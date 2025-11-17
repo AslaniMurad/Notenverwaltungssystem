@@ -76,6 +76,75 @@ app.get("/admin", requireAuth, requireRole("admin"), (req, res) => {
   res.render("admin", { csrfToken: req.csrfToken() });
 });
 
+// --- Schüler-Dashboard ---
+function placeholderCollection(size) {
+  return Array.from({ length: size }, () => ({
+    label: "Test",
+    value: "Test",
+    detail: "Test"
+  }));
+}
+
+// --- Schüler-Dashboard ---
+app.get("/student", requireAuth, requireRole("student"), (req, res) => {
+  const hero = {
+    headline: "Test",
+    statement: "Test",
+    summary: "Test",
+    badges: ["Test", "Test", "Test"],
+    meta: [
+      { label: "Test", value: "Test" },
+      { label: "Test", value: "Test" },
+      { label: "Test", value: "Test" }
+    ]
+  };
+
+  const focusStats = placeholderCollection(4);
+
+  const studyPanels = Array.from({ length: 5 }, () => ({
+    title: "Test",
+    chip: "Test",
+    signal: "Test"
+  }));
+
+  const timeline = Array.from({ length: 4 }, () => ({
+    badge: "Test",
+    title: "Test",
+    detail: "Test",
+    date: "Test"
+  }));
+
+  const routines = Array.from({ length: 4 }, () => ({
+    title: "Test",
+    detail: "Test",
+    emphasis: "Test"
+  }));
+
+  const insights = Array.from({ length: 3 }, () => ({
+    title: "Test",
+    detail: "Test"
+  }));
+
+  const goals = Array.from({ length: 3 }, () => ({
+    title: "Test",
+    due: "Test",
+    progress: "Test"
+  }));
+
+  res.render("student-dashboard", {
+    email: req.session.user.email,
+    hero,
+    focusStats,
+    studyPanels,
+    timeline,
+    routines,
+    insights,
+    goals,
+    csrfToken: req.csrfToken()
+  });
+});
+
+
 // --- Login POST ---
 app.post("/login", (req, res) => {
   const { email, password } = req.body || {};
