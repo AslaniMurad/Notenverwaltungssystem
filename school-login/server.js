@@ -18,14 +18,14 @@ app.use(express.static(path.join(__dirname, "public")));
 // --- Session ---
 app.use(session({
   name: "sid",
-  secret: "change-this-session-secret", // in echt aus ENV
+  secret: "change-this-session-secret",
   resave: false,
   saveUninitialized: false,
   cookie: {
     httpOnly: true,
     sameSite: "lax",
-    secure: false,         // bei HTTPS auf true setzen
-    maxAge: 1000 * 60 * 60 // 1h
+    secure: false,
+    maxAge: 1000 * 60 * 60
   }
 }));
 
@@ -59,7 +59,7 @@ function requireRole(role) {
   };
 }
 
-// --- Startseite (nach Login) ---
+// --- Startseite (Dashboard-Zwischenfenster nach Login) ---
 app.get("/", requireAuth, (req, res) => {
   const { email, role } = req.session.user;
   res.render("dashboard", { email, role, csrfToken: req.csrfToken() });
@@ -71,9 +71,15 @@ app.get("/login", (req, res) => {
   res.render("login", { csrfToken: req.csrfToken() });
 });
 
-// --- Admin UI: User anlegen (gleiches Dark-Design, minimal) ---
+// --- Admin UI: User anlegen ---
 app.get("/admin", requireAuth, requireRole("admin"), (req, res) => {
   res.render("admin", { csrfToken: req.csrfToken() });
+});
+
+// --- Lehrer-Dashboard ---
+app.get("/teacher-dashboard", requireAuth, requireRole("teacher"), (req, res) => {
+  const { email } = req.session.user;
+  res.render("teacher-dashboard", { email, csrfToken: req.csrfToken() });
 });
 
 // --- Login POST ---
@@ -99,7 +105,9 @@ app.post("/login", (req, res) => {
         role: user.role,
         status: user.status
       };
-      res.redirect("/");
+
+      // Alle gehen erst zum Zwischenfenster
+      return res.redirect("/");
     }
   );
 });
