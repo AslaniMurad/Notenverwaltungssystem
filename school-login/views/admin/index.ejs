@@ -1,12 +1,14 @@
-<%- include('layout', {
-  title: 'Admin — Nutzerverwaltung',
-  headerTitle: 'Adminbereich',
-  headerActions: [{ label: 'Zum Dashboard', href: '/' }],
-  styles: ['/css/admin.css'],
-  scripts: ['/js/app.js'],
-  bodyClass: 'page-admin',
-  hideFooter: true,
-  content: function() { %>
+<%
+  const page = {
+    title: 'Admin — Nutzerverwaltung',
+    headerTitle: 'Adminbereich',
+    headerActions: [{ label: 'Zum Dashboard', href: '/' }],
+    styles: ['/css/admin.css'],
+    scripts: ['/js/app.js'],
+    bodyClass: 'page-admin',
+    hideHeader: false,
+    hideFooter: true,
+    content: function () { %>
     <div class="admin-wrap">
       <div class="admin-topbar">
         <h1>Admin — Nutzerverwaltung</h1>
@@ -64,4 +66,6 @@
         </table>
       </div>
     </div>
-<% } ) %>
+<% } };
+%>
+<%- include('../layout', page) %>

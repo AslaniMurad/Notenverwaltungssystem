@@ -1,8 +1,13 @@
-<%- include('layout', {
-  title: 'Schüler-Dashboard',
-  styles: ['/css/student-dashboard.css'],
-  scripts: ['/js/app.js'],
+<%
+  const page = {
+    title: 'Schüler-Dashboard',
+    headerTitle: 'Schüler-Dashboard',
+    headerActions: [{ label: 'Zum Dashboard', href: '/' }],
+    styles: ['/css/student-dashboard.css'],
+    scripts: ['/js/app.js'],
   bodyClass: 'page-student',
+  hideHeader: false,
+  hideFooter: false,
   content: function() { %>
     <main class="student-main">
       <section class="left">
@@ -131,4 +136,6 @@
         </article>
       </section>
     </main>
-<% } ) %>
+<% } };
+%>
+<%- include('layout', page) %>
