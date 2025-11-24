@@ -1,0 +1,212 @@
+:root {
+  --dash-bg: #050816;
+  --dash-bg-elevated: #0f172a;
+  --dash-accent: #3b82f6;
+  --dash-accent-soft: rgba(59, 130, 246, .15);
+  --dash-text: #e5e7eb;
+  --dash-muted: #6b7280;
+  --dash-radius-xl: 18px;
+  --dash-shadow-soft: 0 18px 40px rgba(15, 23, 42, .7);
+  --dash-font: system-ui, -apple-system, BlinkMacSystemFont, -system-ui, sans-serif;
+}
+
+body.page-dashboard {
+  font-family: var(--dash-font);
+  background: radial-gradient(circle at top, #111827 0, #020817 40%, #000 100%);
+  color: var(--dash-text);
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 18px;
+  padding: 24px;
+}
+
+.dashboard-shell {
+  width: 100%;
+  max-width: 900px;
+  background: linear-gradient(to bottom right, rgba(15, 23, 42, .96), rgba(2, 6, 23, .98));
+  border-radius: var(--dash-radius-xl);
+  padding: 22px 24px 20px;
+  box-shadow: var(--dash-shadow-soft);
+  border: 1px solid rgba(148, 163, 253, .08);
+  display: grid;
+  grid-template-columns: minmax(0, 2fr) minmax(220px, 1.4fr);
+  gap: 22px;
+  backdrop-filter: blur(18px);
+}
+
+.dashboard-brand {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+
+.dashboard-logo {
+  width: 22px;
+  height: 22px;
+  border-radius: 999px;
+  background: radial-gradient(circle at 30% 0, #60a5fa, #1d4ed8);
+  box-shadow: 0 0 18px rgba(37, 99, 235, .75);
+}
+
+.brand-title-quiet {
+  font-size: 17px;
+  font-weight: 600;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+  color: #9ca3af;
+}
+
+.dashboard-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 11px;
+  border-radius: 999px;
+  font-size: 10px;
+  color: #9ca3af;
+  background: rgba(15, 23, 42, .9);
+  border: 1px solid rgba(75, 85, 99, .9);
+  margin-bottom: 10px;
+}
+
+.dashboard-pill .bullet {
+  width: 7px;
+  height: 7px;
+  border-radius: 999px;
+  background: #22c55e;
+  box-shadow: 0 0 9px #22c55e;
+}
+
+.dashboard-headline {
+  font-size: 22px;
+  font-weight: 600;
+  margin-bottom: 4px;
+  color: #e5e7eb;
+}
+
+.dashboard-subline {
+  font-size: 13px;
+  color: var(--dash-muted);
+  margin-bottom: 14px;
+}
+
+.dashboard-meta {
+  display: flex;
+  gap: 14px;
+  margin-top: 4px;
+  font-size: 11px;
+  color: var(--dash-muted);
+}
+
+.dashboard-meta strong {
+  color: #e5e7eb;
+  font-weight: 500;
+}
+
+.dashboard-tag {
+  padding: 3px 8px;
+  border-radius: 999px;
+  border: 1px solid rgba(75, 85, 99, .9);
+  font-size: 10px;
+  color: #9ca3af;
+}
+
+.dashboard-right {
+  align-self: stretch;
+  background: radial-gradient(circle at top, var(--dash-accent-soft), rgba(15, 23, 42, 1));
+  border-radius: var(--dash-radius-xl);
+  padding: 14px 14px 12px;
+  border: 1px solid rgba(75, 85, 99, .85);
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.dashboard-right-label {
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: .14em;
+  color: #6b7280;
+  margin-bottom: 3px;
+}
+
+.dashboard-right-email {
+  font-size: 12px;
+  color: #e5e7eb;
+}
+
+.dashboard-right-role {
+  font-size: 11px;
+  color: #9ca3af;
+  margin-bottom: 6px;
+}
+
+.dashboard-nav-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+  margin-top: 4px;
+  margin-bottom: 6px;
+}
+
+.dashboard-link {
+  font-size: 11px;
+  color: var(--dash-accent);
+  text-decoration: none;
+  padding: 5px 8px;
+  border-radius: 8px;
+  background: rgba(15, 23, 42, .9);
+  border: 1px solid rgba(37, 99, 235, .35);
+  transition: all .18s ease;
+}
+
+.dashboard-link:hover {
+  background: rgba(37, 99, 235, .16);
+  box-shadow: 0 0 16px rgba(37, 99, 235, .26);
+}
+
+.dashboard-nav-hint {
+  font-size: 10px;
+  color: #6b7280;
+}
+
+.logout-form {
+  margin-top: 3px;
+}
+
+.logout-btn {
+  width: 100%;
+  padding: 7px 0;
+  border-radius: 10px;
+  border: none;
+  background: linear-gradient(to right, #1d4ed8, #0f766e);
+  color: white;
+  font-size: 11px;
+  font-weight: 500;
+  cursor: pointer;
+  box-shadow: 0 10px 22px rgba(15, 23, 42, .9);
+  transition: all .18s ease-in-out;
+}
+
+.logout-btn:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 16px 32px rgba(15, 23, 42, 1);
+  filter: saturate(1.12);
+}
+
+@media (max-width: 720px) {
+  .dashboard-shell {
+    grid-template-columns: 1fr;
+    max-width: 430px;
+    padding: 18px 16px 14px;
+  }
+
+  .dashboard-headline {
+    font-size: 19px;
+  }
+}
