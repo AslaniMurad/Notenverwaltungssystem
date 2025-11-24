@@ -72,9 +72,13 @@ app.get("/login", (req, res) => {
 });
 
 // --- Admin UI: User anlegen (gleiches Dark-Design, minimal) ---
-app.get("/admin", requireAuth, requireRole("admin"), (req, res) => {
-  res.render("admin", { csrfToken: req.csrfToken() });
-});
+//app.get("/admin", requireAuth, requireRole("admin"), (req, res) => {
+ // res.render("admin", { csrfToken: req.csrfToken() });
+//});
+
+// --- Admin: mount router (statt einzelne /admin routes hier) ---
+const adminRouter = require("./routes/admin");
+app.use("/admin", adminRouter);
 
 // --- Schüler-Dashboard ---
 function placeholderCollection(size) {
