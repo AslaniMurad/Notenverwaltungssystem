@@ -92,6 +92,8 @@
       <div class="nav-row">
         <% if (role === "admin") { %>
           <a class="btn-link" href="/admin">Admin-Bereich öffnen</a>
+              <% } else if (role === "student") { %>
+          <a class="btn-link" href="/student">Schüler-Dashboard</a>
         <% } else { %>
           <span style="font-size:10px;color:#6b7280;">Nutze das Menü deiner Rolle entsprechend.</span>
         <% } %>

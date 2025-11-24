@@ -45,13 +45,7 @@ app.use((req, res, next) => {
 function requireAuth(req, res, next) {
   if (!req.session.user) return res.redirect("/login");
   if (req.session.user.status !== "active") {
-    // show a friendly error page with back button
-    return res.status(403).render("error", {
-      message: "Dein Account ist gesperrt.",
-      status: 403,
-      backUrl: "/login",
-      csrfToken: req.csrfToken()
-    });
+    return res.status(403).send("Account gesperrt.");
   }
   next();
 }
@@ -59,12 +53,7 @@ function requireAuth(req, res, next) {
 function requireRole(role) {
   return (req, res, next) => {
     if (!req.session.user || req.session.user.role !== role) {
-      return res.status(403).render("error", {
-        message: "Zugriff verweigert. Du hast nicht die nötige Berechtigung.",
-        status: 403,
-        backUrl: req.get("Referer") || "/",
-        csrfToken: req.csrfToken()
-      });
+      return res.status(403).send("Forbidden");
     }
     next();
   };
@@ -79,51 +68,98 @@ app.get("/", requireAuth, (req, res) => {
 // --- Login Seite (Dark, clean) ---
 app.get("/login", (req, res) => {
   if (req.session.user) return res.redirect("/");
-  res.render("login", { csrfToken: req.csrfToken(), error: null });
+  res.render("login", { csrfToken: req.csrfToken() });
 });
 
-// --- Admin: mount router (statt einzelne /admin routes hier) ---
-const adminRouter = require("./routes/admin");
-app.use("/admin", adminRouter);
+// --- Admin UI: User anlegen (gleiches Dark-Design, minimal) ---
+app.get("/admin", requireAuth, requireRole("admin"), (req, res) => {
+  res.render("admin", { csrfToken: req.csrfToken() });
+});
+
+// --- Schüler-Dashboard ---
+function placeholderCollection(size) {
+  return Array.from({ length: size }, () => ({
+    label: "Test",
+    value: "Test",
+    detail: "Test"
+  }));
+}
+
+// --- Schüler-Dashboard ---
+app.get("/student", requireAuth, requireRole("student"), (req, res) => {
+  const hero = {
+    headline: "Test",
+    statement: "Test",
+    summary: "Test",
+    badges: ["Test", "Test", "Test"],
+    meta: [
+      { label: "Test", value: "Test" },
+      { label: "Test", value: "Test" },
+      { label: "Test", value: "Test" }
+    ]
+  };
+
+  const focusStats = placeholderCollection(4);
+
+  const studyPanels = Array.from({ length: 5 }, () => ({
+    title: "Test",
+    chip: "Test",
+    signal: "Test"
+  }));
+
+  const timeline = Array.from({ length: 4 }, () => ({
+    badge: "Test",
+    title: "Test",
+    detail: "Test",
+    date: "Test"
+  }));
+
+  const routines = Array.from({ length: 4 }, () => ({
+    title: "Test",
+    detail: "Test",
+    emphasis: "Test"
+  }));
+
+  const insights = Array.from({ length: 3 }, () => ({
+    title: "Test",
+    detail: "Test"
+  }));
+
+  const goals = Array.from({ length: 3 }, () => ({
+    title: "Test",
+    due: "Test",
+    progress: "Test"
+  }));
+
+  res.render("student-dashboard", {
+    email: req.session.user.email,
+    hero,
+    focusStats,
+    studyPanels,
+    timeline,
+    routines,
+    insights,
+    goals,
+    csrfToken: req.csrfToken()
+  });
+});
+
 
 // --- Login POST ---
 app.post("/login", (req, res) => {
   const { email, password } = req.body || {};
-  if (!email || !password) {
-    return res.status(400).render("login", {
-      csrfToken: req.csrfToken(),
-      error: "Bitte E‑Mail und Passwort angeben.",
-      email: email || ""
-    });
-  }
+  if (!email || !password) return res.status(400).send("Fehlende Felder.");
 
   db.get(
     "SELECT id, email, password_hash, role, status FROM users WHERE email = ?",
     [email],
     (err, user) => {
-      if (err) {
-        console.error("DB error on login:", err);
-        return res.status(500).render("error", {
-          message: "Datenbankfehler beim Login.",
-          status: 500,
-          backUrl: "/login",
-          csrfToken: req.csrfToken()
-        });
-      }
+      if (err) return res.status(500).send("DB-Fehler.");
       if (!user || !verifyPassword(user.password_hash, password)) {
-        return res.status(401).render("login", {
-          csrfToken: req.csrfToken(),
-          error: "Login fehlgeschlagen. Bitte überprüfe deine Zugangsdaten.",
-          email: email || ""
-        });
+        return res.status(401).send("Login fehlgeschlagen.");
       }
       if (user.status !== "active") {
-        return res.status(403).render("error", {
-          message: "Account gesperrt. Bitte wende dich an einen Admin.",
-          status: 403,
-          backUrl: "/login",
-          csrfToken: req.csrfToken()
-        });
+        return res.status(403).send("Account gesperrt.");
       }
 
       req.session.user = {
@@ -142,23 +178,24 @@ app.post("/logout", (req, res) => {
   req.session.destroy(() => res.redirect("/login"));
 });
 
-// --- Generic error handler (renders friendly error page) ---
-app.use((err, req, res, next) => {
-  console.error("Unhandled error:", err && err.stack ? err.stack : err);
-  const status = err.status || 500;
-  const message = err.message || "Internal Server Error";
-  // Try to render friendly error page
-  try {
-    res.status(status).render("error", {
-      message,
-      status,
-      backUrl: req.get("Referer") || (req.path === "/login" ? "/" : "/login"),
-      csrfToken: req.csrfToken ? req.csrfToken() : null
-    });
-  } catch (renderErr) {
-    // fallback plain text
-    res.status(status).send(`${status} - ${message}`);
-  }
+app.post("/admin/users", requireAuth, requireRole("admin"), (req, res) => {
+  const { email, role, password } = req.body || {};
+  if (!email || !role || !password) return res.status(400).send("Fehlende Felder.");
+
+  const hash = hashPassword(password);
+  db.run(
+    "INSERT INTO users (email, password_hash, role, status) VALUES (?,?,?, 'active')",
+    [email, hash, role],
+    function (err) {
+      if (err) {
+        if (String(err).includes("UNIQUE")) {
+          return res.status(409).send("E-Mail existiert bereits.");
+        }
+        return res.status(500).send("DB-Fehler.");
+      }
+      res.redirect("/admin");
+    }
+  );
 });
 
 // --- Start ---
