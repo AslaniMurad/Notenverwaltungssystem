@@ -1,51 +1,54 @@
-<%- include('layout', {
-  title: 'Login | School Panel',
-  styles: ['/css/login.css'],
-  scripts: ['/js/app.js'],
-  bodyClass: 'page-login',
-  hideHeader: true,
-  hideFooter: true,
-  content: function() { %>
+<%
+  const page = {
+    title: 'Login | School Panel',
+    styles: ['/css/login.css'],
+    scripts: ['/js/app.js'],
+    bodyClass: 'page-login',
+    hideHeader: true,
+    hideFooter: true,
+    content: function () { %>
     <div class="login-card">
-      <div class="login-glow"></div>
-      <div class="login-brand">
-        <div class="login-mark"></div>
-        <div>
-          <div class="login-eyebrow">Secure School Access</div>
-          <div class="login-title-inline">School Panel Login</div>
+        <div class="login-glow"></div>
+        <div class="login-brand">
+          <div class="login-mark"></div>
+          <div>
+            <div class="login-eyebrow">Secure School Access</div>
+            <div class="login-title-inline">School Panel Login</div>
+          </div>
+        </div>
+
+        <h1>Melde dich an</h1>
+        <p class="login-subtitle">Nutze deine zugewiesene Schul-E-Mail und dein Passwort. Nur freigegebene Accounts erhalten Zugriff.</p>
+
+        <% if (typeof error !== 'undefined' && error) { %>
+          <div class="error-box" role="alert"><%= error %></div>
+        <% } %>
+
+        <form method="POST" action="/login">
+          <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+
+          <label class="login-label" for="email">E-Mail-Adresse</label>
+          <input class="login-input" id="email" name="email" type="email" placeholder="z.B. max.muster@schule.at" required value="<%= typeof email !== 'undefined' ? email : '' %>">
+
+          <label class="login-label" for="password">Passwort</label>
+          <input class="login-input" id="password" name="password" type="password" placeholder="Dein sicheres Passwort" required>
+
+          <div class="login-hint-row">
+            <div class="login-hint">Zugangsdaten erhältst du von einem Admin.</div>
+            <div class="login-roles">Rollen: Admin • Lehrer • Schüler</div>
+          </div>
+
+          <div class="login-buttons">
+            <button class="btn-login-submit" type="submit">Login</button>
+            <button class="btn-login-back" type="button" onclick="history.back()">Zurück</button>
+          </div>
+        </form>
+
+        <div class="login-foot">
+          <div>Keine Selbst-Registrierung – nur zentrale Vergabe.</div>
+          <div><strong>AES</strong> / Hashing / Sessions geschützt.</div>
         </div>
       </div>
-
-      <h1>Melde dich an</h1>
-      <p class="login-subtitle">Nutze deine zugewiesene Schul-E-Mail und dein Passwort. Nur freigegebene Accounts erhalten Zugriff.</p>
-
-      <% if (typeof error !== 'undefined' && error) { %>
-        <div class="error-box" role="alert"><%= error %></div>
-      <% } %>
-
-      <form method="POST" action="/login">
-        <input type="hidden" name="_csrf" value="<%= csrfToken %>">
-
-        <label class="login-label" for="email">E-Mail-Adresse</label>
-        <input class="login-input" id="email" name="email" type="email" placeholder="z.B. max.muster@schule.at" required value="<%= typeof email !== 'undefined' ? email : '' %>">
-
-        <label class="login-label" for="password">Passwort</label>
-        <input class="login-input" id="password" name="password" type="password" placeholder="Dein sicheres Passwort" required>
-
-        <div class="login-hint-row">
-          <div class="login-hint">Zugangsdaten erhältst du von einem Admin.</div>
-          <div class="login-roles">Rollen: Admin • Lehrer • Schüler</div>
-        </div>
-
-        <div class="login-buttons">
-          <button class="btn-login-submit" type="submit">Login</button>
-          <button class="btn-login-back" type="button" onclick="history.back()">Zurück</button>
-        </div>
-      </form>
-
-      <div class="login-foot">
-        <div>Keine Selbst-Registrierung – nur zentrale Vergabe.</div>
-        <div><strong>AES</strong> / Hashing / Sessions geschützt.</div>
-      </div>
-    </div>
-<% } ) %>
+<% } };
+%>
+<%- include('layout', page) %>

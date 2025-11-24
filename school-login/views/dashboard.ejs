@@ -1,9 +1,14 @@
-<%- include('layout', {
-  title: 'Dashboard',
-  styles: ['/css/dashboard.css'],
-  scripts: ['/js/app.js'],
-  bodyClass: 'page-dashboard',
-  content: function() { %>
+<%
+  const page = {
+    title: 'Dashboard',
+    headerTitle: 'Dashboard',
+    headerActions: [],
+    styles: ['/css/dashboard.css'],
+    scripts: ['/js/app.js'],
+    bodyClass: 'page-dashboard',
+    hideHeader: false,
+    hideFooter: false,
+    content: function () { %>
     <div class="dashboard-shell">
       <div>
         <div class="dashboard-brand">
@@ -45,4 +50,6 @@
         </form>
       </div>
     </div>
-<% } ) %>
+<% } };
+%>
+<%- include('layout', page) %>
