@@ -1,0 +1,34 @@
+body.page-error {
+  font-family: var(--font-sans);
+  background: #07102a;
+  color: #e5e7eb;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 100vh;
+  padding: 20px;
+}
+
+.error-card {
+  max-width: 720px;
+  background: linear-gradient(180deg, #0b1220, #071028);
+  padding: 22px;
+  border-radius: 12px;
+  border: 1px solid rgba(148, 163, 253, .06);
+  box-shadow: 0 18px 40px rgba(2, 6, 23, .8);
+}
+
+.error-card h1 {
+  margin: 0 0 6px;
+  font-size: 20px;
+}
+
+.error-card p {
+  color: #9ca3af;
+  margin: 6px 0 14px;
+}
+
+.error-actions {
+  display: flex;
+  gap: 10px;
+}

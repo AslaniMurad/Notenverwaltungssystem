@@ -1,81 +1,67 @@
-<!doctype html>
-<html lang="de">
-<head>
-  <meta charset="utf-8">
-  <title>Admin — Nutzerverwaltung</title>
-  <style>
-    body{font-family:system-ui, -apple-system, BlinkMacSystemFont, sans-serif;background:#020817;color:#e5e7eb;padding:20px;}
-    .wrap{max-width:1000px;margin:0 auto;}
-    .card{background:#071028;padding:16px;border-radius:10px;border:1px solid rgba(148,163,253,.06);}
-    form input, form select{padding:8px;border-radius:6px;border:1px solid rgba(75,85,99,.6);background:#020817;color:#e5e7eb;margin-right:8px;}
-    table{width:100%;border-collapse:collapse;margin-top:12px;}
-    th,td{padding:8px;border-bottom:1px solid rgba(255,255,255,.03);text-align:left;font-size:13px;}
-    .actions form{display:inline-block;margin:0;margin-right:6px;}
-    .btn{padding:6px 10px;border-radius:6px;border:none;cursor:pointer;}
-    .btn-primary{background:#2563eb;color:white;}
-    .btn-danger{background:#ef4444;color:white;}
-    .muted{color:#9ca3af;font-size:12px;}
-  </style>
-</head>
-<body>
-  <div class="wrap">
-    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">
-      <h1 style="margin:0">Admin — Nutzerverwaltung</h1>
-      <a href="/" style="text-decoration:none;">
-        <button style="padding:8px 10px;border-radius:8px;border:none;background:#2563eb;color:#fff;cursor:pointer;">← Dashboard</button>
-      </a>
+<%- include('layout', {
+  title: 'Admin — Nutzerverwaltung',
+  headerTitle: 'Adminbereich',
+  headerActions: [{ label: 'Zum Dashboard', href: '/' }],
+  styles: ['/css/admin.css'],
+  scripts: ['/js/app.js'],
+  bodyClass: 'page-admin',
+  hideFooter: true,
+  content: function() { %>
+    <div class="admin-wrap">
+      <div class="admin-topbar">
+        <h1>Admin — Nutzerverwaltung</h1>
+        <a class="admin-button-plain" href="/">← Dashboard</a>
+      </div>
+
+      <div class="admin-card">
+        <h3>Nutzer anlegen</h3>
+        <form class="admin-form" method="POST" action="/admin/users">
+          <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+          <input name="email" type="email" placeholder="E-Mail" required>
+          <select name="role">
+            <option value="student">Schüler</option>
+            <option value="teacher">Lehrer</option>
+            <option value="admin">Admin</option>
+          </select>
+          <input name="password" type="password" placeholder="Initial-Passwort" required>
+          <button class="btn btn-primary" type="submit">Erstellen</button>
+        </form>
+
+        <h3 class="admin-heading-spaced">Nutzerliste</h3>
+        <table class="admin-table">
+          <thead>
+            <tr><th>ID</th><th>E-Mail</th><th>Rolle</th><th>Status</th><th>Erstellt</th><th>Letzter Login</th><th>Aktionen</th></tr>
+          </thead>
+          <tbody>
+            <% if (!users || users.length === 0) { %>
+              <tr><td colspan="7" class="admin-muted">Keine Nutzer gefunden.</td></tr>
+            <% } %>
+            <% users.forEach(function(u){ %>
+              <tr>
+                <td><%= u.id %></td>
+                <td><%= u.email %></td>
+                <td><%= u.role %></td>
+                <td><%= u.status %></td>
+                <td><%= u.created_at || '-' %></td>
+                <td><%= u.last_login || '-' %></td>
+                <td class="admin-actions">
+                  <a class="btn btn-secondary" href="/admin/users/<%= u.id %>/edit">Bearbeiten</a>
+
+                  <form method="POST" action="/admin/users/<%= u.id %>/reset">
+                    <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+                    <input type="hidden" name="password" value="temp1234">
+                    <button class="btn" type="submit">Passwort reset</button>
+                  </form>
+
+                  <form method="POST" action="/admin/users/<%= u.id %>/delete" onsubmit="return confirm('Nutzer wirklich löschen (soft-delete)?');">
+                    <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+                    <button class="btn btn-danger" type="submit">Löschen</button>
+                  </form>
+                </td>
+              </tr>
+            <% }) %>
+          </tbody>
+        </table>
+      </div>
     </div>
-
-    <div class="card">
-      <h3>Nutzer anlegen</h3>
-      <form method="POST" action="/admin/users">
-        <input type="hidden" name="_csrf" value="<%= csrfToken %>">
-        <input name="email" type="email" placeholder="E-Mail" required>
-        <select name="role">
-          <option value="student">Schüler</option>
-          <option value="teacher">Lehrer</option>
-          <option value="admin">Admin</option>
-        </select>
-        <input name="password" type="password" placeholder="Initial-Passwort" required>
-        <button class="btn btn-primary" type="submit">Erstellen</button>
-      </form>
-
-      <h3 style="margin-top:16px;">Nutzerliste</h3>
-      <table>
-        <thead>
-          <tr><th>ID</th><th>E-Mail</th><th>Rolle</th><th>Status</th><th>Erstellt</th><th>Letzter Login</th><th>Aktionen</th></tr>
-        </thead>
-        <tbody>
-          <% if (!users || users.length === 0) { %>
-            <tr><td colspan="7" class="muted">Keine Nutzer gefunden.</td></tr>
-          <% } %>
-          <% users.forEach(function(u){ %>
-            <tr>
-              <td><%= u.id %></td>
-              <td><%= u.email %></td>
-              <td><%= u.role %></td>
-              <td><%= u.status %></td>
-              <td><%= u.created_at || '-' %></td>
-              <td><%= u.last_login || '-' %></td>
-              <td class="actions">
-                <a class="btn" href="/admin/users/<%= u.id %>/edit">Bearbeiten</a>
-
-                <form method="POST" action="/admin/users/<%= u.id %>/reset" style="display:inline">
-                  <input type="hidden" name="_csrf" value="<%= csrfToken %>">
-                  <input type="hidden" name="password" value="temp1234"> <!-- Admin muss neues PW angeben im Edit, hier einfacher Default -->
-                  <button class="btn" type="submit">Passwort reset</button>
-                </form>
-
-                <form method="POST" action="/admin/users/<%= u.id %>/delete" onsubmit="return confirm('Nutzer wirklich löschen (soft-delete)?');" style="display:inline">
-                  <input type="hidden" name="_csrf" value="<%= csrfToken %>">
-                  <button class="btn btn-danger" type="submit">Löschen</button>
-                </form>
-              </td>
-            </tr>
-          <% }) %>
-        </tbody>
-      </table>
-    </div>
-  </div>
-</body>
-</html>
+<% } ) %>
