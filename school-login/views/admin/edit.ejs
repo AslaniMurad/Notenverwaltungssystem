@@ -1,15 +1,17 @@
-<%- include('layout', {
-  title: 'Bearbeite Nutzer',
-  headerTitle: 'Adminbereich',
-  headerActions: [
-    { label: 'Dashboard', href: '/' },
-    { label: 'Übersicht', href: '/admin' }
-  ],
-  styles: ['/css/admin.css'],
-  scripts: ['/js/app.js'],
-  bodyClass: 'page-admin-edit',
-  hideFooter: true,
-  content: function() { %>
+<%
+  const page = {
+    title: 'Bearbeite Nutzer',
+    headerTitle: 'Adminbereich',
+    headerActions: [
+      { label: 'Dashboard', href: '/' },
+      { label: 'Übersicht', href: '/admin' }
+    ],
+    styles: ['/css/admin.css'],
+    scripts: ['/js/app.js'],
+    bodyClass: 'page-admin-edit',
+    hideHeader: false,
+    hideFooter: true,
+    content: function () { %>
     <div class="admin-card-narrow">
       <div class="admin-edit-topbar">
         <h2>Bearbeite Nutzer: <%= user.email %></h2>
@@ -57,4 +59,6 @@
         <a class="admin-link" href="/admin">← Zurück zur Übersicht</a>
       </div>
     </div>
-<% } ) %>
+<% } };
+%>
+<%- include('../layout', page) %>
