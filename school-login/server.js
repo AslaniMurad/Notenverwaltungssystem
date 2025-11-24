@@ -45,7 +45,13 @@ app.use((req, res, next) => {
 function requireAuth(req, res, next) {
   if (!req.session.user) return res.redirect("/login");
   if (req.session.user.status !== "active") {
-    return res.status(403).send("Account gesperrt.");
+    // show a friendly error page with back button
+    return res.status(403).render("error", {
+      message: "Dein Account ist gesperrt.",
+      status: 403,
+      backUrl: "/login",
+      csrfToken: req.csrfToken()
+    });
   }
   next();
 }
@@ -53,7 +59,12 @@ function requireAuth(req, res, next) {
 function requireRole(role) {
   return (req, res, next) => {
     if (!req.session.user || req.session.user.role !== role) {
-      return res.status(403).send("Forbidden");
+      return res.status(403).render("error", {
+        message: "Zugriff verweigert. Du hast nicht die nötige Berechtigung.",
+        status: 403,
+        backUrl: req.get("Referer") || "/",
+        csrfToken: req.csrfToken()
+      });
     }
     next();
   };
@@ -68,29 +79,51 @@ app.get("/", requireAuth, (req, res) => {
 // --- Login Seite (Dark, clean) ---
 app.get("/login", (req, res) => {
   if (req.session.user) return res.redirect("/");
-  res.render("login", { csrfToken: req.csrfToken() });
+  res.render("login", { csrfToken: req.csrfToken(), error: null });
 });
 
-// --- Admin UI: User anlegen (gleiches Dark-Design, minimal) ---
-app.get("/admin", requireAuth, requireRole("admin"), (req, res) => {
-  res.render("admin", { csrfToken: req.csrfToken() });
-});
+// --- Admin: mount router (statt einzelne /admin routes hier) ---
+const adminRouter = require("./routes/admin");
+app.use("/admin", adminRouter);
 
 // --- Login POST ---
 app.post("/login", (req, res) => {
   const { email, password } = req.body || {};
-  if (!email || !password) return res.status(400).send("Fehlende Felder.");
+  if (!email || !password) {
+    return res.status(400).render("login", {
+      csrfToken: req.csrfToken(),
+      error: "Bitte E‑Mail und Passwort angeben.",
+      email: email || ""
+    });
+  }
 
   db.get(
     "SELECT id, email, password_hash, role, status FROM users WHERE email = ?",
     [email],
     (err, user) => {
-      if (err) return res.status(500).send("DB-Fehler.");
+      if (err) {
+        console.error("DB error on login:", err);
+        return res.status(500).render("error", {
+          message: "Datenbankfehler beim Login.",
+          status: 500,
+          backUrl: "/login",
+          csrfToken: req.csrfToken()
+        });
+      }
       if (!user || !verifyPassword(user.password_hash, password)) {
-        return res.status(401).send("Login fehlgeschlagen.");
+        return res.status(401).render("login", {
+          csrfToken: req.csrfToken(),
+          error: "Login fehlgeschlagen. Bitte überprüfe deine Zugangsdaten.",
+          email: email || ""
+        });
       }
       if (user.status !== "active") {
-        return res.status(403).send("Account gesperrt.");
+        return res.status(403).render("error", {
+          message: "Account gesperrt. Bitte wende dich an einen Admin.",
+          status: 403,
+          backUrl: "/login",
+          csrfToken: req.csrfToken()
+        });
       }
 
       req.session.user = {
@@ -109,24 +142,23 @@ app.post("/logout", (req, res) => {
   req.session.destroy(() => res.redirect("/login"));
 });
 
-app.post("/admin/users", requireAuth, requireRole("admin"), (req, res) => {
-  const { email, role, password } = req.body || {};
-  if (!email || !role || !password) return res.status(400).send("Fehlende Felder.");
-
-  const hash = hashPassword(password);
-  db.run(
-    "INSERT INTO users (email, password_hash, role, status) VALUES (?,?,?, 'active')",
-    [email, hash, role],
-    function (err) {
-      if (err) {
-        if (String(err).includes("UNIQUE")) {
-          return res.status(409).send("E-Mail existiert bereits.");
-        }
-        return res.status(500).send("DB-Fehler.");
-      }
-      res.redirect("/admin");
-    }
-  );
+// --- Generic error handler (renders friendly error page) ---
+app.use((err, req, res, next) => {
+  console.error("Unhandled error:", err && err.stack ? err.stack : err);
+  const status = err.status || 500;
+  const message = err.message || "Internal Server Error";
+  // Try to render friendly error page
+  try {
+    res.status(status).render("error", {
+      message,
+      status,
+      backUrl: req.get("Referer") || (req.path === "/login" ? "/" : "/login"),
+      csrfToken: req.csrfToken ? req.csrfToken() : null
+    });
+  } catch (renderErr) {
+    // fallback plain text
+    res.status(status).send(`${status} - ${message}`);
+  }
 });
 
 // --- Start ---

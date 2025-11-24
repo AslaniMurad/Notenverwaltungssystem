@@ -1,0 +1,68 @@
+<!doctype html>
+<html lang="de">
+<head>
+  <meta charset="utf-8">
+  <title>Bearbeite Nutzer</title>
+  <style>
+    body{font-family:system-ui, -apple-system, BlinkMacSystemFont, sans-serif;background:#020817;color:#e5e7eb;padding:24px;}
+    .card{max-width:640px;background:#071028;padding:16px;border-radius:10px;border:1px solid rgba(148,163,253,.06);}
+    label{display:block;margin-top:8px;font-size:12px;color:#9ca3af;}
+    input,select{width:100%;padding:8px;border-radius:6px;border:1px solid rgba(75,85,99,.6);background:#020817;color:#e5e7eb;margin-top:4px;}
+    .row{display:flex;gap:8px;}
+    .btn{padding:8px 10px;border-radius:6px;border:none;cursor:pointer;margin-top:10px;}
+    .btn-primary{background:#2563eb;color:white;}
+    .btn-danger{background:#ef4444;color:white;}
+  </style>
+</head>
+<body>
+  <div class="card">
+    <div style="display:flex;justify-content:space-between;align-items:center;">
+      <h2 style="margin:0">Bearbeite Nutzer: <%= user.email %></h2>
+      <a href="/" style="text-decoration:none;">
+        <button style="padding:7px 10px;border-radius:8px;border:none;background:#2563eb;color:#fff;cursor:pointer;">← Dashboard</button>
+      </a>
+    </div>
+
+    <form method="POST" action="/admin/users/<%= user.id %>">
+      <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+
+      <label for="email">E-Mail</label>
+      <input id="email" name="email" value="<%= user.email %>" type="email" required>
+
+      <label for="role">Rolle</label>
+      <select id="role" name="role">
+        <option value="student" <%= user.role === 'student' ? 'selected' : '' %>>Schüler</option>
+        <option value="teacher" <%= user.role === 'teacher' ? 'selected' : '' %>>Lehrer</option>
+        <option value="admin" <%= user.role === 'admin' ? 'selected' : '' %>>Admin</option>
+      </select>
+
+      <label for="status">Status</label>
+      <select id="status" name="status">
+        <option value="active" <%= user.status === 'active' ? 'selected' : '' %>>active</option>
+        <option value="locked" <%= user.status === 'locked' ? 'selected' : '' %>>locked</option>
+        <option value="deleted" <%= user.status === 'deleted' ? 'selected' : '' %>>deleted</option>
+      </select>
+
+      <button class="btn btn-primary" type="submit">Speichern</button>
+    </form>
+
+    <hr style="margin:14px 0;border-color:rgba(255,255,255,.03)">
+
+    <form method="POST" action="/admin/users/<%= user.id %>/reset">
+      <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+      <label for="password">Neues Passwort</label>
+      <input id="password" name="password" type="password" required>
+      <button class="btn" type="submit">Passwort zurücksetzen</button>
+    </form>
+
+    <form method="POST" action="/admin/users/<%= user.id %>/delete" onsubmit="return confirm('Nutzer wirklich löschen (soft-delete)?');">
+      <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+      <button class="btn btn-danger" type="submit">Nutzer löschen</button>
+    </form>
+
+    <div style="margin-top:12px">
+      <a href="/admin" style="color:#60a5fa">← Zurück zur Übersicht</a>
+    </div>
+  </div>
+</body>
+</html>

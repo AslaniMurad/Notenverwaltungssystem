@@ -1,0 +1,29 @@
+<!doctype html>
+<html lang="de">
+<head>
+  <meta charset="utf-8">
+  <title>Fehler — <%= status %></title>
+  <style>
+    body{font-family:system-ui,-apple-system,BlinkMacSystemFont,sans-serif;background:#07102a;color:#e5e7eb;display:flex;align-items:center;justify-content:center;min-height:100vh;padding:20px}
+    .card{max-width:720px;background:linear-gradient(180deg,#0b1220,#071028);padding:22px;border-radius:12px;border:1px solid rgba(148,163,253,.06);box-shadow:0 18px 40px rgba(2,6,23,.8)}
+    h1{margin:0 0 6px;font-size:20px}
+    p{color:#9ca3af;margin:6px 0 14px}
+    .actions{display:flex;gap:10px}
+    .btn{padding:9px 12px;border-radius:8px;border:none;cursor:pointer;font-weight:600}
+    .btn-primary{background:#2563eb;color:white}
+    .btn-ghost{background:transparent;border:1px solid rgba(255,255,255,.06);color:#cbd5e1}
+  </style>
+</head>
+<body>
+  <div class="card" role="alert">
+    <h1>Fehler <%= status %></h1>
+    <p><%= message %></p>
+
+    <div class="actions">
+      <button class="btn btn-primary" onclick="(function(){ if('<%= backUrl %>' && '<%= backUrl %>'!=='undefined'){ location.href = '<%= backUrl %>'; } else { history.back(); } })()">Zurück</button>
+      <button class="btn btn-ghost" onclick="location.href='/'">Startseite</button>
+      <button class="btn btn-ghost" onclick="location.href='/login'">Login</button>
+    </div>
+  </div>
+</body>
+</html>
