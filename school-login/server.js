@@ -3,7 +3,8 @@ const express = require("express");
 const session = require("express-session");
 const csrf = require("csurf");
 const path = require("path");
-const { db, hashPassword, verifyPassword } = require("./db");
+const { db, verifyPassword } = require("./db");
+const { requireAuth, requireRole } = require("./middleware/auth");
 
 const app = express();
 
@@ -40,24 +41,6 @@ app.use((req, res, next) => {
   res.setHeader("Referrer-Policy", "no-referrer");
   next();
 });
-
-// --- Helper ---
-function requireAuth(req, res, next) {
-  if (!req.session.user) return res.redirect("/login");
-  if (req.session.user.status !== "active") {
-    return res.status(403).send("Account gesperrt.");
-  }
-  next();
-}
-
-function requireRole(role) {
-  return (req, res, next) => {
-    if (!req.session.user || req.session.user.role !== role) {
-      return res.status(403).send("Forbidden");
-    }
-    next();
-  };
-}
 
 // --- Startseite (nach Login) ---
 app.get("/", requireAuth, (req, res) => {
@@ -181,27 +164,6 @@ app.post("/login", (req, res) => {
 app.post("/logout", (req, res) => {
   req.session.destroy(() => res.redirect("/login"));
 });
-
-app.post("/admin/users", requireAuth, requireRole("admin"), (req, res) => {
-  const { email, role, password } = req.body || {};
-  if (!email || !role || !password) return res.status(400).send("Fehlende Felder.");
-
-  const hash = hashPassword(password);
-  db.run(
-    "INSERT INTO users (email, password_hash, role, status) VALUES (?,?,?, 'active')",
-    [email, hash, role],
-    function (err) {
-      if (err) {
-        if (String(err).includes("UNIQUE")) {
-          return res.status(409).send("E-Mail existiert bereits.");
-        }
-        return res.status(500).send("DB-Fehler.");
-      }
-      res.redirect("/admin");
-    }
-  );
-});
-
 // --- Start ---
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
