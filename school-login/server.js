@@ -54,11 +54,6 @@ app.get("/login", (req, res) => {
   res.render("login", { csrfToken: req.csrfToken() });
 });
 
-// --- Admin UI: User anlegen (gleiches Dark-Design, minimal) ---
-//app.get("/admin", requireAuth, requireRole("admin"), (req, res) => {
- // res.render("admin", { csrfToken: req.csrfToken() });
-//});
-
 // --- Admin: mount router (statt einzelne /admin routes hier) ---
 const adminRouter = require("./routes/admin");
 app.use("/admin", adminRouter);
