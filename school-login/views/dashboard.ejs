@@ -1,55 +1,52 @@
-<%
-  const page = {
-    title: 'Dashboard',
-    headerTitle: 'Dashboard',
-    headerActions: [],
-    styles: ['/css/dashboard.css'],
-    scripts: ['/js/app.js'],
-    bodyClass: 'page-dashboard',
-    hideHeader: false,
-    hideFooter: false,
-    content: function () { %>
-    <div class="dashboard-shell">
-      <div>
-        <div class="dashboard-brand">
-          <div class="dashboard-logo"></div>
-          <div class="brand-title-quiet">School Panel</div>
-        </div>
-        <div class="dashboard-pill">
-          <span class="bullet"></span>
-          Eingeloggt – sichere Schulverwaltung aktiv
-        </div>
-        <h1 class="dashboard-headline">Willkommen zurück, <%= email %></h1>
-        <p class="dashboard-subline">
-          Du bist angemeldet als <b><%= role %></b>. Verwende das Panel rechts, um in den passenden Bereich zu wechseln.
-        </p>
-        <div class="dashboard-meta">
-          <div><strong>Rolle</strong><br><%= role %></div>
-          <div><strong>Sicherheit</strong><br>Session-Cookies, CSRF-Schutz</div>
-          <div class="dashboard-tag">Nur autorisierte Zugriffe</div>
-        </div>
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Dashboard</title>
+  <link rel="stylesheet" href="/css/dashboard.css">
+</head>
+<body class="page-dashboard">
+  <div class="dashboard-shell">
+    <div>
+      <div class="dashboard-brand">
+        <div class="dashboard-logo"></div>
+        <div class="brand-title-quiet">School Panel</div>
+      </div>
+      <div class="dashboard-pill">
+        <span class="bullet"></span>
+        Eingeloggt – sichere Schulverwaltung aktiv
+      </div>
+      <h1 class="dashboard-headline">Willkommen zurück, <%= email %></h1>
+      <p class="dashboard-subline">
+        Du bist angemeldet als <b><%= role %></b>. Verwende das Panel rechts, um in den passenden Bereich zu wechseln.
+      </p>
+      <div class="dashboard-meta">
+        <div><strong>Rolle</strong><br><%= role %></div>
+        <div><strong>Sicherheit</strong><br>Session-Cookies, CSRF-Schutz</div>
+        <div class="dashboard-tag">Nur autorisierte Zugriffe</div>
       </div>
     </div>
-    <div class="right-box">
-      <div>
-        <div class="right-label">Account</div>
-        <div class="right-email"><%= email %></div>
-        <div class="right-role">Level: <% if (role === 'admin') { %>Admin<% } else if (role === 'teacher') { %>Lehrer<% } else { %><%= role %><% } %></div>
-      </div>
-      <div class="nav-row">
-        <% if (role === "admin") { %>
-          <a class="btn-link" href="/admin">Admin-Bereich öffnen</a>
-        <% } else if (role === "teacher") { %>
-          <a class="btn-link" href="/teacher/classes">Meine Klassen</a>
-        <% } else { %>
-          <span style="font-size:10px;color:#6b7280;">Nutze das Menü deiner Rolle entsprechend.</span>
-        <% } %>
-      </div>
-      <form class="logout-form" method="POST" action="/logout">
-        <input type="hidden" name="_csrf" value="<%= csrfToken %>">
-        <button class="logout-btn" type="submit">Logout</button>
-      </form>
+  </div>
+  <div class="right-box">
+    <div>
+      <div class="right-label">Account</div>
+      <div class="right-email"><%= email %></div>
+      <div class="right-role">Level: <% if (role === 'admin') { %>Admin<% } else if (role === 'teacher') { %>Lehrer<% } else { %><%= role %><% } %></div>
     </div>
+    <div class="nav-row">
+      <% if (role === "admin") { %>
+        <a class="btn-link" href="/admin">Admin-Bereich öffnen</a>
+      <% } else if (role === "teacher") { %>
+        <a class="btn-link" href="/teacher/classes">Meine Klassen</a>
+      <% } else { %>
+        <span style="font-size:10px;color:#6b7280;">Nutze das Menü deiner Rolle entsprechend.</span>
+      <% } %>
+    </div>
+    <form class="logout-form" method="POST" action="/logout">
+      <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+      <button class="logout-btn" type="submit">Logout</button>
+    </form>
   </div>
 </body>
 </html>

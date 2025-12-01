@@ -3,7 +3,7 @@ const express = require("express");
 const session = require("express-session");
 const csrf = require("csurf");
 const path = require("path");
-const { db, verifyPassword } = require("./db");
+const { db, verifyPassword, hashPassword } = require("./db");
 const { requireAuth, requireRole } = require("./middleware/auth");
 
 const app = express();
@@ -49,24 +49,6 @@ app.use((req, res, next) => {
   res.setHeader("Referrer-Policy", "no-referrer");
   next();
 });
-
-// --- Helper ---
-function requireAuth(req, res, next) {
-  if (!req.session.user) return res.redirect("/login");
-  if (req.session.user.status !== "active") {
-    return res.status(403).send("Account gesperrt.");
-  }
-  next();
-}
-
-function requireRole(role) {
-  return (req, res, next) => {
-    if (!req.session.user || req.session.user.role !== role) {
-      return res.status(403).send("Forbidden");
-    }
-    next();
-  };
-}
 
 // ============================
 // ROUTES
@@ -323,6 +305,11 @@ app.post("/teacher/add-student/:class_id", requireAuth, requireRole("teacher"), 
 
 // --- Start ---
 const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => {
-  console.log(`Server läuft: http://localhost:${PORT}`);
-});
+
+if (require.main === module) {
+  app.listen(PORT, () => {
+    console.log(`Server läuft: http://localhost:${PORT}`);
+  });
+}
+
+module.exports = app;
