@@ -11,11 +11,11 @@ body.page-error {
 
 .error-card {
   max-width: 720px;
-  background: #ffffff;
+  background: transparent;
   padding: 40px;
   border-radius: 12px;
-  border: 2px solid #fee2e2;
-  box-shadow: 0 10px 25px rgba(220, 38, 38, 0.08);
+  border: 2px solid rgba(254,226,226,0.55);
+  box-shadow: 0 10px 25px rgba(220, 38, 38, 0.06);
   text-align: center;
 }
 
