@@ -7,18 +7,20 @@
     hideHeader: true,
     hideFooter: true,
     content: function () { %>
-    <div class="login-card">
+    <div class="login-card card">
         <div class="login-glow"></div>
         <div class="login-brand">
-          <div class="login-mark"></div>
+          <img src="/images/htl-waidhofen.png" alt="HTL Waidhofen" class="login-mark" onerror="this.style.display='none'">
           <div>
-            <div class="login-eyebrow">Secure School Access</div>
-            <div class="login-title-inline">School Panel Login</div>
+            <div class="login-eyebrow">HTL Waidhofen</div>
+            <div class="login-title-inline">Notenverwaltung</div>
           </div>
         </div>
 
-        <h1>Melde dich an</h1>
-        <p class="login-subtitle">Nutze deine zugewiesene Schul-E-Mail und dein Passwort. Nur freigegebene Accounts erhalten Zugriff.</p>
+        <hr style="border:none;border-top:2px solid #0052CC;margin:20px 0;width:60px;margin-left:auto;margin-right:auto;">
+
+        <h1 style="font-size: 28px; font-weight: 800; color: #003DA5; margin-bottom: 8px; text-align:center;">Willkommen</h1>
+        <p class="login-subtitle">Melde dich mit deinen Schulzugangsdaten an</p>
 
         <% if (typeof error !== 'undefined' && error) { %>
           <div class="error-box" role="alert"><%= error %></div>
@@ -38,15 +40,18 @@
             <div class="login-roles">Rollen: Admin • Lehrer • Schüler</div>
           </div>
 
-          <div class="login-buttons">
-            <button class="btn-login-submit" type="submit">Login</button>
-            <button class="btn-login-back" type="button" onclick="history.back()">Zurück</button>
-          </div>
+          <button class="btn-login-submit" type="submit">Login</button>
         </form>
 
         <div class="login-foot">
-          <div>Keine Selbst-Registrierung – nur zentrale Vergabe.</div>
-          <div><strong>AES</strong> / Hashing / Sessions geschützt.</div>
+          <div class="login-foot-item">
+            <span class="login-foot-icon">🔐</span>
+            <span>Nur zentrale Vergabe</span>
+          </div>
+          <div class="login-foot-item">
+            <span class="login-foot-icon">🛡️</span>
+            <span><strong>AES</strong> / Hashing / Sessions</span>
+          </div>
         </div>
       </div>
 <% } };

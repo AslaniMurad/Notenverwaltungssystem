@@ -11,9 +11,9 @@
       <p><%= message %></p>
 
       <div class="error-actions">
-        <button class="btn btn-primary" onclick="(function(){ if('<%= backUrl %>' && '<%= backUrl %>'!=='undefined'){ location.href = '<%= backUrl %>'; } else { history.back(); } })()">Zurück</button>
-        <button class="btn btn-ghost" onclick="location.href='/'">Startseite</button>
-        <button class="btn btn-ghost" onclick="location.href='/login'">Login</button>
+        <button class="btn-primary" onclick="(function(){ if('<%= backUrl %>' && '<%= backUrl %>'!=='undefined'){ location.href = '<%= backUrl %>'; } else { history.back(); } })()">← Zurück</button>
+        <button class="btn-secondary" onclick="location.href='/'">Zur Startseite</button>
+        <button class="btn-secondary" onclick="location.href='/login'">Zum Login</button>
       </div>
     </div>
 <% } ) %>

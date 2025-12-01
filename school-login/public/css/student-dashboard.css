@@ -1,34 +1,34 @@
 :root {
-  --student-bg: #020617;
-  --student-panel: rgba(8, 12, 22, 0.95);
-  --student-panel-soft: rgba(10, 15, 27, 0.8);
-  --student-text: #f8fafc;
-  --student-muted: #94a3b8;
-  --student-border: rgba(148, 163, 184, 0.25);
-  --student-accent: #38bdf8;
-  --student-radius: 26px;
-  --student-font: "Space Grotesk", "Inter", system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
+  --student-bg: #F3F4F6;
+  --student-panel: #FFFFFF;
+  --student-panel-soft: #F9FAFB;
+  --student-text: #1F2937;
+  --student-muted: #6B7280;
+  --student-border: #D1D5DB;
+  --student-accent: #003DA5;
+  --student-accent-light: #0052CC;
+  --student-accent-green: #6ABF2E;
+  --student-radius: 12px;
+  --student-font: 'Inter', system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
 }
 
 body.page-student {
   min-height: 100vh;
-  background: radial-gradient(circle at 5% 0, rgba(56, 189, 248, 0.25), transparent 55%),
-    radial-gradient(circle at 85% 15%, rgba(129, 140, 248, 0.25), transparent 45%),
-    linear-gradient(120deg, #00040f, #020617 60%, #000);
+  background: linear-gradient(135deg, #f8fafc 0%, #eff6ff 50%, #e0e7ff 100%);
   font-family: var(--student-font);
   color: var(--student-text);
-  padding: 42px 24px 64px;
+  padding: 40px 28px 60px;
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 18px;
+  gap: 28px;
 }
 
 main.student-main {
   width: 100%;
-  max-width: 1280px;
+  max-width: 1300px;
   display: grid;
-  grid-template-columns: minmax(0, 2.7fr) minmax(320px, 1fr);
+  grid-template-columns: minmax(0, 2.7fr) minmax(300px, 1fr);
   gap: 32px;
 }
 
@@ -36,16 +36,17 @@ main.student-main {
   background: var(--student-panel);
   border: 1px solid var(--student-border);
   border-radius: var(--student-radius);
-  padding: 32px;
+  padding: 36px;
   position: relative;
   overflow: hidden;
+  box-shadow: 0 10px 25px rgba(37, 99, 235, 0.08);
 }
 
 .panel::after {
   content: "";
   position: absolute;
   inset: 0;
-  background: radial-gradient(circle at 90% 15%, rgba(56, 189, 248, 0.15), transparent 35%);
+  background: radial-gradient(circle at 90% 15%, rgba(37, 99, 235, 0.05), transparent 35%);
   pointer-events: none;
 }
 
@@ -64,27 +65,30 @@ main.student-main {
 header.hero {
   display: flex;
   flex-direction: column;
-  gap: 18px;
-  margin-bottom: 18px;
+  gap: 16px;
+  margin-bottom: 24px;
 }
 
 .eyebrow {
   text-transform: uppercase;
-  letter-spacing: 0.35em;
-  font-size: 11px;
+  letter-spacing: 0.08em;
+  font-size: 12px;
   color: var(--student-muted);
+  font-weight: 600;
 }
 
 header.hero h1 {
-  font-size: 40px;
-  font-weight: 600;
+  font-size: 36px;
+  font-weight: 700;
   line-height: 1.2;
+  color: var(--student-text);
 }
 
 header.hero p {
   color: var(--student-muted);
   max-width: 620px;
-  line-height: 1.5;
+  line-height: 1.6;
+  font-size: 15px;
 }
 
 .badge-row {
@@ -94,14 +98,15 @@ header.hero p {
 }
 
 .badge {
-  border-radius: 999px;
-  border: 1px solid rgba(56, 189, 248, 0.45);
-  color: #38bdf8;
+  border-radius: 20px;
+  border: 1px solid rgba(37, 99, 235, 0.3);
+  color: var(--student-accent);
   font-size: 12px;
-  letter-spacing: 0.12em;
+  letter-spacing: 0.05em;
   text-transform: uppercase;
-  padding: 6px 14px;
-  background: rgba(8, 47, 73, 0.35);
+  padding: 7px 16px;
+  background: rgba(37, 99, 235, 0.08);
+  font-weight: 600;
 }
 
 .hero-meta {
@@ -112,23 +117,27 @@ header.hero p {
 }
 
 .hero-meta article {
-  border-radius: 18px;
-  padding: 16px;
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  background: rgba(2, 6, 23, 0.75);
+  border-radius: 12px;
+  padding: 18px;
+  border: 1px solid var(--student-border);
+  background: var(--student-panel-soft);
+  box-shadow: 0 2px 8px rgba(37, 99, 235, 0.05);
 }
 
 .hero-meta span {
   font-size: 11px;
-  letter-spacing: 0.15em;
+  letter-spacing: 0.08em;
   color: var(--student-muted);
   text-transform: uppercase;
+  font-weight: 600;
 }
 
 .hero-meta strong {
-  font-size: 20px;
+  font-size: 22px;
   display: block;
-  margin-top: 4px;
+  margin-top: 8px;
+  color: var(--student-text);
+  font-weight: 700;
 }
 
 .focus-stats {
@@ -139,29 +148,39 @@ header.hero p {
 }
 
 .focus-card {
-  border-radius: 22px;
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  background: rgba(7, 11, 23, 0.92);
-  padding: 18px;
+  border-radius: 12px;
+  border: 1px solid var(--student-border);
+  background: var(--student-panel-soft);
+  padding: 20px;
+  box-shadow: 0 2px 8px rgba(37, 99, 235, 0.05);
+  transition: all 0.2s ease;
+}
+
+.focus-card:hover {
+  border-color: var(--student-accent-light);
+  box-shadow: 0 6px 16px rgba(37, 99, 235, 0.12);
 }
 
 .focus-card span {
   font-size: 11px;
-  letter-spacing: 0.2em;
+  letter-spacing: 0.08em;
   color: var(--student-muted);
   text-transform: uppercase;
+  font-weight: 600;
 }
 
 .focus-card strong {
-  font-size: 26px;
+  font-size: 28px;
   display: block;
-  margin-top: 10px;
+  margin-top: 12px;
+  color: var(--student-text);
+  font-weight: 700;
 }
 
 .focus-card p {
   color: var(--student-muted);
   font-size: 13px;
-  margin-top: 6px;
+  margin-top: 8px;
 }
 
 .board {
@@ -171,26 +190,36 @@ header.hero p {
 }
 
 .board-card {
-  border-radius: 24px;
-  border: 1px solid rgba(255, 255, 255, 0.07);
-  background: var(--student-panel-soft);
-  padding: 22px;
+  border-radius: 12px;
+  border: 1px solid var(--student-border);
+  background: var(--student-panel);
+  padding: 24px;
   min-height: 180px;
   display: flex;
   flex-direction: column;
   justify-content: space-between;
+  box-shadow: 0 2px 8px rgba(37, 99, 235, 0.05);
+  transition: all 0.2s ease;
+}
+
+.board-card:hover {
+  box-shadow: 0 6px 16px rgba(37, 99, 235, 0.12);
+  border-color: var(--student-accent-light);
 }
 
 .board-card h4 {
-  font-size: 20px;
-  margin-bottom: 6px;
+  font-size: 18px;
+  margin-bottom: 8px;
+  font-weight: 700;
+  color: var(--student-text);
 }
 
 .board-card small {
   font-size: 11px;
-  letter-spacing: 0.18em;
+  letter-spacing: 0.08em;
   color: var(--student-muted);
   text-transform: uppercase;
+  font-weight: 600;
 }
 
 .board-card p {
@@ -217,25 +246,30 @@ header.hero p {
   grid-template-columns: auto 1fr auto;
   gap: 16px;
   align-items: center;
-  padding: 18px;
-  border-radius: 20px;
-  background: rgba(4, 7, 20, 0.9);
-  border: 1px solid rgba(255, 255, 255, 0.05);
+  padding: 20px;
+  border-radius: 12px;
+  background: var(--student-panel-soft);
+  border: 1px solid var(--student-border);
+  box-shadow: 0 2px 6px rgba(37, 99, 235, 0.05);
 }
 
 .badge-pill {
-  width: 46px;
-  height: 46px;
-  border-radius: 16px;
+  width: 48px;
+  height: 48px;
+  border-radius: 10px;
   display: grid;
   place-items: center;
-  border: 1px solid rgba(255, 255, 255, 0.12);
-  font-weight: 600;
-  letter-spacing: 0.12em;
+  border: 1px solid var(--student-border);
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  background: linear-gradient(135deg, var(--student-accent), var(--student-accent-light));
+  color: white;
 }
 
 .timeline strong {
-  font-size: 18px;
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--student-text);
 }
 
 .timeline span.meta {
@@ -259,10 +293,11 @@ header.hero p {
 }
 
 .micro-card {
-  border-radius: 20px;
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  background: rgba(6, 9, 18, 0.92);
-  padding: 18px;
+  border-radius: 12px;
+  border: 1px solid var(--student-border);
+  background: var(--student-panel-soft);
+  padding: 20px;
+  box-shadow: 0 2px 6px rgba(37, 99, 235, 0.05);
 }
 
 .micro-card span {
@@ -276,6 +311,8 @@ header.hero p {
   display: block;
   font-size: 18px;
   margin-top: 10px;
+  color: var(--student-text);
+  font-weight: 700;
 }
 
 .micro-card p {
@@ -293,16 +330,18 @@ header.hero p {
 .stack-section {
   border-radius: var(--student-radius);
   border: 1px solid var(--student-border);
-  padding: 26px;
-  background: rgba(4, 7, 18, 0.85);
+  padding: 28px;
+  background: var(--student-panel);
+  box-shadow: 0 2px 8px rgba(37, 99, 235, 0.05);
 }
 
 .stack-section h3 {
-  font-size: 16px;
-  letter-spacing: 0.2em;
+  font-size: 14px;
+  letter-spacing: 0.08em;
   text-transform: uppercase;
   color: var(--student-muted);
-  margin-bottom: 18px;
+  margin-bottom: 20px;
+  font-weight: 700;
 }
 
 .routine-list {
@@ -312,14 +351,17 @@ header.hero p {
 }
 
 .routine-card {
-  border-radius: 20px;
-  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 12px;
+  border: 1px solid var(--student-border);
   padding: 18px;
-  background: rgba(8, 11, 20, 0.9);
+  background: var(--student-panel-soft);
+  box-shadow: 0 2px 6px rgba(37, 99, 235, 0.05);
 }
 
 .routine-card strong {
-  font-size: 17px;
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--student-text);
 }
 
 .routine-card p {
@@ -335,10 +377,11 @@ header.hero p {
 }
 
 .goal {
-  border-radius: 18px;
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  padding: 16px;
-  background: rgba(6, 8, 18, 0.9);
+  border-radius: 12px;
+  border: 1px solid var(--student-border);
+  padding: 18px;
+  background: var(--student-panel-soft);
+  box-shadow: 0 2px 6px rgba(37, 99, 235, 0.05);
 }
 
 .goal header {
@@ -358,20 +401,22 @@ header.hero p {
 }
 
 .insight {
-  border-radius: 18px;
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  padding: 14px;
-  background: rgba(8, 12, 23, 0.95);
+  border-radius: 12px;
+  border: 1px solid var(--student-border);
+  padding: 16px;
+  background: var(--student-panel-soft);
   font-size: 13px;
   color: var(--student-muted);
   line-height: 1.6;
+  box-shadow: 0 2px 6px rgba(37, 99, 235, 0.05);
 }
 
 .insight strong {
   display: block;
   font-size: 14px;
-  color: var(--student-text);
+  color: var(--student-accent);
   margin-bottom: 6px;
+  font-weight: 700;
 }
 
 .actions {
@@ -385,17 +430,29 @@ header.hero p {
 a.back {
   color: var(--student-accent);
   text-decoration: none;
-  font-weight: 500;
+  font-weight: 600;
+  transition: color 0.2s ease;
+}
+
+a.back:hover {
+  color: var(--student-text);
 }
 
 .logout-button {
   border: none;
-  border-radius: 16px;
-  padding: 12px 22px;
-  background: linear-gradient(120deg, #38bdf8, #6366f1);
+  border-radius: 8px;
+  padding: 11px 20px;
+  background: linear-gradient(135deg, var(--student-accent), var(--student-accent-light));
   color: white;
   font-weight: 600;
   cursor: pointer;
+  box-shadow: 0 6px 16px rgba(37, 99, 235, 0.3);
+  transition: all 0.2s ease;
+}
+
+.logout-button:hover {
+  box-shadow: 0 8px 22px rgba(37, 99, 235, 0.4);
+  transform: translateY(-2px);
 }
 
 @media (max-width: 1100px) {
@@ -404,13 +461,18 @@ a.back {
   }
 }
 
+
 @media (max-width: 640px) {
   body.page-student {
-    padding: 24px 14px 42px;
+    padding: 24px 16px 40px;
   }
 
   .panel,
   .stack-section {
-    padding: 22px;
+    padding: 20px;
+  }
+
+  header.hero h1 {
+    font-size: 28px;
   }
 }

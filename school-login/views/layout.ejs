@@ -4,6 +4,8 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title><%= title || "School Panel" %></title>
+  <!-- Inter font for improved typography -->
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="/css/base.css">
   <% (styles || []).forEach(function(href){ %>
     <link rel="stylesheet" href="<%= href %>">
@@ -14,7 +16,7 @@
     <%- include('partials/site-header', { headerTitle: headerTitle || title, headerActions: headerActions || [] }) %>
   <% } %>
 
-  <main class="page-shell">
+  <main class="page-shell app-container">
     <% if (typeof content === 'function') { %>
       <%- content() %>
     <% } %>
