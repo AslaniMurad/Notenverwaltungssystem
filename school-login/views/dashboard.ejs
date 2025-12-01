@@ -29,27 +29,27 @@
           <div class="dashboard-tag">Nur autorisierte Zugriffe</div>
         </div>
       </div>
-      <div class="dashboard-right">
-        <div>
-          <div class="dashboard-right-label">Account</div>
-          <div class="dashboard-right-email"><%= email %></div>
-          <div class="dashboard-right-role">Level: <%= role %></div>
-        </div>
-        <div class="dashboard-nav-row">
-          <% if (role === "admin") { %>
-            <a class="dashboard-link" href="/admin">Admin-Bereich öffnen</a>
-          <% } else if (role === "student") { %>
-            <a class="dashboard-link" href="/student">Schüler-Dashboard</a>
-          <% } else { %>
-            <span class="dashboard-nav-hint">Nutze das Menü deiner Rolle entsprechend.</span>
-          <% } %>
-        </div>
-        <form class="logout-form" method="POST" action="/logout">
-          <input type="hidden" name="_csrf" value="<%= csrfToken %>">
-          <button class="logout-btn" type="submit">Logout</button>
-        </form>
-      </div>
     </div>
-<% } };
-%>
-<%- include('layout', page) %>
+    <div class="right-box">
+      <div>
+        <div class="right-label">Account</div>
+        <div class="right-email"><%= email %></div>
+        <div class="right-role">Level: <% if (role === 'admin') { %>Admin<% } else if (role === 'teacher') { %>Lehrer<% } else { %><%= role %><% } %></div>
+      </div>
+      <div class="nav-row">
+        <% if (role === "admin") { %>
+          <a class="btn-link" href="/admin">Admin-Bereich öffnen</a>
+        <% } else if (role === "teacher") { %>
+          <a class="btn-link" href="/teacher/classes">Meine Klassen</a>
+        <% } else { %>
+          <span style="font-size:10px;color:#6b7280;">Nutze das Menü deiner Rolle entsprechend.</span>
+        <% } %>
+      </div>
+      <form class="logout-form" method="POST" action="/logout">
+        <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+        <button class="logout-btn" type="submit">Logout</button>
+      </form>
+    </div>
+  </div>
+</body>
+</html>

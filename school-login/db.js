@@ -90,7 +90,35 @@ db.serialize(() => {
       );
     }
   });
+
+  // Klassen-Tabelle
+  db.run(`
+    CREATE TABLE IF NOT EXISTS classes (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      name TEXT NOT NULL,
+      subject TEXT NOT NULL,
+      teacher_id INTEGER NOT NULL,
+      created_at TEXT NOT NULL DEFAULT (datetime('now')),
+      FOREIGN KEY (teacher_id) REFERENCES users(id)
+    )
+  `);
+
+  // Schüler-Tabelle - Migration: DROP und neu erstellen wenn UNIQUE constraint falsch ist
+  db.run(`DROP TABLE IF EXISTS students`);
+  
+  db.run(`
+    CREATE TABLE IF NOT EXISTS students (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      name TEXT NOT NULL,
+      email TEXT NOT NULL,
+      class_id INTEGER NOT NULL,
+      created_at TEXT NOT NULL DEFAULT (datetime('now')),
+      FOREIGN KEY (class_id) REFERENCES classes(id),
+      UNIQUE(email, class_id)
+    )
+  `);
 });
+
 
 module.exports = {
   db,

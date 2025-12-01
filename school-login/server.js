@@ -19,20 +19,28 @@ app.use(express.static(path.join(__dirname, "public")));
 // --- Session ---
 app.use(session({
   name: "sid",
-  secret: "change-this-session-secret", // in echt aus ENV
+  secret: "change-this-session-secret",
   resave: false,
   saveUninitialized: false,
   cookie: {
     httpOnly: true,
     sameSite: "lax",
-    secure: false,         // bei HTTPS auf true setzen
-    maxAge: 1000 * 60 * 60 // 1h
+    secure: false,
+    maxAge: 1000 * 60 * 60
   }
 }));
 
 // --- CSRF ---
 const csrfProtection = csrf();
 app.use(csrfProtection);
+
+// --- CSRF Error Handler ---
+app.use((err, req, res, next) => {
+  if (err.code === 'EBADCSRFTOKEN') {
+    return res.status(403).send('Ungültiges CSRF-Token. Bitte lade die Seite neu oder melde dich erneut an.');
+  }
+  next(err);
+});
 
 // --- Simple Security Headers ---
 app.use((req, res, next) => {
@@ -42,90 +50,44 @@ app.use((req, res, next) => {
   next();
 });
 
-// --- Startseite (nach Login) ---
-app.get("/", requireAuth, (req, res) => {
-  const { email, role } = req.session.user;
-  res.render("dashboard", { email, role, csrfToken: req.csrfToken() });
-});
+// --- Helper ---
+function requireAuth(req, res, next) {
+  if (!req.session.user) return res.redirect("/login");
+  if (req.session.user.status !== "active") {
+    return res.status(403).send("Account gesperrt.");
+  }
+  next();
+}
 
-// --- Login Seite (Dark, clean) ---
+function requireRole(role) {
+  return (req, res, next) => {
+    if (!req.session.user || req.session.user.role !== role) {
+      return res.status(403).send("Forbidden");
+    }
+    next();
+  };
+}
+
+// ============================
+// ROUTES
+// ============================
+
+// --- Login Seite ---
 app.get("/login", (req, res) => {
   if (req.session.user) return res.redirect("/");
   res.render("login", { csrfToken: req.csrfToken() });
 });
 
-// --- Admin: mount router (statt einzelne /admin routes hier) ---
-const adminRouter = require("./routes/admin");
-app.use("/admin", adminRouter);
-
-// --- Schüler-Dashboard ---
-function placeholderCollection(size) {
-  return Array.from({ length: size }, () => ({
-    label: "Test",
-    value: "Test",
-    detail: "Test"
-  }));
-}
-
-// --- Schüler-Dashboard ---
-app.get("/student", requireAuth, requireRole("student"), (req, res) => {
-  const hero = {
-    headline: "Test",
-    statement: "Test",
-    summary: "Test",
-    badges: ["Test", "Test", "Test"],
-    meta: [
-      { label: "Test", value: "Test" },
-      { label: "Test", value: "Test" },
-      { label: "Test", value: "Test" }
-    ]
-  };
-
-  const focusStats = placeholderCollection(4);
-
-  const studyPanels = Array.from({ length: 5 }, () => ({
-    title: "Test",
-    chip: "Test",
-    signal: "Test"
-  }));
-
-  const timeline = Array.from({ length: 4 }, () => ({
-    badge: "Test",
-    title: "Test",
-    detail: "Test",
-    date: "Test"
-  }));
-
-  const routines = Array.from({ length: 4 }, () => ({
-    title: "Test",
-    detail: "Test",
-    emphasis: "Test"
-  }));
-
-  const insights = Array.from({ length: 3 }, () => ({
-    title: "Test",
-    detail: "Test"
-  }));
-
-  const goals = Array.from({ length: 3 }, () => ({
-    title: "Test",
-    due: "Test",
-    progress: "Test"
-  }));
-
-  res.render("student-dashboard", {
-    email: req.session.user.email,
-    hero,
-    focusStats,
-    studyPanels,
-    timeline,
-    routines,
-    insights,
-    goals,
-    csrfToken: req.csrfToken()
-  });
+// --- Startseite (Dashboard nach Login) ---
+app.get("/", requireAuth, (req, res) => {
+  const { email, role } = req.session.user;
+  res.render("dashboard", { email, role, csrfToken: req.csrfToken() });
 });
 
+// --- Admin UI: User anlegen ---
+app.get("/admin", requireAuth, requireRole("admin"), (req, res) => {
+  res.render("admin", { csrfToken: req.csrfToken() });
+});
 
 // --- Login POST ---
 app.post("/login", (req, res) => {
@@ -150,7 +112,8 @@ app.post("/login", (req, res) => {
         role: user.role,
         status: user.status
       };
-      res.redirect("/");
+
+      return res.redirect("/");
     }
   );
 });
@@ -159,6 +122,205 @@ app.post("/login", (req, res) => {
 app.post("/logout", (req, res) => {
   req.session.destroy(() => res.redirect("/login"));
 });
+
+// --- Admin: User anlegen (POST) ---
+app.post("/admin/users", requireAuth, requireRole("admin"), (req, res) => {
+  const { email, role, password } = req.body || {};
+  if (!email || !role || !password) return res.status(400).send("Fehlende Felder.");
+
+  const hash = hashPassword(password);
+  db.run(
+    "INSERT INTO users (email, password_hash, role, status) VALUES (?,?,?, 'active')",
+    [email, hash, role],
+    function (err) {
+      if (err) {
+        if (String(err).includes("UNIQUE")) {
+          return res.status(409).send("E-Mail existiert bereits.");
+        }
+        return res.status(500).send("DB-Fehler.");
+      }
+      res.redirect("/admin");
+    }
+  );
+});
+// ============================
+// TEACHER ROUTES
+// ============================
+
+// --- Meine Klassen anzeigen ---
+app.get("/teacher/classes", requireAuth, requireRole("teacher"), (req, res) => {
+  const teacher_id = req.session.user.id;
+  db.all(
+    "SELECT id, name, subject FROM classes WHERE teacher_id = ? ORDER BY created_at DESC",
+    [teacher_id],
+    (err, classes) => {
+      if (err) return res.status(500).send("DB-Fehler");
+      res.render("teacher-classes", {
+        classes: classes || [],
+        email: req.session.user.email,
+        csrfToken: req.csrfToken()
+      });
+    }
+  );
+});
+
+// --- Klasse erstellen (GET - Form anzeigen) ---
+app.get("/teacher/create-class", requireAuth, requireRole("teacher"), (req, res) => {
+  res.render("teacher-create-class", { 
+    email: req.session.user.email, 
+    csrfToken: req.csrfToken() 
+  });
+});
+
+// --- Klasse erstellen (POST) ---
+app.post("/teacher/create-class", requireAuth, requireRole("teacher"), (req, res) => {
+  const { name, subject } = req.body || {};
+  if (!name || !subject) return res.status(400).send("Fehlende Felder.");
+
+  const teacher_id = req.session.user.id;
+  db.run(
+    "INSERT INTO classes (name, subject, teacher_id) VALUES (?,?,?)",
+    [name, subject, teacher_id],
+    function (err) {
+      if (err) return res.status(500).send("DB-Fehler: " + err.message);
+      res.redirect("/teacher/classes");
+    }
+  );
+});
+
+// --- Klasse löschen (POST) ---
+app.post("/teacher/delete-class/:class_id", requireAuth, requireRole("teacher"), (req, res) => {
+  const { class_id } = req.params;
+  const teacher_id = req.session.user.id;
+
+  // Prüfe, ob Klasse dem Lehrer gehört
+  db.get("SELECT id FROM classes WHERE id = ? AND teacher_id = ?", [class_id, teacher_id], (err, classRow) => {
+    if (err || !classRow) return res.status(403).send("Forbidden");
+
+    // Lösche erst alle Schüler der Klasse
+    db.run("DELETE FROM students WHERE class_id = ?", [class_id], (err) => {
+      if (err) return res.status(500).send("DB-Fehler");
+
+      // Dann lösche die Klasse
+      db.run("DELETE FROM classes WHERE id = ?", [class_id], (err) => {
+        if (err) return res.status(500).send("DB-Fehler");
+        res.redirect("/teacher/classes");
+      });
+    });
+  });
+});
+
+// --- Schüler einer Klasse anzeigen ---
+app.get("/teacher/students/:class_id", requireAuth, requireRole("teacher"), (req, res) => {
+  const { class_id } = req.params;
+  const teacher_id = req.session.user.id;
+
+  db.get(
+    "SELECT id, name, subject FROM classes WHERE id = ? AND teacher_id = ?",
+    [class_id, teacher_id],
+    (err, classData) => {
+      if (err || !classData) return res.status(403).send("Klasse nicht gefunden");
+
+      db.all(
+        "SELECT id, name, email FROM students WHERE class_id = ? ORDER BY name",
+        [class_id],
+        (err, students) => {
+          if (err) return res.status(500).send("DB-Fehler");
+          res.render("teacher-students", {
+            classData,
+            students: students || [],
+            email: req.session.user.email,
+            csrfToken: req.csrfToken()
+          });
+        }
+      );
+    }
+  );
+});
+
+// --- Schüler zu Klasse hinzufügen (GET - Form) ---
+app.get("/teacher/add-student/:class_id", requireAuth, requireRole("teacher"), (req, res) => {
+  const { class_id } = req.params;
+  const teacher_id = req.session.user.id;
+
+  db.get(
+    "SELECT id, name FROM classes WHERE id = ? AND teacher_id = ?",
+    [class_id, teacher_id],
+    (err, classData) => {
+      if (err || !classData) return res.status(403).send("Klasse nicht gefunden");
+      res.render("teacher-add-student", { 
+        classData, 
+        csrfToken: req.csrfToken(), 
+        email: req.session.user.email,
+        error: null 
+      });
+    }
+  );
+});
+
+// --- Schüler zu Klasse hinzufügen (POST) ---
+app.post("/teacher/add-student/:class_id", requireAuth, requireRole("teacher"), (req, res) => {
+  const { class_id } = req.params;
+  const { name, email: studentEmail } = req.body || {};
+  const teacher_id = req.session.user.id;
+  const teacherEmail = req.session.user.email;
+  
+  if (!name || !studentEmail) return res.status(400).send("Fehlende Felder.");
+
+  db.get(
+    "SELECT id, name FROM classes WHERE id = ? AND teacher_id = ?",
+    [class_id, teacher_id],
+    (err, classData) => {
+      if (err) {
+        console.error("DB-Fehler bei Klassenabfrage:", err);
+        return res.status(500).send("DB-Fehler: " + err.message);
+      }
+      if (!classData) return res.status(403).send("Klasse nicht gefunden");
+
+      // Prüfe, ob die E-Mail als Nutzer mit Rolle 'student' existiert
+      db.get("SELECT id, role FROM users WHERE email = ?", [studentEmail], (err, userRow) => {
+        if (err) {
+          console.error("DB-Fehler bei User-Abfrage:", err);
+          return res.status(500).send("DB-Fehler: " + err.message);
+        }
+        if (!userRow || userRow.role !== "student") {
+          return res.render("teacher-add-student", {
+            classData,
+            csrfToken: req.csrfToken(),
+            email: teacherEmail,
+            error: "E-Mail nicht gefunden oder nicht als Schüler registriert."
+          });
+        }
+
+        // Verhindere Duplikate
+        db.get("SELECT id FROM students WHERE email = ? AND class_id = ?", [studentEmail, class_id], (err, existing) => {
+          if (err) {
+            console.error("DB-Fehler bei Duplikat-Prüfung:", err);
+            return res.status(500).send("DB-Fehler: " + err.message);
+          }
+          if (existing) {
+            return res.render("teacher-add-student", {
+              classData,
+              csrfToken: req.csrfToken(),
+              email: teacherEmail,
+              error: "Dieser Schüler ist bereits in der Klasse."
+            });
+          }
+
+          // Einfügen
+          db.run("INSERT INTO students (name, email, class_id) VALUES (?,?,?)", [name, studentEmail, class_id], function (err) {
+            if (err) {
+              console.error("DB-Fehler beim Einfügen:", err);
+              return res.status(500).send("DB-Fehler: " + err.message);
+            }
+            res.redirect("/teacher/students/" + class_id);
+          });
+        });
+      });
+    }
+  );
+});
+
 // --- Start ---
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
