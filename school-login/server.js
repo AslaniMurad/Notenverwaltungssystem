@@ -5,6 +5,7 @@ const csrf = require("csurf");
 const path = require("path");
 const { db, verifyPassword, hashPassword } = require("./db");
 const { requireAuth, requireRole } = require("./middleware/auth");
+const adminRoutes = require("./routes/admin");
 
 const app = express();
 
@@ -66,11 +67,6 @@ app.get("/", requireAuth, (req, res) => {
   res.render("dashboard", { email, role, csrfToken: req.csrfToken() });
 });
 
-// --- Admin UI: User anlegen ---
-app.get("/admin", requireAuth, requireRole("admin"), (req, res) => {
-  res.render("admin", { csrfToken: req.csrfToken() });
-});
-
 // --- Login POST ---
 app.post("/login", (req, res) => {
   const { email, password } = req.body || {};
@@ -105,26 +101,8 @@ app.post("/logout", (req, res) => {
   req.session.destroy(() => res.redirect("/login"));
 });
 
-// --- Admin: User anlegen (POST) ---
-app.post("/admin/users", requireAuth, requireRole("admin"), (req, res) => {
-  const { email, role, password } = req.body || {};
-  if (!email || !role || !password) return res.status(400).send("Fehlende Felder.");
-
-  const hash = hashPassword(password);
-  db.run(
-    "INSERT INTO users (email, password_hash, role, status) VALUES (?,?,?, 'active')",
-    [email, hash, role],
-    function (err) {
-      if (err) {
-        if (String(err).includes("UNIQUE")) {
-          return res.status(409).send("E-Mail existiert bereits.");
-        }
-        return res.status(500).send("DB-Fehler.");
-      }
-      res.redirect("/admin");
-    }
-  );
-});
+// --- Admin Routes (Userverwaltung) ---
+app.use("/admin", adminRoutes);
 // ============================
 // TEACHER ROUTES
 // ============================
