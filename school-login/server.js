@@ -70,58 +70,88 @@ function placeholderCollection(size) {
 // --- Schüler-Dashboard ---
 app.get("/student", requireAuth, requireRole("student"), (req, res) => {
   const hero = {
-    headline: "Test",
-    statement: "Test",
-    summary: "Test",
-    badges: ["Test", "Test", "Test"],
+    headline: "Dein Dashboard",
+    statement: "Alles Wichtige für deinen Schultag.",
+    summary: "Aufgaben, Noten, Rückgaben, Materialien – übersichtlich und schnell erreichbar.",
+    badges: ["Schüler-Sicht", "HTL Waidhofen/Ybbs"]
+  };
+
+  const studentProfile = {
+    name: "Max Muster",
+    class: "3AHWII",
+    badges: ["Informatik-Schwerpunkt", "HTL-Waidhofen"],
     meta: [
-      { label: "Test", value: "Test" },
-      { label: "Test", value: "Test" },
-      { label: "Test", value: "Test" }
+      { label: "Klasse", value: "3AHWII" },
+      { label: "⌀ Note", value: "2,1" },
+      { label: "Offene Aufgaben", value: "2" },
+      { label: "Neue Rückgaben", value: "1" }
     ]
   };
 
-  const focusStats = placeholderCollection(4);
+  const focusStats = [
+    { label: "Nächste Abgabe", value: "Heute, 14:00", detail: "Chemie-Protokoll" },
+    { label: "Tests diese Woche", value: "2", detail: "Mathe / Informatik" },
+    { label: "Neue Materialien", value: "3", detail: "Seit gestern" }
+  ];
 
-  const studyPanels = Array.from({ length: 5 }, () => ({
-    title: "Test",
-    chip: "Test",
-    signal: "Test"
-  }));
+  const tasks = [
+    {
+      id: 1,
+      title: "Chemie – Laborprotokoll",
+      subject: "Chemie",
+      due: "Heute 14:00",
+      status: "Offen",
+      teacher: "Frau Bauer",
+      description: "Versuch dokumentieren und Kurve einzeichnen.",
+      attachments: ["chemie_arbeitsblatt.pdf"]
+    },
+    {
+      id: 2,
+      title: "Informatik – HTML/CSS Mini-Projekt",
+      subject: "Informatik",
+      due: "Montag 23:59",
+      status: "In Arbeit",
+      teacher: "Herr Leitner",
+      description: "Kleine Website erstellen und ZIP-Datei abgeben.",
+      attachments: []
+    }
+  ];
 
-  const timeline = Array.from({ length: 4 }, () => ({
-    badge: "Test",
-    title: "Test",
-    detail: "Test",
-    date: "Test"
-  }));
+  const returns = [
+    {
+      title: "Mathematik – 1. Test",
+      subject: "Mathematik",
+      grade: "2",
+      teacher: "Frau König",
+      feedback: "Gute Leistung, nur Fehler bei Gleichungen.",
+      attachments: ["mathe_test_loesung.pdf"]
+    }
+  ];
 
-  const routines = Array.from({ length: 4 }, () => ({
-    title: "Test",
-    detail: "Test",
-    emphasis: "Test"
-  }));
+  const grades = [
+    { subject: "Mathematik", grade: "2", teacher: "Frau König", weight: "40%" },
+    { subject: "Informatik", grade: "1-", teacher: "Herr Leitner", weight: "35%" }
+  ];
 
-  const insights = Array.from({ length: 3 }, () => ({
-    title: "Test",
-    detail: "Test"
-  }));
+  const materials = [
+    { title: "HTML Grundlagen", subject: "Informatik", fileName: "html_grundlagen.pdf" },
+    { title: "Lineare Funktionen", subject: "Mathematik", fileName: "lineare_funktionen.pdf" }
+  ];
 
-  const goals = Array.from({ length: 3 }, () => ({
-    title: "Test",
-    due: "Test",
-    progress: "Test"
-  }));
+  const messages = [
+    { title: "Info zum Projekt", sender: "Herr Leitner", excerpt: "Bitte Ideen bis Mittwoch abgeben.", unread: true }
+  ];
 
   res.render("student-dashboard", {
     email: req.session.user.email,
     hero,
+    studentProfile,
     focusStats,
-    studyPanels,
-    timeline,
-    routines,
-    insights,
-    goals,
+    tasks,
+    returns,
+    grades,
+    materials,
+    messages,
     csrfToken: req.csrfToken()
   });
 });
@@ -164,3 +194,4 @@ const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
   console.log(`Server läuft: http://localhost:${PORT}`);
 });
+

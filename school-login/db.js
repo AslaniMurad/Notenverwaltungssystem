@@ -67,13 +67,7 @@ db.serialize(() => {
   `);
 
   const ADMIN_EMAIL = process.env.ADMIN_EMAIL || "admin@example.com";
-  // Generiere ein starkes Initial-Passwort zur Laufzeit, falls keines via ENV gesetzt wurde.
-  // Dadurch vermeiden wir ein hartkodiertes Default-Passwort im Repository.
-  const ADMIN_PASS = process.env.ADMIN_PASS || (function(){
-    const raw = crypto.randomBytes(12).toString('base64');
-    // Entferne problematische Zeichen, begrenze Länge auf 16
-    return raw.replace(/[^A-Za-z0-9]/g,'A').slice(0,16);
-  })();
+  const ADMIN_PASS  = process.env.ADMIN_PASS  || "admin1234!ChangeMe";
 
   db.get("SELECT id FROM users WHERE email = ?", [ADMIN_EMAIL], (err, row) => {
     if (err) {
@@ -90,11 +84,7 @@ db.serialize(() => {
             console.error("Seed-Admin konnte nicht angelegt werden:", e);
           } else {
             console.log("Seed-Admin angelegt:", ADMIN_EMAIL);
-            if (!process.env.ADMIN_PASS) {
-              console.log("Initial-Passwort (nur Laufzeit, bitte setzen Sie ADMIN_PASS für Wiederholbarkeit):", ADMIN_PASS);
-            } else {
-              console.log("Admin-Passwort aus Umgebungsvariable verwendet.");
-            }
+            console.log("Initial-Passwort:", ADMIN_PASS);
           }
         }
       );

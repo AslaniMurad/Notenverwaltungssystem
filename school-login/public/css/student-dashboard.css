@@ -1,10 +1,10 @@
 :root {
   --student-bg: #F3F4F6;
-  --student-panel: #FFFFFF;
-  --student-panel-soft: #F9FAFB;
+  --student-panel: transparent;
+  --student-panel-soft: rgba(249,250,251,0.6);
   --student-text: #1F2937;
   --student-muted: #6B7280;
-  --student-border: #D1D5DB;
+  --student-border: rgba(209,213,219,0.65);
   --student-accent: #003DA5;
   --student-accent-light: #0052CC;
   --student-accent-green: #6ABF2E;
