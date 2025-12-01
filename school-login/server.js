@@ -160,7 +160,23 @@ app.post("/logout", (req, res) => {
   req.session.destroy(() => res.redirect("/login"));
 });
 // --- Start ---
+const os = require("os");
 const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => {
-  console.log(`Server läuft: http://localhost:${PORT}`);
+const HOST = process.env.HOST || "0.0.0.0"; // bind to all interfaces by default
+
+// Find a LAN IPv4 address to print an easy-to-use URL
+function getLocalIPv4() {
+  const ifaces = os.networkInterfaces();
+  for (const name of Object.keys(ifaces)) {
+    for (const net of ifaces[name]) {
+      if (net.family === "IPv4" && !net.internal) return net.address;
+    }
+  }
+  return "localhost";
+}
+
+const LAN_IP = getLocalIPv4();
+app.listen(PORT, HOST, () => {
+  console.log(`Server läuft: http://localhost:${PORT} (bound to ${HOST})`);
+  console.log(`Im Netzwerk erreichbar: http://${LAN_IP}:${PORT}`);
 });
