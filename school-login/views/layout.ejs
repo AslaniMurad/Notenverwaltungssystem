@@ -1,0 +1,31 @@
+<!doctype html>
+<html lang="de">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title><%= title || "School Panel" %></title>
+  <link rel="stylesheet" href="/css/base.css">
+  <% (styles || []).forEach(function(href){ %>
+    <link rel="stylesheet" href="<%= href %>">
+  <% }) %>
+</head>
+<body class="<%= bodyClass || '' %>">
+  <% if (!hideHeader) { %>
+    <%- include('partials/site-header', { headerTitle: headerTitle || title, headerActions: headerActions || [] }) %>
+  <% } %>
+
+  <main class="page-shell">
+    <% if (typeof content === 'function') { %>
+      <%- content() %>
+    <% } %>
+  </main>
+
+  <% if (!hideFooter) { %>
+    <%- include('partials/site-footer') %>
+  <% } %>
+
+  <% (scripts || []).forEach(function(src){ %>
+    <script src="<%= src %>"></script>
+  <% }) %>
+</body>
+</html>

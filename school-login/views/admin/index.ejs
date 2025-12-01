@@ -1,0 +1,71 @@
+<%
+  const page = {
+    title: 'Admin — Nutzerverwaltung',
+    headerTitle: 'Adminbereich',
+    headerActions: [{ label: 'Zum Dashboard', href: '/' }],
+    styles: ['/css/admin.css'],
+    scripts: ['/js/app.js'],
+    bodyClass: 'page-admin',
+    hideHeader: false,
+    hideFooter: true,
+    content: function () { %>
+    <div class="admin-wrap">
+      <div class="admin-topbar">
+        <h1>Admin — Nutzerverwaltung</h1>
+        <a class="admin-button-plain" href="/">← Dashboard</a>
+      </div>
+
+      <div class="admin-card">
+        <h3>Nutzer anlegen</h3>
+        <form class="admin-form" method="POST" action="/admin/users">
+          <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+          <input name="email" type="email" placeholder="E-Mail" required>
+          <select name="role">
+            <option value="student">Schüler</option>
+            <option value="teacher">Lehrer</option>
+            <option value="admin">Admin</option>
+          </select>
+          <input name="password" type="password" placeholder="Initial-Passwort" required>
+          <button class="btn btn-primary" type="submit">Erstellen</button>
+        </form>
+
+        <h3 class="admin-heading-spaced">Nutzerliste</h3>
+        <table class="admin-table">
+          <thead>
+            <tr><th>ID</th><th>E-Mail</th><th>Rolle</th><th>Status</th><th>Erstellt</th><th>Letzter Login</th><th>Aktionen</th></tr>
+          </thead>
+          <tbody>
+            <% if (!users || users.length === 0) { %>
+              <tr><td colspan="7" class="admin-muted">Keine Nutzer gefunden.</td></tr>
+            <% } %>
+            <% users.forEach(function(u){ %>
+              <tr>
+                <td><%= u.id %></td>
+                <td><%= u.email %></td>
+                <td><%= u.role %></td>
+                <td><%= u.status %></td>
+                <td><%= u.created_at || '-' %></td>
+                <td><%= u.last_login || '-' %></td>
+                <td class="admin-actions">
+                  <a class="btn btn-secondary" href="/admin/users/<%= u.id %>/edit">Bearbeiten</a>
+
+                  <form method="POST" action="/admin/users/<%= u.id %>/reset">
+                    <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+                    <input type="hidden" name="password" value="temp1234">
+                    <button class="btn" type="submit">Passwort reset</button>
+                  </form>
+
+                  <form method="POST" action="/admin/users/<%= u.id %>/delete" onsubmit="return confirm('Nutzer wirklich löschen (soft-delete)?');">
+                    <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+                    <button class="btn btn-danger" type="submit">Löschen</button>
+                  </form>
+                </td>
+              </tr>
+            <% }) %>
+          </tbody>
+        </table>
+      </div>
+    </div>
+<% } };
+%>
+<%- include('../layout', page) %>

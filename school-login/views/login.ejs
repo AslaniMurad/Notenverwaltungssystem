@@ -1,119 +1,54 @@
-<!doctype html>
-<html lang="de">
-<head>
-  <meta charset="utf-8">
-  <title>Login | School Panel</title>
-  <style>
-    :root{
-      --bg:#020817;
-      --card:#050816;
-      --card-soft:#0b1020;
-      --accent:#3b82f6;
-      --accent-soft:rgba(59,130,246,.14);
-      --accent-red:#f97316;
-      --border-soft:rgba(148,163,253,.14);
-      --text:#e5e7eb;
-      --muted:#6b7280;
-      --radius-xl:18px;
-      --shadow:0 22px 55px rgba(15,23,42,.95);
-      --font:system-ui, -apple-system, BlinkMacSystemFont, -system-ui, sans-serif;
-    }
-    *{margin:0;padding:0;box-sizing:border-box}
-    body{
-      min-height:100vh;
-      font-family:var(--font);
-      background:
-        radial-gradient(circle at top,#111827 0, #020817 38%, #000 100%);
-      color:var(--text);
-      display:flex;
-      align-items:center;
-      justify-content:center;
-      padding:24px;
-    }
-    .wrap{
-      width:100%;
-      max-width:420px;
-      background:radial-gradient(circle at top, rgba(37,99,235,.08), var(--card));
-      border-radius:var(--radius-xl);
-      padding:22px 22px 18px;
-      box-shadow:var(--shadow);
-      border:1px solid var(--border-soft);
-      backdrop-filter: blur(20px);
-      position:relative;
-      overflow:hidden;
-    }
-    .glow{
-      position:absolute;
-      width:140px;height:140px;
-      background:radial-gradient(circle,#1d4ed8,transparent);
-      opacity:.14;
-      top:-40px;right:-40px;
-      pointer-events:none;
-    }
-    .brand{display:flex;align-items:center;gap:9px;margin-bottom:10px;position:relative;z-index:2;}
-    .logo-dot{width:22px;height:22px;border-radius:999px;background:radial-gradient(circle at 30% 0,#60a5fa,#1d4ed8);box-shadow:0 0 18px rgba(37,99,235,.9);}
-    .brand-text{display:flex;flex-direction:column;gap:0;}
-    .brand-label{font-size:9px;text-transform:uppercase;letter-spacing:.16em;color:#6b7280;}
-    .brand-title{font-size:15px;font-weight:600;color:#e5e7eb;letter-spacing:.03em;}
-    .title{font-size:21px;font-weight:600;margin-bottom:4px;color:#e5e7eb;}
-    .subtitle{font-size:11px;color:var(--muted);margin-bottom:14px;}
-    .security-pill{display:inline-flex;align-items:center;gap:6px;padding:4px 9px;border-radius:999px;border:1px solid rgba(75,85,99,.9);font-size:9px;color:#9ca3af;background:rgba(5,9,20,.98);margin-bottom:10px;}
-    .security-pill span.dot{width:7px;height:7px;border-radius:999px;background:#22c55e;box-shadow:0 0 10px #22c55e;}
-    form{position:relative;z-index:2;}
-    label{display:block;font-size:10px;color:#9ca3af;margin-bottom:4px;margin-top:6px;}
-    input[type="email"],input[type="password"]{width:100%;padding:9px 10px;border-radius:11px;border:1px solid rgba(75,85,99,.9);background:linear-gradient(to bottom,var(--card-soft),#020817);color:var(--text);font-size:11px;outline:none;transition:all .17s ease;}
-    input::placeholder{color:#4b5563;font-size:10px;}
-    input[type="email"]:focus,input[type="password"]:focus{border-color:var(--accent);box-shadow:0 0 16px rgba(37,99,235,.28);transform:translateY(-1px);}
-    .hint-row{display:flex;justify-content:space-between;align-items:center;margin-top:4px;margin-bottom:8px;}
-    .hint-text{font-size:8px;color:var(--muted);}
-    .role-hint{font-size:8px;color:var(--accent);text-align:right;}
-    button[type="submit"]{width:100%;margin-top:6px;padding:9px 0;border-radius:12px;border:none;background:linear-gradient(to right,#2563eb,#4f46e5);color:#f9fafb;font-size:11px;font-weight:500;cursor:pointer;box-shadow:0 15px 32px rgba(15,23,42,1);transition:all .18s ease-in-out;}
-    button[type="submit"]:hover{transform:translateY(-1px);box-shadow:0 22px 40px rgba(15,23,42,1);filter:saturate(1.08);}
-    .foot{margin-top:10px;font-size:8px;color:var(--muted);display:flex;justify-content:space-between;gap:8px;}
-    .foot span.key{color:var(--accent-red);}
-    @media (max-width:480px){body{padding:14px;} .wrap{padding:18px 16px 14px;} .title{font-size:18px;}}
-  </style>
-</head>
-<body>
-  <div class="wrap">
-    <div class="glow"></div>
-    <div class="brand">
-      <div class="logo-dot"></div>
-      <div class="brand-text">
-        <div class="brand-label">Secure School Access</div>
-        <div class="brand-title">School Panel Login</div>
+<%
+  const page = {
+    title: 'Login | School Panel',
+    styles: ['/css/login.css'],
+    scripts: ['/js/app.js'],
+    bodyClass: 'page-login',
+    hideHeader: true,
+    hideFooter: true,
+    content: function () { %>
+    <div class="login-card">
+        <div class="login-glow"></div>
+        <div class="login-brand">
+          <div class="login-mark"></div>
+          <div>
+            <div class="login-eyebrow">Secure School Access</div>
+            <div class="login-title-inline">School Panel Login</div>
+          </div>
+        </div>
+
+        <h1>Melde dich an</h1>
+        <p class="login-subtitle">Nutze deine zugewiesene Schul-E-Mail und dein Passwort. Nur freigegebene Accounts erhalten Zugriff.</p>
+
+        <% if (typeof error !== 'undefined' && error) { %>
+          <div class="error-box" role="alert"><%= error %></div>
+        <% } %>
+
+        <form method="POST" action="/login">
+          <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+
+          <label class="login-label" for="email">E-Mail-Adresse</label>
+          <input class="login-input" id="email" name="email" type="email" placeholder="z.B. max.muster@schule.at" required value="<%= typeof email !== 'undefined' ? email : '' %>">
+
+          <label class="login-label" for="password">Passwort</label>
+          <input class="login-input" id="password" name="password" type="password" placeholder="Dein sicheres Passwort" required>
+
+          <div class="login-hint-row">
+            <div class="login-hint">Zugangsdaten erhältst du von einem Admin.</div>
+            <div class="login-roles">Rollen: Admin • Lehrer • Schüler</div>
+          </div>
+
+          <div class="login-buttons">
+            <button class="btn-login-submit" type="submit">Login</button>
+            <button class="btn-login-back" type="button" onclick="history.back()">Zurück</button>
+          </div>
+        </form>
+
+        <div class="login-foot">
+          <div>Keine Selbst-Registrierung – nur zentrale Vergabe.</div>
+          <div><strong>AES</strong> / Hashing / Sessions geschützt.</div>
+        </div>
       </div>
-    </div>
-    <div class="security-pill">
-      <span class="dot"></span>
-      Interner Zugang für Admins, Lehrer & Schüler
-    </div>
-    <h1 class="title">Melde dich an</h1>
-    <p class="subtitle">
-      Nutze deine zugewiesene Schul-E-Mail und dein Passwort. Nur freigegebene Accounts erhalten Zugriff.
-    </p>
-
-    <form method="POST" action="/login">
-      <input type="hidden" name="_csrf" value="<%= csrfToken %>">
-
-      <label for="email">E-Mail-Adresse</label>
-      <input id="email" name="email" type="email" placeholder="z.B. max.muster@schule.at" required>
-
-      <label for="password">Passwort</label>
-      <input id="password" name="password" type="password" placeholder="Dein sicheres Passwort" required>
-
-      <div class="hint-row">
-        <div class="hint-text">Zugangsdaten erhältst du von einem Admin.</div>
-        <div class="role-hint">Rollen: Admin • Lehrer • Schüler</div>
-      </div>
-
-      <button type="submit">Login</button>
-    </form>
-
-    <div class="foot">
-      <div>Keine Selbst-Registrierung – nur zentrale Vergabe.</div>
-      <div><span class="key">AES</span> / Hashing / Sessions geschützt.</div>
-    </div>
-  </div>
-</body>
-</html>
+<% } };
+%>
+<%- include('layout', page) %>

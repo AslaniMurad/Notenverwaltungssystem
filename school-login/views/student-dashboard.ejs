@@ -1,0 +1,141 @@
+<%
+  const page = {
+    title: 'Schüler-Dashboard',
+    headerTitle: 'Schüler-Dashboard',
+    headerActions: [{ label: 'Zum Dashboard', href: '/' }],
+    styles: ['/css/student-dashboard.css'],
+    scripts: ['/js/app.js'],
+  bodyClass: 'page-student',
+  hideHeader: false,
+  hideFooter: false,
+  content: function() { %>
+    <main class="student-main">
+      <section class="left">
+        <article class="panel">
+          <header class="hero">
+            <p class="eyebrow">Signalraum</p>
+            <h1><%= hero.headline %> • <%= hero.statement %></h1>
+            <p><%= hero.summary %></p>
+            <div class="badge-row">
+              <% hero.badges.forEach(tag => { %>
+                <span class="badge"><%= tag %></span>
+              <% }) %>
+            </div>
+            <div class="hero-meta">
+              <% hero.meta.forEach(item => { %>
+                <article>
+                  <span><%= item.label %></span>
+                  <strong><%= item.value %></strong>
+                </article>
+              <% }) %>
+            </div>
+          </header>
+
+          <section class="focus-stats">
+            <% focusStats.forEach(card => { %>
+              <article class="focus-card">
+                <span><%= card.label %></span>
+                <strong><%= card.value %></strong>
+                <p><%= card.detail %></p>
+              </article>
+            <% }) %>
+          </section>
+
+          <section class="board">
+            <% studyPanels.forEach(card => { %>
+              <article class="board-card">
+                <div>
+                  <small><%= card.chip %></small>
+                  <h4><%= card.title %></h4>
+                </div>
+                <p><%= card.signal %></p>
+              </article>
+            <% }) %>
+          </section>
+
+          <section class="timeline">
+            <p class="eyebrow">Test</p>
+            <ul>
+              <% timeline.forEach(item => { %>
+                <li>
+                  <div class="badge-pill"><%= item.badge %></div>
+                  <div>
+                    <strong><%= item.title %></strong>
+                    <span class="meta"><%= item.detail %></span>
+                  </div>
+                  <div class="timeline-date">
+                    <span><%= item.date %></span>
+                  </div>
+                </li>
+              <% }) %>
+            </ul>
+          </section>
+
+          <section class="micro-grid">
+            <% routines.forEach(item => { %>
+              <article class="micro-card">
+                <span><%= item.emphasis %></span>
+                <strong><%= item.title %></strong>
+                <p><%= item.detail %></p>
+              </article>
+            <% }) %>
+          </section>
+        </article>
+      </section>
+
+      <section class="right">
+        <article class="stack">
+          <div class="stack-section">
+            <h3>Test</h3>
+            <div class="routine-list">
+              <% routines.forEach(item => { %>
+                <article class="routine-card">
+                  <strong><%= item.title %></strong>
+                  <p><%= item.detail %></p>
+                </article>
+              <% }) %>
+            </div>
+          </div>
+
+          <div class="stack-section">
+            <h3>Test</h3>
+            <div class="goal-list">
+              <% goals.forEach(goal => { %>
+                <article class="goal">
+                  <header>
+                    <strong><%= goal.title %></strong>
+                    <span><%= goal.progress %></span>
+                  </header>
+                  <small><%= goal.due %></small>
+                </article>
+              <% }) %>
+            </div>
+          </div>
+
+          <div class="stack-section">
+            <h3>Test</h3>
+            <div class="insight-grid">
+              <% insights.forEach(insight => { %>
+                <article class="insight">
+                  <strong><%= insight.title %></strong>
+                  <p><%= insight.detail %></p>
+                </article>
+              <% }) %>
+            </div>
+          </div>
+
+          <div class="stack-section">
+            <div class="actions">
+              <a class="back" href="/">← Zurück</a>
+              <form method="POST" action="/logout">
+                <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+                <button class="logout-button" type="submit">Logout</button>
+              </form>
+            </div>
+          </div>
+        </article>
+      </section>
+    </main>
+<% } };
+%>
+<%- include('layout', page) %>

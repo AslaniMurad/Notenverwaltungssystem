@@ -1,0 +1,16 @@
+<header class="site-header">
+  <div class="header-brand">
+    <span class="brand-mark" aria-hidden="true"></span>
+    <div>
+      <div class="brand-meta">Secure School Access</div>
+      <div class="brand-title"><%= headerTitle || 'School Panel' %></div>
+    </div>
+  </div>
+  <% if (headerActions && headerActions.length) { %>
+    <nav class="header-actions" aria-label="Hauptaktionen">
+      <% headerActions.forEach(function(action){ %>
+        <a class="btn btn-secondary" href="<%= action.href %>"><%= action.label %></a>
+      <% }) %>
+    </nav>
+  <% } %>
+</header>
