@@ -302,9 +302,7 @@ db.serialize(() => {
     )
   `);
 
-  // Schüler-Tabelle - Migration: DROP und neu erstellen wenn UNIQUE constraint falsch ist
-  db.run(`DROP TABLE IF EXISTS students`);
-
+  // Schüler-Tabelle
   db.run(`
     CREATE TABLE IF NOT EXISTS students (
       id INTEGER PRIMARY KEY AUTOINCREMENT,

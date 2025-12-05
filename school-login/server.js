@@ -51,17 +51,23 @@ app.use((req, res, next) => {
   next();
 });
 
+// --- Helper: Zielpfad anhand der Rolle
+function redirectByRole(role) {
+  if (role === "admin") return "/admin";
+  if (role === "teacher") return "/teacher/classes";
+  if (role === "student") return "/student";
+  return "/login";
+}
+
 // --- Startseite (nach Login) ---
 app.get("/", requireAuth, (req, res) => {
   const { role } = req.session.user;
-  if (role === "admin") return res.redirect("/admin");
-  if (role === "student") return res.redirect("/student");
-  return res.redirect("/login");
+  return res.redirect(redirectByRole(role));
 });
 
 // --- Login Seite ---
 app.get("/login", (req, res) => {
-  if (req.session.user) return res.redirect("/");
+  if (req.session.user) return res.redirect(redirectByRole(req.session.user.role));
   res.render("login", { csrfToken: req.csrfToken() });
 });
 
@@ -180,9 +186,7 @@ app.post("/login", (req, res) => {
         role: user.role,
         status: user.status
       };
-      if (user.role === "admin") return res.redirect("/admin");
-      if (user.role === "student") return res.redirect("/student");
-      res.redirect("/");
+      return res.redirect(redirectByRole(user.role));
     }
   );
 });
@@ -211,6 +215,11 @@ app.get("/teacher/classes", requireAuth, requireRole("teacher"), (req, res) => {
       });
     }
   );
+});
+
+// --- Lehrer-Startseite ---
+app.get("/teacher", requireAuth, requireRole("teacher"), (req, res) => {
+  res.redirect("/teacher/classes");
 });
 
 // --- Klasse erstellen (GET - Form anzeigen) ---
