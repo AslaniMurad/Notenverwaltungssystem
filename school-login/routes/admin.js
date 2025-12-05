@@ -18,7 +18,12 @@ router.get("/", (req, res, next) => {
         console.error("DB error fetching users (admin.index):", err);
         return next(err);
       }
-      res.render("admin/index", { users, csrfToken: req.csrfToken() });
+      res.render("admin/index", {
+        users,
+        csrfToken: req.csrfToken(),
+        currentUser: req.session.user,
+        activePath: req.originalUrl
+      });
     }
   );
 });
@@ -71,7 +76,12 @@ router.get("/users/:id/edit", (req, res, next) => {
         backUrl: "/admin",
         csrfToken: req.csrfToken()
       });
-      res.render("admin/edit", { user, csrfToken: req.csrfToken() });
+      res.render("admin/edit", {
+        user,
+        csrfToken: req.csrfToken(),
+        currentUser: req.session.user,
+        activePath: req.originalUrl
+      });
     }
   );
 });

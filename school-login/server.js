@@ -44,8 +44,10 @@ app.use((req, res, next) => {
 
 // --- Startseite (nach Login) ---
 app.get("/", requireAuth, (req, res) => {
-  const { email, role } = req.session.user;
-  res.render("dashboard", { email, role, csrfToken: req.csrfToken() });
+  const { role } = req.session.user;
+  if (role === "admin") return res.redirect("/admin");
+  if (role === "student") return res.redirect("/student");
+  return res.redirect("/login");
 });
 
 // --- Login Seite (Dark, clean) ---
@@ -57,15 +59,6 @@ app.get("/login", (req, res) => {
 // --- Admin: mount router (statt einzelne /admin routes hier) ---
 const adminRouter = require("./routes/admin");
 app.use("/admin", adminRouter);
-
-// --- Schüler-Dashboard ---
-function placeholderCollection(size) {
-  return Array.from({ length: size }, () => ({
-    label: "Test",
-    value: "Test",
-    detail: "Test"
-  }));
-}
 
 // --- Schüler-Dashboard ---
 app.get("/student", requireAuth, requireRole("student"), (req, res) => {
@@ -180,6 +173,8 @@ app.post("/login", (req, res) => {
         role: user.role,
         status: user.status
       };
+      if (user.role === "admin") return res.redirect("/admin");
+      if (user.role === "student") return res.redirect("/student");
       res.redirect("/");
     }
   );
