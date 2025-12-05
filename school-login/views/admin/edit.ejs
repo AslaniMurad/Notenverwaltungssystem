@@ -2,62 +2,93 @@
   const page = {
     title: 'Bearbeite Nutzer',
     headerTitle: 'Adminbereich',
-    headerActions: [
-      { label: 'Dashboard', href: '/' },
-      { label: 'Übersicht', href: '/admin' }
-    ],
+    headerActions: [],
     styles: ['/css/admin.css'],
     scripts: ['/js/app.js'],
     bodyClass: 'page-admin-edit',
-    hideHeader: false,
+    hideHeader: true,
     hideFooter: true,
     content: function () { %>
-    <div class="admin-card-narrow">
-      <div class="admin-edit-topbar">
-        <h2>Bearbeite Nutzer: <%= user.email %></h2>
-        <a class="admin-button-plain" href="/">← Dashboard</a>
-      </div>
+    <div class="app-shell">
+      <aside class="app-sidebar" aria-label="Admin Navigation">
+        <div class="sidebar-brand">
+          <div>
+            <div class="sidebar-title">Admin-Konsole</div>
+            <div class="sidebar-meta"><%= currentUser?.email %> · <%= currentUser?.role %></div>
+          </div>
+          <span class="sidebar-badge">Eingeloggt</span>
+        </div>
 
-      <form class="admin-edit-form" method="POST" action="/admin/users/<%= user.id %>">
-        <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+        <div class="app-nav">
+          <div class="nav-section">
+            <div class="nav-section-title">Navigation</div>
+            <a href="/admin" class="<%= activePath === '/admin' ? 'is-active' : '' %>">Übersicht</a>
+            <a href="/admin#list">Zur Tabelle</a>
+            <form class="logout-form" method="POST" action="/logout">
+              <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+              <button type="submit" class="app-nav-link">Logout</button>
+            </form>
+          </div>
+        </div>
+      </aside>
 
-        <label for="email">E-Mail</label>
-        <input id="email" name="email" value="<%= user.email %>" type="email" required>
+      <section class="app-main">
+        <div class="app-main-header">
+          <div>
+            <p class="app-main-subtitle">Bearbeitung</p>
+            <h1>Nutzer anpassen</h1>
+          </div>
+          <a class="admin-button-plain" href="/admin">Zurück</a>
+        </div>
 
-        <label for="role">Rolle</label>
-        <select id="role" name="role">
-          <option value="student" <%= user.role === 'student' ? 'selected' : '' %>>Schüler</option>
-          <option value="teacher" <%= user.role === 'teacher' ? 'selected' : '' %>>Lehrer</option>
-          <option value="admin" <%= user.role === 'admin' ? 'selected' : '' %>>Admin</option>
-        </select>
+        <div class="admin-card-narrow">
+          <div class="admin-edit-topbar">
+            <h2>Bearbeite Nutzer: <%= user.email %></h2>
+            <a class="admin-button-plain" href="/">← Dashboard</a>
+          </div>
 
-        <label for="status">Status</label>
-        <select id="status" name="status">
-          <option value="active" <%= user.status === 'active' ? 'selected' : '' %>>active</option>
-          <option value="locked" <%= user.status === 'locked' ? 'selected' : '' %>>locked</option>
-          <option value="deleted" <%= user.status === 'deleted' ? 'selected' : '' %>>deleted</option>
-        </select>
+          <form class="admin-edit-form" method="POST" action="/admin/users/<%= user.id %>">
+            <input type="hidden" name="_csrf" value="<%= csrfToken %>">
 
-        <button class="btn btn-primary" type="submit">Speichern</button>
-      </form>
+            <label for="email">E-Mail</label>
+            <input id="email" name="email" value="<%= user.email %>" type="email" required>
 
-      <hr class="admin-separator">
+            <label for="role">Rolle</label>
+            <select id="role" name="role">
+              <option value="student" <%= user.role === 'student' ? 'selected' : '' %>>Schüler</option>
+              <option value="teacher" <%= user.role === 'teacher' ? 'selected' : '' %>>Lehrer</option>
+              <option value="admin" <%= user.role === 'admin' ? 'selected' : '' %>>Admin</option>
+            </select>
 
-      <form class="admin-edit-form" method="POST" action="/admin/users/<%= user.id %>/reset">
-        <input type="hidden" name="_csrf" value="<%= csrfToken %>">
-        <label for="password">Neues Passwort</label>
-        <input id="password" name="password" type="password" required>
-        <button class="btn" type="submit">Passwort zurücksetzen</button>
-      </form>
+            <label for="status">Status</label>
+            <select id="status" name="status">
+              <option value="active" <%= user.status === 'active' ? 'selected' : '' %>>active</option>
+              <option value="locked" <%= user.status === 'locked' ? 'selected' : '' %>>locked</option>
+              <option value="deleted" <%= user.status === 'deleted' ? 'selected' : '' %>>deleted</option>
+            </select>
 
-      <form class="admin-edit-form" method="POST" action="/admin/users/<%= user.id %>/delete" onsubmit="return confirm('Nutzer wirklich löschen (soft-delete)?');">
-        <input type="hidden" name="_csrf" value="<%= csrfToken %>">
-        <button class="btn btn-danger" type="submit">Nutzer löschen</button>
-      </form>
+            <button class="btn btn-primary" type="submit">Speichern</button>
+          </form>
 
-      <div class="admin-back-link">
-        <a class="admin-link" href="/admin">← Zurück zur Übersicht</a>
-      </div>
+          <hr class="admin-separator">
+
+          <form class="admin-edit-form" method="POST" action="/admin/users/<%= user.id %>/reset">
+            <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+            <label for="password">Neues Passwort</label>
+            <input id="password" name="password" type="password" required>
+            <button class="btn" type="submit">Passwort zurücksetzen</button>
+          </form>
+
+          <form class="admin-edit-form" method="POST" action="/admin/users/<%= user.id %>/delete" onsubmit="return confirm('Nutzer wirklich löschen (soft-delete)?');">
+            <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+            <button class="btn btn-danger" type="submit">Nutzer löschen</button>
+          </form>
+
+          <div class="admin-back-link">
+            <a class="admin-link" href="/admin">← Zurück zur Übersicht</a>
+          </div>
+        </div>
+      </section>
     </div>
 <% } };
 %>
