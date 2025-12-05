@@ -1,22 +1,31 @@
 body.page-admin,
 body.page-admin-edit {
-  font-family: var(--font-sans);
-  background: #020817;
-  color: #e5e7eb;
-  padding: 20px;
+  font-family: 'Inter', system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  background: linear-gradient(135deg, #F3F4F6 0%, #E8F0FF 50%, #F9FAFB 100%);
+  color: #1F2937;
+  padding: 28px 24px;
+  min-height: 100vh;
 }
 
 .admin-wrap {
-  max-width: 1000px;
+  max-width: 1100px;
   margin: 0 auto;
 }
 
 .admin-card,
 .admin-card-narrow {
-  background: #071028;
-  padding: 16px;
-  border-radius: 10px;
-  border: 1px solid rgba(148, 163, 253, .06);
+  background: transparent;
+  padding: 28px;
+  border-radius: 12px;
+  border: 1px solid rgba(226,232,240,0.75);
+  box-shadow: 0 10px 25px rgba(37, 99, 235, 0.06);
+  transition: all 0.2s ease;
+}
+
+.admin-card:hover,
+.admin-card-narrow:hover {
+  box-shadow: 0 14px 36px rgba(37, 99, 235, 0.09);
+  border-color: rgba(96,165,250,0.9);
 }
 
 .admin-heading-spaced {
@@ -28,9 +37,9 @@ body.page-admin-edit {
 }
 
 .admin-separator {
-  margin: 14px 0;
+  margin: 18px 0;
   border: 0;
-  border-top: 1px solid rgba(255, 255, 255, 0.03);
+  border-top: 1px solid #e2e8f0;
 }
 
 .admin-back-link {
@@ -50,12 +59,24 @@ body.page-admin-edit {
 .admin-form select,
 .admin-edit-form input,
 .admin-edit-form select {
-  padding: 8px;
-  border-radius: 6px;
-  border: 1px solid rgba(75, 85, 99, .6);
-  background: #020817;
-  color: #e5e7eb;
-  margin-right: 8px;
+  padding: 11px 13px;
+  border-radius: 8px;
+  border: 1px solid #e2e8f0;
+  background: #f8fafc;
+  color: #1e293b;
+  margin-right: 10px;
+  font-size: 13px;
+  transition: all 0.2s ease;
+}
+
+.admin-form input:focus,
+.admin-form select:focus,
+.admin-edit-form input:focus,
+.admin-edit-form select:focus {
+  outline: none;
+  border-color: #2563eb;
+  background: #ffffff;
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1);
 }
 
 .admin-edit-form label {
@@ -73,21 +94,39 @@ body.page-admin-edit {
 
 .admin-table th,
 .admin-table td {
-  padding: 8px;
-  border-bottom: 1px solid rgba(255, 255, 255, .03);
+  padding: 12px 10px;
+  border-bottom: 1px solid #eef2ff;
   text-align: left;
-  font-size: 13px;
+  font-size: 14px;
+}
+
+.admin-table thead th {
+  background: #f8fafc;
+  color: #475569;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  font-size: 12px;
+}
+
+.admin-table tbody tr:hover {
+  background: #fbfdff;
 }
 
 .admin-actions form {
   display: inline-block;
   margin: 0;
-  margin-right: 6px;
+  margin-right: 8px;
+}
+
+.admin-actions .btn {
+  padding: 8px 10px;
+  border-radius: 8px;
 }
 
 .admin-muted {
-  color: #9ca3af;
-  font-size: 12px;
+  color: #64748b;
+  font-size: 13px;
 }
 
 .admin-row {

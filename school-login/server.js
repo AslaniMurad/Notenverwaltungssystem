@@ -51,9 +51,13 @@ app.use((req, res, next) => {
   next();
 });
 
-// ============================
-// ROUTES
-// ============================
+// --- Startseite (nach Login) ---
+app.get("/", requireAuth, (req, res) => {
+  const { role } = req.session.user;
+  if (role === "admin") return res.redirect("/admin");
+  if (role === "student") return res.redirect("/student");
+  return res.redirect("/login");
+});
 
 // --- Login Seite ---
 app.get("/login", (req, res) => {
@@ -61,10 +65,96 @@ app.get("/login", (req, res) => {
   res.render("login", { csrfToken: req.csrfToken() });
 });
 
-// --- Startseite (Dashboard nach Login) ---
-app.get("/", requireAuth, (req, res) => {
-  const { email, role } = req.session.user;
-  res.render("dashboard", { email, role, csrfToken: req.csrfToken() });
+// --- Admin: mount router (statt einzelne /admin routes hier) ---
+app.use("/admin", adminRoutes);
+
+// --- Schüler-Dashboard ---
+app.get("/student", requireAuth, requireRole("student"), (req, res) => {
+  const hero = {
+    headline: "Dein Dashboard",
+    statement: "Alles Wichtige für deinen Schultag.",
+    summary: "Aufgaben, Noten, Rückgaben, Materialien – übersichtlich und schnell erreichbar.",
+    badges: ["Schüler-Sicht", "HTL Waidhofen/Ybbs"]
+  };
+
+  const studentProfile = {
+    name: "Max Muster",
+    class: "3AHWII",
+    badges: ["Informatik-Schwerpunkt", "HTL-Waidhofen"],
+    meta: [
+      { label: "Klasse", value: "3AHWII" },
+      { label: "⌀ Note", value: "2,1" },
+      { label: "Offene Aufgaben", value: "2" },
+      { label: "Neue Rückgaben", value: "1" }
+    ]
+  };
+
+  const focusStats = [
+    { label: "Nächste Abgabe", value: "Heute, 14:00", detail: "Chemie-Protokoll" },
+    { label: "Tests diese Woche", value: "2", detail: "Mathe / Informatik" },
+    { label: "Neue Materialien", value: "3", detail: "Seit gestern" }
+  ];
+
+  const tasks = [
+    {
+      id: 1,
+      title: "Chemie – Laborprotokoll",
+      subject: "Chemie",
+      due: "Heute 14:00",
+      status: "Offen",
+      teacher: "Frau Bauer",
+      description: "Versuch dokumentieren und Kurve einzeichnen.",
+      attachments: ["chemie_arbeitsblatt.pdf"]
+    },
+    {
+      id: 2,
+      title: "Informatik – HTML/CSS Mini-Projekt",
+      subject: "Informatik",
+      due: "Montag 23:59",
+      status: "In Arbeit",
+      teacher: "Herr Leitner",
+      description: "Kleine Website erstellen und ZIP-Datei abgeben.",
+      attachments: []
+    }
+  ];
+
+  const returns = [
+    {
+      title: "Mathematik – 1. Test",
+      subject: "Mathematik",
+      grade: "2",
+      teacher: "Frau König",
+      feedback: "Gute Leistung, nur Fehler bei Gleichungen.",
+      attachments: ["mathe_test_loesung.pdf"]
+    }
+  ];
+
+  const grades = [
+    { subject: "Mathematik", grade: "2", teacher: "Frau König", weight: "40%" },
+    { subject: "Informatik", grade: "1-", teacher: "Herr Leitner", weight: "35%" }
+  ];
+
+  const materials = [
+    { title: "HTML Grundlagen", subject: "Informatik", fileName: "html_grundlagen.pdf" },
+    { title: "Lineare Funktionen", subject: "Mathematik", fileName: "lineare_funktionen.pdf" }
+  ];
+
+  const messages = [
+    { title: "Info zum Projekt", sender: "Herr Leitner", excerpt: "Bitte Ideen bis Mittwoch abgeben.", unread: true }
+  ];
+
+  res.render("student-dashboard", {
+    email: req.session.user.email,
+    hero,
+    studentProfile,
+    focusStats,
+    tasks,
+    returns,
+    grades,
+    materials,
+    messages,
+    csrfToken: req.csrfToken()
+  });
 });
 
 // --- Login POST ---
@@ -90,8 +180,9 @@ app.post("/login", (req, res) => {
         role: user.role,
         status: user.status
       };
-
-      return res.redirect("/");
+      if (user.role === "admin") return res.redirect("/admin");
+      if (user.role === "student") return res.redirect("/student");
+      res.redirect("/");
     }
   );
 });
@@ -101,8 +192,6 @@ app.post("/logout", (req, res) => {
   req.session.destroy(() => res.redirect("/login"));
 });
 
-// --- Admin Routes (Userverwaltung) ---
-app.use("/admin", adminRoutes);
 // ============================
 // TEACHER ROUTES
 // ============================
