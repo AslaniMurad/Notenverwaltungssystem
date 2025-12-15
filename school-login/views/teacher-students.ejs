@@ -24,6 +24,9 @@
             <a href="/teacher/classes">Meine Klassen</a>
             <a href="/teacher/create-class">Klasse erstellen</a>
             <a class="is-active" href="/teacher/students/<%= classData.id %>">Schüler</a>
+            <a href="/teacher/grades/<%= classData.id %>">Noten</a>
+            <a href="/teacher/grade-templates/<%= classData.id %>">Prüfungen</a>
+            <a href="/teacher/class-statistics/<%= classData.id %>">Statistiken</a>
             <form class="logout-form" method="POST" action="/logout">
               <input type="hidden" name="_csrf" value="<%= csrfToken %>">
               <button class="app-nav-link" type="submit">Logout</button>
@@ -68,6 +71,12 @@
                     <h4><%= student.name %></h4>
                     <p class="teacher-muted"><%= student.email %></p>
                   </div>
+                  <div class="teacher-card-actions">
+                    <form class="inline delete-student-form" method="POST" action="/teacher/delete-student/<%= classData.id %>/<%= student.id %>" data-student-name="<%= student.name %>">
+                      <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+                      <button class="btn btn-danger" type="button">Entfernen</button>
+                    </form>
+                  </div>
                 </div>
               <% }) %>
             <% } %>
@@ -75,6 +84,68 @@
         </div>
       </section>
     </div>
+
+    <!-- Lösch-Bestätigungs-Modal -->
+    <div id="deleteModal" class="modal-overlay">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h3>Schüler entfernen</h3>
+        </div>
+        <div class="modal-body">
+          <p>Möchtest du den Schüler <strong id="deleteStudentName"></strong> wirklich aus der Klasse entfernen?</p>
+        </div>
+        <div class="modal-footer">
+          <button class="btn btn-secondary" id="cancelDelete">Abbrechen</button>
+          <button class="btn btn-danger" id="confirmDelete">Entfernen</button>
+        </div>
+      </div>
+    </div>
+
+    <script>
+      // Modal-Logik für Schüler-Löschung
+      const deleteModal = document.getElementById('deleteModal');
+      const deleteStudentName = document.getElementById('deleteStudentName');
+      const cancelDelete = document.getElementById('cancelDelete');
+      const confirmDelete = document.getElementById('confirmDelete');
+      let currentForm = null;
+
+      document.querySelectorAll('.delete-student-form button[type="button"]').forEach(btn => {
+        btn.addEventListener('click', function(e) {
+          e.preventDefault();
+          currentForm = this.closest('form');
+          const studentName = currentForm.dataset.studentName;
+          deleteStudentName.textContent = studentName;
+          deleteModal.classList.add('active');
+        });
+      });
+
+      cancelDelete.addEventListener('click', () => {
+        deleteModal.classList.remove('active');
+        currentForm = null;
+      });
+
+      confirmDelete.addEventListener('click', () => {
+        if (currentForm) {
+          currentForm.submit();
+        }
+      });
+
+      // Modal schließen bei Klick auf Overlay
+      deleteModal.addEventListener('click', (e) => {
+        if (e.target === deleteModal) {
+          deleteModal.classList.remove('active');
+          currentForm = null;
+        }
+      });
+
+      // ESC-Taste zum Schließen
+      document.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape' && deleteModal.classList.contains('active')) {
+          deleteModal.classList.remove('active');
+          currentForm = null;
+        }
+      });
+    </script>
 <% } };
 %>
 <%- include('layout', page) %>
