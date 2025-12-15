@@ -4,10 +4,15 @@ const session = require("express-session");
 const csrf = require("csurf");
 const path = require("path");
 const { db, verifyPassword, hashPassword } = require("./db");
+const { promisify } = require("util");
 const { requireAuth, requireRole } = require("./middleware/auth");
 const adminRoutes = require("./routes/admin");
 
 const app = express();
+
+const dbGet = promisify(db.get.bind(db));
+const dbAll = promisify(db.all.bind(db));
+const dbRun = promisify(db.run.bind(db));
 
 app.use(express.urlencoded({ extended: true }));
 app.use(express.json());
@@ -59,6 +64,178 @@ function redirectByRole(role) {
   return "/login";
 }
 
+async function loadStudentFromSession(req) {
+  const email = req.session?.user?.email;
+  if (!email) throw new Error("Unauthenticated");
+  const student = await dbGet(
+    "SELECT s.*, c.name as class_name, c.subject as class_subject, c.id as class_id FROM students s JOIN classes c ON c.id = s.class_id WHERE s.email = ?",
+    [email]
+  );
+  if (!student) {
+    const err = new Error("Student not found");
+    err.statusCode = 404;
+    throw err;
+  }
+  return student;
+}
+
+function filterGrades(grades, { subject, startDate, endDate, sort }) {
+  let filtered = [...grades];
+  if (subject) filtered = filtered.filter((g) => g.subject === subject);
+  if (startDate) filtered = filtered.filter((g) => new Date(g.graded_at) >= new Date(startDate));
+  if (endDate) filtered = filtered.filter((g) => new Date(g.graded_at) <= new Date(endDate));
+
+  if (sort === "value") {
+    filtered.sort((a, b) => b.value - a.value);
+  } else {
+    filtered.sort((a, b) => new Date(b.graded_at) - new Date(a.graded_at));
+  }
+  return filtered;
+}
+
+function computeAverages(grades) {
+  const subjectMap = new Map();
+  grades.forEach((g) => {
+    const key = g.subject;
+    const entry = subjectMap.get(key) || { weightedSum: 0, weightTotal: 0 };
+    entry.weightedSum += g.value * (g.weight || 1);
+    entry.weightTotal += g.weight || 1;
+    subjectMap.set(key, entry);
+  });
+
+  const subjects = Array.from(subjectMap.entries()).map(([subject, data]) => ({
+    subject,
+    average: data.weightTotal ? Number((data.weightedSum / data.weightTotal).toFixed(2)) : null
+  }));
+
+  const totals = subjects.reduce(
+    (acc, curr) => {
+      if (curr.average == null) return acc;
+      const weight = subjectMap.get(curr.subject).weightTotal;
+      return {
+        weightedSum: acc.weightedSum + curr.average * weight,
+        weightTotal: acc.weightTotal + weight
+      };
+    },
+    { weightedSum: 0, weightTotal: 0 }
+  );
+
+  const overall = totals.weightTotal ? Number((totals.weightedSum / totals.weightTotal).toFixed(2)) : null;
+  return { subjects, overall };
+}
+
+function computeTrend(grades) {
+  if (!grades.length) return { direction: "steady", change: 0 };
+  const sorted = [...grades].sort((a, b) => new Date(a.graded_at) - new Date(b.graded_at));
+  const first = sorted[0];
+  const last = sorted[sorted.length - 1];
+  const change = Number((last.value - first.value).toFixed(2));
+  const direction = change < -0.1 ? "improving" : change > 0.1 ? "declining" : "steady";
+  return { direction, change };
+}
+
+function escapePdf(text) {
+  return String(text || "").replace(/\\/g, "\\\\").replace(/\(/g, "\\(").replace(/\)/g, "\\)");
+}
+
+function buildSimplePdf(student, grades, averages) {
+  const lines = [
+    "Notenübersicht",
+    `Schüler: ${student.name} (${student.email})`,
+    `Klasse: ${student.class_name || "-"}`,
+    `Schuljahr: ${student.school_year || "-"}`,
+    "",
+    "Noten:"
+  ];
+
+  grades
+    .sort((a, b) => new Date(b.graded_at) - new Date(a.graded_at))
+    .forEach((g) => {
+      lines.push(`${g.subject}: ${g.value.toFixed(2)} (Gewichtung ${g.weight || 1}) ${g.teacher ? "- " + g.teacher : ""}`);
+      lines.push(`Datum: ${new Date(g.graded_at).toLocaleDateString()}`);
+      if (g.comment) lines.push(`Kommentar: ${g.comment}`);
+      lines.push("");
+    });
+
+  lines.push("Durchschnitt:");
+  averages.subjects.forEach((s) => lines.push(`${s.subject}: ${s.average ?? "–"}`));
+  lines.push(`Gesamt: ${averages.overall ?? "–"}`);
+
+  const textOps = ["BT /F1 12 Tf 50 760 Td"];
+  lines.forEach((line, idx) => {
+    textOps.push(`(${escapePdf(line)}) Tj`);
+    if (idx !== lines.length - 1) textOps.push("0 -16 Td");
+  });
+  textOps.push("ET");
+
+  const content = textOps.join("\n");
+  const contentBuffer = Buffer.from(content, "utf8");
+  const objects = [
+    `1 0 obj<< /Type /Catalog /Pages 2 0 R >>endobj\n`,
+    `2 0 obj<< /Type /Pages /Count 1 /Kids [3 0 R] >>endobj\n`,
+    `3 0 obj<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Contents 4 0 R /Resources<< /Font<< /F1 5 0 R >> >> >>endobj\n`,
+    `4 0 obj<< /Length ${contentBuffer.length} >>\nstream\n${content}\nendstream\nendobj\n`,
+    `5 0 obj<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>endobj\n`
+  ];
+
+  let offset = `%PDF-1.4\n`.length;
+  const xrefEntries = ["0000000000 65535 f "];
+  const body = objects
+    .map((obj) => {
+      const currentOffset = offset;
+      const entry = String(obj);
+      xrefEntries.push(`${String(currentOffset).padStart(10, "0")} 00000 n `);
+      offset += Buffer.byteLength(entry, "utf8");
+      return entry;
+    })
+    .join("");
+
+  const xrefOffset = offset; // offset already includes header length
+  const xref = `xref\n0 ${objects.length + 1}\n${xrefEntries.join("\n")}\n`;
+  const trailer = `trailer<< /Root 1 0 R /Size ${objects.length + 1} >>\nstartxref\n${xrefOffset}\n%%EOF`;
+  const pdf = `%PDF-1.4\n${body}${xref}${trailer}`;
+  return Buffer.from(pdf, "utf8");
+}
+
+async function loadGrades(studentId) {
+  const rows = await dbAll(
+    "SELECT id, subject, value, weight, comment, teacher, graded_at, created_at FROM grades WHERE student_id = ?",
+    [studentId]
+  );
+  return (rows || []).map((r) => ({
+    ...r,
+    value: Number(r.value),
+    weight: Number(r.weight || 1)
+  }));
+}
+
+async function loadClassAverages(classId) {
+  const rows = await dbAll(
+    "SELECT g.subject, g.value, g.weight FROM grades g JOIN students s ON s.id = g.student_id WHERE s.class_id = ?",
+    [classId]
+  );
+  const grouped = {};
+  (rows || []).forEach((row) => {
+    const target = grouped[row.subject] || { weightedSum: 0, weightTotal: 0 };
+    target.weightedSum += Number(row.value) * Number(row.weight || 1);
+    target.weightTotal += Number(row.weight || 1);
+    grouped[row.subject] = target;
+  });
+
+  return Object.entries(grouped).map(([subject, data]) => ({
+    subject,
+    average: data.weightTotal ? Number((data.weightedSum / data.weightTotal).toFixed(2)) : null
+  }));
+}
+
+async function loadNotifications(studentId) {
+  const notes = await dbAll(
+    "SELECT id, message, type, created_at, read_at FROM grade_notifications WHERE student_id = ? ORDER BY created_at DESC",
+    [studentId]
+  );
+  return notes || [];
+}
+
 // --- Startseite (nach Login) ---
 app.get("/", requireAuth, (req, res) => {
   const { role } = req.session.user;
@@ -75,92 +252,172 @@ app.get("/login", (req, res) => {
 app.use("/admin", adminRoutes);
 
 // --- Schüler-Dashboard ---
-app.get("/student", requireAuth, requireRole("student"), (req, res) => {
-  const hero = {
-    headline: "Dein Dashboard",
-    statement: "Alles Wichtige für deinen Schultag.",
-    summary: "Aufgaben, Noten, Rückgaben, Materialien – übersichtlich und schnell erreichbar.",
-    badges: ["Schüler-Sicht", "HTL Waidhofen/Ybbs"]
-  };
+app.get("/student", requireAuth, requireRole("student"), async (req, res, next) => {
+  try {
+    const student = await loadStudentFromSession(req);
+    const grades = await loadGrades(student.id);
+    const averages = computeAverages(grades);
+    const classAverages = student.class_id ? await loadClassAverages(student.class_id) : [];
+    const notifications = await loadNotifications(student.id);
+    const trend = computeTrend(grades);
 
-  const studentProfile = {
-    name: "Max Muster",
-    class: "3AHWII",
-    badges: ["Informatik-Schwerpunkt", "HTL-Waidhofen"],
-    meta: [
-      { label: "Klasse", value: "3AHWII" },
-      { label: "⌀ Note", value: "2,1" },
-      { label: "Offene Aufgaben", value: "2" },
-      { label: "Neue Rückgaben", value: "1" }
-    ]
-  };
+    const hero = {
+      headline: "Dein Dashboard",
+      statement: "Alles Wichtige für deinen Schultag.",
+      summary: "Aufgaben, Noten, Rückgaben, Materialien – übersichtlich und schnell erreichbar.",
+      badges: ["Schüler-Sicht", student.class_name || ""]
+    };
 
-  const focusStats = [
-    { label: "Nächste Abgabe", value: "Heute, 14:00", detail: "Chemie-Protokoll" },
-    { label: "Tests diese Woche", value: "2", detail: "Mathe / Informatik" },
-    { label: "Neue Materialien", value: "3", detail: "Seit gestern" }
-  ];
+    const studentProfile = {
+      name: student.name,
+      class: student.class_name,
+      schoolYear: student.school_year,
+      badges: [student.class_subject || ""],
+      meta: [
+        { label: "Klasse", value: student.class_name || "-" },
+        { label: "⌀ Note", value: averages.overall ?? "–" },
+        { label: "Schuljahr", value: student.school_year || "–" }
+      ]
+    };
 
-  const tasks = [
-    {
-      id: 1,
-      title: "Chemie – Laborprotokoll",
-      subject: "Chemie",
-      due: "Heute 14:00",
-      status: "Offen",
-      teacher: "Frau Bauer",
-      description: "Versuch dokumentieren und Kurve einzeichnen.",
-      attachments: ["chemie_arbeitsblatt.pdf"]
-    },
-    {
-      id: 2,
-      title: "Informatik – HTML/CSS Mini-Projekt",
-      subject: "Informatik",
-      due: "Montag 23:59",
-      status: "In Arbeit",
-      teacher: "Herr Leitner",
-      description: "Kleine Website erstellen und ZIP-Datei abgeben.",
-      attachments: []
+    const focusStats = [
+      { label: "Aktuelle Hinweise", value: notifications.length || 0, detail: "Benachrichtigungen" },
+      { label: "Fächer mit Noten", value: averages.subjects.length || 0, detail: "Deine Fächer" },
+      { label: "Trend", value: trend.direction === "improving" ? "⬆︎" : trend.direction === "declining" ? "⬇︎" : "→", detail: `${trend.change}` }
+    ];
+
+    const tasks = [];
+    const returns = [];
+    const materials = [];
+    const messages = [];
+    const subjects = [...new Set(grades.map((g) => g.subject))];
+
+    res.render("student-dashboard", {
+      email: req.session.user.email,
+      hero,
+      studentProfile,
+      focusStats,
+      tasks,
+      returns,
+      materials,
+      messages,
+      csrfToken: req.csrfToken(),
+      initialData: JSON.stringify({ grades, averages, classAverages, notifications, trend }),
+      subjects
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// --- Student APIs ---
+app.get("/student/profile", requireAuth, requireRole("student"), async (req, res) => {
+  try {
+    const student = await loadStudentFromSession(req);
+    const grades = await loadGrades(student.id);
+    const averages = computeAverages(grades);
+    res.json({
+      name: student.name,
+      email: student.email,
+      class: student.class_name,
+      classId: student.class_id,
+      schoolYear: student.school_year,
+      subjects: [...new Set(grades.map((g) => g.subject))],
+      averages
+    });
+  } catch (err) {
+    res.status(err.statusCode || 500).json({ error: err.message || "Unbekannter Fehler" });
+  }
+});
+
+app.get("/student/grades", requireAuth, requireRole("student"), async (req, res) => {
+  try {
+    const student = await loadStudentFromSession(req);
+    const { subject, startDate, endDate, sort } = req.query;
+    if (sort && !["date", "value"].includes(sort)) {
+      return res.status(400).json({ error: "Ungültige Sortierung" });
     }
-  ];
 
-  const returns = [
-    {
-      title: "Mathematik – 1. Test",
-      subject: "Mathematik",
-      grade: "2",
-      teacher: "Frau König",
-      feedback: "Gute Leistung, nur Fehler bei Gleichungen.",
-      attachments: ["mathe_test_loesung.pdf"]
-    }
-  ];
+    const grades = await loadGrades(student.id);
+    const filtered = filterGrades(grades, { subject, startDate, endDate, sort });
+    res.json({ grades: filtered, count: filtered.length });
+  } catch (err) {
+    res.status(err.statusCode || 500).json({ error: err.message || "Unbekannter Fehler" });
+  }
+});
 
-  const grades = [
-    { subject: "Mathematik", grade: "2", teacher: "Frau König", weight: "40%" },
-    { subject: "Informatik", grade: "1-", teacher: "Herr Leitner", weight: "35%" }
-  ];
+app.get("/student/averages", requireAuth, requireRole("student"), async (req, res) => {
+  try {
+    const student = await loadStudentFromSession(req);
+    const grades = await loadGrades(student.id);
+    res.json(computeAverages(grades));
+  } catch (err) {
+    res.status(err.statusCode || 500).json({ error: err.message || "Unbekannter Fehler" });
+  }
+});
 
-  const materials = [
-    { title: "HTML Grundlagen", subject: "Informatik", fileName: "html_grundlagen.pdf" },
-    { title: "Lineare Funktionen", subject: "Mathematik", fileName: "lineare_funktionen.pdf" }
-  ];
+app.get("/student/class-averages", requireAuth, requireRole("student"), async (req, res) => {
+  try {
+    const student = await loadStudentFromSession(req);
+    if (!student.class_id) return res.status(400).json({ error: "Keine Klasse gefunden" });
+    const averages = await loadClassAverages(student.class_id);
+    res.json({ subjects: averages });
+  } catch (err) {
+    res.status(err.statusCode || 500).json({ error: err.message || "Unbekannter Fehler" });
+  }
+});
 
-  const messages = [
-    { title: "Info zum Projekt", sender: "Herr Leitner", excerpt: "Bitte Ideen bis Mittwoch abgeben.", unread: true }
-  ];
+app.get("/student/grades.csv", requireAuth, requireRole("student"), async (req, res) => {
+  try {
+    const student = await loadStudentFromSession(req);
+    const grades = await loadGrades(student.id);
+    const rows = [
+      "Subject,Grade,Weight,Teacher,Date,Comment",
+      ...grades.map((g) => [g.subject, g.value, g.weight, g.teacher || "", g.graded_at, (g.comment || "").replace(/,/g, ";")].join(","))
+    ];
+    res.setHeader("Content-Type", "text/csv");
+    res.setHeader("Content-Disposition", "attachment; filename=grades.csv");
+    res.send(rows.join("\n"));
+  } catch (err) {
+    res.status(err.statusCode || 500).json({ error: err.message || "Unbekannter Fehler" });
+  }
+});
 
-  res.render("student-dashboard", {
-    email: req.session.user.email,
-    hero,
-    studentProfile,
-    focusStats,
-    tasks,
-    returns,
-    grades,
-    materials,
-    messages,
-    csrfToken: req.csrfToken()
-  });
+app.get("/student/grades.pdf", requireAuth, requireRole("student"), async (req, res) => {
+  try {
+    const student = await loadStudentFromSession(req);
+    const grades = await loadGrades(student.id);
+    const averages = computeAverages(grades);
+
+    const pdfBuffer = buildSimplePdf(student, grades, averages);
+    res.setHeader("Content-Type", "application/pdf");
+    res.setHeader("Content-Disposition", "attachment; filename=grades.pdf");
+    res.send(pdfBuffer);
+  } catch (err) {
+    res.status(err.statusCode || 500).json({ error: err.message || "Unbekannter Fehler" });
+  }
+});
+
+app.get("/student/notifications", requireAuth, requireRole("student"), async (req, res) => {
+  try {
+    const student = await loadStudentFromSession(req);
+    const notes = await loadNotifications(student.id);
+    res.json({ notifications: notes });
+  } catch (err) {
+    res.status(err.statusCode || 500).json({ error: err.message || "Unbekannter Fehler" });
+  }
+});
+
+app.post("/student/notifications/:id/read", requireAuth, requireRole("student"), async (req, res) => {
+  try {
+    const student = await loadStudentFromSession(req);
+    const noteId = Number(req.params.id);
+    if (Number.isNaN(noteId)) return res.status(400).json({ error: "Ungültige ID" });
+    await dbRun("UPDATE grade_notifications SET read_at = current_timestamp WHERE id = ? AND student_id = ?", [noteId, student.id]);
+    res.json({ status: "ok" });
+  } catch (err) {
+    res.status(err.statusCode || 500).json({ error: err.message || "Unbekannter Fehler" });
+  }
 });
 
 // --- Login POST ---

@@ -84,9 +84,50 @@ test("admin can log in with seeded credentials", async () => {
   );
 
   assert.strictEqual(loginResponse.response.status, 302);
-  assert.strictEqual(loginResponse.response.headers.get("location"), "/");
+  assert.strictEqual(loginResponse.response.headers.get("location"), "/admin");
 
   const dashboard = await fetchWithCookies("/", {}, loginResponse.cookies);
   assert.strictEqual(dashboard.response.status, 200);
   assert.match(dashboard.body, /admin@test\.local/);
+});
+
+test("student can view grades and profile after login", async () => {
+  const loginPage = await fetchWithCookies("/login");
+  const csrfToken = extractCsrfToken(loginPage.body);
+  const params = new URLSearchParams({
+    _csrf: csrfToken,
+    email: "student@example.com",
+    password: "studentDemo123!"
+  });
+
+  const loginResponse = await fetchWithCookies(
+    "/login",
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/x-www-form-urlencoded" },
+      body: params.toString(),
+      redirect: "manual"
+    },
+    loginPage.cookies
+  );
+
+  assert.strictEqual(loginResponse.response.status, 302);
+  assert.strictEqual(loginResponse.response.headers.get("location"), "/student");
+
+  const gradesResponse = await fetchWithCookies("/student/grades", {}, loginResponse.cookies);
+  assert.strictEqual(gradesResponse.response.status, 200);
+  const gradesData = JSON.parse(gradesResponse.body);
+  assert.ok(Array.isArray(gradesData.grades));
+  assert.ok(gradesData.grades.length > 0, "Seeded grades missing");
+
+  const profileResponse = await fetchWithCookies("/student/profile", {}, loginResponse.cookies);
+  assert.strictEqual(profileResponse.response.status, 200);
+  const profile = JSON.parse(profileResponse.body);
+  assert.strictEqual(profile.class, "3AHWII");
+});
+
+test("student routes redirect when unauthenticated", async () => {
+  const res = await fetchWithCookies("/student/grades", { redirect: "manual" });
+  assert.strictEqual(res.response.status, 302);
+  assert.strictEqual(res.response.headers.get("location"), "/login");
 });
