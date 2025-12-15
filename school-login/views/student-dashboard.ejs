@@ -186,6 +186,88 @@
       color: #6b7280;
       margin: 8px 0 0;
     }
+
+    .stat-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+      gap: 12px;
+      margin-top: 12px;
+    }
+
+    .stat-card {
+      background: #f8fafc;
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 12px;
+    }
+
+    .stat-card small { color: #6b7280; }
+    .stat-card strong { font-size: 20px; }
+
+    .filter-form {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+      gap: 10px;
+      margin: 12px 0 10px;
+    }
+
+    .filter-form label {
+      font-size: 12px;
+      color: #4b5563;
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+
+    .filter-form input,
+    .filter-form select,
+    .filter-form button {
+      padding: 8px 10px;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      font-size: 14px;
+    }
+
+    .filter-form button {
+      background: var(--blue);
+      color: white;
+      border-color: var(--blue);
+      cursor: pointer;
+      font-weight: 600;
+    }
+
+    .export-actions {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+      margin: 6px 0 12px;
+    }
+
+    .export-actions a {
+      padding: 8px 10px;
+      border-radius: 8px;
+      border: 1px solid var(--border);
+      text-decoration: none;
+      color: var(--blue);
+      background: var(--blue-light);
+      font-weight: 600;
+    }
+
+    .text-muted { color: #6b7280; font-size: 13px; }
+
+    .trend-chip {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 8px 12px;
+      border-radius: 10px;
+      font-weight: 600;
+      border: 1px solid var(--border);
+    }
+
+    .trend--improving { color: #065f46; background: #ecfdf3; border-color: #bbf7d0; }
+    .trend--declining { color: #92400e; background: #fff7ed; border-color: #fed7aa; }
+    .trend--stable { color: #1f2937; background: #f3f4f6; border-color: #e5e7eb; }
   </style>
 </head>
 
@@ -263,24 +345,40 @@
               <span class="pill">Rollenübersicht</span>
               <h3><%= hero.statement %></h3>
               <p><%= hero.summary %></p>
-              <div class="student-meta">
-                <div class="card">
+              <div class="stat-grid">
+                <div class="stat-card">
                   <small>⌀ Note</small>
-                  <strong>2,1</strong>
+                  <strong><%= overallAverage ? overallAverage.toFixed(2) : '–' %></strong>
                 </div>
-                <div class="card">
-                  <small>Offene Aufgaben</small>
-                  <strong><%= focusStats[1].value %></strong>
+                <div class="stat-card">
+                  <small>Fächer</small>
+                  <strong><%= subjects.length || '–' %></strong>
                 </div>
+                <div class="stat-card">
+                  <small>Letzte Änderung</small>
+                  <strong><%= grades[0] ? new Date(grades[0].grade_date).toLocaleDateString('de-DE') : '–' %></strong>
+                </div>
+              </div>
+              <div class="trend-chip trend--<%= trend.direction %>">
+                <span><strong>Trend:</strong> <%= trend.direction === 'improving' ? 'Verbesserung' : trend.direction === 'declining' ? 'Rückgang' : 'Stabil' %></span>
+                <small class="text-muted"><%= trend.message %></small>
               </div>
             </div>
             <div class="card">
-              <h3>Aktuelle Hinweise</h3>
-              <ul>
-                <% focusStats.forEach(function(item){ %>
-                  <li><strong><%= item.label %></strong> — <%= item.value %> <small><%= item.detail %></small></li>
-                <% }); %>
-              </ul>
+              <h3>Neueste Noten</h3>
+              <% if (!latestGrades.length) { %>
+                <p class="text-muted">Noch keine Noten vorhanden.</p>
+              <% } else { %>
+                <ul>
+                  <% latestGrades.forEach(function(grade){ %>
+                    <li>
+                      <strong><%= grade.subject %></strong> — <%= grade.grade_value %>
+                      <small class="text-muted">(<%= grade.weight || 1 %>x · <%= new Date(grade.grade_date).toLocaleDateString('de-DE') %>)</small><br>
+                      <% if (grade.teacher_comment) { %><small class="text-muted"><%= grade.teacher_comment %></small><% } %>
+                    </li>
+                  <% }); %>
+                </ul>
+              <% } %>
             </div>
           </div>
         </section>
@@ -318,13 +416,107 @@
         </section>
 
         <section id="grades" class="tab-content">
+          <% const exportParams = []; %>
+          <% if (filters.subject) { exportParams.push(`subject=${encodeURIComponent(filters.subject)}`); } %>
+          <% if (filters.startDate) { exportParams.push(`startDate=${encodeURIComponent(filters.startDate)}`); } %>
+          <% if (filters.endDate) { exportParams.push(`endDate=${encodeURIComponent(filters.endDate)}`); } %>
+          <% if (filters.sortBy) { exportParams.push(`sortBy=${encodeURIComponent(filters.sortBy)}`); } %>
+          <% if (filters.order) { exportParams.push(`order=${encodeURIComponent(filters.order)}`); } %>
+          <% const exportQuery = exportParams.join('&'); %>
           <div class="card">
             <h3>Noten</h3>
-            <ul>
-              <% grades.forEach(function(grade){ %>
-                <li><%= grade.subject %> — <strong><%= grade.grade %></strong> (<%= grade.weight %>)</li>
-              <% }); %>
-            </ul>
+            <form class="filter-form" method="GET" action="/student#grades">
+              <label>
+                Fach
+                <select name="subject">
+                  <option value="">Alle</option>
+                  <% subjects.forEach(function(subject){ %>
+                    <option value="<%= subject %>" <%= filters.subject === subject ? 'selected' : '' %>><%= subject %></option>
+                  <% }); %>
+                </select>
+              </label>
+              <label>
+                Von
+                <input type="date" name="startDate" value="<%= filters.startDate || '' %>">
+              </label>
+              <label>
+                Bis
+                <input type="date" name="endDate" value="<%= filters.endDate || '' %>">
+              </label>
+              <label>
+                Sortieren nach
+                <select name="sortBy">
+                  <option value="grade_date" <%= filters.sortBy === 'grade_date' ? 'selected' : '' %>>Datum</option>
+                  <option value="grade_value" <%= filters.sortBy === 'grade_value' ? 'selected' : '' %>>Note</option>
+                </select>
+              </label>
+              <label>
+                Reihenfolge
+                <select name="order">
+                  <option value="DESC" <%= filters.order.toUpperCase() === 'DESC' ? 'selected' : '' %>>Neueste zuerst</option>
+                  <option value="ASC" <%= filters.order.toUpperCase() === 'ASC' ? 'selected' : '' %>>Älteste zuerst</option>
+                </select>
+              </label>
+              <div></div>
+              <button type="submit">Filtern</button>
+            </form>
+
+            <div class="export-actions">
+              <a href="/student/export/csv<%= exportQuery ? '?' + exportQuery : '' %>">CSV Export</a>
+              <a href="/student/export/pdf<%= exportQuery ? '?' + exportQuery : '' %>">PDF Export</a>
+            </div>
+
+            <% if (!grades.length) { %>
+              <p class="text-muted">Keine Noten für die aktuellen Filter gefunden.</p>
+            <% } else { %>
+              <ul>
+                <% grades.forEach(function(grade){ %>
+                  <li>
+                    <strong><%= grade.subject %></strong> — Note <%= grade.grade_value %>
+                    <small class="text-muted">(<%= grade.weight || 1 %>x · <%= new Date(grade.grade_date).toLocaleDateString('de-DE') %>)</small><br>
+                    <% if (grade.teacher_comment) { %><small class="text-muted">Kommentar: <%= grade.teacher_comment %></small><% } %>
+                  </li>
+                <% }); %>
+              </ul>
+            <% } %>
+          </div>
+          <div class="card">
+            <h3>Durchschnitt & Vergleich</h3>
+            <div class="stat-grid">
+              <div class="stat-card">
+                <small>Dein Schnitt</small>
+                <strong><%= overallAverage ? overallAverage.toFixed(2) : '–' %></strong>
+              </div>
+              <div class="stat-card">
+                <small>Klassen-Schnitt</small>
+                <strong><%= classComparison.overall ? classComparison.overall.toFixed(2) : '–' %></strong>
+              </div>
+              <div class="stat-card">
+                <small>Fächer</small>
+                <strong><%= subjects.length || '–' %></strong>
+              </div>
+            </div>
+            <h4>Fächer-Schnitt</h4>
+            <% if (!subjectAverages.length) { %>
+              <p class="text-muted">Noch keine Durchschnittswerte verfügbar.</p>
+            <% } else { %>
+              <ul>
+                <% subjectAverages.forEach(function(avg){ %>
+                  <% const classAvg = (classComparison.subjects || []).find(function(c){ return c.subject === avg.subject; }); %>
+                  <li>
+                    <strong><%= avg.subject %></strong>: <%= avg.average ? avg.average.toFixed(2) : '–' %>
+                    <% if (classAvg && classAvg.average) { %>
+                      <small class="text-muted">(Klasse: <%= classAvg.average.toFixed(2) %>)</small>
+                    <% } %>
+                  </li>
+                <% }); %>
+              </ul>
+            <% } %>
+            <h4>Trend</h4>
+            <div class="trend-chip trend--<%= trend.direction %>">
+              <strong><%= trend.direction === 'improving' ? 'Verbesserung' : trend.direction === 'declining' ? 'Rückgang' : 'Stabil' %></strong>
+              <small class="text-muted"><%= trend.message %></small>
+            </div>
           </div>
         </section>
 
@@ -340,10 +532,20 @@
 
         <section id="messages" class="tab-content">
           <div class="card">
-            <h3>Nachrichten</h3>
-            <% messages.forEach(function(msg){ %>
-              <p><strong><%= msg.title %></strong> — <%= msg.sender %><br><small><%= msg.excerpt %></small></p>
-            <% }); %>
+            <h3>Benachrichtigungen</h3>
+            <% if (!messages.length) { %>
+              <p class="text-muted">Keine Benachrichtigungen vorhanden.</p>
+            <% } else { %>
+              <ul>
+                <% messages.forEach(function(msg){ %>
+                  <li>
+                    <strong><%= msg.type %></strong>
+                    <small class="text-muted"><%= new Date(msg.created_at).toLocaleString('de-DE') %></small><br>
+                    <span><%= msg.message %></span>
+                  </li>
+                <% }); %>
+              </ul>
+            <% } %>
           </div>
         </section>
       </main>
