@@ -8,9 +8,14 @@ const {
   analyzeTrend,
   getNotifications,
   buildCsv,
-  buildPdfBuffer
+  buildPdfBuffer,
+  getAssignmentsForClass,
+  getAssignmentDetail,
+  getAssignmentFileForStudent
 } = require("../services/studentService");
 const { requireAuth, requireRole } = require("../middleware/auth");
+const path = require("path");
+const fs = require("fs");
 
 const router = express.Router();
 
@@ -48,6 +53,7 @@ router.get("/", async (req, res, next) => {
     const classAverages = await getClassAverages(profile.classId);
     const trend = analyzeTrend(grades);
     const notifications = await getNotifications(profile.id, 6);
+    const assignments = await getAssignmentsForClass(profile.classId);
     const latestGrades = grades.slice(0, 5);
 
     const hero = {
@@ -85,7 +91,7 @@ router.get("/", async (req, res, next) => {
       hero,
       studentProfile,
       focusStats,
-      tasks: [],
+      tasks: assignments,
       returns: [],
       grades,
       latestGrades,
@@ -154,6 +160,56 @@ router.get("/notifications", async (req, res, next) => {
     if (!profile) return res.status(404).json({ error: "Profil nicht gefunden" });
     const notifications = await getNotifications(profile.id, 20);
     res.json({ notifications });
+  } catch (error) {
+    next(error);
+  }
+});
+
+router.get("/assignments", async (req, res, next) => {
+  try {
+    const profile = await getStudentProfileByEmail(req.session.user.email);
+    if (!profile) return res.status(404).json({ error: "Profil nicht gefunden" });
+    const assignments = await getAssignmentsForClass(profile.classId);
+    res.json({ assignments });
+  } catch (error) {
+    next(error);
+  }
+});
+
+router.get("/assignments/:assignmentId", async (req, res, next) => {
+  try {
+    const profile = await getStudentProfileByEmail(req.session.user.email);
+    if (!profile) return res.status(404).json({ error: "Profil nicht gefunden" });
+    const assignmentId = Number(req.params.assignmentId);
+    const assignment = await getAssignmentDetail(assignmentId, profile.classId);
+    if (!assignment) return res.status(404).json({ error: "Aufgabe nicht gefunden" });
+    res.json({ assignment });
+  } catch (error) {
+    next(error);
+  }
+});
+
+router.get("/assignments/:assignmentId/files/:fileId", async (req, res, next) => {
+  try {
+    const profile = await getStudentProfileByEmail(req.session.user.email);
+    if (!profile) return res.status(404).send("Profil nicht gefunden");
+    const assignmentId = Number(req.params.assignmentId);
+    const fileId = Number(req.params.fileId);
+    const result = await getAssignmentFileForStudent(assignmentId, profile.classId, fileId);
+    if (!result) return res.status(404).send("Datei nicht gefunden oder Zugriff nicht erlaubt");
+
+    const baseDir = path.join(__dirname, "..", "data", "assignments");
+    const safePath = path.join(baseDir, path.basename(result.file.stored_name));
+    if (!safePath.startsWith(baseDir)) return res.status(403).send("Zugriff verweigert");
+    if (!fs.existsSync(safePath)) return res.status(404).send("Datei fehlt");
+
+    const download = req.query.download === "1";
+    res.setHeader(
+      "Content-Disposition",
+      `${download ? "attachment" : "inline"}; filename="${encodeURIComponent(result.file.file_name)}"`
+    );
+    res.type(result.file.mime_type || "application/pdf");
+    res.sendFile(safePath);
   } catch (error) {
     next(error);
   }

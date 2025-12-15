@@ -45,6 +45,15 @@ function computeWeightedAverage(grades) {
   return sums.weightedSum / sums.totalWeight;
 }
 
+function deriveAssignmentStatus(assignment) {
+  const due = assignment.due_date ? new Date(assignment.due_date) : null;
+  const now = new Date();
+  if (assignment.status === "submitted" || assignment.submitted_at) return "submitted";
+  if (assignment.status === "overdue") return "overdue";
+  if (due && due < now) return "overdue";
+  return "open";
+}
+
 async function getStudentProfileByEmail(email) {
   if (useFakeStore()) {
     const { students, classes } = db.__data;
@@ -197,6 +206,91 @@ function analyzeTrend(grades) {
   return { direction, delta: Math.round(delta * 100) / 100, message };
 }
 
+async function getAssignmentsForClass(classId) {
+  if (useFakeStore()) {
+    const { assignments, assignmentFiles } = db.__data;
+    return assignments
+      .filter((a) => a.class_id === classId)
+      .sort((a, b) => String(a.due_date || "").localeCompare(String(b.due_date || "")))
+      .map((assignment) => ({
+        ...assignment,
+        status: deriveAssignmentStatus(assignment),
+        attachments: assignmentFiles.filter((f) => f.assignment_id === assignment.id)
+      }));
+  }
+
+  const assignments = await dbAll(
+    `SELECT id, class_id, title, description, subject, due_date, status, submitted_at, created_at, updated_at
+     FROM assignments WHERE class_id = ?
+     ORDER BY CASE WHEN due_date IS NULL THEN 1 ELSE 0 END, due_date`,
+    [classId]
+  );
+  const ids = assignments.map((a) => a.id);
+  const files = ids.length
+    ? await dbAll(
+        `SELECT id, assignment_id, file_name, stored_name, mime_type, file_size
+         FROM assignment_files WHERE assignment_id IN (${ids.map(() => "?").join(",")})`,
+        ids
+      )
+    : [];
+  const fileMap = new Map();
+  files.forEach((file) => {
+    const list = fileMap.get(file.assignment_id) || [];
+    list.push(file);
+    fileMap.set(file.assignment_id, list);
+  });
+  return assignments.map((assignment) => ({
+    ...assignment,
+    status: deriveAssignmentStatus(assignment),
+    attachments: fileMap.get(assignment.id) || []
+  }));
+}
+
+async function getAssignmentDetail(assignmentId, classId) {
+  if (useFakeStore()) {
+    const { assignments, assignmentFiles } = db.__data;
+    const assignment = assignments.find((a) => a.id === assignmentId && a.class_id === classId);
+    if (!assignment) return null;
+    return {
+      ...assignment,
+      status: deriveAssignmentStatus(assignment),
+      attachments: assignmentFiles.filter((f) => f.assignment_id === assignment.id)
+    };
+  }
+
+  const assignment = await dbGet(
+    `SELECT id, class_id, title, description, subject, due_date, status, submitted_at, created_at, updated_at
+     FROM assignments WHERE id = ? AND class_id = ?`,
+    [assignmentId, classId]
+  );
+  if (!assignment) return null;
+  const attachments = await dbAll(
+    `SELECT id, assignment_id, file_name, stored_name, mime_type, file_size FROM assignment_files WHERE assignment_id = ?`,
+    [assignment.id]
+  );
+  return { ...assignment, status: deriveAssignmentStatus(assignment), attachments };
+}
+
+async function getAssignmentFileForStudent(assignmentId, classId, fileId) {
+  if (useFakeStore()) {
+    const assignment = db.__data.assignments.find((a) => a.id === assignmentId && a.class_id === classId);
+    if (!assignment) return null;
+    const file = db.__data.assignmentFiles.find((f) => f.id === fileId && f.assignment_id === assignmentId);
+    return file ? { assignment: { ...assignment }, file } : null;
+  }
+  const assignment = await dbGet(
+    `SELECT id, class_id, title FROM assignments WHERE id = ? AND class_id = ?`,
+    [assignmentId, classId]
+  );
+  if (!assignment) return null;
+  const file = await dbGet(
+    `SELECT id, assignment_id, file_name, stored_name, mime_type, file_size FROM assignment_files WHERE id = ? AND assignment_id = ?`,
+    [fileId, assignmentId]
+  );
+  if (!file) return null;
+  return { assignment, file };
+}
+
 async function getNotifications(studentId, limit = 10) {
   if (useFakeStore()) {
     const { notifications } = db.__data;
@@ -305,6 +399,9 @@ module.exports = {
   analyzeTrend,
   getNotifications,
   addNotification,
+  getAssignmentsForClass,
+  getAssignmentDetail,
+  getAssignmentFileForStudent,
   buildCsv,
   buildPdfBuffer
 };

@@ -60,6 +60,7 @@
       color: var(--blue);
       cursor: pointer;
       font-weight: 500;
+      transition: all 0.2s ease;
     }
 
     .tab.active {
@@ -81,26 +82,6 @@
       border-radius: var(--radius);
       border: 1px solid var(--border);
       box-shadow: var(--shadow);
-    }
-
-    .accordion {
-      border-bottom: 1px solid var(--border);
-      padding: 12px 0;
-      cursor: pointer;
-    }
-
-    .accordion-title {
-      display: flex;
-      justify-content: space-between;
-      font-weight: 600;
-      font-size: 15px;
-    }
-
-    .accordion-content {
-      display: none;
-      padding: 10px 0 4px;
-      font-size: 14px;
-      color: #333;
     }
 
     .pill {
@@ -181,6 +162,9 @@
       gap: 12px;
     }
 
+    .card h3 { display: flex; align-items: center; justify-content: space-between; gap: 8px; flex-wrap: wrap; }
+    .card h3 small { font-weight: 500; color: #6b7280; }
+
     .nav-note {
       font-size: 12px;
       color: #6b7280;
@@ -219,6 +203,9 @@
       gap: 6px;
     }
 
+    .link-button { background: none; border: none; color: var(--blue); cursor: pointer; font-weight: 600; padding: 0; }
+    .link-button:disabled { color: #9ca3af; cursor: not-allowed; }
+
     .filter-form input,
     .filter-form select,
     .filter-form button {
@@ -251,6 +238,7 @@
       color: var(--blue);
       background: var(--blue-light);
       font-weight: 600;
+      transition: all 0.2s ease;
     }
 
     .text-muted { color: #6b7280; font-size: 13px; }
@@ -268,6 +256,48 @@
     .trend--improving { color: #065f46; background: #ecfdf3; border-color: #bbf7d0; }
     .trend--declining { color: #92400e; background: #fff7ed; border-color: #fed7aa; }
     .trend--stable { color: #1f2937; background: #f3f4f6; border-color: #e5e7eb; }
+
+    .assignment-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 12px; }
+    .assignment-card { border: 1px solid var(--border); border-radius: var(--radius); padding: 14px; background: #fff; box-shadow: var(--shadow); cursor: pointer; transition: transform 0.18s ease, box-shadow 0.18s ease; }
+    .assignment-card:hover { transform: translateY(-2px); box-shadow: 0 10px 24px rgba(0,0,0,0.08); }
+    .assignment-meta { display: flex; justify-content: space-between; align-items: center; gap: 8px; flex-wrap: wrap; }
+    .status-pill { border-radius: 999px; padding: 6px 10px; font-size: 12px; font-weight: 700; text-transform: uppercase; }
+    .status-open { background: #f3f4f6; color: #1f2937; }
+    .status-overdue { background: #fef2f2; color: #991b1b; }
+    .status-submitted { background: #ecfdf3; color: #065f46; }
+    .line-clamp-2 { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+    .attachment-list { display: flex; flex-direction: column; gap: 8px; margin: 8px 0; }
+    .attachment-item { display: flex; justify-content: space-between; align-items: center; gap: 8px; padding: 8px 10px; border: 1px solid var(--border); border-radius: 10px; background: #f9fafb; }
+    .attachment-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+    .badge { background: #e0f2fe; color: #0ea5e9; padding: 4px 8px; border-radius: 999px; font-weight: 600; font-size: 12px; }
+    .chip { padding: 6px 10px; border-radius: 10px; background: #f8fafc; border: 1px solid var(--border); font-size: 13px; }
+    .section-subtitle { color: #4b5563; font-size: 13px; margin: 4px 0 12px; }
+
+    .grade-row { padding: 10px 0; border-bottom: 1px dashed var(--border); }
+    .grade-row:last-child { border-bottom: none; }
+    .grade-row strong { display: inline-flex; align-items: center; gap: 6px; }
+    .grade-breakdown { margin-top: 4px; font-size: 13px; color: #4b5563; }
+
+    .modal { position: fixed; inset: 0; display: none; align-items: center; justify-content: center; z-index: 40; }
+    .modal.is-open { display: flex; }
+    .modal-backdrop { position: absolute; inset: 0; background: rgba(17,24,39,0.45); }
+    .modal-body { position: relative; background: #fff; padding: 18px; border-radius: 14px; width: min(680px, 90%); max-height: 90vh; overflow-y: auto; box-shadow: 0 20px 40px rgba(0,0,0,0.18); animation: slideUp 0.2s ease; }
+    .modal-close { position: absolute; right: 12px; top: 12px; background: none; border: none; font-size: 18px; cursor: pointer; }
+    @keyframes slideUp { from { transform: translateY(12px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
+
+    @media (max-width: 900px) {
+      .dashboard-hero { flex-direction: column; align-items: flex-start; gap: 10px; }
+      .tabs { position: sticky; top: 0; z-index: 20; overflow-x: auto; }
+      .export-actions { justify-content: flex-start; }
+    }
+
+    @media (max-width: 640px) {
+      .app-shell { grid-template-columns: 1fr; }
+      .app-sidebar { position: static; width: auto; }
+      .student-meta { grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); }
+      .assignment-meta { flex-direction: column; align-items: flex-start; }
+      .tab { flex: 1; text-align: center; }
+    }
   </style>
 </head>
 
@@ -371,10 +401,13 @@
               <% } else { %>
                 <ul>
                   <% latestGrades.forEach(function(grade){ %>
-                    <li>
-                      <strong><%= grade.subject %></strong> — <%= grade.grade_value %>
-                      <small class="text-muted">(<%= grade.weight || 1 %>x · <%= new Date(grade.grade_date).toLocaleDateString('de-DE') %>)</small><br>
-                      <% if (grade.teacher_comment) { %><small class="text-muted"><%= grade.teacher_comment %></small><% } %>
+                    <li class="grade-row" data-grade-row>
+                      <strong><button class="link-button" type="button" data-filter-subject="<%= grade.subject %>"><%= grade.subject %></button></strong> — <%= grade.grade_value %>
+                      <small class="text-muted">(<%= grade.weight || 1 %>x · <%= new Date(grade.grade_date).toLocaleDateString('de-DE') %>)</small>
+                      <div class="grade-breakdown">
+                        <% if (grade.teacher_comment) { %><small class="text-muted">Kommentar: <%= grade.teacher_comment %></small><br><% } %>
+                        <small class="text-muted">Angelegt am <%= new Date(grade.created_at || grade.grade_date).toLocaleDateString('de-DE') %></small>
+                      </div>
                     </li>
                   <% }); %>
                 </ul>
@@ -385,22 +418,29 @@
 
         <section id="tasks" class="tab-content">
           <div class="card">
-            <h3>Aufgaben</h3>
-            <% tasks.forEach(function(task){ %>
-              <div class="accordion">
-                <div class="accordion-title">
-                  <span><%= task.title %> · <%= task.subject %></span>
-                  <span class="pill"><%= task.status %></span>
-                </div>
-                <div class="accordion-content">
-                  <p>Fällig: <%= task.due %></p>
-                  <p><%= task.description %></p>
-                  <% if (task.attachments.length) { %>
-                    <div class="file-list">Anhänge: <%= task.attachments.join(', ') %></div>
-                  <% } %>
-                </div>
+            <h3>Aufgaben <small>Klicke für Details &amp; Dateien</small></h3>
+            <% if (!tasks.length) { %>
+              <p class="text-muted">Keine Aufgaben vorhanden. Dein Lehrer kann hier Aufgaben freigeben.</p>
+            <% } else { %>
+              <div class="assignment-grid">
+                <% tasks.forEach(function(task){ %>
+                  <article class="assignment-card" data-open-assignment="<%= task.id %>">
+                    <div class="assignment-meta">
+                      <div>
+                        <div class="badge"><%= task.subject || studentProfile.class %></div>
+                        <h4><%= task.title %></h4>
+                      </div>
+                      <span class="status-pill status-<%= task.status %>"><%= task.status === 'overdue' ? 'Überfällig' : task.status === 'submitted' ? 'Abgegeben' : 'Offen' %></span>
+                    </div>
+                    <p class="text-muted line-clamp-2"><%= task.description || 'Keine Beschreibung hinterlegt.' %></p>
+                    <div class="assignment-meta">
+                      <span class="chip">Fällig: <%= task.due_date ? new Date(task.due_date).toLocaleDateString('de-DE') : 'Kein Datum' %></span>
+                      <button type="button" class="link-button" data-open-assignment="<%= task.id %>">Details öffnen</button>
+                    </div>
+                  </article>
+                <% }); %>
               </div>
-            <% }); %>
+            <% } %>
           </div>
         </section>
 
@@ -471,10 +511,13 @@
             <% } else { %>
               <ul>
                 <% grades.forEach(function(grade){ %>
-                  <li>
-                    <strong><%= grade.subject %></strong> — Note <%= grade.grade_value %>
-                    <small class="text-muted">(<%= grade.weight || 1 %>x · <%= new Date(grade.grade_date).toLocaleDateString('de-DE') %>)</small><br>
-                    <% if (grade.teacher_comment) { %><small class="text-muted">Kommentar: <%= grade.teacher_comment %></small><% } %>
+                  <li class="grade-row" data-grade-row>
+                    <strong><button class="link-button" type="button" data-filter-subject="<%= grade.subject %>"><%= grade.subject %></button></strong> — Note <%= grade.grade_value %>
+                    <small class="text-muted">(<%= grade.weight || 1 %>x · <%= new Date(grade.grade_date).toLocaleDateString('de-DE') %>)</small>
+                    <div class="grade-breakdown">
+                      <% if (grade.teacher_comment) { %><small class="text-muted">Kommentar: <%= grade.teacher_comment %></small><br><% } %>
+                      <small class="text-muted">Eingetragen: <%= new Date(grade.created_at || grade.grade_date).toLocaleString('de-DE') %></small>
+                    </div>
                   </li>
                 <% }); %>
               </ul>
@@ -504,7 +547,7 @@
                 <% subjectAverages.forEach(function(avg){ %>
                   <% const classAvg = (classComparison.subjects || []).find(function(c){ return c.subject === avg.subject; }); %>
                   <li>
-                    <strong><%= avg.subject %></strong>: <%= avg.average ? avg.average.toFixed(2) : '–' %>
+                    <strong><button class="link-button" type="button" data-filter-subject="<%= avg.subject %>"><%= avg.subject %></button></strong>: <%= avg.average ? avg.average.toFixed(2) : '–' %>
                     <% if (classAvg && classAvg.average) { %>
                       <small class="text-muted">(Klasse: <%= classAvg.average.toFixed(2) %>)</small>
                     <% } %>
@@ -551,12 +594,20 @@
       </main>
     </section>
   </div>
+  <div class="modal" id="assignment-modal" aria-hidden="true">
+    <div class="modal-backdrop" data-close-assignment></div>
+    <div class="modal-body" role="dialog" aria-modal="true" aria-label="Aufgabendetails">
+      <button class="modal-close" type="button" data-close-assignment aria-label="Schließen">×</button>
+      <div id="assignment-modal-content">
+        <p class="text-muted">Wähle eine Aufgabe aus der Liste, um Details zu sehen.</p>
+      </div>
+    </div>
+  </div>
+  <script id="assignment-data" type="application/json"><%- JSON.stringify(tasks || []) %></script>
   <script src="/js/app.js"></script>
   <script>
     document.querySelectorAll(".tab").forEach(tab => {
-      tab.addEventListener("click", () => {
-        setActiveTab(tab.dataset.tab);
-      });
+      tab.addEventListener("click", () => setActiveTab(tab.dataset.tab));
     });
 
     document.querySelectorAll('[data-tab-target]').forEach(link => {
@@ -573,16 +624,99 @@
     function setActiveTab(name) {
       document.querySelectorAll('.tab').forEach(t => t.classList.toggle('active', t.dataset.tab === name));
       document.querySelectorAll('.tab-content').forEach(c => c.classList.toggle('active', c.id === name));
-      document.querySelectorAll('[data-tab-target]').forEach(link => {
-        const isActive = link.getAttribute('data-tab-target') === name;
-        link.classList.toggle('is-active', isActive);
-      });
+      document.querySelectorAll('[data-tab-target]').forEach(link => link.classList.toggle('is-active', link.getAttribute('data-tab-target') === name));
     }
 
-    document.querySelectorAll('.accordion').forEach(acc => {
-      acc.addEventListener('click', () => {
-        const content = acc.querySelector('.accordion-content');
-        content.style.display = content.style.display === 'block' ? 'none' : 'block';
+    const assignmentDataEl = document.getElementById('assignment-data');
+    const assignmentCache = assignmentDataEl ? JSON.parse(assignmentDataEl.textContent || '[]') : [];
+    const assignmentModal = document.getElementById('assignment-modal');
+    const assignmentModalContent = document.getElementById('assignment-modal-content');
+
+    function closeAssignmentModal() {
+      assignmentModal?.classList.remove('is-open');
+      assignmentModal?.setAttribute('aria-hidden', 'true');
+    }
+
+    function renderAssignmentDetail(assignment) {
+      const attachments = (assignment.attachments || []).length
+        ? assignment.attachments
+            .map(file => {
+              const sizeLabel = file.file_size ? `${Math.round(file.file_size / 102.4) / 10} KB` : 'Größe unbekannt';
+              return `<div class="attachment-item"><div><strong>${file.file_name}</strong><br><small class="text-muted">${sizeLabel}</small></div><div class="attachment-actions"><a class="link-button" href="/student/assignments/${assignment.id}/files/${file.id}" target="_blank" rel="noopener">Ansehen</a><a class="link-button" href="/student/assignments/${assignment.id}/files/${file.id}?download=1">Download</a></div></div>`;
+            })
+            .join('')
+        : '<p class="text-muted">Keine Anhänge vorhanden.</p>';
+
+      const statusLabel = assignment.status === 'overdue' ? 'Überfällig' : assignment.status === 'submitted' ? 'Abgegeben' : 'Offen';
+      assignmentModalContent.innerHTML = `
+        <h3>${assignment.title}</h3>
+        <p class="text-muted">${assignment.description || 'Keine Beschreibung hinterlegt.'}</p>
+        <div class="assignment-meta">
+          <span class="chip">Fach: ${assignment.subject || 'Allgemein'}</span>
+          <span class="chip">Fällig: ${assignment.due_date ? new Date(assignment.due_date).toLocaleDateString('de-DE') : 'Kein Datum'}</span>
+          <span class="status-pill status-${assignment.status}">${statusLabel}</span>
+        </div>
+        <h4>Anhänge</h4>
+        <div class="attachment-list">${attachments}</div>
+      `;
+    }
+
+    function openAssignment(assignmentId) {
+      assignmentModalContent.innerHTML = '<p class="text-muted">Lade Aufgabendetails ...</p>';
+      assignmentModal.classList.add('is-open');
+      assignmentModal.setAttribute('aria-hidden', 'false');
+
+      const cached = assignmentCache.find(a => Number(a.id) === Number(assignmentId));
+      if (cached) renderAssignmentDetail(cached);
+
+      fetch(`/student/assignments/${assignmentId}`)
+        .then(res => (res.ok ? res.json() : Promise.reject()))
+        .then(payload => {
+          if (!payload?.assignment) return;
+          const idx = assignmentCache.findIndex(a => a.id === payload.assignment.id);
+          if (idx >= 0) assignmentCache[idx] = payload.assignment;
+          else assignmentCache.push(payload.assignment);
+          renderAssignmentDetail(payload.assignment);
+        })
+        .catch(() => {
+          assignmentModalContent.innerHTML = '<p class="text-muted">Aufgabendetails konnten nicht geladen werden.</p>';
+        });
+    }
+
+    document.querySelectorAll('[data-open-assignment]').forEach(card => {
+      card.addEventListener('click', (event) => {
+        const id = event.currentTarget.getAttribute('data-open-assignment');
+        openAssignment(id);
+      });
+    });
+
+    document.querySelectorAll('[data-close-assignment]').forEach(btn => btn.addEventListener('click', closeAssignmentModal));
+    document.addEventListener('keydown', (event) => {
+      if (event.key === 'Escape') closeAssignmentModal();
+    });
+
+    const filterForm = document.querySelector('.filter-form');
+    function submitSubjectFilter(subject) {
+      if (!filterForm) return;
+      const select = filterForm.querySelector('select[name="subject"]');
+      if (select) select.value = subject || '';
+      setActiveTab('grades');
+      filterForm.submit();
+    }
+
+    document.querySelectorAll('[data-filter-subject]').forEach(el => {
+      el.addEventListener('click', (ev) => {
+        ev.stopPropagation();
+        submitSubjectFilter(el.getAttribute('data-filter-subject'));
+      });
+    });
+
+    document.querySelectorAll('[data-grade-row]').forEach(row => {
+      const detail = row.querySelector('.grade-breakdown');
+      if (!detail) return;
+      detail.style.display = 'none';
+      row.addEventListener('click', () => {
+        detail.style.display = detail.style.display === 'none' ? 'block' : 'none';
       });
     });
   </script>

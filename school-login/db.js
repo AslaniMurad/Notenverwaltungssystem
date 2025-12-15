@@ -52,11 +52,15 @@ function createFakeDb() {
   const students = [];
   const grades = [];
   const notifications = [];
+  const assignments = [];
+  const assignmentFiles = [];
   let userId = 1;
   let classId = 1;
   let studentId = 1;
   let gradeId = 1;
   let notificationId = 1;
+  let assignmentId = 1;
+  let assignmentFileId = 1;
 
   const db = {
     serialize(fn) {
@@ -165,6 +169,34 @@ function createFakeDb() {
         };
         notifications.push(newNotification);
         lastID = newNotification.id;
+      } else if (/INSERT INTO assignments/i.test(sql)) {
+        const [class_id, title, description, subject, due_date, status] = params;
+        const newAssignment = {
+          id: assignmentId++,
+          class_id: Number(class_id),
+          title,
+          description,
+          subject,
+          due_date,
+          status: status || "open",
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString()
+        };
+        assignments.push(newAssignment);
+        lastID = newAssignment.id;
+      } else if (/INSERT INTO assignment_files/i.test(sql)) {
+        const [assignment_id, file_name, stored_name, mime_type, file_size] = params;
+        const newFile = {
+          id: assignmentFileId++,
+          assignment_id: Number(assignment_id),
+          file_name,
+          stored_name,
+          mime_type: mime_type || "application/pdf",
+          file_size: file_size ? Number(file_size) : null,
+          created_at: new Date().toISOString()
+        };
+        assignmentFiles.push(newFile);
+        lastID = newFile.id;
       }
 
       if (typeof cb === "function") {
@@ -232,6 +264,13 @@ function createFakeDb() {
             };
           }
         }
+      } else if (/FROM assignments WHERE id = \? AND class_id = \?/i.test(sql)) {
+        const [id, class_id] = params.map(Number);
+        row = assignments.find((a) => a.id === id && a.class_id === class_id);
+      } else if (/FROM assignment_files WHERE id = \?/i.test(sql)) {
+        const [id] = params.map(Number);
+        const file = assignmentFiles.find((f) => f.id === id);
+        row = file ? { ...file } : undefined;
       }
 
       if (typeof cb === "function") cb(null, row);
@@ -297,6 +336,14 @@ function createFakeDb() {
         rows = notifications
           .filter((n) => n.student_id === student_id)
           .sort((a, b) => b.created_at.localeCompare(a.created_at));
+      } else if (/FROM assignments WHERE class_id = \?/i.test(sql)) {
+        const class_id = Number(params[0]);
+        rows = assignments
+          .filter((a) => a.class_id === class_id)
+          .sort((a, b) => String(a.due_date || "").localeCompare(String(b.due_date || "")));
+      } else if (/FROM assignment_files WHERE assignment_id IN \(/i.test(sql)) {
+        const ids = params.map(Number);
+        rows = assignmentFiles.filter((f) => ids.includes(f.assignment_id));
       } else if (/PRAGMA table_info\(users\)/i.test(sql)) {
         rows = [];
       }
@@ -305,7 +352,7 @@ function createFakeDb() {
     }
   };
 
-  db.__data = { users, classes, students, grades, notifications };
+  db.__data = { users, classes, students, grades, notifications, assignments, assignmentFiles };
   db.isFake = true;
 
   function seedAdmin() {
@@ -435,6 +482,37 @@ db.serialize(() => {
       is_read INTEGER NOT NULL DEFAULT 0,
       created_at TEXT NOT NULL DEFAULT (datetime('now')),
       FOREIGN KEY (student_id) REFERENCES students(id)
+    )
+  `);
+
+  // Aufgaben
+  db.run(`
+    CREATE TABLE IF NOT EXISTS assignments (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      class_id INTEGER NOT NULL,
+      title TEXT NOT NULL,
+      description TEXT,
+      subject TEXT,
+      due_date TEXT,
+      status TEXT NOT NULL DEFAULT 'open',
+      created_at TEXT NOT NULL DEFAULT (datetime('now')),
+      updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+      submitted_at TEXT,
+      FOREIGN KEY (class_id) REFERENCES classes(id)
+    )
+  `);
+
+  // Anhänge zu Aufgaben (PDFs)
+  db.run(`
+    CREATE TABLE IF NOT EXISTS assignment_files (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      assignment_id INTEGER NOT NULL,
+      file_name TEXT NOT NULL,
+      stored_name TEXT NOT NULL,
+      mime_type TEXT DEFAULT 'application/pdf',
+      file_size INTEGER,
+      created_at TEXT NOT NULL DEFAULT (datetime('now')),
+      FOREIGN KEY (assignment_id) REFERENCES assignments(id)
     )
   `);
 });
