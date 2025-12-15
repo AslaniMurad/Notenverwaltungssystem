@@ -365,10 +365,76 @@ db.serialize(() => {
       email TEXT UNIQUE NOT NULL,
       password_hash TEXT NOT NULL,
       role TEXT NOT NULL CHECK (role IN ('admin','teacher','student')),
-      status TEXT NOT NULL DEFAULT 'active' CHECK (status IN ('active','locked')),
+      status TEXT NOT NULL DEFAULT 'active' CHECK (status IN ('active','locked','deleted')),
       created_at TEXT NOT NULL DEFAULT (datetime('now'))
     )
   `);
+
+  // Ältere Datenbanken hatten den Status-Check ohne 'deleted'. Korrigiere das,
+  // damit Soft-Deletes nicht an der CHECK-Constraint scheitern.
+  db.get("SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'users'", (err, row) => {
+    if (err || !row?.sql) {
+      if (err) console.error("Konnte Users-Schema nicht prüfen:", err);
+      return;
+    }
+
+    if (row.sql.includes("'deleted'")) return;
+
+    console.log("Aktualisiere users.status-Constraint, um 'deleted' zu erlauben...");
+    db.run("ALTER TABLE users RENAME TO users_old", (renameErr) => {
+      if (renameErr) {
+        console.error("Umbenennen der users-Tabelle fehlgeschlagen:", renameErr);
+        return;
+      }
+
+      db.all("PRAGMA table_info(users_old)", (pragmaErr, cols) => {
+        if (pragmaErr) {
+          console.error("Konnte Schema von users_old nicht lesen:", pragmaErr);
+          return;
+        }
+
+        const hasLastLogin = cols.some((c) => c.name === "last_login");
+        const createSql = `
+          CREATE TABLE users (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            email TEXT UNIQUE NOT NULL,
+            password_hash TEXT NOT NULL,
+            role TEXT NOT NULL CHECK (role IN ('admin','teacher','student')),
+            status TEXT NOT NULL DEFAULT 'active' CHECK (status IN ('active','locked','deleted')),
+            created_at TEXT NOT NULL DEFAULT (datetime('now'))${hasLastLogin ? ",\n            last_login TEXT" : ""}
+          )
+        `;
+
+        db.run(createSql, (createErr) => {
+          if (createErr) {
+            console.error("Neuanlage der users-Tabelle mit erweiterter Constraint fehlgeschlagen:", createErr);
+            return;
+          }
+
+          const insertSql = `
+            INSERT INTO users (id, email, password_hash, role, status, created_at${hasLastLogin ? ", last_login" : ""})
+            SELECT id, email, password_hash, role, status, COALESCE(created_at, datetime('now'))${hasLastLogin ? ", last_login" : ""}
+            FROM users_old
+          `;
+
+          db.run(insertSql, (insertErr) => {
+            if (insertErr) {
+              console.error("Übertragen der alten User-Daten fehlgeschlagen:", insertErr);
+              return;
+            }
+
+            db.run("DROP TABLE users_old", (dropErr) => {
+              if (dropErr) {
+                console.error("Konnte users_old nicht löschen:", dropErr);
+                return;
+              }
+              console.log("users.status-Constraint erfolgreich angepasst.");
+            });
+          });
+        });
+      });
+    });
+  });
 
   const ADMIN_EMAIL = process.env.ADMIN_EMAIL || "admin@example.com";
   const ADMIN_PASS  = process.env.ADMIN_PASS  || "admin1234!ChangeMe";
