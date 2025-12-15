@@ -50,9 +50,13 @@ function createFakeDb() {
   const users = [];
   const classes = [];
   const students = [];
+  const grades = [];
+  const notifications = [];
   let userId = 1;
   let classId = 1;
   let studentId = 1;
+  let gradeId = 1;
+  let notificationId = 1;
 
   const db = {
     serialize(fn) {
@@ -64,6 +68,9 @@ function createFakeDb() {
 
       if (/INSERT INTO users/i.test(sql)) {
         const [email, password_hash, role, status] = params;
+        const resolvedRole =
+          role || (/\'teacher\'/i.test(sql) ? "teacher" : /\'student\'/i.test(sql) ? "student" : /\'admin\'/i.test(sql) ? "admin" : undefined);
+        const resolvedStatus = status || (/\'active\'/i.test(sql) ? "active" : undefined) || "active";
         if (users.some((u) => u.email === email)) {
           err = new Error("UNIQUE constraint failed: users.email");
         } else {
@@ -71,8 +78,8 @@ function createFakeDb() {
             id: userId++,
             email,
             password_hash,
-            role,
-            status: status || "active",
+            role: resolvedRole,
+            status: resolvedStatus,
             created_at: new Date().toISOString()
           };
           users.push(newUser);
@@ -129,11 +136,43 @@ function createFakeDb() {
             name,
             email,
             class_id: Number(class_id),
+            school_year: params[3] || "2024/25",
             created_at: new Date().toISOString()
           };
           students.push(newStudent);
           lastID = newStudent.id;
         }
+      } else if (/INSERT INTO grades/i.test(sql)) {
+        const [student_id, subject, value, weight, comment, teacher, graded_at] = params;
+        const newGrade = {
+          id: gradeId++,
+          student_id: Number(student_id),
+          subject,
+          value: Number(value),
+          weight: weight != null ? Number(weight) : 1,
+          comment: comment || null,
+          teacher: teacher || null,
+          graded_at: graded_at || new Date().toISOString(),
+          created_at: new Date().toISOString()
+        };
+        grades.push(newGrade);
+        lastID = newGrade.id;
+      } else if (/INSERT INTO grade_notifications/i.test(sql)) {
+        const [student_id, message, type, created_at] = params;
+        const notification = {
+          id: notificationId++,
+          student_id: Number(student_id),
+          message,
+          type: type || "info",
+          created_at: created_at || new Date().toISOString(),
+          read_at: null
+        };
+        notifications.push(notification);
+        lastID = notification.id;
+      } else if (/UPDATE grade_notifications SET read_at = current_timestamp WHERE id = \? AND student_id = \?/i.test(sql)) {
+        const [id, student_id] = params.map(Number);
+        const note = notifications.find((n) => n.id === id && n.student_id === student_id);
+        if (note) note.read_at = new Date().toISOString();
       }
 
       if (typeof cb === "function") {
@@ -185,6 +224,18 @@ function createFakeDb() {
         const [email, class_id] = params;
         const student = students.find((s) => s.email === email && s.class_id === Number(class_id));
         row = student ? { id: student.id } : undefined;
+      } else if (/SELECT s\.\*, c\.name as class_name, c\.subject as class_subject, c\.id as class_id FROM students s JOIN classes c ON c.id = s.class_id WHERE s.email = \?/i.test(sql)) {
+        const [email] = params;
+        const student = students.find((s) => s.email === email);
+        if (student) {
+          const cls = classes.find((c) => c.id === student.class_id);
+          row = {
+            ...student,
+            class_name: cls?.name,
+            class_subject: cls?.subject,
+            class_id: cls?.id
+          };
+        }
       }
 
       if (typeof cb === "function") cb(null, row);
@@ -207,7 +258,28 @@ function createFakeDb() {
           .filter((s) => s.class_id === Number(class_id))
           .sort((a, b) => a.name.localeCompare(b.name))
           .map((s) => ({ id: s.id, name: s.name, email: s.email }));
-      } else if (/PRAGMA table_info\(users\)/i.test(sql)) {
+      } else if (/SELECT id, subject, value, weight, comment, teacher, graded_at, created_at FROM grades WHERE student_id = \?/i.test(sql)) {
+        const [student_id] = params;
+        rows = grades
+          .filter((g) => g.student_id === Number(student_id))
+          .map((g) => ({ ...g }));
+      } else if (/SELECT g\.subject, g\.value, g\.weight FROM grades g JOIN students s ON s.id = g.student_id WHERE s.class_id = \?/i.test(sql)) {
+        const [class_id] = params;
+        const studentIds = students.filter((s) => s.class_id === Number(class_id)).map((s) => s.id);
+        rows = grades
+          .filter((g) => studentIds.includes(g.student_id))
+          .map((g) => ({ subject: g.subject, value: g.value, weight: g.weight }));
+      } else if (/SELECT id, message, type, created_at, read_at FROM grade_notifications WHERE student_id = \? ORDER BY created_at DESC/i.test(sql)) {
+        const [student_id] = params;
+        rows = notifications
+          .filter((n) => n.student_id === Number(student_id))
+          .sort((a, b) => new Date(b.created_at) - new Date(a.created_at))
+          .map((n) => ({ ...n }));
+      } else if (/SELECT id, name, subject, teacher_id FROM classes WHERE id = \?/i.test(sql)) {
+        const [id] = params;
+        const cls = classes.find((c) => c.id === Number(id));
+        rows = cls ? [{ ...cls }] : [];
+      } else if (/PRAGMA table_info\(users\)/i.test(sql) || /PRAGMA table_info\(students\)/i.test(sql)) {
         rows = [];
       }
 
@@ -226,7 +298,40 @@ function createFakeDb() {
     );
   }
 
+  function seedDemoStudent() {
+    const teacherHash = hashPassword("teacherDemo123!");
+    const studentHash = hashPassword("studentDemo123!");
+
+    db.run("INSERT INTO users (email, password_hash, role, status) VALUES (?,?, 'teacher', 'active')", ["teacher@example.com", teacherHash]);
+    db.run("INSERT INTO users (email, password_hash, role, status) VALUES (?,?, 'student', 'active')", ["student@example.com", studentHash]);
+
+    db.run("INSERT INTO classes (name, subject, teacher_id) VALUES (?,?,?)", ["3AHWII", "Informatik", 2], function () {
+      const createdClassId = this.lastID;
+      db.run("INSERT INTO students (name, email, class_id, school_year) VALUES (?,?,?,?)", ["Max Muster", "student@example.com", createdClassId, "2024/25"], function () {
+        const studentId = this.lastID;
+        const now = new Date();
+        db.run(
+          "INSERT INTO grades (student_id, subject, value, weight, comment, teacher, graded_at) VALUES (?,?,?,?,?,?,?)",
+          [studentId, "Mathematik", 2, 0.4, "Gute Struktur", "Frau König", new Date(now.getTime() - 1000 * 60 * 60 * 24 * 14).toISOString()]
+        );
+        db.run(
+          "INSERT INTO grades (student_id, subject, value, weight, comment, teacher, graded_at) VALUES (?,?,?,?,?,?,?)",
+          [studentId, "Informatik", 1.5, 0.35, "Sauberer Code", "Herr Leitner", new Date(now.getTime() - 1000 * 60 * 60 * 24 * 7).toISOString()]
+        );
+        db.run(
+          "INSERT INTO grades (student_id, subject, value, weight, comment, teacher, graded_at) VALUES (?,?,?,?,?,?,?)",
+          [studentId, "Deutsch", 3, 0.25, "Mehr Quellenangaben", "Frau Bauer", now.toISOString()]
+        );
+        db.run(
+          "INSERT INTO grade_notifications (student_id, message, type, created_at) VALUES (?,?,?,?)",
+          [studentId, "Neue Note in Informatik eingetragen.", "grade", now.toISOString()]
+        );
+      });
+    });
+  }
+
   seedAdmin();
+  seedDemoStudent();
   return db;
 }
 
@@ -309,13 +414,83 @@ db.serialize(() => {
       name TEXT NOT NULL,
       email TEXT NOT NULL,
       class_id INTEGER NOT NULL,
+      school_year TEXT,
       created_at TEXT NOT NULL DEFAULT (datetime('now')),
       FOREIGN KEY (class_id) REFERENCES classes(id),
       UNIQUE(email, class_id)
     )
   `);
+
+  db.run(`
+    CREATE TABLE IF NOT EXISTS grades (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      student_id INTEGER NOT NULL,
+      subject TEXT NOT NULL,
+      value REAL NOT NULL,
+      weight REAL DEFAULT 1,
+      comment TEXT,
+      teacher TEXT,
+      graded_at TEXT NOT NULL DEFAULT (datetime('now')),
+      created_at TEXT NOT NULL DEFAULT (datetime('now')),
+      FOREIGN KEY (student_id) REFERENCES students(id)
+    )
+  `);
+
+  db.run(`
+    CREATE TABLE IF NOT EXISTS grade_notifications (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      student_id INTEGER NOT NULL,
+      message TEXT NOT NULL,
+      type TEXT NOT NULL DEFAULT 'info',
+      created_at TEXT NOT NULL DEFAULT (datetime('now')),
+      read_at TEXT,
+      FOREIGN KEY (student_id) REFERENCES students(id)
+    )
+  `);
 });
 
+// --- Ensure new columns exist for legacy DBs ---
+db.all("PRAGMA table_info(students)", [], (err, cols) => {
+  if (err) return;
+  const hasSchoolYear = cols.some((c) => c.name === "school_year");
+  if (!hasSchoolYear) {
+    db.run("ALTER TABLE students ADD COLUMN school_year TEXT", [], () => {});
+  }
+});
+
+// --- Seed demo users and sample data for local testing ---
+function seedDemoData() {
+  const teacherEmail = "teacher@example.com";
+  const studentEmail = "student@example.com";
+
+  db.get("SELECT id FROM users WHERE email = ?", [teacherEmail], (err, teacherRow) => {
+    if (err || teacherRow) return;
+    const teacherHash = hashPassword("teacherDemo123!");
+    db.run("INSERT INTO users (email, password_hash, role, status) VALUES (?,?, 'teacher','active')", [teacherEmail, teacherHash], function () {
+      const teacherId = this.lastID;
+      db.run("INSERT INTO users (email, password_hash, role, status) VALUES (?,?, 'student','active')", [studentEmail, hashPassword("studentDemo123!")], function () {
+        const studentUserId = this.lastID;
+        db.run("INSERT INTO classes (name, subject, teacher_id) VALUES (?,?,?)", ["3AHWII", "Informatik", teacherId], function () {
+          const classId = this.lastID;
+          db.run("INSERT INTO students (name, email, class_id, school_year) VALUES (?,?,?,?)", ["Max Muster", studentEmail, classId, "2024/25"], function () {
+            const studentId = this.lastID;
+            const now = new Date();
+            const fourteenDays = new Date(now.getTime() - 1000 * 60 * 60 * 24 * 14).toISOString();
+            const sevenDays = new Date(now.getTime() - 1000 * 60 * 60 * 24 * 7).toISOString();
+
+            db.run("INSERT INTO grades (student_id, subject, value, weight, comment, teacher, graded_at) VALUES (?,?,?,?,?,?,?)", [studentId, "Mathematik", 2, 0.4, "Gute Struktur", "Frau König", fourteenDays]);
+            db.run("INSERT INTO grades (student_id, subject, value, weight, comment, teacher, graded_at) VALUES (?,?,?,?,?,?,?)", [studentId, "Informatik", 1.5, 0.35, "Sauberer Code", "Herr Leitner", sevenDays]);
+            db.run("INSERT INTO grades (student_id, subject, value, weight, comment, teacher, graded_at) VALUES (?,?,?,?,?,?,?)", [studentId, "Deutsch", 3, 0.25, "Mehr Quellenangaben", "Frau Bauer", now.toISOString()]);
+            db.run("INSERT INTO grade_notifications (student_id, message, type) VALUES (?,?,?)", [studentId, "Neue Note in Informatik eingetragen.", "grade"]);
+            db.run("INSERT INTO grade_notifications (student_id, message, type) VALUES (?,?,?)", [studentId, "Dein Notendurchschnitt hat sich verbessert!", "average"]);
+          });
+        });
+      });
+    });
+  });
+}
+
+seedDemoData();
 
 module.exports = {
   db,
