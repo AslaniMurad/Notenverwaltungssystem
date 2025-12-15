@@ -314,6 +314,38 @@ db.serialize(() => {
       UNIQUE(email, class_id)
     )
   `);
+
+  // Prüfungsvorlagen-Tabelle
+  db.run(`
+    CREATE TABLE IF NOT EXISTS grade_templates (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      class_id INTEGER NOT NULL,
+      name TEXT NOT NULL,
+      category TEXT NOT NULL CHECK (category IN ('Schularbeit', 'Test', 'Wiederholung', 'Mitarbeit', 'Projekt', 'Hausübung')),
+      weight REAL NOT NULL CHECK (weight >= 0 AND weight <= 100),
+      date TEXT,
+      description TEXT,
+      created_at TEXT NOT NULL DEFAULT (datetime('now')),
+      FOREIGN KEY (class_id) REFERENCES classes(id) ON DELETE CASCADE
+    )
+  `);
+
+  // Noten-Tabelle (mit Template-Referenz)
+  db.run(`
+    CREATE TABLE IF NOT EXISTS grades (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      student_id INTEGER NOT NULL,
+      class_id INTEGER NOT NULL,
+      grade_template_id INTEGER NOT NULL,
+      grade REAL NOT NULL CHECK (grade >= 1 AND grade <= 5),
+      note TEXT,
+      created_at TEXT NOT NULL DEFAULT (datetime('now')),
+      FOREIGN KEY (student_id) REFERENCES students(id) ON DELETE CASCADE,
+      FOREIGN KEY (class_id) REFERENCES classes(id) ON DELETE CASCADE,
+      FOREIGN KEY (grade_template_id) REFERENCES grade_templates(id) ON DELETE CASCADE,
+      UNIQUE(student_id, grade_template_id)
+    )
+  `);
 });
 
 
