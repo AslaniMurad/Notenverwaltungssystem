@@ -50,9 +50,17 @@ function createFakeDb() {
   const users = [];
   const classes = [];
   const students = [];
+  const grades = [];
+  const notifications = [];
+  const assignments = [];
+  const assignmentFiles = [];
   let userId = 1;
   let classId = 1;
   let studentId = 1;
+  let gradeId = 1;
+  let notificationId = 1;
+  let assignmentId = 1;
+  let assignmentFileId = 1;
 
   const db = {
     serialize(fn) {
@@ -134,6 +142,61 @@ function createFakeDb() {
           students.push(newStudent);
           lastID = newStudent.id;
         }
+      } else if (/INSERT INTO grades/i.test(sql)) {
+        const [student_id, subject, grade_value, grade_date, weight, teacher_comment, teacher_id] = params;
+        const newGrade = {
+          id: gradeId++,
+          student_id: Number(student_id),
+          subject,
+          grade_value: Number(grade_value),
+          grade_date: grade_date || new Date().toISOString(),
+          weight: weight ? Number(weight) : 1,
+          teacher_comment: teacher_comment || null,
+          teacher_id: teacher_id ? Number(teacher_id) : null,
+          created_at: new Date().toISOString()
+        };
+        grades.push(newGrade);
+        lastID = newGrade.id;
+      } else if (/INSERT INTO notifications/i.test(sql)) {
+        const [student_id, type, message] = params;
+        const newNotification = {
+          id: notificationId++,
+          student_id: Number(student_id),
+          type,
+          message,
+          is_read: 0,
+          created_at: new Date().toISOString()
+        };
+        notifications.push(newNotification);
+        lastID = newNotification.id;
+      } else if (/INSERT INTO assignments/i.test(sql)) {
+        const [class_id, title, description, subject, due_date, status] = params;
+        const newAssignment = {
+          id: assignmentId++,
+          class_id: Number(class_id),
+          title,
+          description,
+          subject,
+          due_date,
+          status: status || "open",
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString()
+        };
+        assignments.push(newAssignment);
+        lastID = newAssignment.id;
+      } else if (/INSERT INTO assignment_files/i.test(sql)) {
+        const [assignment_id, file_name, stored_name, mime_type, file_size] = params;
+        const newFile = {
+          id: assignmentFileId++,
+          assignment_id: Number(assignment_id),
+          file_name,
+          stored_name,
+          mime_type: mime_type || "application/pdf",
+          file_size: file_size ? Number(file_size) : null,
+          created_at: new Date().toISOString()
+        };
+        assignmentFiles.push(newFile);
+        lastID = newFile.id;
       }
 
       if (typeof cb === "function") {
@@ -185,6 +248,29 @@ function createFakeDb() {
         const [email, class_id] = params;
         const student = students.find((s) => s.email === email && s.class_id === Number(class_id));
         row = student ? { id: student.id } : undefined;
+      } else if (/FROM students s JOIN classes c ON c.id = s.class_id WHERE s.email = \?/i.test(sql)) {
+        const [email] = params;
+        const student = students.find((s) => s.email === email);
+        if (student) {
+          const classData = classes.find((c) => c.id === student.class_id);
+          if (classData) {
+            row = {
+              student_id: student.id,
+              student_name: student.name,
+              email: student.email,
+              class_id: classData.id,
+              class_name: classData.name,
+              class_subject: classData.subject
+            };
+          }
+        }
+      } else if (/FROM assignments WHERE id = \? AND class_id = \?/i.test(sql)) {
+        const [id, class_id] = params.map(Number);
+        row = assignments.find((a) => a.id === id && a.class_id === class_id);
+      } else if (/FROM assignment_files WHERE id = \?/i.test(sql)) {
+        const [id] = params.map(Number);
+        const file = assignmentFiles.find((f) => f.id === id);
+        row = file ? { ...file } : undefined;
       }
 
       if (typeof cb === "function") cb(null, row);
@@ -207,6 +293,57 @@ function createFakeDb() {
           .filter((s) => s.class_id === Number(class_id))
           .sort((a, b) => a.name.localeCompare(b.name))
           .map((s) => ({ id: s.id, name: s.name, email: s.email }));
+      } else if (/FROM grades/i.test(sql)) {
+        const student_id = Number(params[0]);
+        let idx = 1;
+        let subjectFilter;
+        let startDate;
+        let endDate;
+        if (sql.includes("subject = ?")) subjectFilter = params[idx++];
+        if (sql.includes("grade_date >= ?")) startDate = params[idx++];
+        if (sql.includes("grade_date <= ?")) endDate = params[idx++];
+        const sortBy = sql.includes("ORDER BY grade_value") ? "grade_value" : "grade_date";
+        const orderDesc = sql.toUpperCase().includes("DESC");
+        rows = grades
+          .filter((g) => g.student_id === student_id)
+          .filter((g) => (!subjectFilter || g.subject === subjectFilter))
+          .filter((g) => (!startDate || g.grade_date >= startDate))
+          .filter((g) => (!endDate || g.grade_date <= endDate))
+          .sort((a, b) => {
+            const factor = orderDesc ? -1 : 1;
+            if (sortBy === "grade_value") return (a.grade_value - b.grade_value) * factor;
+            return (a.grade_date.localeCompare(b.grade_date)) * factor;
+          });
+      } else if (/SUM\(g.grade_value \* g.weight\)/i.test(sql) && sql.includes("GROUP BY g.subject")) {
+        const class_id = Number(params[0]);
+        const classStudentIds = students.filter((s) => s.class_id === class_id).map((s) => s.id);
+        const subjectMap = new Map();
+        grades
+          .filter((g) => classStudentIds.includes(g.student_id))
+          .forEach((g) => {
+            const entry = subjectMap.get(g.subject) || { weightedSum: 0, totalWeight: 0 };
+            entry.weightedSum += g.grade_value * g.weight;
+            entry.totalWeight += g.weight;
+            subjectMap.set(g.subject, entry);
+          });
+        rows = Array.from(subjectMap.entries()).map(([subject, data]) => ({
+          subject,
+          weightedSum: data.weightedSum,
+          totalWeight: data.totalWeight
+        }));
+      } else if (/FROM notifications/i.test(sql)) {
+        const student_id = Number(params[0]);
+        rows = notifications
+          .filter((n) => n.student_id === student_id)
+          .sort((a, b) => b.created_at.localeCompare(a.created_at));
+      } else if (/FROM assignments WHERE class_id = \?/i.test(sql)) {
+        const class_id = Number(params[0]);
+        rows = assignments
+          .filter((a) => a.class_id === class_id)
+          .sort((a, b) => String(a.due_date || "").localeCompare(String(b.due_date || "")));
+      } else if (/FROM assignment_files WHERE assignment_id IN \(/i.test(sql)) {
+        const ids = params.map(Number);
+        rows = assignmentFiles.filter((f) => ids.includes(f.assignment_id));
       } else if (/PRAGMA table_info\(users\)/i.test(sql)) {
         rows = [];
       }
@@ -214,6 +351,9 @@ function createFakeDb() {
       if (typeof cb === "function") cb(null, rows);
     }
   };
+
+  db.__data = { users, classes, students, grades, notifications, assignments, assignmentFiles };
+  db.isFake = true;
 
   function seedAdmin() {
     const ADMIN_EMAIL = process.env.ADMIN_EMAIL || "admin@example.com";
@@ -312,6 +452,67 @@ db.serialize(() => {
       created_at TEXT NOT NULL DEFAULT (datetime('now')),
       FOREIGN KEY (class_id) REFERENCES classes(id),
       UNIQUE(email, class_id)
+    )
+  `);
+
+  // Noten-Tabelle
+  db.run(`
+    CREATE TABLE IF NOT EXISTS grades (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      student_id INTEGER NOT NULL,
+      subject TEXT NOT NULL,
+      grade_value REAL NOT NULL,
+      grade_date TEXT NOT NULL DEFAULT (datetime('now')),
+      weight REAL NOT NULL DEFAULT 1,
+      teacher_comment TEXT,
+      teacher_id INTEGER,
+      created_at TEXT NOT NULL DEFAULT (datetime('now')),
+      FOREIGN KEY (student_id) REFERENCES students(id),
+      FOREIGN KEY (teacher_id) REFERENCES users(id)
+    )
+  `);
+
+  // In-App-Benachrichtigungen
+  db.run(`
+    CREATE TABLE IF NOT EXISTS notifications (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      student_id INTEGER NOT NULL,
+      type TEXT NOT NULL,
+      message TEXT NOT NULL,
+      is_read INTEGER NOT NULL DEFAULT 0,
+      created_at TEXT NOT NULL DEFAULT (datetime('now')),
+      FOREIGN KEY (student_id) REFERENCES students(id)
+    )
+  `);
+
+  // Aufgaben
+  db.run(`
+    CREATE TABLE IF NOT EXISTS assignments (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      class_id INTEGER NOT NULL,
+      title TEXT NOT NULL,
+      description TEXT,
+      subject TEXT,
+      due_date TEXT,
+      status TEXT NOT NULL DEFAULT 'open',
+      created_at TEXT NOT NULL DEFAULT (datetime('now')),
+      updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+      submitted_at TEXT,
+      FOREIGN KEY (class_id) REFERENCES classes(id)
+    )
+  `);
+
+  // Anhänge zu Aufgaben (PDFs)
+  db.run(`
+    CREATE TABLE IF NOT EXISTS assignment_files (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      assignment_id INTEGER NOT NULL,
+      file_name TEXT NOT NULL,
+      stored_name TEXT NOT NULL,
+      mime_type TEXT DEFAULT 'application/pdf',
+      file_size INTEGER,
+      created_at TEXT NOT NULL DEFAULT (datetime('now')),
+      FOREIGN KEY (assignment_id) REFERENCES assignments(id)
     )
   `);
 });
