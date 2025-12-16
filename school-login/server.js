@@ -68,15 +68,10 @@ async function loadStudentFromSession(req) {
   const email = req.session?.user?.email;
   if (!email) throw new Error("Unauthenticated");
   const student = await dbGet(
-    "SELECT s.*, c.name as class_name, c.subject as class_subject, c.id as class_id FROM students s JOIN classes c ON c.id = s.class_id WHERE s.email = ?",
+    "SELECT s.*, c.name as class_name, c.subject as class_subject, c.id as class_id FROM students s LEFT JOIN classes c ON c.id = s.class_id WHERE s.email = ?",
     [email]
   );
-  if (!student) {
-    const err = new Error("Student not found");
-    err.statusCode = 404;
-    throw err;
-  }
-  return student;
+  return student; // Return null if not found, instead of throwing
 }
 
 function filterGrades(grades, { subject, startDate, endDate, sort }) {
@@ -274,6 +269,14 @@ app.use("/admin", adminRoutes);
 app.get("/student", requireAuth, requireRole("student"), async (req, res, next) => {
   try {
     const student = await loadStudentFromSession(req);
+    if (!student) {
+      return res.status(403).render("error", {
+        message: "Du bist noch keiner Klasse zugewiesen. Bitte wende dich an deinen Lehrer.",
+        status: 403,
+        backUrl: "/login",
+        csrfToken: req.csrfToken()
+      });
+    }
     const grades = await loadGrades(student.id);
     const averages = computeAverages(grades);
     const classAverages = student.class_id ? await loadClassAverages(student.class_id) : [];

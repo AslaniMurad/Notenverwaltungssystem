@@ -238,7 +238,7 @@ function createFakeDb() {
         const [email, class_id] = params;
         const student = students.find((s) => s.email === email && s.class_id === Number(class_id));
         row = student ? { id: student.id } : undefined;
-      } else if (/SELECT s\.\*, c\.name as class_name, c\.subject as class_subject, c\.id as class_id FROM students s JOIN classes c ON c.id = s.class_id WHERE s.email = \?/i.test(sql)) {
+      } else if (/SELECT s\.\*, c\.name as class_name, c\.subject as class_subject, c\.id as class_id FROM students s (LEFT )?JOIN classes c ON c.id = s.class_id WHERE s.email = \?/i.test(sql)) {
         const [email] = params;
         const student = students.find((s) => s.email === email);
         if (student) {
