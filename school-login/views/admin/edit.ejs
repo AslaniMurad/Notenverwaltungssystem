@@ -10,27 +10,7 @@
     hideFooter: true,
     content: function () { %>
     <div class="app-shell">
-      <aside class="app-sidebar" aria-label="Admin Navigation">
-        <div class="sidebar-brand">
-          <div>
-            <div class="sidebar-title">Admin-Konsole</div>
-            <div class="sidebar-meta"><%= currentUser?.email %> · <%= currentUser?.role %></div>
-          </div>
-          <span class="sidebar-badge">Eingeloggt</span>
-        </div>
-
-        <div class="app-nav">
-          <div class="nav-section">
-            <div class="nav-section-title">Navigation</div>
-            <a href="/admin" class="<%= activePath === '/admin' ? 'is-active' : '' %>">Übersicht</a>
-            <a href="/admin#list">Zur Tabelle</a>
-            <form class="logout-form" method="POST" action="/logout">
-              <input type="hidden" name="_csrf" value="<%= csrfToken %>">
-              <button type="submit" class="app-nav-link">Logout</button>
-            </form>
-          </div>
-        </div>
-      </aside>
+      <%- include('./nav', { csrfToken, currentUser, activePath }) %>
 
       <section class="app-main">
         <div class="app-main-header">
@@ -42,11 +22,6 @@
         </div>
 
         <div class="admin-card-narrow">
-          <div class="admin-edit-topbar">
-            <h2>Bearbeite Nutzer: <%= user.email %></h2>
-            <a class="admin-button-plain" href="/">← Dashboard</a>
-          </div>
-
           <form class="admin-edit-form" method="POST" action="/admin/users/<%= user.id %>">
             <input type="hidden" name="_csrf" value="<%= csrfToken %>">
 
@@ -69,6 +44,8 @@
 
             <button class="btn btn-primary" type="submit">Speichern</button>
           </form>
+
+          <div class="admin-alert muted">Aktueller Status: <strong><%= user.must_change_password ? 'Initial-Passwort aktiv' : 'individuelles Passwort' %></strong></div>
 
           <hr class="admin-separator">
 

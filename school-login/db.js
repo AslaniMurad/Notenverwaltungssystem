@@ -63,7 +63,7 @@ function createFakeDb() {
       let lastID;
 
       if (/INSERT INTO users/i.test(sql)) {
-        const [email, password_hash, role, status] = params;
+        const [email, password_hash, role, status, must_change_password] = params;
         if (users.some((u) => u.email === email)) {
           err = new Error("UNIQUE constraint failed: users.email");
         } else {
@@ -73,7 +73,8 @@ function createFakeDb() {
             password_hash,
             role,
             status: status || "active",
-            created_at: new Date().toISOString()
+            created_at: new Date().toISOString(),
+            must_change_password: must_change_password ? 1 : 0
           };
           users.push(newUser);
           lastID = newUser.id;
@@ -86,17 +87,32 @@ function createFakeDb() {
           user.role = role;
           user.status = status;
         }
-      } else if (/UPDATE users SET password_hash = \? WHERE id = \?/i.test(sql)) {
-        const [password_hash, id] = params;
+      } else if (/UPDATE users SET password_hash = \?, must_change_password = \? WHERE id = \?/i.test(sql)) {
+        const [password_hash, must_change_password, id] = params;
         const user = users.find((u) => u.id === Number(id));
         if (user) {
           user.password_hash = password_hash;
+          user.must_change_password = must_change_password;
         }
       } else if (/UPDATE users SET status = 'deleted' WHERE id = \?/i.test(sql)) {
         const [id] = params;
         const user = users.find((u) => u.id === Number(id));
         if (user) {
           user.status = "deleted";
+        }
+      } else if (/UPDATE users SET must_change_password = \? WHERE id = \?/i.test(sql)) {
+        const [must_change_password, id] = params;
+        const user = users.find((u) => u.id === Number(id));
+        if (user) {
+          user.must_change_password = must_change_password;
+        }
+      } else if (/UPDATE classes SET name = \?, subject = \?, teacher_id = \? WHERE id = \?/i.test(sql)) {
+        const [name, subject, teacher_id, id] = params;
+        const classRow = classes.find((c) => c.id === Number(id));
+        if (classRow) {
+          classRow.name = name;
+          classRow.subject = subject;
+          classRow.teacher_id = Number(teacher_id);
         }
       } else if (/INSERT INTO classes/i.test(sql)) {
         const [name, subject, teacher_id] = params;
@@ -147,7 +163,7 @@ function createFakeDb() {
         const [email] = params;
         const user = users.find((u) => u.email === email);
         row = user ? { id: user.id } : undefined;
-      } else if (/SELECT id, email, password_hash, role, status FROM users WHERE email = \?/i.test(sql)) {
+      } else if (/SELECT id, email, password_hash, role, status, must_change_password FROM users WHERE email = \?/i.test(sql)) {
         const [email] = params;
         const user = users.find((u) => u.email === email);
         row = user
@@ -156,19 +172,43 @@ function createFakeDb() {
               email: user.email,
               password_hash: user.password_hash,
               role: user.role,
-              status: user.status
+              status: user.status,
+              must_change_password: user.must_change_password || 0
             }
           : undefined;
       } else if (/SELECT id, role FROM users WHERE email = \?/i.test(sql)) {
         const [email] = params;
         const user = users.find((u) => u.email === email);
         row = user ? { id: user.id, role: user.role } : undefined;
-      } else if (/SELECT id, email, role, status FROM users WHERE id = \?/i.test(sql)) {
+      } else if (/SELECT id, email, role, status, must_change_password FROM users WHERE id = \?/i.test(sql)) {
         const [id] = params;
         const user = users.find((u) => u.id === Number(id));
         row = user
-          ? { id: user.id, email: user.email, role: user.role, status: user.status }
+          ? { id: user.id, email: user.email, role: user.role, status: user.status, must_change_password: user.must_change_password || 0 }
           : undefined;
+      } else if (/SELECT id, name, subject FROM classes WHERE id = \?/i.test(sql)) {
+        const [id] = params;
+        const classRow = classes.find((c) => c.id === Number(id));
+        row = classRow ? { id: classRow.id, name: classRow.name, subject: classRow.subject } : undefined;
+      } else if (/SELECT c.id, c.name, c.subject, u.email AS teacher_email FROM classes c/i.test(sql)) {
+        const [id] = params;
+        const classRow = classes.find((c) => c.id === Number(id));
+        if (classRow) {
+          const teacher = users.find((u) => u.id === classRow.teacher_id);
+          row = {
+            id: classRow.id,
+            name: classRow.name,
+            subject: classRow.subject,
+            teacher_email: teacher ? teacher.email : null,
+            teacher_id: classRow.teacher_id
+          };
+        }
+      } else if (/SELECT COUNT\(\*\) AS count FROM users/i.test(sql)) {
+        row = { count: users.length };
+      } else if (/SELECT COUNT\(\*\) AS count FROM classes/i.test(sql)) {
+        row = { count: classes.length };
+      } else if (/SELECT COUNT\(\*\) AS count FROM students/i.test(sql)) {
+        row = { count: students.length };
       } else if (/SELECT id FROM classes WHERE id = \? AND teacher_id = \?/i.test(sql)) {
         const [id, teacher_id] = params;
         const classRow = classes.find((c) => c.id === Number(id) && c.teacher_id === Number(teacher_id));
@@ -191,16 +231,42 @@ function createFakeDb() {
     },
     all(sql, params = [], cb) {
       let rows = [];
-      if (/SELECT id, email, role, status FROM users ORDER BY id DESC/i.test(sql)) {
+      if (/SELECT id, email, role, status, created_at, must_change_password FROM users ORDER BY id DESC/i.test(sql)) {
         rows = [...users]
           .sort((a, b) => b.id - a.id)
-          .map((u) => ({ id: u.id, email: u.email, role: u.role, status: u.status }));
+          .map((u) => ({ id: u.id, email: u.email, role: u.role, status: u.status, created_at: u.created_at, must_change_password: u.must_change_password || 0 }));
       } else if (/SELECT id, name, subject FROM classes WHERE teacher_id = \? ORDER BY created_at DESC/i.test(sql)) {
         const [teacher_id] = params;
         rows = classes
           .filter((c) => c.teacher_id === Number(teacher_id))
           .sort((a, b) => (a.created_at < b.created_at ? 1 : -1))
           .map((c) => ({ id: c.id, name: c.name, subject: c.subject }));
+      } else if (/SELECT id, email FROM users WHERE role = 'teacher' AND status = 'active'/i.test(sql)) {
+        rows = users
+          .filter((u) => u.role === "teacher" && u.status === "active")
+          .sort((a, b) => a.email.localeCompare(b.email))
+          .map((u) => ({ id: u.id, email: u.email }));
+      } else if (/SELECT c.id, c.name, c.subject, c.created_at, u.email AS teacher_email, u.id AS teacher_id/i.test(sql)) {
+        rows = classes
+          .filter((c) => {
+            if (!params.length) return true;
+            const [like] = params;
+            const teacher = users.find((u) => u.id === c.teacher_id);
+            const haystack = `${c.name} ${c.subject} ${teacher?.email || ''}`.toLowerCase();
+            return haystack.includes(String(like).replace(/%/g, '').toLowerCase());
+          })
+          .sort((a, b) => (a.created_at < b.created_at ? 1 : -1))
+          .map((c) => {
+            const teacher = users.find((u) => u.id === c.teacher_id);
+            return {
+              id: c.id,
+              name: c.name,
+              subject: c.subject,
+              created_at: c.created_at,
+              teacher_email: teacher ? teacher.email : null,
+              teacher_id: teacher ? teacher.id : null
+            };
+          });
       } else if (/SELECT id, name, email FROM students WHERE class_id = \? ORDER BY name/i.test(sql)) {
         const [class_id] = params;
         rows = students
@@ -220,7 +286,7 @@ function createFakeDb() {
     const ADMIN_PASS = process.env.ADMIN_PASS || "admin1234!ChangeMe";
     const hash = hashPassword(ADMIN_PASS);
     db.run(
-      "INSERT INTO users (email, password_hash, role, status) VALUES (?,?,?, 'active')",
+      "INSERT INTO users (email, password_hash, role, status, must_change_password) VALUES (?,?,?, 'active', 0)",
       [ADMIN_EMAIL, hash, "admin", "active"],
       () => {}
     );
@@ -260,10 +326,26 @@ db.serialize(() => {
       email TEXT UNIQUE NOT NULL,
       password_hash TEXT NOT NULL,
       role TEXT NOT NULL CHECK (role IN ('admin','teacher','student')),
-      status TEXT NOT NULL DEFAULT 'active' CHECK (status IN ('active','locked')),
+      status TEXT NOT NULL DEFAULT 'active' CHECK (status IN ('active','locked','deleted')),
+      must_change_password INTEGER NOT NULL DEFAULT 0,
       created_at TEXT NOT NULL DEFAULT (datetime('now'))
     )
   `);
+
+  db.all("PRAGMA table_info(users)", (infoErr, columns) => {
+    if (infoErr) {
+      console.error("Konnte user-Spalten nicht prüfen:", infoErr);
+      return;
+    }
+    const hasMustChange = columns.some((col) => col.name === "must_change_password");
+    if (!hasMustChange) {
+      db.run("ALTER TABLE users ADD COLUMN must_change_password INTEGER NOT NULL DEFAULT 0");
+    }
+    const hasStatusDeleted = columns.some((col) => col.name === "status");
+    if (hasStatusDeleted) {
+      db.run("UPDATE users SET status = 'active' WHERE status NOT IN ('active','locked','deleted')");
+    }
+  });
 
   const ADMIN_EMAIL = process.env.ADMIN_EMAIL || "admin@example.com";
   const ADMIN_PASS  = process.env.ADMIN_PASS  || "admin1234!ChangeMe";
@@ -276,7 +358,7 @@ db.serialize(() => {
     if (!row) {
       const hash = hashPassword(ADMIN_PASS);
       db.run(
-        "INSERT INTO users (email, password_hash, role, status) VALUES (?,?, 'admin','active')",
+        "INSERT INTO users (email, password_hash, role, status, must_change_password) VALUES (?,?, 'admin','active', 0)",
         [ADMIN_EMAIL, hash],
         (e) => {
           if (e) {

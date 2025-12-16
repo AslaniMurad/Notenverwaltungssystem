@@ -31,6 +31,14 @@ app.use(session({
   }
 }));
 
+app.use((req, res, next) => {
+  const { user } = req.session || {};
+  if (user && user.mustChangePassword && !req.path.startsWith("/force-password-change") && req.path !== "/logout") {
+    return res.redirect("/force-password-change");
+  }
+  next();
+});
+
 // --- CSRF ---
 const csrfProtection = csrf();
 app.use(csrfProtection);
@@ -166,27 +174,88 @@ app.get("/student", requireAuth, requireRole("student"), (req, res) => {
 // --- Login POST ---
 app.post("/login", (req, res) => {
   const { email, password } = req.body || {};
-  if (!email || !password) return res.status(400).send("Fehlende Felder.");
+  if (!email || !password)
+    return res.status(400).render("login", {
+      csrfToken: req.csrfToken(),
+      errorType: "invalid",
+      email,
+      errorMessage: "Bitte E-Mail und Passwort eingeben."
+    });
 
   db.get(
-    "SELECT id, email, password_hash, role, status FROM users WHERE email = ?",
+    "SELECT id, email, password_hash, role, status, must_change_password FROM users WHERE email = ?",
     [email],
     (err, user) => {
-      if (err) return res.status(500).send("DB-Fehler.");
-      if (!user || !verifyPassword(user.password_hash, password)) {
-        return res.status(401).send("Login fehlgeschlagen.");
+      if (err)
+        return res.status(500).render("login", {
+          csrfToken: req.csrfToken(),
+          errorType: "invalid",
+          email,
+          errorMessage: "Es gab ein Problem mit der Anmeldung. Bitte versuche es erneut."
+        });
+
+      const passwordValid = user && verifyPassword(user.password_hash, password);
+
+      if (!user || !passwordValid) {
+        return res.status(401).render("login", {
+          csrfToken: req.csrfToken(),
+          errorType: "invalid",
+          email,
+          errorMessage: "Der Login ist fehlgeschlagen, versuchen Sie es erneut."
+        });
       }
       if (user.status !== "active") {
-        return res.status(403).send("Account gesperrt.");
+        return res.status(403).render("login", {
+          csrfToken: req.csrfToken(),
+          errorType: "locked",
+          lockedInfo: { id: user.id, email: user.email }
+        });
       }
 
       req.session.user = {
         id: user.id,
         email: user.email,
         role: user.role,
-        status: user.status
+        status: user.status,
+        mustChangePassword: !!user.must_change_password
       };
-      return res.redirect(redirectByRole(user.role));
+      return res.redirect(req.session.user.mustChangePassword ? "/force-password-change" : redirectByRole(user.role));
+    }
+  );
+});
+
+app.get("/force-password-change", requireAuth, (req, res) => {
+  if (!req.session.user?.mustChangePassword) {
+    return res.redirect(redirectByRole(req.session.user.role));
+  }
+  res.render("force-password-change", {
+    csrfToken: req.csrfToken(),
+    email: req.session.user.email
+  });
+});
+
+app.post("/force-password-change", requireAuth, (req, res, next) => {
+  const { newPassword } = req.body || {};
+  if (!newPassword) {
+    return res.status(400).render("force-password-change", {
+      csrfToken: req.csrfToken(),
+      email: req.session.user.email,
+      error: "Bitte ein neues Passwort festlegen."
+    });
+  }
+
+  const hash = hashPassword(newPassword);
+  const userId = req.session.user.id;
+  db.run(
+    "UPDATE users SET password_hash = ?, must_change_password = 0 WHERE id = ?",
+    [hash, userId],
+    (err) => {
+      if (err) {
+        console.error("Fehler beim Aktualisieren des Passworts:", err);
+        return next(err);
+      }
+      req.session.user.mustChangePassword = false;
+      return res.redirect(redirectByRole(req.session.user.role));
     }
   );
 });

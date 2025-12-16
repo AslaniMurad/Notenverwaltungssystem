@@ -1,4 +1,10 @@
 <%
+  const _errorType = typeof errorType !== 'undefined' ? errorType : null;
+  const _errorMessage = typeof errorMessage !== 'undefined' ? errorMessage : null;
+  const _lockedInfo = typeof lockedInfo !== 'undefined' ? lockedInfo : null;
+  const _csrfToken = typeof csrfToken !== 'undefined' ? csrfToken : '';
+  const _email = typeof email !== 'undefined' ? email : '';
+
   const page = {
     title: 'Login | School Panel',
     styles: ['/css/login.css'],
@@ -21,15 +27,31 @@
         <h1 style="font-size: 28px; font-weight: 800; color: #003DA5; margin-bottom: 8px; text-align:center;">Willkommen</h1>
         <p class="login-subtitle">Melde dich mit deinen Schulzugangsdaten an</p>
 
-        <% if (typeof error !== 'undefined' && error) { %>
-          <div class="error-box" role="alert"><%= error %></div>
+        <% const hasErrorPanel = _errorType === 'locked' || _errorType === 'invalid'; %>
+        <% if (hasErrorPanel) { %>
+          <div class="login-alert-panel <%= _errorType === 'locked' ? 'login-alert-locked' : 'login-alert-invalid' %>" role="alert">
+            <div class="login-alert-icon">✖</div>
+            <div class="login-alert-body">
+              <% if (_errorType === 'locked') { %>
+                <p class="login-alert-title">Konto wurde administrativ gesperrt</p>
+                <p class="login-alert-text">ID: <strong><%= _lockedInfo?.id %></strong> • E-Mail: <strong><%= _lockedInfo?.email %></strong></p>
+                <p class="login-alert-text">Sollte es sich um einen Fehler handeln, melden Sie sich bitte bei einem Administrator:</p>
+                <p class="login-alert-contact">admin@example.com</p>
+              <% } else { %>
+                <p class="login-alert-title">Der Login ist fehlgeschlagen</p>
+                <p class="login-alert-text"><%= _errorMessage || 'Versuchen Sie es erneut.' %></p>
+                <p class="login-alert-text">Sollte es sich um einen Fehler handeln, melden Sie sich bitte bei einem Administrator:</p>
+                <p class="login-alert-contact">admin@example.com</p>
+              <% } %>
+            </div>
+          </div>
         <% } %>
 
         <form method="POST" action="/login">
-          <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+          <input type="hidden" name="_csrf" value="<%= _csrfToken %>">
 
           <label class="login-label" for="email">E-Mail-Adresse</label>
-          <input class="login-input" id="email" name="email" type="email" placeholder="z.B. max.muster@schule.at" required value="<%= typeof email !== 'undefined' ? email : '' %>">
+          <input class="login-input" id="email" name="email" type="email" placeholder="z.B. max.muster@schule.at" required value="<%= _email %>">
 
           <label class="login-label" for="password">Passwort</label>
           <input class="login-input" id="password" name="password" type="password" placeholder="Dein sicheres Passwort" required>
