@@ -24,6 +24,9 @@
             <a href="/teacher/classes">Meine Klassen</a>
             <a href="/teacher/create-class">Klasse erstellen</a>
             <a class="is-active" href="/teacher/students/<%= classData.id %>">Schüler</a>
+            <a href="/teacher/grades/<%= classData.id %>">Noten</a>
+            <a href="/teacher/grade-templates/<%= classData.id %>">Prüfungen</a>
+            <a href="/teacher/class-statistics/<%= classData.id %>">Statistiken</a>
             <form class="logout-form" method="POST" action="/logout">
               <input type="hidden" name="_csrf" value="<%= csrfToken %>">
               <button class="app-nav-link" type="submit">Logout</button>
