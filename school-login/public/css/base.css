@@ -1,0 +1,328 @@
+:root {
+  --font-sans: 'Inter', system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  /* HTL Brand Colors */
+  --accent: #003DA5;           /* Deep Blue */
+  --accent-light: #0052CC;     /* Brighter Blue */
+  --accent-lighter: #1B7EFF;   /* Light Blue */
+  --accent-green: #6ABF2E;     /* HTL Green */
+  --accent-green-light: #8FD63F;/* Light Green */
+  --muted: #6B7280;
+  --text: #1F2937;
+  --text-light: #4B5563;
+  --bg-white: #FFFFFF;
+  --bg-gray: #F3F4F6;
+  --bg-blue-light: #E8F0FF;
+  --border: #D1D5DB;
+  --shadow: 0 10px 30px rgba(0, 61, 165, 0.1);
+  --shadow-sm: 0 2px 8px rgba(0, 61, 165, 0.06);
+}
+
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+a {
+  color: inherit;
+}
+
+a,
+button,
+input,
+select {
+  font-family: var(--font-sans);
+}
+
+body {
+  font-family: var(--font-sans);
+  color: var(--text);
+}
+
+.site-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 16px;
+  padding: 16px 28px;
+  border-bottom: 4px solid var(--accent);
+  background: transparent;
+  position: sticky;
+  top: 0;
+  box-shadow: 0 4px 16px rgba(0, 61, 165, 0.12);
+  z-index: 10;
+}
+
+.header-brand {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.brand-mark {
+  width: 40px;
+  height: 40px;
+  border-radius: 10px;
+  background: linear-gradient(135deg, var(--accent), var(--accent-light));
+  box-shadow: 0 6px 16px rgba(0, 61, 165, 0.25);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 700;
+  color: white;
+  font-size: 20px;
+}
+
+.htl-logo {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transition: transform 0.2s ease;
+}
+
+.htl-logo:hover {
+  transform: scale(1.05);
+}
+
+.htl-logo svg {
+  width: 36px;
+  height: 36px;
+  display: block;
+}
+
+.htl-logo-img {
+  display: inline-block;
+  width: 36px;
+  height: 36px;
+  object-fit: contain;
+  border-radius: 6px;
+}
+
+.site-header .brand-meta {
+  font-size: 12px;
+}
+
+.site-header .brand-title {
+  font-size: 22px;
+  font-weight: 800;
+  color: var(--accent);
+}
+
+.header-actions .btn {
+  padding: 10px 14px;
+}
+
+.brand-meta {
+  font-size: 11px;
+  color: var(--muted);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  font-weight: 600;
+}
+
+.brand-title {
+  font-weight: 700;
+  font-size: 18px;
+  color: var(--text);
+}
+
+.header-actions {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  margin-left: auto;
+}
+
+.site-footer {
+  padding: 24px 28px;
+  text-align: center;
+  color: var(--muted);
+  border-top: 2px solid var(--border);
+  background: var(--bg-gray);
+  margin-top: 48px;
+  font-size: 13px;
+}
+
+.site-footer a {
+  color: var(--accent);
+  text-decoration: none;
+  font-weight: 600;
+  transition: color 0.2s ease;
+}
+
+.site-footer a:hover {
+  color: var(--text);
+  text-decoration: underline;
+}
+
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+  text-decoration: none;
+  font-weight: 600;
+  padding: 11px 18px;
+  transition: all 0.2s ease;
+  font-size: 14px;
+}
+
+.btn:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 3px;
+}
+
+.btn:active {
+  transform: scale(0.97);
+}
+
+.btn-primary {
+  background: linear-gradient(135deg, var(--accent), var(--accent-light));
+  color: white;
+  box-shadow: 0 6px 16px rgba(0, 61, 165, 0.3);
+}
+
+.btn-primary:hover {
+  box-shadow: 0 8px 22px rgba(0, 61, 165, 0.4);
+  transform: translateY(-2px);
+}
+
+.btn-danger {
+  background: linear-gradient(135deg, #dc2626, #ef4444);
+  color: white;
+  box-shadow: 0 6px 16px rgba(220, 38, 38, 0.25);
+}
+
+.btn-danger:hover {
+  box-shadow: 0 8px 22px rgba(220, 38, 38, 0.35);
+  transform: translateY(-2px);
+}
+
+.btn-secondary {
+  background: var(--bg-gray);
+  border: 1px solid var(--border);
+  color: var(--text);
+}
+
+.btn-secondary:hover {
+  background: var(--bg-blue-light);
+  border-color: var(--accent-light);
+  color: var(--accent);
+}
+
+.btn-ghost {
+  background: transparent;
+  border: 1.5px solid var(--border);
+  color: var(--text);
+}
+
+.btn-ghost:hover {
+  background: var(--bg-gray);
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.link-back {
+  color: var(--accent);
+  text-decoration: none;
+  font-weight: 600;
+  transition: color 0.2s ease;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.link-back:hover {
+  color: var(--text);
+}
+
+.page-shell {
+  width: 100%;
+  margin: 0 auto;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 24px;
+  padding: 28px 24px;
+  background: transparent;
+}
+
+/* Centering container used by layout.ejs to constrain content */
+.app-container {
+  width: 100%;
+  max-width: 1100px;
+  padding-left: 8px;
+  padding-right: 8px;
+}
+
+/* Cards and containers */
+.card {
+  background: transparent;
+  border: 1px solid rgba(209, 213, 219, 0.65);
+  border-radius: 12px;
+  padding: 24px;
+  box-shadow: var(--shadow);
+  transition: all 0.2s ease;
+}
+
+.card:hover {
+  box-shadow: 0 14px 32px rgba(37, 99, 235, 0.12);
+  border-color: var(--accent-lighter);
+}
+
+/* Forms */
+.form-group {
+  margin-bottom: 18px;
+}
+
+.form-label {
+  display: block;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text);
+  margin-bottom: 8px;
+}
+
+.form-input,
+.form-select {
+  width: 100%;
+  padding: 11px 14px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  font-size: 14px;
+  background: var(--bg-white);
+  color: var(--text);
+  transition: all 0.2s ease;
+}
+
+.form-input:focus,
+.form-select:focus {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1);
+  background: var(--bg-blue-light);
+}
+
+.form-input::placeholder {
+  color: var(--muted);
+}
+
+/* Utilities */
+.text-muted {
+  color: var(--muted);
+}
+
+.text-accent {
+  color: var(--accent);
+}
+
+.mt-sm { margin-top: 8px; }
+.mt-md { margin-top: 16px; }
+.mt-lg { margin-top: 24px; }
+
+.mb-sm { margin-bottom: 8px; }
+.mb-md { margin-bottom: 16px; }
+.mb-lg { margin-bottom: 24px; }

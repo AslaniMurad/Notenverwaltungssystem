@@ -22,3 +22,6 @@ Used technologies
     Version control: Git & GitHub
     Authentication: OAuth 2.0
     Design tools: HTML, JavaScript, CSS
+
+Release tracking
+    The release branch now includes the styling overhaul from releaseCssRevamp, bringing the consolidated layouts and CSS assets into the main line.

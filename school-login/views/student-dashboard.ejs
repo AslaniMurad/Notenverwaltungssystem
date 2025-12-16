@@ -1,0 +1,677 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8">
+  <title>Schüler-Dashboard</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/css/base.css">
+  <link rel="stylesheet" href="/css/app-shell.css">
+  <style>
+    :root {
+      --blue: #124f9c;
+      --blue-light: #e4efff;
+      --bg: #f6f8fb;
+      --card: #ffffff;
+      --border: #d9e1ec;
+      --radius: 12px;
+      --shadow: 0 6px 16px rgba(0,0,0,0.06);
+    }
+
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      background: var(--bg);
+      font-family: Inter, sans-serif;
+      color: #1a1a1a;
+    }
+
+    header.dashboard-hero {
+      background: linear-gradient(135deg, #124f9c, #1b6dd1);
+      padding: 18px 20px;
+      color: #fff;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      border-radius: 12px;
+      box-shadow: var(--shadow);
+      margin-bottom: 18px;
+    }
+
+    .tabs {
+      display: flex;
+      gap: 10px;
+      background: #fff;
+      padding: 14px 20px;
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      box-shadow: var(--shadow);
+      position: sticky;
+      top: 0;
+      z-index: 10;
+      margin-bottom: 16px;
+    }
+
+    .tab {
+      padding: 8px 14px;
+      border-radius: 999px;
+      border: 1px solid transparent;
+      background: var(--blue-light);
+      color: var(--blue);
+      cursor: pointer;
+      font-weight: 500;
+    }
+
+    .tab.active {
+      background: var(--blue);
+      color: #fff;
+    }
+
+    .student-main {
+      display: grid;
+      gap: 20px;
+    }
+
+    .tab-content { display: none; }
+    .tab-content.active { display: block; }
+
+    .card {
+      background: #fff;
+      padding: 18px 20px;
+      border-radius: var(--radius);
+      border: 1px solid var(--border);
+      box-shadow: var(--shadow);
+    }
+
+    .accordion {
+      border-bottom: 1px solid var(--border);
+      padding: 12px 0;
+      cursor: pointer;
+    }
+
+    .accordion-title {
+      display: flex;
+      justify-content: space-between;
+      font-weight: 600;
+      font-size: 15px;
+    }
+
+    .accordion-content {
+      display: none;
+      padding: 10px 0 4px;
+      font-size: 14px;
+      color: #333;
+    }
+
+    .pill {
+      background: var(--blue-light);
+      color: var(--blue);
+      padding: 4px 10px;
+      border-radius: 999px;
+      font-size: 12px;
+      font-weight: 500;
+    }
+
+    .upload-box {
+      margin-top: 8px;
+      padding: 10px;
+      border-radius: var(--radius);
+      border: 1px dashed var(--border);
+      background: #fafafa;
+      cursor: pointer;
+      font-size: 13px;
+    }
+
+    .file-list {
+      margin-top: 6px;
+      font-size: 12px;
+      color: #777;
+    }
+    .htl-small {
+      width: 48px;
+      height: 48px;
+      object-fit: contain;
+      border-radius: 8px;
+      margin-right: 12px;
+      vertical-align: middle;
+      background: white;
+      padding: 4px;
+    }
+
+    .header-left {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .header-right {
+      text-align: right;
+      display: flex;
+      flex-direction: column;
+      align-items: flex-end;
+      gap: 6px;
+    }
+
+    .logout-form { margin-top: 6px; }
+    .logout-form .logout-button {
+      padding: 8px 14px;
+      border-radius: 8px;
+      font-weight: 700;
+      border: none;
+      cursor: pointer;
+      background: rgba(255,255,255,0.12);
+      color: #fff;
+      transition: all 0.15s ease;
+    }
+    .logout-form .logout-button:hover { background: rgba(255,255,255,0.18); transform: translateY(-2px); }
+
+    .student-meta {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+      gap: 12px;
+      margin-top: 12px;
+    }
+
+    .student-meta .card small { color: #4b5563; }
+    .student-meta .card strong { font-size: 18px; }
+
+    .grid-two {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+      gap: 12px;
+    }
+
+    .nav-note {
+      font-size: 12px;
+      color: #6b7280;
+      margin: 8px 0 0;
+    }
+
+    .grade-row {
+      display: grid;
+      grid-template-columns: 1fr 120px 110px 160px;
+      gap: 12px;
+      align-items: center;
+      padding: 10px 0;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .grade-row:last-child { border-bottom: none; }
+
+    .grade-value {
+      font-weight: 800;
+      font-size: 18px;
+    }
+
+    .grade-pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 6px 10px;
+      border-radius: 10px;
+      background: #f3f4f6;
+      font-size: 12px;
+      color: #1f2937;
+    }
+
+    .grade-pill.success { background: #e5f7ef; color: #0c6b3c; }
+    .grade-pill.warning { background: #fff7e6; color: #9a6400; }
+    .grade-pill.danger { background: #fdecec; color: #a11919; }
+
+    .filter-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+      gap: 10px;
+      margin-bottom: 12px;
+    }
+
+    .filter-grid label { display: flex; flex-direction: column; gap: 6px; font-size: 13px; color: #374151; }
+    .filter-grid input, .filter-grid select {
+      padding: 8px 10px;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      font-size: 14px;
+    }
+
+    .button-row { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+    .btn {
+      padding: 8px 12px;
+      border-radius: 10px;
+      border: 1px solid transparent;
+      cursor: pointer;
+      background: var(--blue);
+      color: #fff;
+      font-weight: 600;
+    }
+    .btn.secondary { background: #fff; color: var(--blue); border-color: var(--blue); }
+    .btn.small { padding: 6px 10px; font-size: 13px; }
+
+    .info-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      gap: 12px;
+    }
+
+    .stat-tile { background: #f9fbff; border: 1px solid var(--border); padding: 12px; border-radius: 10px; }
+    .stat-tile h4 { margin: 0 0 4px; font-size: 14px; color: #4b5563; }
+    .stat-tile strong { font-size: 20px; }
+
+    .chart-row { display: grid; grid-template-columns: 1fr; gap: 10px; }
+    .chart-bar { display: flex; align-items: center; gap: 10px; }
+    .chart-bar .bar { flex: 1; background: #e5e7eb; border-radius: 999px; overflow: hidden; height: 10px; }
+    .chart-bar .bar span { display: block; height: 100%; background: linear-gradient(90deg, #2563eb, #22c55e); }
+    .chart-bar small { color: #374151; }
+
+    .empty-state { color: #6b7280; font-size: 14px; padding: 10px 0; }
+    .badge-inline { display: inline-flex; gap: 6px; align-items: center; padding: 4px 8px; border-radius: 8px; background: #eef2ff; color: #4338ca; font-weight: 600; font-size: 12px; }
+    .notifications { display: grid; gap: 10px; }
+    .notification { padding: 10px; border: 1px solid var(--border); border-radius: 10px; background: #f8fafc; }
+    .notification.unread { border-color: #93c5fd; background: #eef2ff; }
+    .notification small { color: #6b7280; }
+  </style>
+</head>
+
+<body class="app-shell-body">
+  <div class="app-shell app-shell-wide">
+    <aside class="app-sidebar" aria-label="Schülernavigation">
+      <div class="sidebar-brand">
+        <div>
+          <div class="sidebar-title">Schüler-Dashboard</div>
+          <div class="sidebar-meta"><%= studentProfile.name %> · <%= studentProfile.class %></div>
+        </div>
+        <span class="sidebar-badge">Aktiv</span>
+      </div>
+
+      <div class="app-nav">
+        <div class="nav-section">
+          <div class="nav-section-title">Bereiche</div>
+          <a class="is-active" href="#overview" data-tab-target="overview">Übersicht</a>
+          <a href="#tasks" data-tab-target="tasks">Aufgaben</a>
+          <a href="#returns" data-tab-target="returns">Rückgaben</a>
+          <a href="#grades" data-tab-target="grades">Noten</a>
+          <a href="#materials" data-tab-target="materials">Materialien</a>
+          <button class="nav-trigger" data-target="#messages-panel" aria-expanded="false">Kommunikation <span class="chevron">›</span></button>
+          <div class="nav-panel" id="messages-panel">
+            <a href="#messages" data-tab-target="messages">Nachrichten</a>
+          </div>
+          <form class="logout-form" method="POST" action="/logout">
+            <% if (typeof csrfToken !== 'undefined') { %>
+              <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+            <% } %>
+            <button class="app-nav-link" type="submit">Logout</button>
+          </form>
+          <p class="nav-note">Die Leiste bleibt beim Navigieren sichtbar.</p>
+        </div>
+      </div>
+    </aside>
+
+    <section class="app-main">
+      <header class="dashboard-hero">
+        <div class="header-left">
+          <img src="/images/htl-waidhofen.png" alt="HTL Waidhofen" class="htl-small" onerror="this.style.display='none'">
+          <div>
+            <h1><%= hero.headline %></h1>
+            <small><%= hero.summary %></small>
+          </div>
+        </div>
+        <div class="header-right">
+          <div>
+            <strong><%= studentProfile.name %></strong><br>
+            <small>Klasse <%= studentProfile.class %></small><br>
+            <small><%= email %></small>
+          </div>
+          <form class="logout-form" method="POST" action="/logout">
+            <% if (typeof csrfToken !== 'undefined') { %>
+              <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+            <% } %>
+            <button class="logout-button" type="submit">Logout</button>
+          </form>
+        </div>
+      </header>
+
+      <div class="tabs">
+        <div class="tab active" data-tab="overview">Übersicht</div>
+        <div class="tab" data-tab="tasks">Aufgaben</div>
+        <div class="tab" data-tab="returns">Rückgaben</div>
+        <div class="tab" data-tab="grades">Noten</div>
+        <div class="tab" data-tab="materials">Materialien</div>
+        <div class="tab" data-tab="messages">Nachrichten</div>
+      </div>
+
+      <main class="student-main">
+        <section id="overview" class="tab-content active">
+          <div class="grid-two">
+            <div class="card">
+              <span class="pill">Rollenübersicht</span>
+              <h3><%= hero.statement %></h3>
+              <p><%= hero.summary %></p>
+              <div class="student-meta">
+                <div class="card">
+                  <small>⌀ Note</small>
+                  <strong>2,1</strong>
+                </div>
+                <div class="card">
+                  <small>Offene Aufgaben</small>
+                  <strong><%= focusStats[1].value %></strong>
+                </div>
+              </div>
+            </div>
+            <div class="card">
+              <h3>Aktuelle Hinweise</h3>
+              <ul>
+                <% focusStats.forEach(function(item){ %>
+                  <li><strong><%= item.label %></strong> — <%= item.value %> <small><%= item.detail %></small></li>
+                <% }); %>
+              </ul>
+            </div>
+          </div>
+        </section>
+
+        <section id="tasks" class="tab-content">
+          <div class="card">
+            <h3>Aufgaben</h3>
+            <% tasks.forEach(function(task){ %>
+              <div class="accordion">
+                <div class="accordion-title">
+                  <span><%= task.title %> · <%= task.subject %></span>
+                  <span class="pill"><%= task.status %></span>
+                </div>
+                <div class="accordion-content">
+                  <p>Fällig: <%= task.due %></p>
+                  <p><%= task.description %></p>
+                  <% if (task.attachments.length) { %>
+                    <div class="file-list">Anhänge: <%= task.attachments.join(', ') %></div>
+                  <% } %>
+                </div>
+              </div>
+            <% }); %>
+          </div>
+        </section>
+
+        <section id="returns" class="tab-content">
+          <div class="card">
+            <h3>Rückgaben</h3>
+            <% returns.forEach(function(ret){ %>
+              <p><strong><%= ret.title %></strong> (<%= ret.subject %>) — Note <%= ret.grade %><br>
+                <small><%= ret.feedback %></small>
+              </p>
+            <% }); %>
+          </div>
+        </section>
+
+        <section id="grades" class="tab-content">
+          <div class="card">
+            <div class="grades-header" style="display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;">
+              <h3>Noten</h3>
+              <div class="button-row">
+                <a class="btn small secondary" href="/student/grades.csv">CSV Export</a>
+                <a class="btn small secondary" href="/student/grades.pdf">PDF Export</a>
+              </div>
+            </div>
+            <form id="grade-filter" class="filter-grid" aria-label="Noten filtern">
+              <label>Fach
+                <select name="subject" id="filter-subject">
+                  <option value="">Alle</option>
+                  <% subjects.forEach(function(sub){ %>
+                    <option value="<%= sub %>"><%= sub %></option>
+                  <% }) %>
+                </select>
+              </label>
+              <label>Von
+                <input type="date" name="startDate" id="filter-start">
+              </label>
+              <label>Bis
+                <input type="date" name="endDate" id="filter-end">
+              </label>
+              <label>Sortierung
+                <select name="sort" id="filter-sort">
+                  <option value="date">Datum (neueste zuerst)</option>
+                  <option value="value">Beste Note zuerst</option>
+                </select>
+              </label>
+            </form>
+
+            <div class="info-grid" id="grade-insights">
+              <div class="stat-tile">
+                <h4>Gesamtdurchschnitt</h4>
+                <strong id="avg-overall">–</strong>
+              </div>
+              <div class="stat-tile">
+                <h4>Trend</h4>
+                <div id="avg-trend" class="badge-inline">–</div>
+              </div>
+              <div class="stat-tile">
+                <h4>Letzte Aktualisierung</h4>
+                <small id="avg-updated">–</small>
+              </div>
+            </div>
+
+            <div id="grade-list" aria-live="polite" style="margin-top:10px;"></div>
+          </div>
+
+          <div class="card">
+            <h3>Klassenvergleich</h3>
+            <div id="class-average" class="chart-row"></div>
+          </div>
+
+          <div class="card">
+            <h3>Benachrichtigungen</h3>
+            <div id="notification-list" class="notifications"></div>
+          </div>
+        </section>
+
+        <section id="materials" class="tab-content">
+          <div class="card">
+            <h3>Materialien</h3>
+            <% materials.forEach(function(item){ %>
+              <p><strong><%= item.title %></strong> (<%= item.subject %>) — <%= item.fileName %></p>
+            <% }); %>
+            <div class="upload-box">Datei hochladen</div>
+          </div>
+        </section>
+
+        <section id="messages" class="tab-content">
+          <div class="card">
+            <h3>Nachrichten</h3>
+            <% messages.forEach(function(msg){ %>
+              <p><strong><%= msg.title %></strong> — <%= msg.sender %><br><small><%= msg.excerpt %></small></p>
+            <% }); %>
+          </div>
+        </section>
+      </main>
+    </section>
+  </div>
+  <script src="/js/app.js"></script>
+  <script>
+    const initialData = <%- initialData || '{}' %>;
+
+    document.querySelectorAll(".tab").forEach(tab => {
+      tab.addEventListener("click", () => {
+        setActiveTab(tab.dataset.tab);
+      });
+    });
+
+    document.querySelectorAll('[data-tab-target]').forEach(link => {
+      link.addEventListener('click', (event) => {
+        const target = link.getAttribute('data-tab-target');
+        if (target) {
+          event.preventDefault();
+          setActiveTab(target);
+          document.getElementById(target)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        }
+      });
+    });
+
+    function setActiveTab(name) {
+      document.querySelectorAll('.tab').forEach(t => t.classList.toggle('active', t.dataset.tab === name));
+      document.querySelectorAll('.tab-content').forEach(c => c.classList.toggle('active', c.id === name));
+      document.querySelectorAll('[data-tab-target]').forEach(link => {
+        const isActive = link.getAttribute('data-tab-target') === name;
+        link.classList.toggle('is-active', isActive);
+      });
+    }
+
+    document.querySelectorAll('.accordion').forEach(acc => {
+      acc.addEventListener('click', () => {
+        const content = acc.querySelector('.accordion-content');
+        content.style.display = content.style.display === 'block' ? 'none' : 'block';
+      });
+    });
+
+    const state = {
+      grades: (initialData.grades || []).map(normalizeGrade),
+      averages: initialData.averages || { subjects: [], overall: null },
+      classAverages: initialData.classAverages || [],
+      notifications: initialData.notifications || [],
+      trend: initialData.trend || { direction: 'steady', change: 0 }
+    };
+
+    function normalizeGrade(g) {
+      return { ...g, value: Number(g.value), weight: Number(g.weight || 1) };
+    }
+
+    function gradeColor(value) {
+      if (value <= 1.5) return 'success';
+      if (value <= 2.5) return 'warning';
+      return 'danger';
+    }
+
+    function computeAveragesClient(grades) {
+      const subjectMap = new Map();
+      grades.forEach((g) => {
+        const bucket = subjectMap.get(g.subject) || { weightedSum: 0, weightTotal: 0 };
+        bucket.weightedSum += g.value * (g.weight || 1);
+        bucket.weightTotal += g.weight || 1;
+        subjectMap.set(g.subject, bucket);
+      });
+      const subjects = Array.from(subjectMap.entries()).map(([subject, info]) => ({
+        subject,
+        average: info.weightTotal ? Number((info.weightedSum / info.weightTotal).toFixed(2)) : null
+      }));
+      const total = subjects.reduce((acc, sub) => {
+        if (sub.average == null) return acc;
+        const weight = subjectMap.get(sub.subject).weightTotal;
+        return { weightedSum: acc.weightedSum + sub.average * weight, weightTotal: acc.weightTotal + weight };
+      }, { weightedSum: 0, weightTotal: 0 });
+      return { subjects, overall: total.weightTotal ? Number((total.weightedSum / total.weightTotal).toFixed(2)) : null };
+    }
+
+    function renderGrades() {
+      const container = document.getElementById('grade-list');
+      if (!container) return;
+      if (!state.grades.length) {
+        container.innerHTML = '<p class="empty-state">Keine Noten vorhanden.</p>';
+        return;
+      }
+      const items = state.grades.map((g) => `
+        <div class="grade-row">
+          <div>
+            <div><strong>${g.subject}</strong> · <small>${new Date(g.graded_at).toLocaleDateString()}</small></div>
+            <small>${g.teacher || 'Lehrkraft unbekannt'}</small>
+            ${g.comment ? `<div class="nav-note">${g.comment}</div>` : ''}
+          </div>
+          <div class="grade-value">${g.value.toFixed(2)}</div>
+          <div><span class="grade-pill ${gradeColor(g.value)}">Gewichtung ${(g.weight || 1)}</span></div>
+          <div style="text-align:right;"><span class="grade-pill">${g.subject}</span></div>
+        </div>
+      `);
+      container.innerHTML = items.join('');
+    }
+
+    function renderAverages() {
+      document.getElementById('avg-overall').textContent = state.averages.overall ?? '–';
+      const trend = state.trend || { direction: 'steady', change: 0 };
+      const trendEl = document.getElementById('avg-trend');
+      if (trendEl) {
+        const icon = trend.direction === 'improving' ? '⬆︎' : trend.direction === 'declining' ? '⬇︎' : '→';
+        trendEl.textContent = `${icon} ${trend.change}`;
+      }
+      const updatedEl = document.getElementById('avg-updated');
+      if (updatedEl && state.grades.length) {
+        const latest = [...state.grades].sort((a, b) => new Date(b.graded_at) - new Date(a.graded_at))[0];
+        updatedEl.textContent = new Date(latest.graded_at).toLocaleString();
+      }
+    }
+
+    function renderClassAverage() {
+      const container = document.getElementById('class-average');
+      if (!container) return;
+      if (!state.classAverages.length) {
+        container.innerHTML = '<p class="empty-state">Keine Vergleichsdaten vorhanden.</p>';
+        return;
+      }
+      const highest = Math.max(...state.classAverages.map((c) => c.average || 0), 1);
+      container.innerHTML = state.classAverages.map((c) => {
+        const width = Math.min(100, Math.round((c.average / highest) * 100));
+        return `<div class="chart-bar"><div style="width:120px;font-weight:600;">${c.subject}</div><div class="bar"><span style="width:${width}%;"></span></div><small>${c.average?.toFixed(2) ?? '–'}</small></div>`;
+      }).join('');
+    }
+
+    function renderNotifications() {
+      const container = document.getElementById('notification-list');
+      if (!container) return;
+      if (!state.notifications.length) {
+        container.innerHTML = '<p class="empty-state">Keine neuen Benachrichtigungen.</p>';
+        return;
+      }
+      container.innerHTML = state.notifications.map((n) => `
+        <div class="notification ${n.read_at ? '' : 'unread'}">
+          <strong>${n.type === 'average' ? 'Durchschnitt' : 'Neue Note'}</strong>
+          <p style="margin:4px 0;">${n.message}</p>
+          <small>${new Date(n.created_at).toLocaleString()}</small>
+          ${n.read_at ? '' : `<button class="btn small secondary" data-note-id="${n.id}">Als gelesen markieren</button>`}
+        </div>
+      `).join('');
+
+      container.querySelectorAll('button[data-note-id]').forEach((btn) => {
+        btn.addEventListener('click', async () => {
+          const id = btn.getAttribute('data-note-id');
+          await fetch(`/student/notifications/${id}/read`, { method: 'POST' });
+          state.notifications = state.notifications.map((n) => n.id == id ? { ...n, read_at: new Date().toISOString() } : n);
+          renderNotifications();
+        });
+      });
+    }
+
+    async function refreshGrades(skipRequest = false) {
+      const form = document.getElementById('grade-filter');
+      const params = new URLSearchParams(new FormData(form)).toString();
+      if (!skipRequest) {
+        const response = await fetch(`/student/grades?${params}`);
+        const data = await response.json();
+        state.grades = (data.grades || []).map(normalizeGrade);
+        state.averages = computeAveragesClient(state.grades);
+      }
+      renderGrades();
+      renderAverages();
+    }
+
+    async function loadClassComparison() {
+      const response = await fetch('/student/class-averages');
+      const data = await response.json();
+      state.classAverages = data.subjects || [];
+      renderClassAverage();
+    }
+
+    async function loadNotificationsFromServer() {
+      const response = await fetch('/student/notifications');
+      const data = await response.json();
+      state.notifications = data.notifications || [];
+      renderNotifications();
+    }
+
+    document.getElementById('grade-filter')?.addEventListener('change', () => refreshGrades());
+
+    // Initial render from server data
+    renderGrades();
+    renderAverages();
+    renderClassAverage();
+    renderNotifications();
+
+    // Fetch the freshest data in background
+    refreshGrades();
+    loadClassComparison();
+    loadNotificationsFromServer();
+  </script>
+</body>
+</html>
