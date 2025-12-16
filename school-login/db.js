@@ -50,11 +50,13 @@ function createFakeDb() {
   const users = [];
   const classes = [];
   const students = [];
+  const gradeTemplates = [];
   const grades = [];
   const notifications = [];
   let userId = 1;
   let classId = 1;
   let studentId = 1;
+  let gradeTemplateId = 1;
   let gradeId = 1;
   let notificationId = 1;
 
@@ -142,17 +144,29 @@ function createFakeDb() {
           students.push(newStudent);
           lastID = newStudent.id;
         }
+      } else if (/INSERT INTO grade_templates/i.test(sql)) {
+        const [class_id, name, category, weight, date, description] = params;
+        const template = {
+          id: gradeTemplateId++,
+          class_id: Number(class_id),
+          name,
+          category,
+          weight: Number(weight),
+          date: date || null,
+          description: description || null,
+          created_at: new Date().toISOString()
+        };
+        gradeTemplates.push(template);
+        lastID = template.id;
       } else if (/INSERT INTO grades/i.test(sql)) {
-        const [student_id, subject, value, weight, comment, teacher, graded_at] = params;
+        const [student_id, class_id, grade_template_id, grade, note] = params;
         const newGrade = {
           id: gradeId++,
           student_id: Number(student_id),
-          subject,
-          value: Number(value),
-          weight: weight != null ? Number(weight) : 1,
-          comment: comment || null,
-          teacher: teacher || null,
-          graded_at: graded_at || new Date().toISOString(),
+          class_id: Number(class_id),
+          grade_template_id: Number(grade_template_id),
+          grade: Number(grade),
+          note: note || null,
           created_at: new Date().toISOString()
         };
         grades.push(newGrade);
@@ -258,17 +272,34 @@ function createFakeDb() {
           .filter((s) => s.class_id === Number(class_id))
           .sort((a, b) => a.name.localeCompare(b.name))
           .map((s) => ({ id: s.id, name: s.name, email: s.email }));
-      } else if (/SELECT id, subject, value, weight, comment, teacher, graded_at, created_at FROM grades WHERE student_id = \?/i.test(sql)) {
+      } else if (/FROM grades g\s+JOIN grade_templates gt\s+ON gt\.id = g\.grade_template_id\s+JOIN classes c ON c\.id = g\.class_id\s+WHERE g\.student_id = \?/i.test(sql)) {
         const [student_id] = params;
         rows = grades
           .filter((g) => g.student_id === Number(student_id))
-          .map((g) => ({ ...g }));
-      } else if (/SELECT g\.subject, g\.value, g\.weight FROM grades g JOIN students s ON s.id = g.student_id WHERE s.class_id = \?/i.test(sql)) {
+          .map((g) => {
+            const template = gradeTemplates.find((t) => t.id === g.grade_template_id) || {};
+            const cls = classes.find((c) => c.id === g.class_id) || {};
+            return {
+              id: g.id,
+              grade: g.grade,
+              note: g.note,
+              created_at: g.created_at,
+              name: template.name,
+              category: template.category,
+              weight: template.weight,
+              date: template.date,
+              class_subject: cls.subject
+            };
+          });
+      } else if (/SELECT gt\.name as subject, g\.grade as value, gt\.weight FROM grades g JOIN students s ON s.id = g.student_id JOIN grade_templates gt ON gt.id = g.grade_template_id WHERE s.class_id = \?/i.test(sql)) {
         const [class_id] = params;
         const studentIds = students.filter((s) => s.class_id === Number(class_id)).map((s) => s.id);
         rows = grades
           .filter((g) => studentIds.includes(g.student_id))
-          .map((g) => ({ subject: g.subject, value: g.value, weight: g.weight }));
+          .map((g) => {
+            const template = gradeTemplates.find((t) => t.id === g.grade_template_id) || {};
+            return { subject: template.name, value: g.grade, weight: template.weight };
+          });
       } else if (/SELECT id, message, type, created_at, read_at FROM grade_notifications WHERE student_id = \? ORDER BY created_at DESC/i.test(sql)) {
         const [student_id] = params;
         rows = notifications
@@ -279,6 +310,19 @@ function createFakeDb() {
         const [id] = params;
         const cls = classes.find((c) => c.id === Number(id));
         rows = cls ? [{ ...cls }] : [];
+      } else if (/SELECT id, name, category, weight, date, description FROM grade_templates WHERE class_id = \? ORDER BY date, name/i.test(sql)) {
+        const [clsId] = params;
+        rows = gradeTemplates
+          .filter((t) => t.class_id === Number(clsId))
+          .sort((a, b) => {
+            if (a.date && b.date && a.date !== b.date) return new Date(a.date) - new Date(b.date);
+            return a.name.localeCompare(b.name);
+          })
+          .map((t) => ({ ...t }));
+      } else if (/SELECT id FROM grade_templates WHERE id = \? AND class_id = \?/i.test(sql)) {
+        const [templateId, clsId] = params;
+        const template = gradeTemplates.find((t) => t.id === Number(templateId) && t.class_id === Number(clsId));
+        rows = template ? [{ id: template.id }] : [];
       } else if (/PRAGMA table_info\(users\)/i.test(sql) || /PRAGMA table_info\(students\)/i.test(sql)) {
         rows = [];
       }
@@ -310,18 +354,15 @@ function createFakeDb() {
       db.run("INSERT INTO students (name, email, class_id, school_year) VALUES (?,?,?,?)", ["Max Muster", "student@example.com", createdClassId, "2024/25"], function () {
         const studentId = this.lastID;
         const now = new Date();
-        db.run(
-          "INSERT INTO grades (student_id, subject, value, weight, comment, teacher, graded_at) VALUES (?,?,?,?,?,?,?)",
-          [studentId, "Mathematik", 2, 0.4, "Gute Struktur", "Frau König", new Date(now.getTime() - 1000 * 60 * 60 * 24 * 14).toISOString()]
-        );
-        db.run(
-          "INSERT INTO grades (student_id, subject, value, weight, comment, teacher, graded_at) VALUES (?,?,?,?,?,?,?)",
-          [studentId, "Informatik", 1.5, 0.35, "Sauberer Code", "Herr Leitner", new Date(now.getTime() - 1000 * 60 * 60 * 24 * 7).toISOString()]
-        );
-        db.run(
-          "INSERT INTO grades (student_id, subject, value, weight, comment, teacher, graded_at) VALUES (?,?,?,?,?,?,?)",
-          [studentId, "Deutsch", 3, 0.25, "Mehr Quellenangaben", "Frau Bauer", now.toISOString()]
-        );
+
+        db.run("INSERT INTO grade_templates (class_id, name, category, weight, date, description) VALUES (?,?,?,?,?,?)", [createdClassId, "SA 1", "Schularbeit", 40, new Date(now.getTime() - 1000 * 60 * 60 * 24 * 14).toISOString(), "Schularbeit 1"]);
+        db.run("INSERT INTO grade_templates (class_id, name, category, weight, date, description) VALUES (?,?,?,?,?,?)", [createdClassId, "Test 1", "Test", 30, new Date(now.getTime() - 1000 * 60 * 60 * 24 * 7).toISOString(), "Wöchentlicher Test"]);
+        db.run("INSERT INTO grade_templates (class_id, name, category, weight, date, description) VALUES (?,?,?,?,?,?)", [createdClassId, "Mitarbeit", "Mitarbeit", 30, now.toISOString(), "Aktive Teilnahme"]);
+
+        db.run("INSERT INTO grades (student_id, class_id, grade_template_id, grade, note) VALUES (?,?,?,?,?)", [studentId, createdClassId, 1, 2, "Gute Struktur"]);
+        db.run("INSERT INTO grades (student_id, class_id, grade_template_id, grade, note) VALUES (?,?,?,?,?)", [studentId, createdClassId, 2, 1.5, "Sauberer Code"]);
+        db.run("INSERT INTO grades (student_id, class_id, grade_template_id, grade, note) VALUES (?,?,?,?,?)", [studentId, createdClassId, 3, 3, "Mehr Quellenangaben"]);
+
         db.run(
           "INSERT INTO grade_notifications (student_id, message, type, created_at) VALUES (?,?,?,?)",
           [studentId, "Neue Note in Informatik eingetragen.", "grade", now.toISOString()]
@@ -488,17 +529,32 @@ db.serialize(() => {
   `);
 
   db.run(`
+    CREATE TABLE IF NOT EXISTS grade_templates (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      class_id INTEGER NOT NULL,
+      name TEXT NOT NULL,
+      category TEXT NOT NULL CHECK (category IN ('Schularbeit', 'Test', 'Wiederholung', 'Mitarbeit', 'Projekt', 'Hausübung')),
+      weight REAL NOT NULL CHECK (weight >= 0 AND weight <= 100),
+      date TEXT,
+      description TEXT,
+      created_at TEXT NOT NULL DEFAULT (datetime('now')),
+      FOREIGN KEY (class_id) REFERENCES classes(id) ON DELETE CASCADE
+    )
+  `);
+
+  db.run(`
     CREATE TABLE IF NOT EXISTS grades (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       student_id INTEGER NOT NULL,
-      subject TEXT NOT NULL,
-      value REAL NOT NULL,
-      weight REAL DEFAULT 1,
-      comment TEXT,
-      teacher TEXT,
-      graded_at TEXT NOT NULL DEFAULT (datetime('now')),
+      class_id INTEGER NOT NULL,
+      grade_template_id INTEGER NOT NULL,
+      grade REAL NOT NULL CHECK (grade >= 1 AND grade <= 5),
+      note TEXT,
       created_at TEXT NOT NULL DEFAULT (datetime('now')),
-      FOREIGN KEY (student_id) REFERENCES students(id)
+      FOREIGN KEY (student_id) REFERENCES students(id) ON DELETE CASCADE,
+      FOREIGN KEY (class_id) REFERENCES classes(id) ON DELETE CASCADE,
+      FOREIGN KEY (grade_template_id) REFERENCES grade_templates(id) ON DELETE CASCADE,
+      UNIQUE(student_id, grade_template_id)
     )
   `);
 
@@ -513,6 +569,53 @@ db.serialize(() => {
       FOREIGN KEY (student_id) REFERENCES students(id)
     )
   `);
+});
+
+// --- Update legacy grades schema to template-based model ---
+db.all("PRAGMA table_info(grades)", [], (err, cols) => {
+  if (err) return;
+  const hasTemplate = cols.some((c) => c.name === "grade_template_id");
+  const hasSubject = cols.some((c) => c.name === "subject");
+
+  if (hasTemplate && !hasSubject) return;
+
+  console.log("Aktualisiere grades-Tabelle auf Template-basiertes Schema (alte Daten werden gelöscht)...");
+  db.serialize(() => {
+    db.run("ALTER TABLE grades RENAME TO grades_old", (renameErr) => {
+      if (renameErr) {
+        console.error("Konnte alte grades-Tabelle nicht umbenennen:", renameErr);
+        return;
+      }
+
+      db.run(
+        `CREATE TABLE grades (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          student_id INTEGER NOT NULL,
+          class_id INTEGER NOT NULL,
+          grade_template_id INTEGER NOT NULL,
+          grade REAL NOT NULL CHECK (grade >= 1 AND grade <= 5),
+          note TEXT,
+          created_at TEXT NOT NULL DEFAULT (datetime('now')),
+          FOREIGN KEY (student_id) REFERENCES students(id) ON DELETE CASCADE,
+          FOREIGN KEY (class_id) REFERENCES classes(id) ON DELETE CASCADE,
+          FOREIGN KEY (grade_template_id) REFERENCES grade_templates(id) ON DELETE CASCADE,
+          UNIQUE(student_id, grade_template_id)
+        )`,
+        (createErr) => {
+          if (createErr) {
+            console.error("Neues grades-Schema konnte nicht erstellt werden:", createErr);
+            return;
+          }
+
+          db.run("DROP TABLE grades_old", (dropErr) => {
+            if (dropErr) {
+              console.error("Konnte alte grades-Tabelle nicht löschen:", dropErr);
+            }
+          });
+        }
+      );
+    });
+  });
 });
 
 // --- Ensure new columns exist for legacy DBs ---
@@ -544,9 +647,13 @@ function seedDemoData() {
             const fourteenDays = new Date(now.getTime() - 1000 * 60 * 60 * 24 * 14).toISOString();
             const sevenDays = new Date(now.getTime() - 1000 * 60 * 60 * 24 * 7).toISOString();
 
-            db.run("INSERT INTO grades (student_id, subject, value, weight, comment, teacher, graded_at) VALUES (?,?,?,?,?,?,?)", [studentId, "Mathematik", 2, 0.4, "Gute Struktur", "Frau König", fourteenDays]);
-            db.run("INSERT INTO grades (student_id, subject, value, weight, comment, teacher, graded_at) VALUES (?,?,?,?,?,?,?)", [studentId, "Informatik", 1.5, 0.35, "Sauberer Code", "Herr Leitner", sevenDays]);
-            db.run("INSERT INTO grades (student_id, subject, value, weight, comment, teacher, graded_at) VALUES (?,?,?,?,?,?,?)", [studentId, "Deutsch", 3, 0.25, "Mehr Quellenangaben", "Frau Bauer", now.toISOString()]);
+            db.run("INSERT INTO grade_templates (class_id, name, category, weight, date, description) VALUES (?,?,?,?,?,?)", [classId, "SA 1", "Schularbeit", 40, fourteenDays, "Schularbeit 1"]);
+            db.run("INSERT INTO grade_templates (class_id, name, category, weight, date, description) VALUES (?,?,?,?,?,?)", [classId, "Test 1", "Test", 30, sevenDays, "Wöchentlicher Test"]);
+            db.run("INSERT INTO grade_templates (class_id, name, category, weight, date, description) VALUES (?,?,?,?,?,?)", [classId, "Mitarbeit", "Mitarbeit", 30, now.toISOString(), "Aktive Teilnahme"]);
+
+            db.run("INSERT INTO grades (student_id, class_id, grade_template_id, grade, note) VALUES (?,?,?,?,?)", [studentId, classId, 1, 2, "Gute Struktur"]);
+            db.run("INSERT INTO grades (student_id, class_id, grade_template_id, grade, note) VALUES (?,?,?,?,?)", [studentId, classId, 2, 1.5, "Sauberer Code"]);
+            db.run("INSERT INTO grades (student_id, class_id, grade_template_id, grade, note) VALUES (?,?,?,?,?)", [studentId, classId, 3, 3, "Mehr Quellenangaben"]);
             db.run("INSERT INTO grade_notifications (student_id, message, type) VALUES (?,?,?)", [studentId, "Neue Note in Informatik eingetragen.", "grade"]);
             db.run("INSERT INTO grade_notifications (student_id, message, type) VALUES (?,?,?)", [studentId, "Dein Notendurchschnitt hat sich verbessert!", "average"]);
           });

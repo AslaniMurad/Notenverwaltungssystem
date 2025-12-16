@@ -199,19 +199,38 @@ function buildSimplePdf(student, grades, averages) {
 
 async function loadGrades(studentId) {
   const rows = await dbAll(
-    "SELECT id, subject, value, weight, comment, teacher, graded_at, created_at FROM grades WHERE student_id = ?",
+    `SELECT
+      g.id,
+      g.grade,
+      g.note,
+      g.created_at,
+      gt.name,
+      gt.category,
+      gt.weight,
+      gt.date,
+      c.subject as class_subject
+     FROM grades g
+     JOIN grade_templates gt ON gt.id = g.grade_template_id
+     JOIN classes c ON c.id = g.class_id
+     WHERE g.student_id = ?`,
     [studentId]
   );
   return (rows || []).map((r) => ({
-    ...r,
-    value: Number(r.value),
-    weight: Number(r.weight || 1)
+    id: r.id,
+    subject: r.name,
+    category: r.category,
+    value: Number(r.grade),
+    weight: Number(r.weight || 1),
+    comment: r.note,
+    teacher: r.class_subject,
+    graded_at: r.date || r.created_at,
+    created_at: r.created_at
   }));
 }
 
 async function loadClassAverages(classId) {
   const rows = await dbAll(
-    "SELECT g.subject, g.value, g.weight FROM grades g JOIN students s ON s.id = g.student_id WHERE s.class_id = ?",
+    "SELECT gt.name as subject, g.grade as value, gt.weight FROM grades g JOIN students s ON s.id = g.student_id JOIN grade_templates gt ON gt.id = g.grade_template_id WHERE s.class_id = ?",
     [classId]
   );
   const grouped = {};
