@@ -1,0 +1,33 @@
+<aside class="app-sidebar" aria-label="Admin Navigation">
+  <div class="sidebar-brand">
+    <div>
+      <div class="sidebar-title">Admin-Konsole</div>
+      <div class="sidebar-meta"><%= currentUser?.email %> · <%= currentUser?.role %></div>
+    </div>
+    <span class="sidebar-badge">Eingeloggt</span>
+  </div>
+
+  <div class="app-nav">
+    <div class="nav-section">
+      <div class="nav-section-title">Navigation</div>
+      <a class="<%= activePath === '/admin' ? 'is-active' : '' %>" href="/admin">Home</a>
+    </div>
+
+    <div class="nav-section">
+      <div class="nav-section-title">Klassen</div>
+      <a class="<%= activePath.startsWith('/admin/classes') && !activePath.endsWith('/new') ? 'is-active' : '' %>" href="/admin/classes">Übersicht</a>
+      <a class="<%= activePath === '/admin/classes/new' ? 'is-active' : '' %>" href="/admin/classes/new">Klasse erstellen</a>
+    </div>
+
+    <div class="nav-section">
+      <div class="nav-section-title">Nutzer</div>
+      <a class="<%= activePath.startsWith('/admin/users') && !activePath.includes('/new') ? 'is-active' : '' %>" href="/admin/users">Nutzerliste</a>
+      <a class="<%= activePath.includes('/users/new') ? 'is-active' : '' %>" href="/admin/users/new">Nutzer anlegen</a>
+    </div>
+
+    <form class="logout-form" method="POST" action="/logout">
+      <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+      <button type="submit" class="app-nav-link">Logout</button>
+    </form>
+  </div>
+</aside>
