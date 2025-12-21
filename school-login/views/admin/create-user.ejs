@@ -15,15 +15,15 @@
         <div class="app-main-header">
           <div>
             <p class="app-main-subtitle">Nutzer anlegen</p>
-            <h1>Geführte Erstellung</h1>
-            <p class="admin-muted">Einzelne Accounts oder Bulk-Anlage Schritt für Schritt.</p>
+            <h1>Nutzer erstellen</h1>
+            
           </div>
           <a class="btn btn-secondary" href="/admin/users">Zur Nutzerliste</a>
         </div>
 
         <div class="admin-grid">
           <div class="admin-card" id="single">
-            <p class="admin-eyebrow">Schritt 1</p>
+            
             <h3>Einzelnen Nutzer erstellen</h3>
             <form class="admin-form vertical" method="POST" action="/admin/users">
               <input type="hidden" name="_csrf" value="<%= csrfToken %>">
@@ -47,7 +47,7 @@
           </div>
 
           <div class="admin-card" id="bulk">
-            <p class="admin-eyebrow">Schritt 2</p>
+            
             <h3>Bulk-Anlage</h3>
             <form class="admin-form vertical" method="POST" action="/admin/users/bulk">
               <input type="hidden" name="_csrf" value="<%= csrfToken %>">
