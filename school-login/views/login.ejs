@@ -51,14 +51,14 @@
           <input type="hidden" name="_csrf" value="<%= _csrfToken %>">
 
           <label class="login-label" for="email">E-Mail-Adresse</label>
-          <input class="login-input" id="email" name="email" type="email" placeholder="z.B. max.muster@schule.at" required value="<%= _email %>">
+          <input class="login-input" id="email" name="email" type="email" placeholder="vorname.nachname@htlwy.at" required value="<%= _email %>">
 
           <label class="login-label" for="password">Passwort</label>
-          <input class="login-input" id="password" name="password" type="password" placeholder="Dein sicheres Passwort" required>
+          <input class="login-input" id="password" name="password" type="password" placeholder="Dein Passwort" required>
 
           <div class="login-hint-row">
-            <div class="login-hint">Zugangsdaten erhältst du von einem Admin.</div>
-            <div class="login-roles">Rollen: Admin • Lehrer • Schüler</div>
+            <!-- TODO: Add a remeber me functionality -->
+            
           </div>
 
           <button class="btn-login-submit" type="submit">Login</button>
@@ -66,12 +66,8 @@
 
         <div class="login-foot">
           <div class="login-foot-item">
-            <span class="login-foot-icon">🔐</span>
-            <span>Nur zentrale Vergabe</span>
-          </div>
-          <div class="login-foot-item">
-            <span class="login-foot-icon">🛡️</span>
-            <span><strong>AES</strong> / Hashing / Sessions</span>
+            <span class="login-foot-icon">👥</span>
+            <span>Sitz, Grasberger, Granzer, Aslani, Reisinger</span>
           </div>
         </div>
       </div>
