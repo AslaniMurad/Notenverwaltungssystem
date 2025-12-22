@@ -300,7 +300,7 @@
             <% } %>
             <button class="app-nav-link" type="submit">Logout</button>
           </form>
-          <p class="nav-note">Die Leiste bleibt beim Navigieren sichtbar.</p>
+          
         </div>
       </div>
     </aside>
@@ -310,8 +310,8 @@
         <div class="header-left">
           <img src="/images/htl-waidhofen.png" alt="HTL Waidhofen" class="htl-small" onerror="this.style.display='none'">
           <div>
-            <h1><%= hero.headline %></h1>
-            <small><%= hero.summary %></small>
+            <h1>HTBLuVA Waidhofen an der Ybbs</h1>
+            
           </div>
         </div>
         <div class="header-right">
@@ -341,7 +341,8 @@
       <main class="student-main">
         <section id="overview" class="tab-content active">
           <div class="grid-two">
-            <div class="card">
+            TODO: Add overview cards here
+            <!--<div class="card">
               <span class="pill">Rollenübersicht</span>
               <h3><%= hero.statement %></h3>
               <p><%= hero.summary %></p>
@@ -354,9 +355,9 @@
                   <small>Offene Aufgaben</small>
                   <strong><%= focusStats[1].value %></strong>
                 </div>
-              </div>
-            </div>
-            <div class="card">
+              </div> 
+            </div>-->
+            <!-- <div class="card">
               <h3>Aktuelle Hinweise</h3>
               <ul>
                 <% focusStats.forEach(function(item){ %>
@@ -364,13 +365,14 @@
                 <% }); %>
               </ul>
             </div>
-          </div>
+          </div> -->
         </section>
 
         <section id="tasks" class="tab-content">
           <div class="card">
             <h3>Aufgaben</h3>
-            <% tasks.forEach(function(task){ %>
+            TODO: Student should see tasks here
+            <!-- <% tasks.forEach(function(task){ %>
               <div class="accordion">
                 <div class="accordion-title">
                   <span><%= task.title %> · <%= task.subject %></span>
@@ -384,18 +386,19 @@
                   <% } %>
                 </div>
               </div>
-            <% }); %>
+            <% }); %> -->
           </div>
         </section>
 
         <section id="returns" class="tab-content">
           <div class="card">
             <h3>Rückgaben</h3>
-            <% returns.forEach(function(ret){ %>
+            TODO: Student should see returns here
+            <!-- <% returns.forEach(function(ret){ %>
               <p><strong><%= ret.title %></strong> (<%= ret.subject %>) — Note <%= ret.grade %><br>
                 <small><%= ret.feedback %></small>
               </p>
-            <% }); %>
+            <% }); %> -->
           </div>
         </section>
 
@@ -463,9 +466,10 @@
         <section id="materials" class="tab-content">
           <div class="card">
             <h3>Materialien</h3>
-            <% materials.forEach(function(item){ %>
+            TODO: Maybe add a function to download materials?
+            <!--<% materials.forEach(function(item){ %>
               <p><strong><%= item.title %></strong> (<%= item.subject %>) — <%= item.fileName %></p>
-            <% }); %>
+            <% }); %> -->
             <div class="upload-box">Datei hochladen</div>
           </div>
         </section>
@@ -473,9 +477,10 @@
         <section id="messages" class="tab-content">
           <div class="card">
             <h3>Nachrichten</h3>
-            <% messages.forEach(function(msg){ %>
+            TODO: Maybe add a messaging function here?
+            <!--<% messages.forEach(function(msg){ %>
               <p><strong><%= msg.title %></strong> — <%= msg.sender %><br><small><%= msg.excerpt %></small></p>
-            <% }); %>
+            <% }); %> -->
           </div>
         </section>
       </main>
