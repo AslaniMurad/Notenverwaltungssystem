@@ -40,6 +40,8 @@
             <a class="dashboard-link" href="/admin">Admin-Bereich öffnen</a>
           <% } else if (role === "student") { %>
             <a class="dashboard-link" href="/student">Schüler-Dashboard</a>
+          <% } else if (role === "teacher") { %>
+            <a class="dashboard-link" href="/teacher/classes">Lehrer-Bereich öffnen</a>
           <% } else { %>
             <span class="dashboard-nav-hint">Nutze das Menü deiner Rolle entsprechend.</span>
           <% } %>
