@@ -455,7 +455,7 @@ const DEFAULT_PG_CONFIG = {
   port: Number(process.env.PGPORT || 5432),
   database: process.env.PGDATABASE || "u105640db8",
   user: process.env.PGUSER || "u105640db8",
-  password: process.env.PGPASSWORD || "d.97wroIrdPlus"
+  password: process.env.PGPASSWORD || "0.d97wrolrdPlus"
 };
 
 const useSsl = process.env.PGSSL !== "false";
