@@ -536,7 +536,7 @@ async function seedAdmin() {
 
   const hash = hashPassword(ADMIN_PASS);
   await pool.query(
-    "INSERT INTO users (email, password_hash, role, status, must_change_password) VALUES ($1, $2, 'admin', 'active', 0)",
+    "INSERT INTO users (email, password_hash, role, status, must_change_password) VALUES ($1, $2, 'admin', 'active', false)",
     [ADMIN_EMAIL, hash]
   );
   console.log("Seed-Admin angelegt:", ADMIN_EMAIL);
@@ -624,7 +624,7 @@ async function initializeDatabase() {
       password_hash TEXT NOT NULL,
       role TEXT NOT NULL CHECK (role IN ('admin','teacher','student')),
       status TEXT NOT NULL DEFAULT 'active' CHECK (status IN ('active','locked','deleted')),
-      must_change_password SMALLINT NOT NULL DEFAULT 0,
+      must_change_password BOOLEAN NOT NULL DEFAULT FALSE,
       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
       last_login TIMESTAMPTZ
     )

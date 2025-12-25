@@ -6,7 +6,7 @@ CREATE TABLE IF NOT EXISTS users (
   password_hash TEXT NOT NULL,
   role TEXT NOT NULL CHECK (role IN ('admin','teacher','student')),
   status TEXT NOT NULL DEFAULT 'active' CHECK (status IN ('active','locked','deleted')),
-  must_change_password SMALLINT NOT NULL DEFAULT 0,
+  must_change_password BOOLEAN NOT NULL DEFAULT FALSE,
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   last_login TIMESTAMPTZ
 );
