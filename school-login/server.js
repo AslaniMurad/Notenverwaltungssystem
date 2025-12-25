@@ -3,7 +3,7 @@ const express = require("express");
 const session = require("express-session");
 const csrf = require("csurf");
 const path = require("path");
-const { db, verifyPassword } = require("./db");
+const { db, verifyPassword, hashPassword } = require("./db");
 const { requireAuth } = require("./middleware/auth");
 
 const adminRouter = require("./routes/admin");
@@ -11,6 +11,16 @@ const studentRouter = require("./routes/student");
 const teacherRouter = require("./routes/teacher");
 
 const app = express();
+const INITIAL_PASSWORD = "2025!HTL";
+const ROLE_REDIRECTS = {
+  admin: "/admin",
+  teacher: "/teacher/classes",
+  student: "/student"
+};
+
+function redirectForRole(role) {
+  return ROLE_REDIRECTS[role] || "/";
+}
 
 app.use(express.urlencoded({ extended: true }));
 app.use(express.json());
@@ -66,6 +76,15 @@ app.use((req, res, next) => {
   next();
 });
 
+function enforcePasswordChange(req, res, next) {
+  const user = req.session.user;
+  if (!user || !user.must_change_password) return next();
+  if (req.path === "/force-password-change" || req.path === "/logout") return next();
+  return res.redirect("/force-password-change");
+}
+
+app.use(enforcePasswordChange);
+
 // --- Startseite (nach Login) ---
 app.get("/", requireAuth, (req, res) => {
   const { email, role } = req.session.user;
@@ -91,7 +110,7 @@ app.post("/login", (req, res) => {
   }
 
   db.get(
-    "SELECT id, email, password_hash, role, status FROM users WHERE email = ?",
+    "SELECT id, email, password_hash, role, status, must_change_password FROM users WHERE email = ?",
     [email],
     (err, user) => {
       if (err) {
@@ -122,15 +141,67 @@ app.post("/login", (req, res) => {
         id: user.id,
         email: user.email,
         role: user.role,
-        status: user.status
+        status: user.status,
+        must_change_password: user.must_change_password ? 1 : 0
       };
 
-      const redirectMap = {
-        admin: "/admin",
-        teacher: "/teacher/classes",
-        student: "/student"
-      };
-      res.redirect(redirectMap[user.role] || "/");
+      if (req.session.user.must_change_password) {
+        return res.redirect("/force-password-change");
+      }
+
+      res.redirect(redirectForRole(user.role));
+    }
+  );
+});
+
+// --- Force Password Change ---
+app.get("/force-password-change", requireAuth, (req, res) => {
+  if (!req.session.user.must_change_password) {
+    return res.redirect(redirectForRole(req.session.user.role));
+  }
+
+  res.render("force-password-change", {
+    csrfToken: req.csrfToken(),
+    email: req.session.user.email,
+    error: null
+  });
+});
+
+app.post("/force-password-change", requireAuth, (req, res) => {
+  const { newPassword } = req.body || {};
+  if (!req.session.user.must_change_password) {
+    return res.redirect(redirectForRole(req.session.user.role));
+  }
+  if (!newPassword) {
+    return res.status(400).render("force-password-change", {
+      csrfToken: req.csrfToken(),
+      email: req.session.user.email,
+      error: "Bitte ein neues Passwort eingeben."
+    });
+  }
+  if (newPassword === INITIAL_PASSWORD) {
+    return res.status(400).render("force-password-change", {
+      csrfToken: req.csrfToken(),
+      email: req.session.user.email,
+      error: "Bitte ein neues Passwort verwenden, nicht das Initial-Kennwort."
+    });
+  }
+
+  const hash = hashPassword(newPassword);
+  db.run(
+    "UPDATE users SET password_hash = ?, must_change_password = 0 WHERE id = ?",
+    [hash, req.session.user.id],
+    (err) => {
+      if (err) {
+        return res.status(500).render("error", {
+          message: "Passwort konnte nicht aktualisiert werden.",
+          status: 500,
+          backUrl: "/force-password-change"
+        });
+      }
+
+      req.session.user.must_change_password = 0;
+      res.redirect(redirectForRole(req.session.user.role));
     }
   );
 });

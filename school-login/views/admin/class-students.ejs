@@ -39,6 +39,10 @@
                     <strong><%= student.name %></strong>
                     <p class="admin-muted"><%= student.email %></p>
                   </div>
+                  <form method="POST" action="/admin/classes/<%= classData.id %>/students/<%= student.id %>/delete" onsubmit="return confirm(&quot;Schüler aus der Klasse entfernen?&quot;);">
+                    <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+                    <button class="btn btn-danger" type="submit">Entfernen</button>
+                  </form>
                 </div>
               <% }) %>
             <% } %>

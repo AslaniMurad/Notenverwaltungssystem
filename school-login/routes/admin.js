@@ -545,4 +545,39 @@ router.post("/classes/:id/students/add", async (req, res, next) => {
   }
 });
 
+router.post("/classes/:id/students/:studentId/delete", async (req, res, next) => {
+  const classId = Number(req.params.id);
+  const studentId = Number(req.params.studentId);
+
+  if (!classId || !studentId) {
+    return res.status(400).render("error", {
+      message: "Ungültige Anfrage.",
+      status: 400,
+      backUrl: "/admin/classes",
+      csrfToken: req.csrfToken()
+    });
+  }
+
+  try {
+    const studentRow = await getAsync(
+      "SELECT id FROM students WHERE id = ? AND class_id = ?",
+      [studentId, classId]
+    );
+    if (!studentRow) {
+      return res.status(404).render("error", {
+        message: "Schüler nicht gefunden.",
+        status: 404,
+        backUrl: `/admin/classes/${classId}/students`,
+        csrfToken: req.csrfToken()
+      });
+    }
+
+    await runAsync("DELETE FROM students WHERE id = ? AND class_id = ?", [studentId, classId]);
+    res.redirect(`/admin/classes/${classId}/students`);
+  } catch (err) {
+    console.error("DB error deleting student:", err);
+    next(err);
+  }
+});
+
 module.exports = router;
