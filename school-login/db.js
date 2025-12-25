@@ -619,7 +619,7 @@ async function seedDemoData() {
 async function initializeDatabase() {
   await pool.query(`
     CREATE TABLE IF NOT EXISTS users (
-      id INTEGER GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+      id SERIAL PRIMARY KEY,
       email TEXT UNIQUE NOT NULL,
       password_hash TEXT NOT NULL,
       role TEXT NOT NULL CHECK (role IN ('admin','teacher','student')),
@@ -632,7 +632,7 @@ async function initializeDatabase() {
 
   await pool.query(`
     CREATE TABLE IF NOT EXISTS classes (
-      id INTEGER GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+      id SERIAL PRIMARY KEY,
       name TEXT NOT NULL,
       subject TEXT NOT NULL,
       teacher_id INTEGER NOT NULL REFERENCES users(id),
@@ -642,7 +642,7 @@ async function initializeDatabase() {
 
   await pool.query(`
     CREATE TABLE IF NOT EXISTS students (
-      id INTEGER GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+      id SERIAL PRIMARY KEY,
       name TEXT NOT NULL,
       email TEXT NOT NULL,
       class_id INTEGER NOT NULL REFERENCES classes(id),
@@ -654,7 +654,7 @@ async function initializeDatabase() {
 
   await pool.query(`
     CREATE TABLE IF NOT EXISTS grade_templates (
-      id INTEGER GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+      id SERIAL PRIMARY KEY,
       class_id INTEGER NOT NULL REFERENCES classes(id) ON DELETE CASCADE,
       name TEXT NOT NULL,
       category TEXT NOT NULL CHECK (category IN ('Schularbeit', 'Test', 'Wiederholung', 'Mitarbeit', 'Projekt', 'Hausübung')),
@@ -667,7 +667,7 @@ async function initializeDatabase() {
 
   await pool.query(`
     CREATE TABLE IF NOT EXISTS grades (
-      id INTEGER GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+      id SERIAL PRIMARY KEY,
       student_id INTEGER NOT NULL REFERENCES students(id) ON DELETE CASCADE,
       class_id INTEGER NOT NULL REFERENCES classes(id) ON DELETE CASCADE,
       grade_template_id INTEGER NOT NULL REFERENCES grade_templates(id) ON DELETE CASCADE,
@@ -680,7 +680,7 @@ async function initializeDatabase() {
 
   await pool.query(`
     CREATE TABLE IF NOT EXISTS grade_notifications (
-      id INTEGER GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+      id SERIAL PRIMARY KEY,
       student_id INTEGER NOT NULL REFERENCES students(id),
       message TEXT NOT NULL,
       type TEXT NOT NULL DEFAULT 'info',
