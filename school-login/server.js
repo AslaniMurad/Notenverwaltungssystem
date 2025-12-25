@@ -3,7 +3,7 @@ const express = require("express");
 const session = require("express-session");
 const csrf = require("csurf");
 const path = require("path");
-const { db, verifyPassword } = require("./db");
+const { db, verifyPassword, ready } = require("./db");
 const { requireAuth } = require("./middleware/auth");
 
 const adminRouter = require("./routes/admin");
@@ -14,6 +14,16 @@ const app = express();
 
 app.use(express.urlencoded({ extended: true }));
 app.use(express.json());
+app.use(async (req, res, next) => {
+  try {
+    if (ready) {
+      await ready;
+    }
+    next();
+  } catch (err) {
+    next(err);
+  }
+});
 
 // set view engine & static
 app.set("views", path.join(__dirname, "views"));

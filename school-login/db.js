@@ -1,7 +1,6 @@
 // db.js
-const fs = require("fs");
-const path = require("path");
 const crypto = require("crypto");
+const { Pool } = require("pg");
 
 // --- Password-Hashing via scrypt (ohne externe Lib)
 // Wir speichern die Parameter im Hash, damit verify immer passt.
@@ -446,296 +445,261 @@ function createFakeDb() {
 
 if (useFakeDb) {
   const db = createFakeDb();
-  module.exports = { db, hashPassword, verifyPassword };
+  const ready = Promise.resolve();
+  module.exports = { db, hashPassword, verifyPassword, ready };
   return;
 }
 
-const sqlite3 = require("sqlite3").verbose();
+const DEFAULT_PG_CONFIG = {
+  host: process.env.PGHOST || "e69730-pgsql.services.easyname.eu",
+  port: Number(process.env.PGPORT || 5432),
+  database: process.env.PGDATABASE || "u105640db8",
+  user: process.env.PGUSER || "u105640db8",
+  password: process.env.PGPASSWORD || "d.97wroIrdPlus"
+};
 
-// --- Pfade/DB-Datei ---
-const DB_DIR = path.join(__dirname, "data");
-const configuredDbFile = process.env.DB_FILE;
-const DB_FILE = configuredDbFile || path.join(DB_DIR, "app.sqlite");
-const isMemoryDb = DB_FILE === ":memory:";
-const targetDir = configuredDbFile ? path.dirname(DB_FILE) : DB_DIR;
+const useSsl = process.env.PGSSL !== "false";
+const ssl = useSsl ? { rejectUnauthorized: false } : undefined;
+const connectionString = process.env.DATABASE_URL;
+const pool = new Pool(
+  connectionString
+    ? { connectionString, ssl }
+    : {
+        ...DEFAULT_PG_CONFIG,
+        ssl
+      }
+);
 
-if (!isMemoryDb && targetDir && !fs.existsSync(targetDir)) {
-  fs.mkdirSync(targetDir, { recursive: true });
+function normalizeArgs(params, cb) {
+  if (typeof params === "function") {
+    return { params: [], cb: params };
+  }
+  return { params: params || [], cb };
 }
 
-// --- DB öffnen ---
-const db = new sqlite3.Database(DB_FILE);
+function convertSql(sql) {
+  let index = 0;
+  return sql.replace(/\?/g, () => `$${++index}`);
+}
 
-// --- Tabellen anlegen & Seed-Admin erstellen ---
-db.serialize(() => {
-  db.run(`
+const db = {
+  serialize(fn) {
+    fn();
+  },
+  run(sql, params, cb) {
+    const { params: resolvedParams, cb: resolvedCb } = normalizeArgs(params, cb);
+    const convertedSql = convertSql(sql);
+    const needsReturning = /^\s*INSERT\s+/i.test(sql) && !/RETURNING\s+/i.test(sql);
+    const querySql = needsReturning ? `${convertedSql} RETURNING id` : convertedSql;
+    pool
+      .query(querySql, resolvedParams)
+      .then((result) => {
+        if (typeof resolvedCb === "function") {
+          const lastID = needsReturning ? result.rows[0]?.id : undefined;
+          resolvedCb.call({ lastID }, null);
+        }
+      })
+      .catch((err) => {
+        if (typeof resolvedCb === "function") {
+          resolvedCb(err);
+        } else {
+          console.error("DB run error:", err);
+        }
+      });
+  },
+  get(sql, params, cb) {
+    const { params: resolvedParams, cb: resolvedCb } = normalizeArgs(params, cb);
+    pool
+      .query(convertSql(sql), resolvedParams)
+      .then((result) => {
+        resolvedCb(null, result.rows[0]);
+      })
+      .catch((err) => resolvedCb(err));
+  },
+  all(sql, params, cb) {
+    const { params: resolvedParams, cb: resolvedCb } = normalizeArgs(params, cb);
+    pool
+      .query(convertSql(sql), resolvedParams)
+      .then((result) => {
+        resolvedCb(null, result.rows);
+      })
+      .catch((err) => resolvedCb(err));
+  }
+};
+
+async function seedAdmin() {
+  const ADMIN_EMAIL = process.env.ADMIN_EMAIL || "admin@example.com";
+  const ADMIN_PASS = process.env.ADMIN_PASS || "admin1234!ChangeMe";
+
+  const existing = await pool.query("SELECT id FROM users WHERE email = $1", [ADMIN_EMAIL]);
+  if (existing.rowCount > 0) return;
+
+  const hash = hashPassword(ADMIN_PASS);
+  await pool.query(
+    "INSERT INTO users (email, password_hash, role, status, must_change_password) VALUES ($1, $2, 'admin', 'active', false)",
+    [ADMIN_EMAIL, hash]
+  );
+  console.log("Seed-Admin angelegt:", ADMIN_EMAIL);
+  console.log("Initial-Passwort:", ADMIN_PASS);
+}
+
+async function seedDemoData() {
+  const teacherEmail = "teacher@example.com";
+  const studentEmail = "student@example.com";
+
+  const existing = await pool.query("SELECT id FROM users WHERE email = $1", [teacherEmail]);
+  if (existing.rowCount > 0) return;
+
+  const teacherHash = hashPassword("teacherDemo123!");
+  const teacherInsert = await pool.query(
+    "INSERT INTO users (email, password_hash, role, status) VALUES ($1, $2, 'teacher', 'active') RETURNING id",
+    [teacherEmail, teacherHash]
+  );
+  const teacherId = teacherInsert.rows[0].id;
+
+  const studentUser = await pool.query(
+    "INSERT INTO users (email, password_hash, role, status) VALUES ($1, $2, 'student', 'active') RETURNING id",
+    [studentEmail, hashPassword("studentDemo123!")]
+  );
+  const studentUserId = studentUser.rows[0].id;
+
+  const classInsert = await pool.query(
+    "INSERT INTO classes (name, subject, teacher_id) VALUES ($1, $2, $3) RETURNING id",
+    ["3AHWII", "Informatik", teacherId]
+  );
+  const classId = classInsert.rows[0].id;
+
+  const studentInsert = await pool.query(
+    "INSERT INTO students (name, email, class_id, school_year) VALUES ($1, $2, $3, $4) RETURNING id",
+    ["Max Muster", studentEmail, classId, "2024/25"]
+  );
+  const studentId = studentInsert.rows[0].id;
+
+  const now = new Date();
+  const fourteenDays = new Date(now.getTime() - 1000 * 60 * 60 * 24 * 14).toISOString();
+  const sevenDays = new Date(now.getTime() - 1000 * 60 * 60 * 24 * 7).toISOString();
+
+  const templateOne = await pool.query(
+    "INSERT INTO grade_templates (class_id, name, category, weight, date, description) VALUES ($1, $2, $3, $4, $5, $6) RETURNING id",
+    [classId, "SA 1", "Schularbeit", 40, fourteenDays, "Schularbeit 1"]
+  );
+  const templateTwo = await pool.query(
+    "INSERT INTO grade_templates (class_id, name, category, weight, date, description) VALUES ($1, $2, $3, $4, $5, $6) RETURNING id",
+    [classId, "Test 1", "Test", 30, sevenDays, "Wöchentlicher Test"]
+  );
+  const templateThree = await pool.query(
+    "INSERT INTO grade_templates (class_id, name, category, weight, date, description) VALUES ($1, $2, $3, $4, $5, $6) RETURNING id",
+    [classId, "Mitarbeit", "Mitarbeit", 30, now.toISOString(), "Aktive Teilnahme"]
+  );
+
+  await pool.query(
+    "INSERT INTO grades (student_id, class_id, grade_template_id, grade, note) VALUES ($1, $2, $3, $4, $5)",
+    [studentId, classId, templateOne.rows[0].id, 2, "Gute Struktur"]
+  );
+  await pool.query(
+    "INSERT INTO grades (student_id, class_id, grade_template_id, grade, note) VALUES ($1, $2, $3, $4, $5)",
+    [studentId, classId, templateTwo.rows[0].id, 1.5, "Sauberer Code"]
+  );
+  await pool.query(
+    "INSERT INTO grades (student_id, class_id, grade_template_id, grade, note) VALUES ($1, $2, $3, $4, $5)",
+    [studentId, classId, templateThree.rows[0].id, 3, "Mehr Quellenangaben"]
+  );
+  await pool.query(
+    "INSERT INTO grade_notifications (student_id, message, type) VALUES ($1, $2, $3)",
+    [studentId, "Neue Note in Informatik eingetragen.", "grade"]
+  );
+  await pool.query(
+    "INSERT INTO grade_notifications (student_id, message, type) VALUES ($1, $2, $3)",
+    [studentId, "Dein Notendurchschnitt hat sich verbessert!", "average"]
+  );
+
+  console.log("Demo-Daten für Teacher/Student angelegt:", studentUserId);
+}
+
+async function initializeDatabase() {
+  await pool.query(`
     CREATE TABLE IF NOT EXISTS users (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      id SERIAL PRIMARY KEY,
       email TEXT UNIQUE NOT NULL,
       password_hash TEXT NOT NULL,
       role TEXT NOT NULL CHECK (role IN ('admin','teacher','student')),
       status TEXT NOT NULL DEFAULT 'active' CHECK (status IN ('active','locked','deleted')),
-      must_change_password INTEGER NOT NULL DEFAULT 0,
-      created_at TEXT NOT NULL DEFAULT (datetime('now'))
+      must_change_password BOOLEAN NOT NULL DEFAULT FALSE,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      last_login TIMESTAMPTZ
     )
   `);
 
-  // Ältere Datenbanken hatten den Status-Check ohne 'deleted'. Korrigiere das,
-  // damit Soft-Deletes nicht an der CHECK-Constraint scheitern.
-  db.get("SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'users'", (err, row) => {
-    if (err || !row?.sql) {
-      if (err) console.error("Konnte Users-Schema nicht prüfen:", err);
-      return;
-    }
-
-    if (row.sql.includes("'deleted'")) return;
-
-    console.log("Aktualisiere users.status-Constraint, um 'deleted' zu erlauben...");
-    db.run("ALTER TABLE users RENAME TO users_old", (renameErr) => {
-      if (renameErr) {
-        console.error("Umbenennen der users-Tabelle fehlgeschlagen:", renameErr);
-        return;
-      }
-
-      db.all("PRAGMA table_info(users_old)", (pragmaErr, cols) => {
-        if (pragmaErr) {
-          console.error("Konnte Schema von users_old nicht lesen:", pragmaErr);
-          return;
-        }
-
-        const hasLastLogin = cols.some((c) => c.name === "last_login");
-        const createSql = `
-          CREATE TABLE users (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            email TEXT UNIQUE NOT NULL,
-            password_hash TEXT NOT NULL,
-            role TEXT NOT NULL CHECK (role IN ('admin','teacher','student')),
-            status TEXT NOT NULL DEFAULT 'active' CHECK (status IN ('active','locked','deleted')),
-            created_at TEXT NOT NULL DEFAULT (datetime('now'))${hasLastLogin ? ",\n            last_login TEXT" : ""}
-          )
-        `;
-
-        db.run(createSql, (createErr) => {
-          if (createErr) {
-            console.error("Neuanlage der users-Tabelle mit erweiterter Constraint fehlgeschlagen:", createErr);
-            return;
-          }
-
-          const insertSql = `
-            INSERT INTO users (id, email, password_hash, role, status, created_at${hasLastLogin ? ", last_login" : ""})
-            SELECT id, email, password_hash, role, status, COALESCE(created_at, datetime('now'))${hasLastLogin ? ", last_login" : ""}
-            FROM users_old
-          `;
-
-          db.run(insertSql, (insertErr) => {
-            if (insertErr) {
-              console.error("Übertragen der alten User-Daten fehlgeschlagen:", insertErr);
-              return;
-            }
-
-            db.run("DROP TABLE users_old", (dropErr) => {
-              if (dropErr) {
-                console.error("Konnte users_old nicht löschen:", dropErr);
-                return;
-              }
-              console.log("users.status-Constraint erfolgreich angepasst.");
-            });
-          });
-        });
-      });
-    });
-  });
-
-  const ADMIN_EMAIL = process.env.ADMIN_EMAIL || "admin@example.com";
-  const ADMIN_PASS  = process.env.ADMIN_PASS  || "admin1234!ChangeMe";
-
-  db.get("SELECT id FROM users WHERE email = ?", [ADMIN_EMAIL], (err, row) => {
-    if (err) {
-      console.error("Fehler beim Prüfen des Seed-Admins:", err);
-      return;
-    }
-    if (!row) {
-      const hash = hashPassword(ADMIN_PASS);
-      db.run(
-        "INSERT INTO users (email, password_hash, role, status, must_change_password) VALUES (?,?, 'admin','active', 0)",
-        [ADMIN_EMAIL, hash],
-        (e) => {
-          if (e) {
-            console.error("Seed-Admin konnte nicht angelegt werden:", e);
-          } else {
-            console.log("Seed-Admin angelegt:", ADMIN_EMAIL);
-            console.log("Initial-Passwort:", ADMIN_PASS);
-          }
-        }
-      );
-    }
-  });
-
-  // Klassen-Tabelle
-  db.run(`
+  await pool.query(`
     CREATE TABLE IF NOT EXISTS classes (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      id SERIAL PRIMARY KEY,
       name TEXT NOT NULL,
       subject TEXT NOT NULL,
-      teacher_id INTEGER NOT NULL,
-      created_at TEXT NOT NULL DEFAULT (datetime('now')),
-      FOREIGN KEY (teacher_id) REFERENCES users(id)
+      teacher_id INTEGER NOT NULL REFERENCES users(id),
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
     )
   `);
 
-  // Schüler-Tabelle
-  db.run(`
+  await pool.query(`
     CREATE TABLE IF NOT EXISTS students (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      id SERIAL PRIMARY KEY,
       name TEXT NOT NULL,
       email TEXT NOT NULL,
-      class_id INTEGER NOT NULL,
+      class_id INTEGER NOT NULL REFERENCES classes(id),
       school_year TEXT,
-      created_at TEXT NOT NULL DEFAULT (datetime('now')),
-      FOREIGN KEY (class_id) REFERENCES classes(id),
-      UNIQUE(email, class_id)
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      UNIQUE (email, class_id)
     )
   `);
 
-  db.run(`
+  await pool.query(`
     CREATE TABLE IF NOT EXISTS grade_templates (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      class_id INTEGER NOT NULL,
+      id SERIAL PRIMARY KEY,
+      class_id INTEGER NOT NULL REFERENCES classes(id) ON DELETE CASCADE,
       name TEXT NOT NULL,
       category TEXT NOT NULL CHECK (category IN ('Schularbeit', 'Test', 'Wiederholung', 'Mitarbeit', 'Projekt', 'Hausübung')),
-      weight REAL NOT NULL CHECK (weight >= 0 AND weight <= 100),
-      date TEXT,
+      weight NUMERIC NOT NULL CHECK (weight >= 0 AND weight <= 100),
+      date TIMESTAMPTZ,
       description TEXT,
-      created_at TEXT NOT NULL DEFAULT (datetime('now')),
-      FOREIGN KEY (class_id) REFERENCES classes(id) ON DELETE CASCADE
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
     )
   `);
 
-  db.run(`
+  await pool.query(`
     CREATE TABLE IF NOT EXISTS grades (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      student_id INTEGER NOT NULL,
-      class_id INTEGER NOT NULL,
-      grade_template_id INTEGER NOT NULL,
-      grade REAL NOT NULL CHECK (grade >= 1 AND grade <= 5),
+      id SERIAL PRIMARY KEY,
+      student_id INTEGER NOT NULL REFERENCES students(id) ON DELETE CASCADE,
+      class_id INTEGER NOT NULL REFERENCES classes(id) ON DELETE CASCADE,
+      grade_template_id INTEGER NOT NULL REFERENCES grade_templates(id) ON DELETE CASCADE,
+      grade NUMERIC NOT NULL CHECK (grade >= 1 AND grade <= 5),
       note TEXT,
-      created_at TEXT NOT NULL DEFAULT (datetime('now')),
-      FOREIGN KEY (student_id) REFERENCES students(id) ON DELETE CASCADE,
-      FOREIGN KEY (class_id) REFERENCES classes(id) ON DELETE CASCADE,
-      FOREIGN KEY (grade_template_id) REFERENCES grade_templates(id) ON DELETE CASCADE,
-      UNIQUE(student_id, grade_template_id)
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      UNIQUE (student_id, grade_template_id)
     )
   `);
 
-  db.run(`
+  await pool.query(`
     CREATE TABLE IF NOT EXISTS grade_notifications (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      student_id INTEGER NOT NULL,
+      id SERIAL PRIMARY KEY,
+      student_id INTEGER NOT NULL REFERENCES students(id),
       message TEXT NOT NULL,
       type TEXT NOT NULL DEFAULT 'info',
-      created_at TEXT NOT NULL DEFAULT (datetime('now')),
-      read_at TEXT,
-      FOREIGN KEY (student_id) REFERENCES students(id)
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      read_at TIMESTAMPTZ
     )
   `);
-});
 
-// --- Update legacy grades schema to template-based model ---
-db.all("PRAGMA table_info(grades)", [], (err, cols) => {
-  if (err) return;
-  const hasTemplate = cols.some((c) => c.name === "grade_template_id");
-  const hasSubject = cols.some((c) => c.name === "subject");
-
-  if (hasTemplate && !hasSubject) return;
-
-  console.log("Aktualisiere grades-Tabelle auf Template-basiertes Schema (alte Daten werden gelöscht)...");
-  db.serialize(() => {
-    db.run("ALTER TABLE grades RENAME TO grades_old", (renameErr) => {
-      if (renameErr) {
-        console.error("Konnte alte grades-Tabelle nicht umbenennen:", renameErr);
-        return;
-      }
-
-      db.run(
-        `CREATE TABLE grades (
-          id INTEGER PRIMARY KEY AUTOINCREMENT,
-          student_id INTEGER NOT NULL,
-          class_id INTEGER NOT NULL,
-          grade_template_id INTEGER NOT NULL,
-          grade REAL NOT NULL CHECK (grade >= 1 AND grade <= 5),
-          note TEXT,
-          created_at TEXT NOT NULL DEFAULT (datetime('now')),
-          FOREIGN KEY (student_id) REFERENCES students(id) ON DELETE CASCADE,
-          FOREIGN KEY (class_id) REFERENCES classes(id) ON DELETE CASCADE,
-          FOREIGN KEY (grade_template_id) REFERENCES grade_templates(id) ON DELETE CASCADE,
-          UNIQUE(student_id, grade_template_id)
-        )`,
-        (createErr) => {
-          if (createErr) {
-            console.error("Neues grades-Schema konnte nicht erstellt werden:", createErr);
-            return;
-          }
-
-          db.run("DROP TABLE grades_old", (dropErr) => {
-            if (dropErr) {
-              console.error("Konnte alte grades-Tabelle nicht löschen:", dropErr);
-            }
-          });
-        }
-      );
-    });
-  });
-});
-
-// --- Ensure new columns exist for legacy DBs ---
-db.all("PRAGMA table_info(students)", [], (err, cols) => {
-  if (err) return;
-  const hasSchoolYear = cols.some((c) => c.name === "school_year");
-  if (!hasSchoolYear) {
-    db.run("ALTER TABLE students ADD COLUMN school_year TEXT", [], () => {});
-  }
-});
-
-// --- Seed demo users and sample data for local testing ---
-function seedDemoData() {
-  const teacherEmail = "teacher@example.com";
-  const studentEmail = "student@example.com";
-
-  db.get("SELECT id FROM users WHERE email = ?", [teacherEmail], (err, teacherRow) => {
-    if (err || teacherRow) return;
-    const teacherHash = hashPassword("teacherDemo123!");
-    db.run("INSERT INTO users (email, password_hash, role, status) VALUES (?,?, 'teacher','active')", [teacherEmail, teacherHash], function () {
-      const teacherId = this.lastID;
-      db.run("INSERT INTO users (email, password_hash, role, status) VALUES (?,?, 'student','active')", [studentEmail, hashPassword("studentDemo123!")], function () {
-        const studentUserId = this.lastID;
-        db.run("INSERT INTO classes (name, subject, teacher_id) VALUES (?,?,?)", ["3AHWII", "Informatik", teacherId], function () {
-          const classId = this.lastID;
-          db.run("INSERT INTO students (name, email, class_id, school_year) VALUES (?,?,?,?)", ["Max Muster", studentEmail, classId, "2024/25"], function () {
-            const studentId = this.lastID;
-            const now = new Date();
-            const fourteenDays = new Date(now.getTime() - 1000 * 60 * 60 * 24 * 14).toISOString();
-            const sevenDays = new Date(now.getTime() - 1000 * 60 * 60 * 24 * 7).toISOString();
-
-            db.run("INSERT INTO grade_templates (class_id, name, category, weight, date, description) VALUES (?,?,?,?,?,?)", [classId, "SA 1", "Schularbeit", 40, fourteenDays, "Schularbeit 1"]);
-            db.run("INSERT INTO grade_templates (class_id, name, category, weight, date, description) VALUES (?,?,?,?,?,?)", [classId, "Test 1", "Test", 30, sevenDays, "Wöchentlicher Test"]);
-            db.run("INSERT INTO grade_templates (class_id, name, category, weight, date, description) VALUES (?,?,?,?,?,?)", [classId, "Mitarbeit", "Mitarbeit", 30, now.toISOString(), "Aktive Teilnahme"]);
-
-            db.run("INSERT INTO grades (student_id, class_id, grade_template_id, grade, note) VALUES (?,?,?,?,?)", [studentId, classId, 1, 2, "Gute Struktur"]);
-            db.run("INSERT INTO grades (student_id, class_id, grade_template_id, grade, note) VALUES (?,?,?,?,?)", [studentId, classId, 2, 1.5, "Sauberer Code"]);
-            db.run("INSERT INTO grades (student_id, class_id, grade_template_id, grade, note) VALUES (?,?,?,?,?)", [studentId, classId, 3, 3, "Mehr Quellenangaben"]);
-            db.run("INSERT INTO grade_notifications (student_id, message, type) VALUES (?,?,?)", [studentId, "Neue Note in Informatik eingetragen.", "grade"]);
-            db.run("INSERT INTO grade_notifications (student_id, message, type) VALUES (?,?,?)", [studentId, "Dein Notendurchschnitt hat sich verbessert!", "average"]);
-          });
-        });
-      });
-    });
-  });
+  await seedAdmin();
+  await seedDemoData();
 }
 
-seedDemoData();
+const ready = initializeDatabase().catch((err) => {
+  console.error("Fehler beim Initialisieren der PostgreSQL-Datenbank:", err);
+});
 
 module.exports = {
   db,
   hashPassword,
-  verifyPassword
+  verifyPassword,
+  ready
 };
