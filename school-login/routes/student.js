@@ -45,12 +45,19 @@ async function loadClassInfo(classId) {
 
 async function loadStudentGrades(studentId) {
   return allAsync(
-    `SELECT g.id, g.grade, g.note, g.created_at, gt.name, gt.category, gt.weight, gt.date, c.subject as class_subject
+    `SELECT g.id, g.grade, g.note, g.created_at, gt.id as template_id, gt.name, gt.category, gt.weight, gt.date, gt.description, c.subject as class_subject
      FROM grades g
      JOIN grade_templates gt ON gt.id = g.grade_template_id
      JOIN classes c ON c.id = g.class_id
      WHERE g.student_id = ?`,
     [studentId]
+  );
+}
+
+async function loadTemplates(classId) {
+  return allAsync(
+    "SELECT id, name, category, weight, date, description FROM grade_templates WHERE class_id = ? ORDER BY date, name",
+    [classId]
   );
 }
 
@@ -79,6 +86,37 @@ function mapGradeRow(row, classInfo) {
     teacher: classInfo?.teacher_email || null,
     comment: row.note || row.name || "",
     graded_at: gradedAt
+  };
+}
+
+function mapTaskRow(template, gradeRow, classInfo) {
+  return {
+    id: template.id,
+    title: template.name,
+    category: template.category,
+    weight: Number(template.weight || 0),
+    due_at: template.date || null,
+    description: template.description || "",
+    subject: classInfo?.subject || "",
+    graded: Boolean(gradeRow && gradeRow.id),
+    grade: gradeRow ? Number(gradeRow.grade) : null,
+    graded_at: gradeRow?.created_at || null,
+    note: gradeRow?.note || null
+  };
+}
+
+function mapReturnRow(row, classInfo) {
+  const subject = row.class_subject || classInfo?.subject || row.name || "";
+  return {
+    id: row.id,
+    template_id: row.template_id,
+    title: row.name,
+    category: row.category,
+    weight: Number(row.weight || 0),
+    grade: Number(row.grade),
+    graded_at: row.created_at || row.date || null,
+    note: row.note || "",
+    subject
   };
 }
 
@@ -208,8 +246,23 @@ router.get("/", async (req, res, next) => {
     const { student, classInfo } = context;
     const gradeRows = await loadStudentGrades(student.id);
     const grades = gradeRows.map((row) => mapGradeRow(row, classInfo));
-    const subjects = Array.from(new Set(grades.map((grade) => grade.subject))).filter(Boolean);
+    const subjectSet = new Set(grades.map((grade) => grade.subject));
+    if (classInfo?.subject) subjectSet.add(classInfo.subject);
+    if (student.class_subject) subjectSet.add(student.class_subject);
+    const subjects = Array.from(subjectSet).filter(Boolean);
     const averages = computeAverages(grades);
+    const templates = await loadTemplates(student.class_id);
+    const gradeByTemplate = new Map(
+      gradeRows
+        .filter((row) => row.template_id != null)
+        .map((row) => [String(row.template_id), row])
+    );
+    const tasks = templates.map((template) =>
+      mapTaskRow(template, gradeByTemplate.get(String(template.id)), classInfo)
+    );
+    const returns = gradeRows
+      .map((row) => mapReturnRow(row, classInfo))
+      .sort((a, b) => new Date(b.graded_at) - new Date(a.graded_at));
     const classRows = await loadClassGradeRows(student.class_id);
     const classAverages = computeClassAverages(classRows);
     const notifications = await loadNotifications(student.id);
@@ -225,13 +278,15 @@ router.get("/", async (req, res, next) => {
       email: req.session.user.email,
       studentProfile,
       subjects,
-      tasks: [],
-      returns: [],
+      tasks,
+      returns,
       materials: [],
       messages: [],
       initialData: {
         grades,
         averages,
+        tasks,
+        returns,
         classAverages,
         notifications,
         trend: { direction: "steady", change: 0 },
@@ -307,6 +362,47 @@ router.get("/grades", async (req, res, next) => {
     }
 
     res.json({ grades });
+  } catch (err) {
+    next(err);
+  }
+});
+
+router.get("/tasks", async (req, res, next) => {
+  try {
+    const context = await getStudentContext(req);
+    if (!context) {
+      return res.status(404).json({ error: "Student nicht gefunden." });
+    }
+
+    const { student } = context;
+    const templates = await loadTemplates(student.class_id);
+    const gradeRows = await loadStudentGrades(student.id);
+    const gradeByTemplate = new Map(
+      gradeRows
+        .filter((row) => row.template_id != null)
+        .map((row) => [String(row.template_id), row])
+    );
+    const tasks = templates.map((template) =>
+      mapTaskRow(template, gradeByTemplate.get(String(template.id)), context.classInfo)
+    );
+    res.json({ tasks });
+  } catch (err) {
+    next(err);
+  }
+});
+
+router.get("/returns", async (req, res, next) => {
+  try {
+    const context = await getStudentContext(req);
+    if (!context) {
+      return res.status(404).json({ error: "Student nicht gefunden." });
+    }
+
+    const gradeRows = await loadStudentGrades(context.student.id);
+    const returns = gradeRows
+      .map((row) => mapReturnRow(row, context.classInfo))
+      .sort((a, b) => new Date(b.graded_at) - new Date(a.graded_at));
+    res.json({ returns });
   } catch (err) {
     next(err);
   }

@@ -350,10 +350,12 @@ function createFakeDb() {
               grade: g.grade,
               note: g.note,
               created_at: g.created_at,
+              template_id: template.id,
               name: template.name,
               category: template.category,
               weight: template.weight,
               date: template.date,
+              description: template.description,
               class_subject: cls.subject
             };
           });
