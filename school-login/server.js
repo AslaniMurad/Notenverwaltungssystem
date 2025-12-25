@@ -25,7 +25,7 @@ app.use(express.static(path.join(__dirname, "public")));
 // --- Session ---
 app.use(session({
   name: "sid",
-  secret: "change-this-session-secret",
+  secret: process.env.SESSION_SECRET,
   resave: false,
   saveUninitialized: false,
   cookie: {
