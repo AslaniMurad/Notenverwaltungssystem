@@ -1,0 +1,442 @@
+const express = require("express");
+const router = express.Router();
+const { db } = require("../db");
+const { requireAuth, requireRole } = require("../middleware/auth");
+
+const runAsync = (sql, params = []) =>
+  new Promise((resolve, reject) => {
+    db.run(sql, params, function (err) {
+      if (err) return reject(err);
+      resolve(this);
+    });
+  });
+
+const allAsync = (sql, params = []) =>
+  new Promise((resolve, reject) => {
+    db.all(sql, params, (err, rows) => {
+      if (err) return reject(err);
+      resolve(rows);
+    });
+  });
+
+const getAsync = (sql, params = []) =>
+  new Promise((resolve, reject) => {
+    db.get(sql, params, (err, row) => {
+      if (err) return reject(err);
+      resolve(row);
+    });
+  });
+
+router.use(requireAuth, requireRole("student"));
+
+async function loadStudentProfile(email) {
+  return getAsync(
+    "SELECT s.*, c.name as class_name, c.subject as class_subject, c.id as class_id FROM students s JOIN classes c ON c.id = s.class_id WHERE s.email = ?",
+    [email]
+  );
+}
+
+async function loadClassInfo(classId) {
+  return getAsync(
+    "SELECT c.id, c.name, c.subject, u.email AS teacher_email FROM classes c LEFT JOIN users u ON c.teacher_id = u.id WHERE c.id = ?",
+    [classId]
+  );
+}
+
+async function loadStudentGrades(studentId) {
+  return allAsync(
+    `SELECT g.id, g.grade, g.note, g.created_at, gt.name, gt.category, gt.weight, gt.date, c.subject as class_subject
+     FROM grades g
+     JOIN grade_templates gt ON gt.id = g.grade_template_id
+     JOIN classes c ON c.id = g.class_id
+     WHERE g.student_id = ?`,
+    [studentId]
+  );
+}
+
+async function loadClassGradeRows(classId) {
+  return allAsync(
+    "SELECT gt.name as subject, g.grade as value, gt.weight FROM grades g JOIN students s ON s.id = g.student_id JOIN grade_templates gt ON gt.id = g.grade_template_id WHERE s.class_id = ?",
+    [classId]
+  );
+}
+
+async function loadNotifications(studentId) {
+  return allAsync(
+    "SELECT id, message, type, created_at, read_at FROM grade_notifications WHERE student_id = ? ORDER BY created_at DESC",
+    [studentId]
+  );
+}
+
+function mapGradeRow(row, classInfo) {
+  const subject = row.class_subject || classInfo?.subject || row.name || "Fach";
+  const gradedAt = row.date || row.created_at;
+  return {
+    id: row.id,
+    value: Number(row.grade),
+    weight: Number(row.weight || 1),
+    subject,
+    teacher: classInfo?.teacher_email || null,
+    comment: row.note || row.name || "",
+    graded_at: gradedAt
+  };
+}
+
+function computeAverages(grades) {
+  const subjectMap = new Map();
+  let weightedSum = 0;
+  let weightTotal = 0;
+
+  grades.forEach((grade) => {
+    const weight = Number(grade.weight || 1);
+    if (Number.isNaN(grade.value) || Number.isNaN(weight)) return;
+    weightedSum += grade.value * weight;
+    weightTotal += weight;
+
+    const bucket = subjectMap.get(grade.subject) || { weightedSum: 0, weightTotal: 0 };
+    bucket.weightedSum += grade.value * weight;
+    bucket.weightTotal += weight;
+    subjectMap.set(grade.subject, bucket);
+  });
+
+  const subjects = Array.from(subjectMap.entries()).map(([subject, info]) => ({
+    subject,
+    average: info.weightTotal ? Number((info.weightedSum / info.weightTotal).toFixed(2)) : null
+  }));
+
+  return {
+    subjects,
+    overall: weightTotal ? Number((weightedSum / weightTotal).toFixed(2)) : null
+  };
+}
+
+function computeClassAverages(rows) {
+  const bucket = new Map();
+  rows.forEach((row) => {
+    const key = row.subject || "Fach";
+    const entry = bucket.get(key) || { sum: 0, count: 0 };
+    entry.sum += Number(row.value);
+    entry.count += 1;
+    bucket.set(key, entry);
+  });
+
+  return Array.from(bucket.entries()).map(([subject, info]) => ({
+    subject,
+    average: info.count ? Number((info.sum / info.count).toFixed(2)) : null
+  }));
+}
+
+function escapeCsv(value) {
+  const stringValue = value == null ? "" : String(value);
+  if (/[",\n]/.test(stringValue)) {
+    return `"${stringValue.replace(/"/g, '""')}"`;
+  }
+  return stringValue;
+}
+
+function sanitizePdfText(value) {
+  return String(value || "")
+    .replace(/\\/g, "\\\\")
+    .replace(/\(/g, "\\(")
+    .replace(/\)/g, "\\)")
+    .replace(/[^\x20-\x7E]/g, "?");
+}
+
+function buildPdf(lines) {
+  const safeLines = lines.map((line) => sanitizePdfText(line));
+  const contentLines = ["BT", "/F1 12 Tf", "14 TL", "72 760 Td"];
+
+  safeLines.forEach((line, index) => {
+    contentLines.push(`(${line}) Tj`);
+    if (index < safeLines.length - 1) {
+      contentLines.push("T*");
+    }
+  });
+
+  contentLines.push("ET");
+  const content = contentLines.join("\n");
+
+  const objects = [
+    "1 0 obj\n<< /Type /Catalog /Pages 2 0 R >>\nendobj\n",
+    "2 0 obj\n<< /Type /Pages /Kids [3 0 R] /Count 1 >>\nendobj\n",
+    "3 0 obj\n<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Contents 4 0 R /Resources << /Font << /F1 5 0 R >> >> >>\nendobj\n",
+    `4 0 obj\n<< /Length ${content.length} >>\nstream\n${content}\nendstream\nendobj\n`,
+    "5 0 obj\n<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>\nendobj\n"
+  ];
+
+  let pdf = "%PDF-1.4\n";
+  const offsets = [0];
+  let currentOffset = pdf.length;
+
+  objects.forEach((obj) => {
+    offsets.push(currentOffset);
+    pdf += obj;
+    currentOffset = pdf.length;
+  });
+
+  const xrefOffset = currentOffset;
+  pdf += `xref\n0 ${objects.length + 1}\n`;
+  pdf += "0000000000 65535 f \n";
+  offsets.slice(1).forEach((offset) => {
+    pdf += `${String(offset).padStart(10, "0")} 00000 n \n`;
+  });
+
+  pdf += `trailer\n<< /Size ${objects.length + 1} /Root 1 0 R >>\nstartxref\n${xrefOffset}\n%%EOF\n`;
+
+  return pdf;
+}
+
+async function getStudentContext(req) {
+  const student = await loadStudentProfile(req.session.user.email);
+  if (!student) return null;
+  const classInfo = await loadClassInfo(student.class_id);
+  return { student, classInfo };
+}
+
+router.get("/", async (req, res, next) => {
+  try {
+    const context = await getStudentContext(req);
+    if (!context) {
+      return res.status(404).render("error", {
+        message: "Student nicht gefunden.",
+        status: 404,
+        backUrl: "/",
+        csrfToken: req.csrfToken()
+      });
+    }
+
+    const { student, classInfo } = context;
+    const gradeRows = await loadStudentGrades(student.id);
+    const grades = gradeRows.map((row) => mapGradeRow(row, classInfo));
+    const subjects = Array.from(new Set(grades.map((grade) => grade.subject))).filter(Boolean);
+    const averages = computeAverages(grades);
+    const classRows = await loadClassGradeRows(student.class_id);
+    const classAverages = computeClassAverages(classRows);
+    const notifications = await loadNotifications(student.id);
+    const csrfToken = req.csrfToken();
+
+    const studentProfile = {
+      name: student.name,
+      class: student.class_name || classInfo?.name || "Unbekannt",
+      subject: student.class_subject || classInfo?.subject || ""
+    };
+
+    res.render("student-dashboard", {
+      email: req.session.user.email,
+      studentProfile,
+      subjects,
+      tasks: [],
+      returns: [],
+      materials: [],
+      messages: [],
+      initialData: {
+        grades,
+        averages,
+        classAverages,
+        notifications,
+        trend: { direction: "steady", change: 0 },
+        csrfToken
+      },
+      csrfToken
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
+router.get("/profile", async (req, res, next) => {
+  try {
+    const context = await getStudentContext(req);
+    if (!context) {
+      return res.status(404).json({ error: "Student nicht gefunden." });
+    }
+
+    const { student, classInfo } = context;
+    res.json({
+      name: student.name,
+      class: student.class_name || classInfo?.name || "",
+      classId: student.class_id,
+      subject: student.class_subject || classInfo?.subject || "",
+      schoolYear: student.school_year || null
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
+router.get("/grades", async (req, res, next) => {
+  try {
+    const context = await getStudentContext(req);
+    if (!context) {
+      return res.status(404).json({ error: "Student nicht gefunden." });
+    }
+
+    const { student, classInfo } = context;
+    const gradeRows = await loadStudentGrades(student.id);
+    let grades = gradeRows.map((row) => mapGradeRow(row, classInfo));
+
+    const subject = String(req.query.subject || "").trim();
+    const startDate = req.query.startDate ? new Date(req.query.startDate) : null;
+    const endDate = req.query.endDate ? new Date(req.query.endDate) : null;
+
+    if (endDate && !Number.isNaN(endDate.getTime())) {
+      endDate.setHours(23, 59, 59, 999);
+    }
+
+    if (subject) {
+      grades = grades.filter((grade) => grade.subject === subject);
+    }
+    if (startDate && !Number.isNaN(startDate.getTime())) {
+      grades = grades.filter((grade) => {
+        if (!grade.graded_at) return false;
+        return new Date(grade.graded_at) >= startDate;
+      });
+    }
+    if (endDate && !Number.isNaN(endDate.getTime())) {
+      grades = grades.filter((grade) => {
+        if (!grade.graded_at) return false;
+        return new Date(grade.graded_at) <= endDate;
+      });
+    }
+
+    const sort = String(req.query.sort || "date");
+    if (sort === "value") {
+      grades.sort((a, b) => a.value - b.value);
+    } else {
+      grades.sort((a, b) => new Date(b.graded_at) - new Date(a.graded_at));
+    }
+
+    res.json({ grades });
+  } catch (err) {
+    next(err);
+  }
+});
+
+router.get("/class-averages", async (req, res, next) => {
+  try {
+    const context = await getStudentContext(req);
+    if (!context) {
+      return res.status(404).json({ error: "Student nicht gefunden." });
+    }
+
+    const classRows = await loadClassGradeRows(context.student.class_id);
+    res.json({ subjects: computeClassAverages(classRows) });
+  } catch (err) {
+    next(err);
+  }
+});
+
+router.get("/notifications", async (req, res, next) => {
+  try {
+    const context = await getStudentContext(req);
+    if (!context) {
+      return res.status(404).json({ error: "Student nicht gefunden." });
+    }
+
+    const notifications = await loadNotifications(context.student.id);
+    res.json({ notifications });
+  } catch (err) {
+    next(err);
+  }
+});
+
+router.post("/notifications/:id/read", async (req, res, next) => {
+  try {
+    const context = await getStudentContext(req);
+    if (!context) {
+      return res.status(404).json({ error: "Student nicht gefunden." });
+    }
+
+    const id = Number(req.params.id);
+    if (!id) {
+      return res.status(400).json({ error: "Ungültige ID." });
+    }
+
+    await runAsync(
+      "UPDATE grade_notifications SET read_at = current_timestamp WHERE id = ? AND student_id = ?",
+      [id, context.student.id]
+    );
+    res.json({ ok: true });
+  } catch (err) {
+    next(err);
+  }
+});
+
+router.get("/grades.csv", async (req, res, next) => {
+  try {
+    const context = await getStudentContext(req);
+    if (!context) {
+      return res.status(404).send("Student nicht gefunden.");
+    }
+
+    const { student, classInfo } = context;
+    const gradeRows = await loadStudentGrades(student.id);
+    const grades = gradeRows.map((row) => mapGradeRow(row, classInfo));
+
+    const header = ["Fach", "Datum", "Note", "Gewichtung", "Lehrkraft", "Kommentar"];
+    const lines = [header.map(escapeCsv).join(",")];
+
+    grades.forEach((grade) => {
+      const dateLabel = grade.graded_at ? new Date(grade.graded_at).toLocaleDateString("de-DE") : "";
+      const row = [
+        grade.subject,
+        dateLabel,
+        Number(grade.value).toFixed(2),
+        grade.weight,
+        grade.teacher || "",
+        grade.comment
+      ];
+      lines.push(row.map(escapeCsv).join(","));
+    });
+
+    const csv = lines.join("\n");
+    res.setHeader("Content-Type", "text/csv; charset=utf-8");
+    res.setHeader("Content-Disposition", "attachment; filename=grades.csv");
+    res.send(csv);
+  } catch (err) {
+    next(err);
+  }
+});
+
+router.get("/grades.pdf", async (req, res, next) => {
+  try {
+    const context = await getStudentContext(req);
+    if (!context) {
+      return res.status(404).send("Student nicht gefunden.");
+    }
+
+    const { student, classInfo } = context;
+    const gradeRows = await loadStudentGrades(student.id);
+    const grades = gradeRows.map((row) => mapGradeRow(row, classInfo));
+
+    const lines = [
+      "Notenuebersicht",
+      `Schueler: ${student.name}`,
+      `Klasse: ${student.class_name || classInfo?.name || ""}`,
+      `Fach: ${student.class_subject || classInfo?.subject || ""}`,
+      "",
+      "Fach | Datum | Note | Gewicht | Kommentar"
+    ];
+
+    grades.forEach((grade) => {
+      const dateLabel = grade.graded_at ? new Date(grade.graded_at).toLocaleDateString("de-DE") : "";
+      const row = [
+        grade.subject,
+        dateLabel,
+        Number(grade.value).toFixed(2),
+        String(grade.weight || ""),
+        grade.comment || ""
+      ].join(" | ");
+      lines.push(row);
+    });
+
+    const pdf = buildPdf(lines);
+    res.setHeader("Content-Type", "application/pdf");
+    res.setHeader("Content-Disposition", "attachment; filename=grades.pdf");
+    res.send(Buffer.from(pdf, "utf8"));
+  } catch (err) {
+    next(err);
+  }
+});
+
+module.exports = router;

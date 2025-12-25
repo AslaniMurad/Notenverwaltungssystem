@@ -23,6 +23,7 @@
             <div class="nav-section-title">Navigation</div>
             <a href="/teacher/classes">Meine Klassen</a>
             <a href="/teacher/create-class">Klasse erstellen</a>
+            <div class="nav-section-title">Klasse: <%= classData.name %> / <%= classData.subject %></div>
             <a href="/teacher/students/<%= classData.id %>">Schüler</a>
             <a href="/teacher/grades/<%= classData.id %>">Noten</a>
             <a class="is-active" href="/teacher/grade-templates/<%= classData.id %>">Prüfungen</a>
@@ -100,4 +101,4 @@
     </div>
 <% } };
 %>
-<%- include('layout', page) %>
+<%- include('../layout', page) %>
