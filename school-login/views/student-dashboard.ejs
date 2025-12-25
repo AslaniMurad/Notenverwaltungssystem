@@ -75,24 +75,73 @@
         </div>
 
         <main class="student-main">
-          <section id="overview" class="tab-content active">
+                    <section id="overview" class="tab-content active">
             <div class="card">
-              <h3>Übersicht</h3>
-              <p class="empty-state">Noch keine Übersichtsdaten vorhanden.</p>
+              <h3>&Uuml;bersicht</h3>
+              <div class="info-grid">
+                <div class="stat-tile">
+                  <h4>Durchschnitt</h4>
+                  <strong id="overview-average">-</strong>
+                </div>
+                <div class="stat-tile">
+                  <h4>Offene Aufgaben</h4>
+                  <strong id="overview-open-tasks">-</strong>
+                </div>
+                <div class="stat-tile">
+                  <h4>R&uuml;ckgaben</h4>
+                  <strong id="overview-return-count">-</strong>
+                </div>
+              </div>
+            </div>
+
+            <div class="card">
+              <h3>N&auml;chste Aufgaben</h3>
+              <div id="overview-upcoming" class="overview-list"></div>
+            </div>
+
+            <div class="card">
+              <h3>Letzte R&uuml;ckgaben</h3>
+              <div id="overview-recent-returns" class="overview-list"></div>
             </div>
           </section>
 
-          <section id="tasks" class="tab-content">
+                    <section id="tasks" class="tab-content">
             <div class="card">
               <h3>Aufgaben</h3>
-              <p class="empty-state">Derzeit keine Aufgaben vorhanden.</p>
+              <form id="task-filter" class="filter-grid" aria-label="Aufgaben filtern">
+                <label>Fach
+                  <select name="subject" id="task-filter-subject">
+                    <option value="">Alle</option>
+                    <% subjects.forEach(function(sub){ %>
+                      <option value="<%= sub %>"><%= sub %></option>
+                    <% }) %>
+                  </select>
+                </label>
+                <label>Suche
+                  <input type="search" name="query" id="task-filter-query" placeholder="Titel oder Beschreibung">
+                </label>
+              </form>
+              <div id="task-list"></div>
             </div>
           </section>
 
-          <section id="returns" class="tab-content">
+                    <section id="returns" class="tab-content">
             <div class="card">
-              <h3>Rückgaben</h3>
-              <p class="empty-state">Derzeit keine Rückgaben vorhanden.</p>
+              <h3>R&uuml;ckgaben</h3>
+              <form id="return-filter" class="filter-grid" aria-label="Rueckgaben filtern">
+                <label>Fach
+                  <select name="subject" id="return-filter-subject">
+                    <option value="">Alle</option>
+                    <% subjects.forEach(function(sub){ %>
+                      <option value="<%= sub %>"><%= sub %></option>
+                    <% }) %>
+                  </select>
+                </label>
+                <label>Suche
+                  <input type="search" name="query" id="return-filter-query" placeholder="Titel oder Beschreibung">
+                </label>
+              </form>
+              <div id="return-list"></div>
             </div>
           </section>
 
@@ -178,3 +227,4 @@
 <% } };
 %>
 <%- include('layout', page) %>
+
