@@ -665,6 +665,13 @@ async function initializeDatabase() {
     )
   `);
 
+  await pool.query(
+    "ALTER TABLE grade_templates ADD COLUMN IF NOT EXISTS description TEXT"
+  );
+  await pool.query(
+    "ALTER TABLE grade_templates ADD COLUMN IF NOT EXISTS date TIMESTAMPTZ"
+  );
+
   await pool.query(`
     CREATE TABLE IF NOT EXISTS grades (
       id SERIAL PRIMARY KEY,
