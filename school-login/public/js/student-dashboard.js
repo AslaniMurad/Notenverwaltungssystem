@@ -16,12 +16,31 @@
     return { ...grade, value: Number(grade.value), weight: Number(grade.weight || 1) };
   }
 
+  function normalizeTask(task) {
+    return {
+      ...task,
+      weight: Number(task.weight || 0),
+      grade: task.grade == null ? null : Number(task.grade),
+      graded: Boolean(task.graded)
+    };
+  }
+
+  function normalizeReturn(entry) {
+    return {
+      ...entry,
+      weight: Number(entry.weight || 0),
+      grade: Number(entry.grade)
+    };
+  }
+
   const state = {
     grades: (initialData.grades || []).map(normalizeGrade),
     averages: initialData.averages || { subjects: [], overall: null },
     classAverages: initialData.classAverages || [],
     notifications: initialData.notifications || [],
-    trend: initialData.trend || { direction: "steady", change: 0 }
+    trend: initialData.trend || { direction: "steady", change: 0 },
+    tasks: (initialData.tasks || []).map(normalizeTask),
+    returns: (initialData.returns || []).map(normalizeReturn)
   };
 
   document.querySelectorAll(".tab").forEach((tab) => {
@@ -67,6 +86,45 @@
     if (value <= 1.5) return "success";
     if (value <= 2.5) return "warning";
     return "danger";
+  }
+
+  function formatDate(value, withTime = false) {
+    if (!value) return "-";
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) return "-";
+    return withTime ? date.toLocaleString() : date.toLocaleDateString();
+  }
+
+  function dateSortValue(value, fallback) {
+    if (!value) return fallback;
+    const time = new Date(value).getTime();
+    return Number.isNaN(time) ? fallback : time;
+  }
+
+  function normalizeText(value) {
+    return String(value || "").toLowerCase();
+  }
+
+  function matchesSubject(item, subject) {
+    if (!subject) return true;
+    return String(item.subject || "") === subject;
+  }
+
+  function matchesQuery(item, query, fields) {
+    if (!query) return true;
+    const needle = normalizeText(query);
+    return fields.some((field) => normalizeText(item[field]).includes(needle));
+  }
+
+  function getTaskStatus(task) {
+    if (task.graded) {
+      return { label: "Benotet", className: "graded" };
+    }
+    const due = task.due_at ? new Date(task.due_at) : null;
+    if (due && !Number.isNaN(due.getTime()) && due < new Date()) {
+      return { label: "Ueberfaellig", className: "overdue" };
+    }
+    return { label: "Offen", className: "open" };
   }
 
   function computeAveragesClient(grades) {
@@ -159,6 +217,83 @@
     }
   }
 
+  function renderOverview() {
+    const averageEl = document.getElementById("overview-average");
+    if (averageEl) {
+      averageEl.textContent = state.averages.overall ?? "-";
+    }
+
+    const openTasksEl = document.getElementById("overview-open-tasks");
+    if (openTasksEl) {
+      openTasksEl.textContent = state.tasks.filter((task) => !task.graded).length;
+    }
+
+    const returnsEl = document.getElementById("overview-return-count");
+    if (returnsEl) {
+      returnsEl.textContent = state.returns.length;
+    }
+
+    const upcomingEl = document.getElementById("overview-upcoming");
+    if (upcomingEl) {
+      const upcoming = state.tasks
+        .filter((task) => !task.graded && task.due_at)
+        .sort((a, b) => {
+          const aTime = dateSortValue(a.due_at, Number.POSITIVE_INFINITY);
+          const bTime = dateSortValue(b.due_at, Number.POSITIVE_INFINITY);
+          return aTime - bTime;
+        })
+        .slice(0, 3);
+
+      if (!upcoming.length) {
+        upcomingEl.innerHTML = '<p class="empty-state">Keine offenen Aufgaben mit Datum.</p>';
+      } else {
+        upcomingEl.innerHTML = upcoming
+          .map(
+            (task) => `
+              <div class="overview-row">
+                <div>
+                  <strong>${task.title}</strong>
+                  ${task.category ? `<span class="pill">${task.category}</span>` : ""}
+                </div>
+                <small>${formatDate(task.due_at)}</small>
+              </div>
+            `
+          )
+          .join("");
+      }
+    }
+
+    const recentEl = document.getElementById("overview-recent-returns");
+    if (recentEl) {
+      const recent = [...state.returns]
+        .sort((a, b) => {
+          const aTime = dateSortValue(a.graded_at, 0);
+          const bTime = dateSortValue(b.graded_at, 0);
+          return bTime - aTime;
+        })
+        .slice(0, 3);
+
+      if (!recent.length) {
+        recentEl.innerHTML = '<p class="empty-state">Noch keine Rueckgaben vorhanden.</p>';
+      } else {
+        recentEl.innerHTML = recent
+          .map((entry) => {
+            const gradeText = Number.isFinite(entry.grade) ? entry.grade.toFixed(2) : "-";
+            return `
+              <div class="overview-row">
+                <div>
+                  <strong>${entry.title}</strong>
+                  ${entry.category ? `<span class="pill">${entry.category}</span>` : ""}
+                </div>
+                <span class="grade-pill ${gradeColor(entry.grade)}">Note ${gradeText}</span>
+              </div>
+            `;
+          })
+          .join("");
+      }
+    }
+  }
+
   function renderClassAverage() {
     const container = document.getElementById("class-average");
     if (!container) return;
@@ -221,6 +356,113 @@
     });
   }
 
+  function renderTasks() {
+    const container = document.getElementById("task-list");
+    if (!container) return;
+    if (!state.tasks.length) {
+      container.innerHTML = '<p class="empty-state">Keine Aufgaben vorhanden.</p>';
+      return;
+    }
+
+    const subject = document.getElementById("task-filter-subject")?.value || "";
+    const query = document.getElementById("task-filter-query")?.value || "";
+    const filtered = state.tasks.filter(
+      (task) =>
+        matchesSubject(task, subject) && matchesQuery(task, query, ["title", "description"])
+    );
+    if (!filtered.length) {
+      container.innerHTML = '<p class="empty-state">Keine Aufgaben gefunden.</p>';
+      return;
+    }
+
+    const ordered = [...filtered].sort((a, b) => {
+      const aTime = dateSortValue(a.due_at, Number.POSITIVE_INFINITY);
+      const bTime = dateSortValue(b.due_at, Number.POSITIVE_INFINITY);
+      if (aTime !== bTime) return aTime - bTime;
+      return String(a.title || "").localeCompare(String(b.title || ""));
+    });
+
+    container.innerHTML = ordered
+      .map((task) => {
+        const status = getTaskStatus(task);
+        const dueText = formatDate(task.due_at);
+        const weightText = Number.isFinite(task.weight) && task.weight ? `${task.weight}%` : "-";
+        const gradeText = Number.isFinite(task.grade) ? task.grade.toFixed(2) : "-";
+        return `
+          <div class="task-row">
+            <div>
+              <div class="task-title">
+                <strong>${task.title}</strong>
+                ${task.category ? `<span class="pill">${task.category}</span>` : ""}
+              </div>
+              <div class="task-meta">
+                <span>Datum: ${dueText}</span>
+                <span>Gewichtung: ${weightText}</span>
+              </div>
+              ${task.description ? `<div class="nav-note">${task.description}</div>` : ""}
+            </div>
+            <div class="task-status">
+              <span class="status-pill ${status.className}">${status.label}</span>
+              ${task.graded ? `<small>Note ${gradeText}</small>` : ""}
+            </div>
+          </div>
+        `;
+      })
+      .join("");
+  }
+
+  function renderReturns() {
+    const container = document.getElementById("return-list");
+    if (!container) return;
+    if (!state.returns.length) {
+      container.innerHTML = '<p class="empty-state">Keine Rueckgaben vorhanden.</p>';
+      return;
+    }
+
+    const subject = document.getElementById("return-filter-subject")?.value || "";
+    const query = document.getElementById("return-filter-query")?.value || "";
+    const filtered = state.returns.filter(
+      (entry) => matchesSubject(entry, subject) && matchesQuery(entry, query, ["title", "note"])
+    );
+    if (!filtered.length) {
+      container.innerHTML = '<p class="empty-state">Keine Rueckgaben gefunden.</p>';
+      return;
+    }
+
+    const ordered = [...filtered].sort((a, b) => {
+      const aTime = dateSortValue(a.graded_at, 0);
+      const bTime = dateSortValue(b.graded_at, 0);
+      return bTime - aTime;
+    });
+
+    container.innerHTML = ordered
+      .map((entry) => {
+        const gradeText = Number.isFinite(entry.grade) ? entry.grade.toFixed(2) : "-";
+        const returnText = formatDate(entry.graded_at, true);
+        const weightText =
+          Number.isFinite(entry.weight) && entry.weight ? `${entry.weight}%` : "-";
+        return `
+          <div class="return-row">
+            <div>
+              <div class="task-title">
+                <strong>${entry.title}</strong>
+                ${entry.category ? `<span class="pill">${entry.category}</span>` : ""}
+              </div>
+              <div class="task-meta">
+                <span>Rueckgabe: ${returnText}</span>
+                <span>Gewichtung: ${weightText}</span>
+              </div>
+              ${entry.note ? `<div class="nav-note">${entry.note}</div>` : ""}
+            </div>
+            <div class="return-grade">
+              <span class="grade-pill ${gradeColor(entry.grade)}">Note ${gradeText}</span>
+            </div>
+          </div>
+        `;
+      })
+      .join("");
+  }
+
   async function refreshGrades(skipRequest = false) {
     const form = document.getElementById("grade-filter");
     const params = form ? new URLSearchParams(new FormData(form)).toString() : "";
@@ -236,6 +478,7 @@
     }
     renderGrades();
     renderAverages();
+    renderOverview();
   }
 
   async function loadClassComparison() {
@@ -246,6 +489,30 @@
       renderClassAverage();
     } catch (err) {
       console.error("Konnte Klassenvergleich nicht laden:", err);
+    }
+  }
+
+  async function loadTasksFromServer() {
+    try {
+      const response = await fetch("/student/tasks");
+      const data = await response.json();
+      state.tasks = (data.tasks || []).map(normalizeTask);
+      renderTasks();
+      renderOverview();
+    } catch (err) {
+      console.error("Konnte Aufgaben nicht laden:", err);
+    }
+  }
+
+  async function loadReturnsFromServer() {
+    try {
+      const response = await fetch("/student/returns");
+      const data = await response.json();
+      state.returns = (data.returns || []).map(normalizeReturn);
+      renderReturns();
+      renderOverview();
+    } catch (err) {
+      console.error("Konnte Rueckgaben nicht laden:", err);
     }
   }
 
@@ -263,13 +530,30 @@
   document
     .getElementById("grade-filter")
     ?.addEventListener("change", () => refreshGrades());
+  document
+    .getElementById("task-filter")
+    ?.addEventListener("input", () => renderTasks());
+  document
+    .getElementById("task-filter")
+    ?.addEventListener("change", () => renderTasks());
+  document
+    .getElementById("return-filter")
+    ?.addEventListener("input", () => renderReturns());
+  document
+    .getElementById("return-filter")
+    ?.addEventListener("change", () => renderReturns());
 
   renderGrades();
   renderAverages();
   renderClassAverage();
   renderNotifications();
+  renderTasks();
+  renderReturns();
+  renderOverview();
 
   refreshGrades();
   loadClassComparison();
+  loadTasksFromServer();
+  loadReturnsFromServer();
   loadNotificationsFromServer();
 })();
