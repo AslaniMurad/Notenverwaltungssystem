@@ -450,22 +450,29 @@ if (useFakeDb) {
   return;
 }
 
-const DEFAULT_PG_CONFIG = {
-  host: process.env.PGHOST || "e69730-pgsql.services.easyname.eu",
-  port: Number(process.env.PGPORT || 5432),
-  database: process.env.PGDATABASE || "u105640db8",
-  user: process.env.PGUSER || "u105640db8",
-  password: process.env.PGPASSWORD || "0.d97wrolrdPlus"
-};
-
 const useSsl = process.env.PGSSL !== "false";
 const ssl = useSsl ? { rejectUnauthorized: false } : undefined;
 const connectionString = process.env.DATABASE_URL;
+if (!connectionString) {
+  const missing = ["PGHOST", "PGPORT", "PGDATABASE", "PGUSER", "PGPASSWORD"].filter(
+    (key) => !process.env[key]
+  );
+  if (missing.length) {
+    throw new Error(
+      `Fehlende PostgreSQL-Umgebungsvariablen: ${missing.join(", ")}`
+    );
+  }
+}
+
 const pool = new Pool(
   connectionString
     ? { connectionString, ssl }
     : {
-        ...DEFAULT_PG_CONFIG,
+        host: process.env.PGHOST,
+        port: Number(process.env.PGPORT),
+        database: process.env.PGDATABASE,
+        user: process.env.PGUSER,
+        password: process.env.PGPASSWORD,
         ssl
       }
 );
