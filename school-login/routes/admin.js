@@ -468,6 +468,28 @@ router.get("/classes/:id/students", async (req, res, next) => {
   }
 });
 
+router.post("/classes/:classId/students/:studentId/delete", async (req, res, next) => {
+  const { classId, studentId } = req.params;
+  try {
+    const classData = await getAsync("SELECT id, name, subject FROM classes WHERE id = ?", [classId]);
+    if (!classData) {
+      return res.status(404).render("error", {
+        message: "Klasse nicht gefunden.",
+        status: 404,
+        backUrl: "/admin/classes",
+        csrfToken: req.csrfToken()
+      });
+    }
+
+    await runAsync("DELETE FROM grade_notifications WHERE student_id = ?", [studentId]);
+    await runAsync("DELETE FROM students WHERE id = ? AND class_id = ?", [studentId, classId]);
+    res.redirect(`/admin/classes/${classId}/students`);
+  } catch (err) {
+    console.error("DB error deleting student from class:", err);
+    next(err);
+  }
+});
+
 router.get("/classes/:id/students/add", async (req, res, next) => {
   const classId = req.params.id;
   try {

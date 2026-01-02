@@ -133,6 +133,21 @@ function createFakeDb() {
         };
         classes.push(newClass);
         lastID = newClass.id;
+      } else if (/DELETE FROM grade_notifications WHERE student_id = \?/i.test(sql)) {
+        const [studentIdParam] = params;
+        for (let i = notifications.length - 1; i >= 0; i -= 1) {
+          if (notifications[i].student_id === Number(studentIdParam)) notifications.splice(i, 1);
+        }
+      } else if (/DELETE FROM students WHERE id = \? AND class_id = \?/i.test(sql)) {
+        const [idParam, classIdParam] = params;
+        for (let i = students.length - 1; i >= 0; i -= 1) {
+          if (students[i].id === Number(idParam) && students[i].class_id === Number(classIdParam)) {
+            students.splice(i, 1);
+          }
+        }
+        for (let i = grades.length - 1; i >= 0; i -= 1) {
+          if (grades[i].student_id === Number(idParam)) grades.splice(i, 1);
+        }
       } else if (/DELETE FROM students WHERE class_id = \?/i.test(sql)) {
         const [classIdParam] = params;
         for (let i = students.length - 1; i >= 0; i -= 1) {

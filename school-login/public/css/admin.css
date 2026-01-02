@@ -232,6 +232,11 @@ body.page-admin-edit {
   padding: 12px;
   border-radius: 10px;
   background: #f8fafc;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
 }
 
 .admin-checkbox {
