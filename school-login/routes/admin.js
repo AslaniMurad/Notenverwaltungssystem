@@ -57,11 +57,39 @@ router.get("/", async (req, res, next) => {
 
 router.get("/users", async (req, res, next) => {
   try {
+    const idQuery = String(req.query.id || "").trim();
+    const emailQuery = String(req.query.email || "").trim();
+    const roleQuery = String(req.query.role || "").trim();
+
+    const filters = [];
+    const params = [];
+
+    if (idQuery) {
+      const idValue = Number.parseInt(idQuery, 10);
+      if (!Number.isNaN(idValue)) {
+        filters.push("id = ?");
+        params.push(idValue);
+      }
+    }
+
+    if (emailQuery) {
+      filters.push("LOWER(email) LIKE LOWER(?)");
+      params.push(`%${emailQuery}%`);
+    }
+
+    if (["admin", "teacher", "student"].includes(roleQuery)) {
+      filters.push("role = ?");
+      params.push(roleQuery);
+    }
+
+    const whereClause = filters.length ? `WHERE ${filters.join(" AND ")}` : "";
     const users = await allAsync(
-      "SELECT id, email, role, status, created_at, must_change_password FROM users ORDER BY id DESC"
+      `SELECT id, email, role, status, created_at, must_change_password FROM users ${whereClause} ORDER BY id DESC`,
+      params
     );
     res.render("admin/users", {
       users,
+      query: { id: idQuery, email: emailQuery, role: roleQuery },
       csrfToken: req.csrfToken(),
       currentUser: req.session.user,
       activePath: req.originalUrl
@@ -195,6 +223,54 @@ router.post("/users/bulk", async (req, res, next) => {
     bulkResult,
     error: null
   });
+});
+
+router.get("/users/:id", async (req, res, next) => {
+  const id = req.params.id;
+  try {
+    const user = await getAsync(
+      "SELECT id, email, role, status, created_at, must_change_password FROM users WHERE id = ?",
+      [id]
+    );
+    if (!user) {
+      return res.status(404).render("error", {
+        message: "Nutzer nicht gefunden.",
+        status: 404,
+        backUrl: "/admin/users",
+        csrfToken: req.csrfToken()
+      });
+    }
+
+    let classes = [];
+    if (user.role === "teacher") {
+      classes = await allAsync(
+        "SELECT id, name, subject FROM classes WHERE teacher_id = ? ORDER BY created_at DESC",
+        [user.id]
+      );
+    } else if (user.role === "student") {
+      classes = await allAsync(
+        `SELECT s.id AS student_id, s.name AS student_name, s.email AS student_email, s.school_year,
+                c.id AS class_id, c.name AS class_name, c.subject, u.email AS teacher_email
+         FROM students s
+         JOIN classes c ON c.id = s.class_id
+         LEFT JOIN users u ON u.id = c.teacher_id
+         WHERE s.email = ?
+         ORDER BY c.name`,
+        [user.email]
+      );
+    }
+
+    res.render("admin/user-details", {
+      user,
+      classes,
+      csrfToken: req.csrfToken(),
+      currentUser: req.session.user,
+      activePath: req.originalUrl
+    });
+  } catch (err) {
+    console.error("DB error fetching user detail:", err);
+    next(err);
+  }
 });
 
 router.get("/users/:id/edit", async (req, res, next) => {
@@ -433,6 +509,9 @@ router.post("/classes/:id/delete", async (req, res, next) => {
 router.get("/classes/:id/students", async (req, res, next) => {
   const classId = req.params.id;
   try {
+    const nameQuery = String(req.query.name || "").trim();
+    const emailQuery = String(req.query.email || "").trim();
+
     const classData = await getAsync(
       `SELECT c.id, c.name, c.subject, u.email AS teacher_email
        FROM classes c
@@ -450,14 +529,29 @@ router.get("/classes/:id/students", async (req, res, next) => {
       });
     }
 
+    const filters = ["class_id = ?"];
+    const params = [classId];
+
+    if (nameQuery) {
+      filters.push("LOWER(name) LIKE LOWER(?)");
+      params.push(`%${nameQuery}%`);
+    }
+
+    if (emailQuery) {
+      filters.push("LOWER(email) LIKE LOWER(?)");
+      params.push(`%${emailQuery}%`);
+    }
+
+    const whereClause = `WHERE ${filters.join(" AND ")}`;
     const students = await allAsync(
-      "SELECT id, name, email FROM students WHERE class_id = ? ORDER BY name",
-      [classId]
+      `SELECT id, name, email FROM students ${whereClause} ORDER BY name`,
+      params
     );
 
     res.render("admin/class-students", {
       classData,
       students,
+      query: { name: nameQuery, email: emailQuery },
       csrfToken: req.csrfToken(),
       currentUser: req.session.user,
       activePath: req.originalUrl

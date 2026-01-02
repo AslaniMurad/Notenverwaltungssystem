@@ -1,4 +1,5 @@
 <%
+  const search = query || {};
   const page = {
     title: `Admin — Schüler (${classData.name})`,
     headerTitle: 'Adminbereich',
@@ -22,6 +23,21 @@
             <a class="btn btn-primary" href="/admin/classes/<%= classData.id %>/students/add">+ Schüler hinzufügen</a>
             <a class="btn btn-secondary" href="/admin/classes">Zurück</a>
           </div>
+        </div>
+
+        <div class="admin-card">
+          <div class="admin-topbar">
+            <div>
+              <p class="admin-eyebrow">Suche</p>
+              <h3>Schueler filtern</h3>
+            </div>
+          </div>
+          <form class="admin-form" method="GET" action="/admin/classes/<%= classData.id %>/students">
+            <input type="text" name="name" placeholder="Name" value="<%= search.name || '' %>">
+            <input type="text" name="email" placeholder="E-Mail" value="<%= search.email || '' %>">
+            <button class="btn btn-secondary" type="submit">Suchen</button>
+            <a class="btn" href="/admin/classes/<%= classData.id %>/students">Zuruecksetzen</a>
+          </form>
         </div>
 
         <div class="admin-card">

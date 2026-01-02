@@ -247,6 +247,19 @@ function createFakeDb() {
         const [email] = params;
         const user = users.find((u) => u.email === email);
         row = user ? { id: user.id, role: user.role } : undefined;
+      } else if (/SELECT id, email, role, status, created_at, must_change_password FROM users WHERE id = \?/i.test(sql)) {
+        const [id] = params;
+        const user = users.find((u) => u.id === Number(id));
+        row = user
+          ? {
+              id: user.id,
+              email: user.email,
+              role: user.role,
+              status: user.status,
+              created_at: user.created_at,
+              must_change_password: user.must_change_password || 0
+            }
+          : undefined;
       } else if (/SELECT id, email, role, status, must_change_password FROM users WHERE id = \?/i.test(sql)) {
         const [id] = params;
         const user = users.find((u) => u.id === Number(id));
@@ -346,10 +359,39 @@ function createFakeDb() {
               teacher_id: teacher ? teacher.id : null
             };
           });
-      } else if (/SELECT id, name, email FROM students WHERE class_id = \? ORDER BY name/i.test(sql)) {
-        const [class_id] = params;
+      } else if (/FROM students s\s+JOIN classes c ON c.id = s.class_id\s+LEFT JOIN users u ON u.id = c.teacher_id\s+WHERE s.email = \?/i.test(sql)) {
+        const [email] = params;
+        rows = students
+          .filter((s) => s.email === email)
+          .map((s) => {
+            const cls = classes.find((c) => c.id === s.class_id) || {};
+            const teacher = users.find((u) => u.id === cls.teacher_id);
+            return {
+              student_id: s.id,
+              student_name: s.name,
+              student_email: s.email,
+              school_year: s.school_year,
+              class_id: cls.id,
+              class_name: cls.name,
+              subject: cls.subject,
+              teacher_email: teacher ? teacher.email : null
+            };
+          })
+          .sort((a, b) => (a.class_name || "").localeCompare(b.class_name || ""));
+      } else if (/SELECT id, name, email FROM students WHERE class_id = \?/i.test(sql) && /ORDER BY name/i.test(sql)) {
+        const hasNameFilter = /LOWER\(name\) LIKE LOWER\(\?\)/i.test(sql);
+        const hasEmailFilter = /LOWER\(email\) LIKE LOWER\(\?\)/i.test(sql);
+        let index = 0;
+        const class_id = params[index++];
+        const nameLike = hasNameFilter ? params[index++] : null;
+        const emailLike = hasEmailFilter ? params[index++] : null;
+        const nameNeedle = nameLike ? String(nameLike).replace(/%/g, "").toLowerCase() : null;
+        const emailNeedle = emailLike ? String(emailLike).replace(/%/g, "").toLowerCase() : null;
+
         rows = students
           .filter((s) => s.class_id === Number(class_id))
+          .filter((s) => (!nameNeedle ? true : s.name.toLowerCase().includes(nameNeedle)))
+          .filter((s) => (!emailNeedle ? true : s.email.toLowerCase().includes(emailNeedle)))
           .sort((a, b) => a.name.localeCompare(b.name))
           .map((s) => ({ id: s.id, name: s.name, email: s.email }));
       } else if (/FROM grades g\s+JOIN grade_templates gt\s+ON gt\.id = g\.grade_template_id\s+JOIN classes c ON c\.id = g\.class_id\s+WHERE g\.student_id = \?/i.test(sql)) {
