@@ -389,6 +389,21 @@
   color: #374151;
 }
 
+.grade-category-badge.präsentation {
+  background: #fee2e2;
+  color: #991b1b;
+}
+
+.grade-category-badge.wunschprüfung {
+  background: #e0f2fe;
+  color: #0369a1;
+}
+
+.grade-category-badge.benutzerdefiniert {
+  background: #ede9fe;
+  color: #5b21b6;
+}
+
 .weight-badge {
   display: inline-block;
   padding: 8px 16px;

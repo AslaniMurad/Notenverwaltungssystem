@@ -45,12 +45,18 @@ async function loadClassInfo(classId) {
 
 async function loadStudentGrades(studentId) {
   return allAsync(
-    `SELECT g.id, g.grade, g.note, g.created_at, gt.id as template_id, gt.name, gt.category, gt.weight, gt.date, gt.description, c.subject as class_subject
+    `SELECT g.id, g.grade, g.note, g.created_at, gt.id as template_id, gt.name, gt.category, gt.weight, gt.date, gt.description, c.subject as class_subject, 0 as is_special
      FROM grades g
      JOIN grade_templates gt ON gt.id = g.grade_template_id
      JOIN classes c ON c.id = g.class_id
-     WHERE g.student_id = ?`,
-    [studentId]
+     WHERE g.student_id = ?
+     UNION ALL
+     SELECT sa.id, sa.grade, sa.description as note, sa.created_at, NULL as template_id, sa.name, sa.type as category, sa.weight, sa.created_at as date, sa.description, c.subject as class_subject, 1 as is_special
+     FROM special_assessments sa
+     JOIN classes c ON c.id = sa.class_id
+     WHERE sa.student_id = ?
+     ORDER BY created_at DESC`,
+    [studentId, studentId]
   );
 }
 
@@ -63,8 +69,16 @@ async function loadTemplates(classId) {
 
 async function loadClassGradeRows(classId) {
   return allAsync(
-    "SELECT gt.name as subject, g.grade as value, gt.weight FROM grades g JOIN students s ON s.id = g.student_id JOIN grade_templates gt ON gt.id = g.grade_template_id WHERE s.class_id = ?",
-    [classId]
+    `SELECT gt.name as subject, g.grade as value, gt.weight
+     FROM grades g
+     JOIN students s ON s.id = g.student_id
+     JOIN grade_templates gt ON gt.id = g.grade_template_id
+     WHERE s.class_id = ?
+     UNION ALL
+     SELECT sa.name as subject, sa.grade as value, sa.weight
+     FROM special_assessments sa
+     WHERE sa.class_id = ?`,
+    [classId, classId]
   );
 }
 
@@ -78,13 +92,21 @@ async function loadNotifications(studentId) {
 function mapGradeRow(row, classInfo) {
   const subject = row.class_subject || classInfo?.subject || row.name || "Fach";
   const gradedAt = row.date || row.created_at;
+  const isSpecial = Boolean(row.is_special);
+  const baseComment = row.note || row.name || "";
+  let comment = baseComment;
+  if (isSpecial) {
+    const displayName = row.name || row.category || "Sonderleistung";
+    const description = row.description || row.note || "";
+    comment = description && description !== displayName ? `${displayName} – ${description}` : displayName;
+  }
   return {
     id: row.id,
     value: Number(row.grade),
     weight: Number(row.weight || 1),
     subject,
     teacher: classInfo?.teacher_email || null,
-    comment: row.note || row.name || "",
+    comment,
     graded_at: gradedAt
   };
 }

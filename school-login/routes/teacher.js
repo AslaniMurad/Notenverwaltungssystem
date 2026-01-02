@@ -29,6 +29,8 @@ const getAsync = (sql, params = []) =>
 
 router.use(requireAuth, requireRole("teacher"));
 
+const SPECIAL_ASSESSMENT_TYPES = ["Präsentation", "Wunschprüfung", "Benutzerdefiniert"];
+
 function renderError(res, req, message, status, backUrl) {
   return res.status(status).render("error", {
     message,
@@ -58,12 +60,29 @@ async function loadTemplates(classId) {
 
 async function loadStudentGrades(studentId) {
   return allAsync(
-    `SELECT g.id, g.grade, g.note, g.created_at, g.grade_template_id as template_id, gt.name, gt.category, gt.weight, gt.date, c.subject as class_subject
+    `SELECT g.id, g.grade, g.note, g.created_at, g.grade_template_id as template_id, gt.name, gt.category, gt.weight, gt.date, gt.description, c.subject as class_subject, 0 as is_special
      FROM grades g
      JOIN grade_templates gt ON gt.id = g.grade_template_id
      JOIN classes c ON c.id = g.class_id
-     WHERE g.student_id = ?`,
-    [studentId]
+     WHERE g.student_id = ?
+     UNION ALL
+     SELECT sa.id, sa.grade, sa.description as note, sa.created_at, NULL as template_id, sa.name, sa.type as category, sa.weight, sa.created_at as date, sa.description, c.subject as class_subject, 1 as is_special
+     FROM special_assessments sa
+     JOIN classes c ON c.id = sa.class_id
+     WHERE sa.student_id = ?
+     ORDER BY created_at DESC`,
+    [studentId, studentId]
+  );
+}
+
+async function loadSpecialAssessments(classId) {
+  return allAsync(
+    `SELECT sa.id, sa.student_id, s.name AS student_name, sa.type, sa.name, sa.description, sa.weight, sa.grade, sa.created_at
+     FROM special_assessments sa
+     JOIN students s ON s.id = sa.student_id
+     WHERE sa.class_id = ?
+     ORDER BY sa.created_at DESC`,
+    [classId]
   );
 }
 
@@ -249,6 +268,8 @@ router.get("/grades/:classId", async (req, res, next) => {
     }
 
     const students = await loadStudents(classId);
+    const templates = await loadTemplates(classId);
+    const possibleCount = templates.length;
     const studentsWithGrades = await Promise.all(
       students.map(async (student) => {
         const grades = await loadStudentGrades(student.id);
@@ -265,6 +286,7 @@ router.get("/grades/:classId", async (req, res, next) => {
       email: req.session.user.email,
       classData,
       students: studentsWithGrades,
+      possibleCount,
       csrfToken: req.csrfToken()
     });
   } catch (err) {
@@ -295,7 +317,11 @@ router.get("/student-grades/:classId/:studentId", async (req, res, next) => {
       category: row.category,
       weight: row.weight,
       template_name: row.name,
-      template_date: row.date
+      template_date: row.date,
+      is_special: Boolean(row.is_special),
+      delete_action: row.is_special
+        ? `/teacher/delete-special-assessment/${classId}/${row.id}`
+        : `/teacher/delete-grade/${classId}/${row.id}`
     }));
     const average = computeWeightedAverage(gradeRows);
 
@@ -548,6 +574,194 @@ router.post("/delete-template/:classId/:templateId", async (req, res, next) => {
   }
 });
 
+router.get("/special-assessments/:classId", async (req, res, next) => {
+  try {
+    const classId = req.params.classId;
+    const classData = await loadClassForTeacher(classId, req.session.user.id);
+    if (!classData) {
+      return renderError(res, req, "Klasse nicht gefunden.", 404, "/teacher/classes");
+    }
+
+    const students = await loadStudents(classId);
+    const assessments = await loadSpecialAssessments(classId);
+    const selectedStudent = req.query.student_id ? String(req.query.student_id) : "";
+
+    res.render("teacher/teacher-special-assessments", {
+      email: req.session.user.email,
+      classData,
+      students,
+      assessments,
+      specialTypes: SPECIAL_ASSESSMENT_TYPES,
+      formData: {
+        student_id: selectedStudent,
+        type: "",
+        name: "",
+        description: "",
+        weight: "",
+        grade: ""
+      },
+      error: null,
+      csrfToken: req.csrfToken()
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
+router.post("/special-assessments/:classId", async (req, res, next) => {
+  try {
+    const classId = req.params.classId;
+    const classData = await loadClassForTeacher(classId, req.session.user.id);
+    if (!classData) {
+      return renderError(res, req, "Klasse nicht gefunden.", 404, "/teacher/classes");
+    }
+
+    const students = await loadStudents(classId);
+    const { student_id, type, name, description, weight, grade } = req.body || {};
+    const selectedStudent = students.find((entry) => String(entry.id) === String(student_id));
+    const trimmedType = String(type || "").trim();
+    const trimmedName = String(name || "").trim();
+    const trimmedDescription = String(description || "").trim();
+    const weightValue = Number(weight);
+    const gradeValue = Number(grade);
+
+    const isTypeValid = SPECIAL_ASSESSMENT_TYPES.includes(trimmedType);
+    const resolvedName =
+      trimmedName || (trimmedType && trimmedType !== "Benutzerdefiniert" ? trimmedType : "");
+
+    if (!selectedStudent || !isTypeValid || !Number.isFinite(weightValue) || !Number.isFinite(gradeValue)) {
+      const assessments = await loadSpecialAssessments(classId);
+      return res.status(400).render("teacher/teacher-special-assessments", {
+        email: req.session.user.email,
+        classData,
+        students,
+        assessments,
+        specialTypes: SPECIAL_ASSESSMENT_TYPES,
+        formData: {
+          student_id: student_id || "",
+          type: trimmedType,
+          name: trimmedName,
+          description: trimmedDescription,
+          weight,
+          grade
+        },
+        error: "Bitte alle Pflichtfelder korrekt ausfüllen.",
+        csrfToken: req.csrfToken()
+      });
+    }
+
+    if (trimmedType === "Benutzerdefiniert" && !resolvedName) {
+      const assessments = await loadSpecialAssessments(classId);
+      return res.status(400).render("teacher/teacher-special-assessments", {
+        email: req.session.user.email,
+        classData,
+        students,
+        assessments,
+        specialTypes: SPECIAL_ASSESSMENT_TYPES,
+        formData: {
+          student_id: student_id || "",
+          type: trimmedType,
+          name: trimmedName,
+          description: trimmedDescription,
+          weight,
+          grade
+        },
+        error: "Bitte eine Bezeichnung für die benutzerdefinierte Sonderleistung angeben.",
+        csrfToken: req.csrfToken()
+      });
+    }
+
+    if (weightValue < 0 || weightValue > 100) {
+      const assessments = await loadSpecialAssessments(classId);
+      return res.status(400).render("teacher/teacher-special-assessments", {
+        email: req.session.user.email,
+        classData,
+        students,
+        assessments,
+        specialTypes: SPECIAL_ASSESSMENT_TYPES,
+        formData: {
+          student_id: student_id || "",
+          type: trimmedType,
+          name: trimmedName,
+          description: trimmedDescription,
+          weight,
+          grade
+        },
+        error: "Gewichtung muss zwischen 0 und 100 liegen.",
+        csrfToken: req.csrfToken()
+      });
+    }
+
+    if (gradeValue < 1 || gradeValue > 5) {
+      const assessments = await loadSpecialAssessments(classId);
+      return res.status(400).render("teacher/teacher-special-assessments", {
+        email: req.session.user.email,
+        classData,
+        students,
+        assessments,
+        specialTypes: SPECIAL_ASSESSMENT_TYPES,
+        formData: {
+          student_id: student_id || "",
+          type: trimmedType,
+          name: trimmedName,
+          description: trimmedDescription,
+          weight,
+          grade
+        },
+        error: "Note muss zwischen 1 und 5 liegen.",
+        csrfToken: req.csrfToken()
+      });
+    }
+
+    await runAsync(
+      "INSERT INTO special_assessments (student_id, class_id, type, name, description, weight, grade) VALUES (?,?,?,?,?,?,?)",
+      [
+        selectedStudent.id,
+        classId,
+        trimmedType,
+        resolvedName,
+        trimmedDescription || null,
+        weightValue,
+        gradeValue
+      ]
+    );
+    await runAsync("INSERT INTO grade_notifications (student_id, message, type) VALUES (?,?,?)", [
+      selectedStudent.id,
+      "Neue Sonderleistung eingetragen.",
+      "grade"
+    ]);
+
+    res.redirect(`/teacher/special-assessments/${classId}`);
+  } catch (err) {
+    next(err);
+  }
+});
+
+router.post("/delete-special-assessment/:classId/:assessmentId", async (req, res, next) => {
+  try {
+    const classId = req.params.classId;
+    const assessmentId = req.params.assessmentId;
+    const classData = await loadClassForTeacher(classId, req.session.user.id);
+    if (!classData) {
+      return renderError(res, req, "Klasse nicht gefunden.", 404, "/teacher/classes");
+    }
+
+    const assessmentRow = await getAsync(
+      "SELECT id FROM special_assessments WHERE id = ? AND class_id = ?",
+      [assessmentId, classId]
+    );
+    if (!assessmentRow) {
+      return renderError(res, req, "Sonderleistung nicht gefunden.", 404, `/teacher/special-assessments/${classId}`);
+    }
+
+    await runAsync("DELETE FROM special_assessments WHERE id = ? AND class_id = ?", [assessmentId, classId]);
+    const backUrl = req.get("referer") || `/teacher/special-assessments/${classId}`;
+    res.redirect(backUrl);
+  } catch (err) {
+    next(err);
+  }
+});
+
 router.get("/class-statistics/:classId", async (req, res, next) => {
   try {
     const classId = req.params.classId;
@@ -572,6 +786,7 @@ router.get("/class-statistics/:classId", async (req, res, next) => {
       gradesByStudent.forEach((grades, studentId) => {
         const student = studentMap.get(studentId);
         grades.forEach((grade) => {
+          if (grade.is_special) return;
           const matchesById =
             grade.template_id && Number(grade.template_id) === Number(template.id);
           const matchesByName = !grade.template_id && grade.name === template.name;

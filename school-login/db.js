@@ -51,12 +51,14 @@ function createFakeDb() {
   const students = [];
   const gradeTemplates = [];
   const grades = [];
+  const specialAssessments = [];
   const notifications = [];
   let userId = 1;
   let classId = 1;
   let studentId = 1;
   let gradeTemplateId = 1;
   let gradeId = 1;
+  let specialAssessmentId = 1;
   let notificationId = 1;
 
   const db = {
@@ -148,15 +150,24 @@ function createFakeDb() {
         for (let i = grades.length - 1; i >= 0; i -= 1) {
           if (grades[i].student_id === Number(idParam)) grades.splice(i, 1);
         }
+        for (let i = specialAssessments.length - 1; i >= 0; i -= 1) {
+          if (specialAssessments[i].student_id === Number(idParam)) specialAssessments.splice(i, 1);
+        }
       } else if (/DELETE FROM students WHERE class_id = \?/i.test(sql)) {
         const [classIdParam] = params;
         for (let i = students.length - 1; i >= 0; i -= 1) {
           if (students[i].class_id === Number(classIdParam)) students.splice(i, 1);
         }
+        for (let i = specialAssessments.length - 1; i >= 0; i -= 1) {
+          if (specialAssessments[i].class_id === Number(classIdParam)) specialAssessments.splice(i, 1);
+        }
       } else if (/DELETE FROM classes WHERE id = \?/i.test(sql)) {
         const [id] = params;
         for (let i = classes.length - 1; i >= 0; i -= 1) {
           if (classes[i].id === Number(id)) classes.splice(i, 1);
+        }
+        for (let i = specialAssessments.length - 1; i >= 0; i -= 1) {
+          if (specialAssessments[i].class_id === Number(id)) specialAssessments.splice(i, 1);
         }
       } else if (/INSERT INTO students/i.test(sql)) {
         const [name, email, class_id] = params;
@@ -201,6 +212,31 @@ function createFakeDb() {
         };
         grades.push(newGrade);
         lastID = newGrade.id;
+      } else if (/INSERT INTO special_assessments/i.test(sql)) {
+        const [student_id, class_id, type, name, description, weight, grade] = params;
+        const assessment = {
+          id: specialAssessmentId++,
+          student_id: Number(student_id),
+          class_id: Number(class_id),
+          type,
+          name,
+          description: description || null,
+          weight: Number(weight),
+          grade: Number(grade),
+          created_at: new Date().toISOString()
+        };
+        specialAssessments.push(assessment);
+        lastID = assessment.id;
+      } else if (/DELETE FROM special_assessments WHERE id = \? AND class_id = \?/i.test(sql)) {
+        const [idParam, classIdParam] = params;
+        for (let i = specialAssessments.length - 1; i >= 0; i -= 1) {
+          if (
+            specialAssessments[i].id === Number(idParam) &&
+            specialAssessments[i].class_id === Number(classIdParam)
+          ) {
+            specialAssessments.splice(i, 1);
+          }
+        }
       } else if (/INSERT INTO grade_notifications/i.test(sql)) {
         const [student_id, message, type, created_at] = params;
         const notification = {
@@ -305,6 +341,12 @@ function createFakeDb() {
         const [email, class_id] = params;
         const student = students.find((s) => s.email === email && s.class_id === Number(class_id));
         row = student ? { id: student.id } : undefined;
+      } else if (/SELECT id FROM special_assessments WHERE id = \? AND class_id = \?/i.test(sql)) {
+        const [assessmentId, clsId] = params;
+        const assessment = specialAssessments.find(
+          (entry) => entry.id === Number(assessmentId) && entry.class_id === Number(clsId)
+        );
+        row = assessment ? { id: assessment.id } : undefined;
       } else if (/SELECT s\.\*, c\.name as class_name, c\.subject as class_subject, c\.id as class_id FROM students s (LEFT )?JOIN classes c ON c.id = s.class_id WHERE s.email = \?/i.test(sql)) {
         const [email] = params;
         const student = students.find((s) => s.email === email);
@@ -394,9 +436,9 @@ function createFakeDb() {
           .filter((s) => (!emailNeedle ? true : s.email.toLowerCase().includes(emailNeedle)))
           .sort((a, b) => a.name.localeCompare(b.name))
           .map((s) => ({ id: s.id, name: s.name, email: s.email }));
-      } else if (/FROM grades g\s+JOIN grade_templates gt\s+ON gt\.id = g\.grade_template_id\s+JOIN classes c ON c\.id = g\.class_id\s+WHERE g\.student_id = \?/i.test(sql)) {
+      } else if (/FROM grades g[\s\S]*UNION ALL[\s\S]*special_assessments/i.test(sql) && /WHERE g\.student_id = \?/i.test(sql)) {
         const [student_id] = params;
-        rows = grades
+        const baseRows = grades
           .filter((g) => g.student_id === Number(student_id))
           .map((g) => {
             const template = gradeTemplates.find((t) => t.id === g.grade_template_id) || {};
@@ -412,18 +454,47 @@ function createFakeDb() {
               weight: template.weight,
               date: template.date,
               description: template.description,
-              class_subject: cls.subject
+              class_subject: cls.subject,
+              is_special: 0
             };
           });
-      } else if (/SELECT gt\.name as subject, g\.grade as value, gt\.weight FROM grades g JOIN students s ON s.id = g.student_id JOIN grade_templates gt ON gt.id = g.grade_template_id WHERE s.class_id = \?/i.test(sql)) {
+        const specialRows = specialAssessments
+          .filter((entry) => entry.student_id === Number(student_id))
+          .map((entry) => {
+            const cls = classes.find((c) => c.id === entry.class_id) || {};
+            return {
+              id: entry.id,
+              grade: entry.grade,
+              note: entry.description || null,
+              created_at: entry.created_at,
+              template_id: null,
+              name: entry.name,
+              category: entry.type,
+              weight: entry.weight,
+              date: entry.created_at,
+              description: entry.description,
+              class_subject: cls.subject,
+              is_special: 1
+            };
+          });
+        rows = [...baseRows, ...specialRows];
+      } else if (/FROM grades g[\s\S]*UNION ALL[\s\S]*special_assessments/i.test(sql) && /WHERE s\.class_id = \?/i.test(sql)) {
         const [class_id] = params;
         const studentIds = students.filter((s) => s.class_id === Number(class_id)).map((s) => s.id);
-        rows = grades
+        const regularRows = grades
           .filter((g) => studentIds.includes(g.student_id))
           .map((g) => {
             const template = gradeTemplates.find((t) => t.id === g.grade_template_id) || {};
             return { subject: template.name, value: g.grade, weight: template.weight };
           });
+        const specialRows = specialAssessments
+          .filter((entry) => entry.class_id === Number(class_id))
+          .map((entry) => ({
+            subject: entry.name,
+            value: entry.grade,
+            weight: entry.weight
+          }));
+        rows = [...regularRows, ...specialRows];
       } else if (/SELECT id, message, type, created_at, read_at FROM grade_notifications WHERE student_id = \? ORDER BY created_at DESC/i.test(sql)) {
         const [student_id] = params;
         rows = notifications
@@ -443,6 +514,25 @@ function createFakeDb() {
             return a.name.localeCompare(b.name);
           })
           .map((t) => ({ ...t }));
+      } else if (/FROM special_assessments sa\s+JOIN students s ON s\.id = sa\.student_id\s+WHERE sa\.class_id = \?/i.test(sql)) {
+        const [clsId] = params;
+        rows = specialAssessments
+          .filter((entry) => entry.class_id === Number(clsId))
+          .map((entry) => {
+            const student = students.find((s) => s.id === entry.student_id);
+            return {
+              id: entry.id,
+              student_id: entry.student_id,
+              student_name: student?.name || "",
+              type: entry.type,
+              name: entry.name,
+              description: entry.description,
+              weight: entry.weight,
+              grade: entry.grade,
+              created_at: entry.created_at
+            };
+          })
+          .sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
       } else if (/SELECT id FROM grade_templates WHERE id = \? AND class_id = \?/i.test(sql)) {
         const [templateId, clsId] = params;
         const template = gradeTemplates.find((t) => t.id === Number(templateId) && t.class_id === Number(clsId));
@@ -746,6 +836,20 @@ async function initializeDatabase() {
       note TEXT,
       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
       UNIQUE (student_id, grade_template_id)
+    )
+  `);
+
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS special_assessments (
+      id SERIAL PRIMARY KEY,
+      student_id INTEGER NOT NULL REFERENCES students(id) ON DELETE CASCADE,
+      class_id INTEGER NOT NULL REFERENCES classes(id) ON DELETE CASCADE,
+      type TEXT NOT NULL CHECK (type IN ('Präsentation', 'Wunschprüfung', 'Benutzerdefiniert')),
+      name TEXT NOT NULL,
+      description TEXT,
+      weight NUMERIC NOT NULL CHECK (weight >= 0 AND weight <= 100),
+      grade NUMERIC NOT NULL CHECK (grade >= 1 AND grade <= 5),
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
     )
   `);
 
