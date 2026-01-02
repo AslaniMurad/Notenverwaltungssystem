@@ -26,6 +26,7 @@
             <div class="nav-section-title">Klasse: <%= classData.name %> / <%= classData.subject %></div>
             <a href="/teacher/students/<%= classData.id %>">Schüler</a>
             <a class="is-active" href="/teacher/grades/<%= classData.id %>">Noten</a>
+            <a href="/teacher/special-assessments/<%= classData.id %>">Sonderleistungen</a>
             <a href="/teacher/grade-templates/<%= classData.id %>">Prüfungen</a>
             <a href="/teacher/class-statistics/<%= classData.id %>">Statistiken</a>
             <form class="logout-form" method="POST" action="/logout">
@@ -79,7 +80,7 @@
                     <tr>
                       <td><strong><%= student.name %></strong></td>
                       <td><%= student.email %></td>
-                      <td><span class="badge-count"><%= student.grade_count %></span></td>
+                      <td><span class="badge-count"><%= student.grade_count %>/<%= possibleCount || 0 %></span></td>
                       <td>
                         <% if (student.average_grade) { %>
                           <span class="grade-badge grade-<%= Math.round(student.average_grade) %>">
