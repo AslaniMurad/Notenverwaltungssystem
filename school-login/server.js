@@ -164,8 +164,16 @@ app.use((req, res) => {
 });
 
 app.use((err, req, res, next) => {
-  console.error("Unhandled error:", err);
   if (res.headersSent) return next(err);
+  if (err && err.code === "EBADCSRFTOKEN") {
+    return res.status(403).render("error", {
+      message:
+        "Ungültiges oder abgelaufenes Sicherheits-Token. Bitte Seite neu laden und erneut versuchen.",
+      status: 403,
+      backUrl: req.get("referer") || "/login"
+    });
+  }
+  console.error("Unhandled error:", err);
   res.status(500).render("error", {
     message: "Interner Serverfehler.",
     status: 500,
