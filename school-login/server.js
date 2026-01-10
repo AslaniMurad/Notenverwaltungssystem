@@ -3,6 +3,8 @@ const express = require("express");
 const session = require("express-session");
 const csrf = require("csurf");
 const path = require("path");
+const crypto = require("crypto");
+require("dotenv").config();
 const { db, verifyPassword, ready } = require("./db");
 const { requireAuth } = require("./middleware/auth");
 
@@ -11,6 +13,11 @@ const studentRouter = require("./routes/student");
 const teacherRouter = require("./routes/teacher");
 
 const app = express();
+const isProduction = process.env.NODE_ENV === "production";
+
+if (isProduction) {
+  app.set("trust proxy", 1);
+}
 
 app.use(express.urlencoded({ extended: true }));
 app.use(express.json());
@@ -52,13 +59,13 @@ function renderLogin(res, req, options = {}) {
 app.use(
   session({
     name: "sid",
-    secret: "change-this-session-secret", // in echt aus ENV
+    secret: process.env.SESSION_SECRET || crypto.randomBytes(32).toString("hex"),
     resave: false,
     saveUninitialized: false,
     cookie: {
       httpOnly: true,
       sameSite: "lax",
-      secure: false, // bei HTTPS auf true setzen
+      secure: isProduction,
       maxAge: 1000 * 60 * 60 // 1h
     }
   })
@@ -89,7 +96,7 @@ app.get("/login", (req, res) => {
 });
 
 // --- Login POST ---
-app.post("/login", (req, res) => {
+app.post("/login", (req, res, next) => {
   const { email, password } = req.body || {};
   if (!email || !password) {
     return renderLogin(res, req, {
@@ -128,19 +135,23 @@ app.post("/login", (req, res) => {
         });
       }
 
-      req.session.user = {
-        id: user.id,
-        email: user.email,
-        role: user.role,
-        status: user.status
-      };
+      req.session.regenerate((regenErr) => {
+        if (regenErr) return next(regenErr);
 
-      const redirectMap = {
-        admin: "/admin",
-        teacher: "/teacher/classes",
-        student: "/student"
-      };
-      res.redirect(redirectMap[user.role] || "/");
+        req.session.user = {
+          id: user.id,
+          email: user.email,
+          role: user.role,
+          status: user.status
+        };
+
+        const redirectMap = {
+          admin: "/admin",
+          teacher: "/teacher/classes",
+          student: "/student"
+        };
+        res.redirect(redirectMap[user.role] || "/");
+      });
     }
   );
 });

@@ -169,7 +169,7 @@
     </div>
 
     <script>
-      const wishGradeData = <%- JSON.stringify(grades || []) %>;
+      const wishGradeData = <%- JSON.stringify(grades || []).replace(/</g, "\\u003c") %>;
       const wishGradeInput = document.getElementById('target-grade');
       const wishGradeInfo = document.getElementById('wish-grade-info');
       const wishGradeTable = document.getElementById('wish-grade-table');
