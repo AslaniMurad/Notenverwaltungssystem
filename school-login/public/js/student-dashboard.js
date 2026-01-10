@@ -12,6 +12,15 @@
 
   const csrfToken = initialData.csrfToken;
 
+  function escapeHtml(value) {
+    return String(value ?? "")
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;")
+      .replace(/'/g, "&#39;");
+  }
+
   function normalizeGrade(grade) {
     return { ...grade, value: Number(grade.value), weight: Number(grade.weight || 1) };
   }
@@ -170,14 +179,16 @@
         dateValue && !Number.isNaN(dateValue.getTime()) ? dateValue.toLocaleDateString() : "-";
       const valueText = Number.isFinite(grade.value) ? grade.value.toFixed(2) : "-";
       const weightText = Number.isFinite(grade.weight) ? grade.weight : "-";
-      const subjectText = grade.subject || "Fach";
+      const subjectText = escapeHtml(grade.subject || "Fach");
+      const teacherText = escapeHtml(grade.teacher || "Lehrkraft unbekannt");
+      const commentText = escapeHtml(grade.comment || "");
 
       return `
         <div class="grade-row">
           <div>
             <div><strong>${subjectText}</strong> &middot; <small>${dateText}</small></div>
-            <small>${grade.teacher || "Lehrkraft unbekannt"}</small>
-            ${grade.comment ? `<div class="nav-note">${grade.comment}</div>` : ""}
+            <small>${teacherText}</small>
+            ${commentText ? `<div class="nav-note">${commentText}</div>` : ""}
           </div>
           <div class="grade-value">${valueText}</div>
           <div><span class="grade-pill ${gradeColor(grade.value)}">Gewichtung ${weightText}</span></div>
@@ -252,8 +263,8 @@
             (task) => `
               <div class="overview-row">
                 <div>
-                  <strong>${task.title}</strong>
-                  ${task.category ? `<span class="pill">${task.category}</span>` : ""}
+                  <strong>${escapeHtml(task.title)}</strong>
+                  ${task.category ? `<span class="pill">${escapeHtml(task.category)}</span>` : ""}
                 </div>
                 <small>${formatDate(task.due_at)}</small>
               </div>
@@ -282,8 +293,8 @@
             return `
               <div class="overview-row">
                 <div>
-                  <strong>${entry.title}</strong>
-                  ${entry.category ? `<span class="pill">${entry.category}</span>` : ""}
+                  <strong>${escapeHtml(entry.title)}</strong>
+                  ${entry.category ? `<span class="pill">${escapeHtml(entry.category)}</span>` : ""}
                 </div>
                 <span class="grade-pill ${gradeColor(entry.grade)}">Note ${gradeText}</span>
               </div>
@@ -309,7 +320,7 @@
         const valueText = item.average != null ? Number(item.average).toFixed(2) : "-";
         return `
           <div class="chart-bar">
-            <div style="width:120px;font-weight:600;">${item.subject}</div>
+            <div style="width:120px;font-weight:600;">${escapeHtml(item.subject)}</div>
             <div class="bar"><span style="width:${width}%;"></span></div>
             <small>${valueText}</small>
           </div>
@@ -331,7 +342,7 @@
         (note) => `
         <div class="notification ${note.read_at ? "" : "unread"}">
           <strong>${note.type === "average" ? "Durchschnitt" : "Neue Note"}</strong>
-          <p style="margin:4px 0;">${note.message}</p>
+          <p style="margin:4px 0;">${escapeHtml(note.message)}</p>
           <small>${new Date(note.created_at).toLocaleString()}</small>
           ${
             note.read_at
@@ -392,14 +403,14 @@
           <div class="task-row">
             <div>
               <div class="task-title">
-                <strong>${task.title}</strong>
-                ${task.category ? `<span class="pill">${task.category}</span>` : ""}
+                <strong>${escapeHtml(task.title)}</strong>
+                ${task.category ? `<span class="pill">${escapeHtml(task.category)}</span>` : ""}
               </div>
               <div class="task-meta">
                 <span>Datum: ${dueText}</span>
                 <span>Gewichtung: ${weightText}</span>
               </div>
-              ${task.description ? `<div class="nav-note">${task.description}</div>` : ""}
+              ${task.description ? `<div class="nav-note">${escapeHtml(task.description)}</div>` : ""}
             </div>
             <div class="task-status">
               <span class="status-pill ${status.className}">${status.label}</span>
@@ -445,14 +456,14 @@
           <div class="return-row">
             <div>
               <div class="task-title">
-                <strong>${entry.title}</strong>
-                ${entry.category ? `<span class="pill">${entry.category}</span>` : ""}
+                <strong>${escapeHtml(entry.title)}</strong>
+                ${entry.category ? `<span class="pill">${escapeHtml(entry.category)}</span>` : ""}
               </div>
               <div class="task-meta">
                 <span>Rueckgabe: ${returnText}</span>
                 <span>Gewichtung: ${weightText}</span>
               </div>
-              ${entry.note ? `<div class="nav-note">${entry.note}</div>` : ""}
+              ${entry.note ? `<div class="nav-note">${escapeHtml(entry.note)}</div>` : ""}
             </div>
             <div class="return-grade">
               <span class="grade-pill ${gradeColor(entry.grade)}">Note ${gradeText}</span>

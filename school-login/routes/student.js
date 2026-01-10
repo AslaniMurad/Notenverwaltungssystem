@@ -188,10 +188,11 @@ function computeClassAverages(rows) {
 
 function escapeCsv(value) {
   const stringValue = value == null ? "" : String(value);
-  if (/[",\n]/.test(stringValue)) {
-    return `"${stringValue.replace(/"/g, '""')}"`;
+  const guarded = /^[=+\-@\t\r]/.test(stringValue) ? `'${stringValue}` : stringValue;
+  if (/[",\n]/.test(guarded)) {
+    return `"${guarded.replace(/"/g, '""')}"`;
   }
-  return stringValue;
+  return guarded;
 }
 
 function sanitizePdfText(value) {
