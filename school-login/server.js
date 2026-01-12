@@ -4,7 +4,7 @@ const session = require("express-session");
 const csrf = require("csurf");
 const path = require("path");
 const crypto = require("crypto");
-require("dotenv").config();
+require('dotenv').config({ override: true });
 const { db, verifyPassword, ready } = require("./db");
 const { requireAuth } = require("./middleware/auth");
 
