@@ -1,5 +1,7 @@
 const express = require("express");
 const router = express.Router();
+const path = require("path");
+const fs = require("fs");
 const { db } = require("../db");
 const { requireAuth, requireRole } = require("../middleware/auth");
 
@@ -29,6 +31,14 @@ const getAsync = (sql, params = []) =>
 
 router.use(requireAuth, requireRole("student"));
 
+const GRADE_ATTACHMENT_DIR = path.join(__dirname, "..", "uploads", "grade-attachments");
+
+function sanitizeFilename(name) {
+  return String(name || "datei")
+    .replace(/[^a-zA-Z0-9._-]/g, "_")
+    .slice(0, 120);
+}
+
 async function loadStudentProfile(email) {
   return getAsync(
     "SELECT s.*, c.name as class_name, c.subject as class_subject, c.id as class_id FROM students s JOIN classes c ON c.id = s.class_id WHERE s.email = ?",
@@ -45,13 +55,13 @@ async function loadClassInfo(classId) {
 
 async function loadStudentGrades(studentId) {
   return allAsync(
-    `SELECT g.id, g.grade, g.note, g.created_at, gt.id as template_id, gt.name, gt.category, gt.weight, gt.date, gt.description, c.subject as class_subject, 0 as is_special
+    `SELECT g.id, g.grade, g.note, g.created_at, gt.id as template_id, gt.name, gt.category, gt.weight, gt.date, gt.description, c.subject as class_subject, g.attachment_path, g.attachment_original_name, g.attachment_mime, g.attachment_size, g.external_link, 0 as is_special
      FROM grades g
      JOIN grade_templates gt ON gt.id = g.grade_template_id
      JOIN classes c ON c.id = g.class_id
      WHERE g.student_id = ?
      UNION ALL
-     SELECT sa.id, sa.grade, sa.description as note, sa.created_at, NULL as template_id, sa.name, sa.type as category, sa.weight, sa.created_at as date, sa.description, c.subject as class_subject, 1 as is_special
+     SELECT sa.id, sa.grade, sa.description as note, sa.created_at, NULL as template_id, sa.name, sa.type as category, sa.weight, sa.created_at as date, sa.description, c.subject as class_subject, NULL as attachment_path, NULL as attachment_original_name, NULL as attachment_mime, NULL as attachment_size, NULL as external_link, 1 as is_special
      FROM special_assessments sa
      JOIN classes c ON c.id = sa.class_id
      WHERE sa.student_id = ?
@@ -129,6 +139,8 @@ function mapTaskRow(template, gradeRow, classInfo) {
 
 function mapReturnRow(row, classInfo) {
   const subject = row.class_subject || classInfo?.subject || row.name || "";
+  const hasFile = Boolean(row.attachment_path);
+  const hasLink = Boolean(row.external_link);
   return {
     id: row.id,
     template_id: row.template_id,
@@ -138,7 +150,12 @@ function mapReturnRow(row, classInfo) {
     grade: Number(row.grade),
     graded_at: row.created_at || row.date || null,
     note: row.note || "",
-    subject
+    subject,
+    attachment_download_url: hasFile ? `/student/returns/${row.id}/attachment` : null,
+    attachment_name: hasFile ? row.attachment_original_name || null : null,
+    attachment_mime: hasFile ? row.attachment_mime || null : null,
+    attachment_size: hasFile ? row.attachment_size || null : null,
+    external_link: hasLink ? row.external_link : null
   };
 }
 
@@ -426,6 +443,47 @@ router.get("/returns", async (req, res, next) => {
       .map((row) => mapReturnRow(row, context.classInfo))
       .sort((a, b) => new Date(b.graded_at) - new Date(a.graded_at));
     res.json({ returns });
+  } catch (err) {
+    next(err);
+  }
+});
+
+router.get("/returns/:gradeId/attachment", async (req, res, next) => {
+  try {
+    const context = await getStudentContext(req);
+    if (!context) {
+      return res.status(404).send("Student nicht gefunden.");
+    }
+
+    const gradeId = Number(req.params.gradeId);
+    if (!gradeId) {
+      return res.status(400).send("Ungültige ID.");
+    }
+
+    const row = await getAsync(
+      "SELECT attachment_path, attachment_original_name, attachment_mime FROM grades WHERE id = ? AND student_id = ?",
+      [gradeId, context.student.id]
+    );
+    if (!row || !row.attachment_path) {
+      return res.status(404).send("Datei nicht gefunden.");
+    }
+
+    const baseDir = path.resolve(GRADE_ATTACHMENT_DIR);
+    const filePath = path.resolve(path.join(GRADE_ATTACHMENT_DIR, row.attachment_path));
+    if (!filePath.startsWith(baseDir + path.sep)) {
+      return res.status(400).send("Ungültiger Dateipfad.");
+    }
+
+    const stat = await fs.promises.stat(filePath).catch(() => null);
+    if (!stat || !stat.isFile()) {
+      return res.status(404).send("Datei nicht gefunden.");
+    }
+
+    const downloadName = sanitizeFilename(row.attachment_original_name || "datei");
+    res.setHeader("Content-Type", row.attachment_mime || "application/octet-stream");
+    return res.download(filePath, downloadName, (err) => {
+      if (err) next(err);
+    });
   } catch (err) {
     next(err);
   }

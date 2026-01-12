@@ -143,6 +143,15 @@
                   <% if (grade.note) { %>
                     <p class="grade-description"><%= grade.note %></p>
                   <% } %>
+                  <% if (grade.has_attachment) { %>
+                    <div class="grade-attachment">
+                      <span class="teacher-muted">Anhang: <%= grade.attachment_name || 'Datei' %></span>
+                      <form class="inline delete-attachment-form" method="POST" action="<%= grade.attachment_delete_action %>">
+                        <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+                        <button class="btn btn-secondary btn-sm" type="submit">Anhang löschen</button>
+                      </form>
+                    </div>
+                  <% } %>
                 </div>
               <% }) %>
             <% } %>

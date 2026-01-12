@@ -38,7 +38,10 @@
     return {
       ...entry,
       weight: Number(entry.weight || 0),
-      grade: Number(entry.grade)
+      grade: Number(entry.grade),
+      attachment_download_url: entry.attachment_download_url || null,
+      attachment_name: entry.attachment_name || null,
+      external_link: entry.external_link || null
     };
   }
 
@@ -452,6 +455,16 @@
         const returnText = formatDate(entry.graded_at, true);
         const weightText =
           Number.isFinite(entry.weight) && entry.weight ? `${entry.weight}%` : "-";
+        const downloadUrl = entry.attachment_download_url
+          ? escapeHtml(entry.attachment_download_url)
+          : "";
+        const externalLink = entry.external_link ? escapeHtml(entry.external_link) : "";
+        const attachmentName = entry.attachment_name ? escapeHtml(entry.attachment_name) : "Datei";
+        const attachmentHtml = externalLink
+          ? `<div class="return-actions"><a class="btn small secondary" href="${externalLink}" target="_blank" rel="noopener noreferrer">Link öffnen</a></div>`
+          : downloadUrl
+          ? `<div class="return-actions"><a class="btn small secondary" href="${downloadUrl}">Datei herunterladen</a><small>${attachmentName}</small></div>`
+          : "";
         return `
           <div class="return-row">
             <div>
@@ -464,6 +477,7 @@
                 <span>Gewichtung: ${weightText}</span>
               </div>
               ${entry.note ? `<div class="nav-note">${escapeHtml(entry.note)}</div>` : ""}
+              ${attachmentHtml}
             </div>
             <div class="return-grade">
               <span class="grade-pill ${gradeColor(entry.grade)}">Note ${gradeText}</span>

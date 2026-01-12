@@ -200,7 +200,18 @@ function createFakeDb() {
         gradeTemplates.push(template);
         lastID = template.id;
       } else if (/INSERT INTO grades/i.test(sql)) {
-        const [student_id, class_id, grade_template_id, grade, note] = params;
+        const [
+          student_id,
+          class_id,
+          grade_template_id,
+          grade,
+          note,
+          attachment_path,
+          attachment_original_name,
+          attachment_mime,
+          attachment_size,
+          external_link
+        ] = params;
         const newGrade = {
           id: gradeId++,
           student_id: Number(student_id),
@@ -208,6 +219,11 @@ function createFakeDb() {
           grade_template_id: Number(grade_template_id),
           grade: Number(grade),
           note: note || null,
+          attachment_path: attachment_path || null,
+          attachment_original_name: attachment_original_name || null,
+          attachment_mime: attachment_mime || null,
+          attachment_size: attachment_size ? Number(attachment_size) : null,
+          external_link: external_link || null,
           created_at: new Date().toISOString()
         };
         grades.push(newGrade);
@@ -347,6 +363,24 @@ function createFakeDb() {
           (entry) => entry.id === Number(assessmentId) && entry.class_id === Number(clsId)
         );
         row = assessment ? { id: assessment.id } : undefined;
+      } else if (/SELECT attachment_path FROM grades WHERE id = \? AND class_id = \?/i.test(sql)) {
+        const [gradeId, clsId] = params;
+        const grade = grades.find(
+          (entry) => entry.id === Number(gradeId) && entry.class_id === Number(clsId)
+        );
+        row = grade ? { attachment_path: grade.attachment_path || null } : undefined;
+      } else if (/SELECT attachment_path, attachment_original_name, attachment_mime FROM grades WHERE id = \? AND student_id = \?/i.test(sql)) {
+        const [gradeId, studentId] = params;
+        const grade = grades.find(
+          (entry) => entry.id === Number(gradeId) && entry.student_id === Number(studentId)
+        );
+        row = grade
+          ? {
+              attachment_path: grade.attachment_path || null,
+              attachment_original_name: grade.attachment_original_name || null,
+              attachment_mime: grade.attachment_mime || null
+            }
+          : undefined;
       } else if (/SELECT s\.\*, c\.name as class_name, c\.subject as class_subject, c\.id as class_id FROM students s (LEFT )?JOIN classes c ON c.id = s.class_id WHERE s.email = \?/i.test(sql)) {
         const [email] = params;
         const student = students.find((s) => s.email === email);
@@ -455,6 +489,11 @@ function createFakeDb() {
               date: template.date,
               description: template.description,
               class_subject: cls.subject,
+              attachment_path: g.attachment_path || null,
+              attachment_original_name: g.attachment_original_name || null,
+              attachment_mime: g.attachment_mime || null,
+              attachment_size: g.attachment_size || null,
+              external_link: g.external_link || null,
               is_special: 0
             };
           });
@@ -474,6 +513,11 @@ function createFakeDb() {
               date: entry.created_at,
               description: entry.description,
               class_subject: cls.subject,
+              attachment_path: null,
+              attachment_original_name: null,
+              attachment_mime: null,
+              attachment_size: null,
+              external_link: null,
               is_special: 1
             };
           });
@@ -838,10 +882,31 @@ async function initializeDatabase() {
       grade_template_id INTEGER NOT NULL REFERENCES grade_templates(id) ON DELETE CASCADE,
       grade NUMERIC NOT NULL CHECK (grade >= 1 AND grade <= 5),
       note TEXT,
+      attachment_path TEXT,
+      attachment_original_name TEXT,
+      attachment_mime TEXT,
+      attachment_size INTEGER,
+      external_link TEXT,
       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
       UNIQUE (student_id, grade_template_id)
     )
   `);
+
+  await pool.query(
+    "ALTER TABLE grades ADD COLUMN IF NOT EXISTS attachment_path TEXT"
+  );
+  await pool.query(
+    "ALTER TABLE grades ADD COLUMN IF NOT EXISTS attachment_original_name TEXT"
+  );
+  await pool.query(
+    "ALTER TABLE grades ADD COLUMN IF NOT EXISTS attachment_mime TEXT"
+  );
+  await pool.query(
+    "ALTER TABLE grades ADD COLUMN IF NOT EXISTS attachment_size INTEGER"
+  );
+  await pool.query(
+    "ALTER TABLE grades ADD COLUMN IF NOT EXISTS external_link TEXT"
+  );
 
   await pool.query(`
     CREATE TABLE IF NOT EXISTS special_assessments (

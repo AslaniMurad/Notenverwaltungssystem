@@ -488,6 +488,14 @@
   line-height: 1.5;
 }
 
+.grade-attachment {
+  margin-top: 8px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
 /* Form enhancements */
 .teacher-form select,
 .teacher-form textarea {

@@ -66,7 +66,7 @@
               ⚠️ Noch keine Prüfungsvorlagen vorhanden. <a href="/teacher/grade-templates/<%= classData.id %>">Jetzt Prüfung anlegen</a>
             </div>
           <% } else { %>
-            <form class="teacher-form" method="POST" action="/teacher/add-grade/<%= classData.id %>/<%= student.id %>">
+            <form class="teacher-form" method="POST" action="/teacher/add-grade/<%= classData.id %>/<%= student.id %>?_csrf=<%= encodeURIComponent(csrfToken) %>" enctype="multipart/form-data">
               <input type="hidden" name="_csrf" value="<%= csrfToken %>">
 
               <label for="grade_template_id">Prüfung *</label>
@@ -87,6 +87,15 @@
 
               <label for="note">Notiz (optional)</label>
               <textarea id="note" name="note" rows="2" placeholder="z.B. Sehr gute Mitarbeit, kleine Fehler bei Aufgabe 3"></textarea>
+              <small class="form-hint">Optional kannst du eine korrigierte Arbeit anhängen oder einen externen Link angeben.</small>
+
+              <label for="attachment_file">Korrigierte Arbeit hochladen (optional)</label>
+              <input type="file" id="attachment_file" name="attachment_file" accept=".pdf,.jpg,.jpeg,.png,application/pdf,image/jpeg,image/png">
+              <small class="form-hint">Erlaubt: PDF, JPG, PNG. Maximal <%= maxFileSizeMb %> MB.</small>
+
+              <label for="external_link">Oder externer Link (optional)</label>
+              <input type="url" id="external_link" name="external_link" placeholder="https://drive.google.com/...">
+              <small class="form-hint">Nur http/https. Bitte keine Datei + Link gleichzeitig.</small>
 
               <div class="teacher-form-actions">
                 <button class="btn btn-primary" type="submit">Note speichern</button>

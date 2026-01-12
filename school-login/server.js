@@ -92,7 +92,12 @@ app.use(
 
 // --- CSRF ---
 const csrfProtection = csrf();
-app.use(csrfProtection);
+app.use((req, res, next) => {
+  if (req.is("multipart/form-data")) {
+    return next();
+  }
+  return csrfProtection(req, res, next);
+});
 
 // --- Device Detection ---
 app.use(detectDevice);
