@@ -1,5 +1,10 @@
 const express = require("express");
 const router = express.Router();
+const path = require("path");
+const fs = require("fs");
+const crypto = require("crypto");
+const multer = require("multer");
+const csrf = require("csurf");
 const { db } = require("../db");
 const { requireAuth, requireRole } = require("../middleware/auth");
 
@@ -29,7 +34,118 @@ const getAsync = (sql, params = []) =>
 
 router.use(requireAuth, requireRole("teacher"));
 
+const csrfProtection = csrf();
+const GRADE_ATTACHMENT_DIR = path.join(__dirname, "..", "uploads", "grade-attachments");
+const MAX_GRADE_FILE_MB = Math.max(1, Number(process.env.GRADE_FILE_MAX_MB) || 10);
+const MAX_GRADE_FILE_BYTES = MAX_GRADE_FILE_MB * 1024 * 1024;
+const ALLOWED_GRADE_MIME_TYPES = new Set(["application/pdf", "image/jpeg", "image/jpg", "image/png"]);
+const ALLOWED_GRADE_EXTENSIONS = new Set([".pdf", ".jpg", ".jpeg", ".png"]);
+
+fs.mkdirSync(GRADE_ATTACHMENT_DIR, { recursive: true });
+
 const SPECIAL_ASSESSMENT_TYPES = ["Präsentation", "Wunschprüfung", "Benutzerdefiniert"];
+
+function sanitizeFilename(name) {
+  return String(name || "datei")
+    .replace(/[^a-zA-Z0-9._-]/g, "_")
+    .slice(0, 120);
+}
+
+function normalizeExternalLink(raw) {
+  const trimmed = String(raw || "").trim();
+  if (!trimmed) return { value: null };
+  if (trimmed.length > 2048) {
+    return { error: "Der Link ist zu lang." };
+  }
+  let url;
+  try {
+    url = new URL(trimmed);
+  } catch {
+    return { error: "Ungültiger Link." };
+  }
+  if (!["http:", "https:"].includes(url.protocol)) {
+    return { error: "Der Link muss mit http:// oder https:// beginnen." };
+  }
+  return { value: url.toString() };
+}
+
+async function removeUploadedFile(file) {
+  if (!file || !file.path) return;
+  try {
+    await fs.promises.unlink(file.path);
+  } catch {}
+}
+
+async function removeStoredAttachment(attachmentPath) {
+  if (!attachmentPath) return;
+  const baseDir = path.resolve(GRADE_ATTACHMENT_DIR);
+  const filePath = path.resolve(path.join(GRADE_ATTACHMENT_DIR, attachmentPath));
+  if (!filePath.startsWith(baseDir + path.sep)) return;
+  try {
+    await fs.promises.unlink(filePath);
+  } catch {}
+}
+
+const upload = multer({
+  storage: multer.diskStorage({
+    destination: (req, file, cb) => cb(null, GRADE_ATTACHMENT_DIR),
+    filename: (req, file, cb) => {
+      const ext = path.extname(file.originalname || "").toLowerCase();
+      const safeExt = ALLOWED_GRADE_EXTENSIONS.has(ext) ? ext : "";
+      const uniqueName = `${Date.now()}-${crypto.randomBytes(8).toString("hex")}${safeExt}`;
+      cb(null, uniqueName);
+    }
+  }),
+  fileFilter: (req, file, cb) => {
+    const ext = path.extname(file.originalname || "").toLowerCase();
+    const mime = String(file.mimetype || "").toLowerCase();
+    if (!ALLOWED_GRADE_EXTENSIONS.has(ext) || !ALLOWED_GRADE_MIME_TYPES.has(mime)) {
+      const error = new Error("Unsupported file type");
+      error.code = "UNSUPPORTED_FILE_TYPE";
+      return cb(error);
+    }
+    return cb(null, true);
+  },
+  limits: { fileSize: MAX_GRADE_FILE_BYTES }
+});
+
+function handleUpload(req, res, next) {
+  upload.single("attachment_file")(req, res, async (err) => {
+    if (!err) return next();
+    try {
+      await removeUploadedFile(req.file);
+      const classId = req.params.classId;
+      const studentId = req.params.studentId;
+      const classData = await loadClassForTeacher(classId, req.session.user.id);
+      if (!classData) {
+        return renderError(res, req, "Klasse nicht gefunden.", 404, "/teacher/classes");
+      }
+      const students = await loadStudents(classId);
+      const student = students.find((entry) => String(entry.id) === String(studentId));
+      if (!student) {
+        return renderError(res, req, "Schüler nicht gefunden.", 404, `/teacher/students/${classId}`);
+      }
+      const templates = await loadTemplates(classId);
+      const errorMessage =
+        err.code === "LIMIT_FILE_SIZE"
+          ? `Datei ist zu groß. Maximal ${MAX_GRADE_FILE_MB} MB erlaubt.`
+          : err.code === "UNSUPPORTED_FILE_TYPE"
+          ? "Nur PDF-, JPG- oder PNG-Dateien sind erlaubt."
+          : "Upload fehlgeschlagen. Bitte erneut versuchen.";
+      return res.status(400).render("teacher/teacher-add-grade", {
+        email: req.session.user.email,
+        classData,
+        student,
+        templates,
+        csrfToken: req.csrfToken(),
+        error: errorMessage,
+        maxFileSizeMb: MAX_GRADE_FILE_MB
+      });
+    } catch (innerErr) {
+      return next(innerErr);
+    }
+  });
+}
 
 function renderError(res, req, message, status, backUrl) {
   return res.status(status).render("error", {
@@ -60,13 +176,13 @@ async function loadTemplates(classId) {
 
 async function loadStudentGrades(studentId) {
   return allAsync(
-    `SELECT g.id, g.grade, g.note, g.created_at, g.grade_template_id as template_id, gt.name, gt.category, gt.weight, gt.date, gt.description, c.subject as class_subject, 0 as is_special
+    `SELECT g.id, g.grade, g.note, g.created_at, g.grade_template_id as template_id, gt.name, gt.category, gt.weight, gt.date, gt.description, c.subject as class_subject, g.attachment_path, g.attachment_original_name, g.attachment_mime, g.attachment_size, g.external_link, 0 as is_special
      FROM grades g
      JOIN grade_templates gt ON gt.id = g.grade_template_id
      JOIN classes c ON c.id = g.class_id
      WHERE g.student_id = ?
      UNION ALL
-     SELECT sa.id, sa.grade, sa.description as note, sa.created_at, NULL as template_id, sa.name, sa.type as category, sa.weight, sa.created_at as date, sa.description, c.subject as class_subject, 1 as is_special
+     SELECT sa.id, sa.grade, sa.description as note, sa.created_at, NULL as template_id, sa.name, sa.type as category, sa.weight, sa.created_at as date, sa.description, c.subject as class_subject, NULL as attachment_path, NULL as attachment_original_name, NULL as attachment_mime, NULL as attachment_size, NULL as external_link, 1 as is_special
      FROM special_assessments sa
      JOIN classes c ON c.id = sa.class_id
      WHERE sa.student_id = ?
@@ -310,19 +426,27 @@ router.get("/student-grades/:classId/:studentId", async (req, res, next) => {
     }
 
     const gradeRows = await loadStudentGrades(student.id);
-    const grades = gradeRows.map((row) => ({
-      id: row.id,
-      grade: row.grade,
-      note: row.note,
-      category: row.category,
-      weight: row.weight,
-      template_name: row.name,
-      template_date: row.date,
-      is_special: Boolean(row.is_special),
-      delete_action: row.is_special
-        ? `/teacher/delete-special-assessment/${classId}/${row.id}`
-        : `/teacher/delete-grade/${classId}/${row.id}`
-    }));
+    const grades = gradeRows.map((row) => {
+      const hasAttachment = Boolean(row.attachment_path);
+      return {
+        id: row.id,
+        grade: row.grade,
+        note: row.note,
+        category: row.category,
+        weight: row.weight,
+        template_name: row.name,
+        template_date: row.date,
+        is_special: Boolean(row.is_special),
+        has_attachment: hasAttachment,
+        attachment_name: row.attachment_original_name || null,
+        attachment_delete_action: hasAttachment
+          ? `/teacher/delete-grade-attachment/${classId}/${row.id}`
+          : null,
+        delete_action: row.is_special
+          ? `/teacher/delete-special-assessment/${classId}/${row.id}`
+          : `/teacher/delete-grade/${classId}/${row.id}`
+      };
+    });
     const average = computeWeightedAverage(gradeRows);
 
     res.render("teacher/teacher-student-grades", {
@@ -347,7 +471,42 @@ router.post("/delete-grade/:classId/:gradeId", async (req, res, next) => {
       return renderError(res, req, "Klasse nicht gefunden.", 404, "/teacher/classes");
     }
 
+    const gradeRow = await getAsync(
+      "SELECT attachment_path FROM grades WHERE id = ? AND class_id = ?",
+      [gradeId, classId]
+    );
     await runAsync("DELETE FROM grades WHERE id = ? AND class_id = ?", [gradeId, classId]);
+    await removeStoredAttachment(gradeRow?.attachment_path);
+    const backUrl = req.get("referer") || `/teacher/grades/${classId}`;
+    res.redirect(backUrl);
+  } catch (err) {
+    next(err);
+  }
+});
+
+router.post("/delete-grade-attachment/:classId/:gradeId", async (req, res, next) => {
+  try {
+    const classId = req.params.classId;
+    const gradeId = req.params.gradeId;
+    const classData = await loadClassForTeacher(classId, req.session.user.id);
+    if (!classData) {
+      return renderError(res, req, "Klasse nicht gefunden.", 404, "/teacher/classes");
+    }
+
+    const gradeRow = await getAsync(
+      "SELECT attachment_path FROM grades WHERE id = ? AND class_id = ?",
+      [gradeId, classId]
+    );
+    if (!gradeRow) {
+      return renderError(res, req, "Note nicht gefunden.", 404, `/teacher/student-grades/${classId}`);
+    }
+
+    await runAsync(
+      "UPDATE grades SET attachment_path = NULL, attachment_original_name = NULL, attachment_mime = NULL, attachment_size = NULL WHERE id = ? AND class_id = ?",
+      [gradeId, classId]
+    );
+    await removeStoredAttachment(gradeRow.attachment_path);
+
     const backUrl = req.get("referer") || `/teacher/grades/${classId}`;
     res.redirect(backUrl);
   } catch (err) {
@@ -377,50 +536,84 @@ router.get("/add-grade/:classId/:studentId", async (req, res, next) => {
       student,
       templates,
       csrfToken: req.csrfToken(),
-      error: null
+      error: null,
+      maxFileSizeMb: MAX_GRADE_FILE_MB
     });
   } catch (err) {
     next(err);
   }
 });
 
-router.post("/add-grade/:classId/:studentId", async (req, res, next) => {
+router.post("/add-grade/:classId/:studentId", csrfProtection, handleUpload, async (req, res, next) => {
   try {
     const classId = req.params.classId;
     const studentId = req.params.studentId;
-    const { grade_template_id, grade, note } = req.body || {};
+    const { grade_template_id, grade, note, external_link } = req.body || {};
     const classData = await loadClassForTeacher(classId, req.session.user.id);
     if (!classData) {
+      await removeUploadedFile(req.file);
       return renderError(res, req, "Klasse nicht gefunden.", 404, "/teacher/classes");
     }
 
     const students = await loadStudents(classId);
     const student = students.find((entry) => String(entry.id) === String(studentId));
     if (!student) {
+      await removeUploadedFile(req.file);
       return renderError(res, req, "Schüler nicht gefunden.", 404, `/teacher/students/${classId}`);
     }
 
     const templates = await loadTemplates(classId);
     if (!grade_template_id || !grade) {
+      await removeUploadedFile(req.file);
       return res.status(400).render("teacher/teacher-add-grade", {
         email: req.session.user.email,
         classData,
         student,
         templates,
         csrfToken: req.csrfToken(),
-        error: "Bitte alle Pflichtfelder ausfüllen."
+        error: "Bitte alle Pflichtfelder ausfüllen.",
+        maxFileSizeMb: MAX_GRADE_FILE_MB
       });
     }
 
     const gradeValue = Number(grade);
     if (!Number.isFinite(gradeValue) || gradeValue < 1 || gradeValue > 5) {
+      await removeUploadedFile(req.file);
       return res.status(400).render("teacher/teacher-add-grade", {
         email: req.session.user.email,
         classData,
         student,
         templates,
         csrfToken: req.csrfToken(),
-        error: "Note muss zwischen 1 und 5 liegen."
+        error: "Note muss zwischen 1 und 5 liegen.",
+        maxFileSizeMb: MAX_GRADE_FILE_MB
+      });
+    }
+
+    const linkResult = normalizeExternalLink(external_link);
+    if (linkResult.error) {
+      await removeUploadedFile(req.file);
+      return res.status(400).render("teacher/teacher-add-grade", {
+        email: req.session.user.email,
+        classData,
+        student,
+        templates,
+        csrfToken: req.csrfToken(),
+        error: linkResult.error,
+        maxFileSizeMb: MAX_GRADE_FILE_MB
+      });
+    }
+
+    if (req.file && linkResult.value) {
+      await removeUploadedFile(req.file);
+      return res.status(400).render("teacher/teacher-add-grade", {
+        email: req.session.user.email,
+        classData,
+        student,
+        templates,
+        csrfToken: req.csrfToken(),
+        error: "Bitte entweder eine Datei hochladen oder einen Link angeben, nicht beides.",
+        maxFileSizeMb: MAX_GRADE_FILE_MB
       });
     }
 
@@ -429,20 +622,38 @@ router.post("/add-grade/:classId/:studentId", async (req, res, next) => {
       [grade_template_id, classId]
     );
     if (!templateRow) {
+      await removeUploadedFile(req.file);
       return res.status(400).render("teacher/teacher-add-grade", {
         email: req.session.user.email,
         classData,
         student,
         templates,
         csrfToken: req.csrfToken(),
-        error: "Prüfungsvorlage nicht gefunden."
+        error: "Prüfungsvorlage nicht gefunden.",
+        maxFileSizeMb: MAX_GRADE_FILE_MB
       });
     }
 
+    const attachmentPath = req.file ? req.file.filename : null;
+    const attachmentOriginalName = req.file ? sanitizeFilename(req.file.originalname) : null;
+    const attachmentMime = req.file ? req.file.mimetype : null;
+    const attachmentSize = req.file ? req.file.size : null;
+
     try {
       await runAsync(
-        "INSERT INTO grades (student_id, class_id, grade_template_id, grade, note) VALUES (?,?,?,?,?)",
-        [studentId, classId, grade_template_id, gradeValue, note || null]
+        "INSERT INTO grades (student_id, class_id, grade_template_id, grade, note, attachment_path, attachment_original_name, attachment_mime, attachment_size, external_link) VALUES (?,?,?,?,?,?,?,?,?,?)",
+        [
+          studentId,
+          classId,
+          grade_template_id,
+          gradeValue,
+          note || null,
+          attachmentPath,
+          attachmentOriginalName,
+          attachmentMime,
+          attachmentSize,
+          linkResult.value
+        ]
       );
       await runAsync("INSERT INTO grade_notifications (student_id, message, type) VALUES (?,?,?)", [
         studentId,
@@ -451,13 +662,15 @@ router.post("/add-grade/:classId/:studentId", async (req, res, next) => {
       ]);
     } catch (err) {
       if (String(err).includes("UNIQUE")) {
+        await removeUploadedFile(req.file);
         return res.status(409).render("teacher/teacher-add-grade", {
           email: req.session.user.email,
           classData,
           student,
           templates,
           csrfToken: req.csrfToken(),
-          error: "Diese Prüfung wurde bereits benotet."
+          error: "Diese Prüfung wurde bereits benotet.",
+          maxFileSizeMb: MAX_GRADE_FILE_MB
         });
       }
       throw err;
@@ -465,6 +678,7 @@ router.post("/add-grade/:classId/:studentId", async (req, res, next) => {
 
     res.redirect(`/teacher/student-grades/${classId}/${studentId}`);
   } catch (err) {
+    await removeUploadedFile(req.file);
     next(err);
   }
 });

@@ -47,6 +47,11 @@ CREATE TABLE IF NOT EXISTS grades (
   grade_template_id INTEGER NOT NULL REFERENCES grade_templates(id) ON DELETE CASCADE,
   grade NUMERIC NOT NULL CHECK (grade >= 1 AND grade <= 5),
   note TEXT,
+  attachment_path TEXT,
+  attachment_original_name TEXT,
+  attachment_mime TEXT,
+  attachment_size INTEGER,
+  external_link TEXT,
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   UNIQUE (student_id, grade_template_id)
 );

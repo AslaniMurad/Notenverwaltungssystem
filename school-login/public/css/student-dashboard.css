@@ -315,6 +315,14 @@ header.dashboard-hero {
 .status-pill.overdue { background: #fdecec; color: #a11919; }
 .status-pill.graded { background: #e5f7ef; color: #0c6b3c; }
 .return-grade { min-width: 140px; text-align: right; }
+.return-actions {
+  margin-top: 8px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+.return-actions small { color: #6b7280; font-size: 12px; }
 
 .empty-state { color: #6b7280; font-size: 14px; padding: 10px 0; }
 .badge-inline { display: inline-flex; gap: 6px; align-items: center; padding: 4px 8px; border-radius: 8px; background: #eef2ff; color: #4338ca; font-weight: 600; font-size: 12px; }

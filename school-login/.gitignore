@@ -12,6 +12,9 @@ yarn-debug.log*
 yarn-error.log*
 pnpm-debug.log*
 
+# Uploads
+uploads/
+
 # SQLite / local data
 data/*.sqlite
 data/*.sqlite3
