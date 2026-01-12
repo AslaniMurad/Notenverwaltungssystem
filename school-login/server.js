@@ -7,6 +7,7 @@ const crypto = require("crypto");
 require('dotenv').config({ override: true });
 const { db, verifyPassword, ready } = require("./db");
 const { requireAuth } = require("./middleware/auth");
+const { detectDevice } = require("./middleware/deviceDetection");
 
 const adminRouter = require("./routes/admin");
 const studentRouter = require("./routes/student");
@@ -74,6 +75,9 @@ app.use(
 // --- CSRF ---
 const csrfProtection = csrf();
 app.use(csrfProtection);
+
+// --- Device Detection ---
+app.use(detectDevice);
 
 // --- Simple Security Headers ---
 app.use((req, res, next) => {

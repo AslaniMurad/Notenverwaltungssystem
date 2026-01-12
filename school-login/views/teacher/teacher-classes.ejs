@@ -8,6 +8,9 @@
     hideHeader: true,
     hideFooter: true,
     content: function () { %>
+    <% if (locals.isMobile) { %>
+      <button class="mobile-nav-toggle" aria-label="Navigation öffnen"></button>
+    <% } %>
     <div class="app-shell teacher-shell">
       <aside class="teacher-sidebar" aria-label="Lehrer Navigation">
         <div class="sidebar-brand">
