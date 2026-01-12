@@ -1,4 +1,4 @@
-<%
+﻿<%
   const page = {
     title: 'Dashboard',
     headerTitle: 'Dashboard',
@@ -7,48 +7,35 @@
     scripts: ['/js/app.js'],
     bodyClass: 'page-dashboard',
     hideHeader: false,
-    hideFooter: false,
+    hideFooter: true,
     content: function () { %>
     <div class="dashboard-shell">
       <div>
         <div class="dashboard-brand">
-          <div class="dashboard-logo"></div>
-          <div class="brand-title-quiet">School Panel - ALTE VERSION!!!!!!!!!!!!!!</div>
+          <div class="dashboard-logo is-error">!</div>
+          <div class="brand-title-quiet">School Panel</div>
         </div>
-        <div class="dashboard-pill">
+        <div class="dashboard-pill is-error">
           <span class="bullet"></span>
-          Eingeloggt – sichere Schulverwaltung aktiv
+          WRONG PATH!
         </div>
-        <h1 class="dashboard-headline">Willkommen zurück, <%= email %></h1>
+        <h1 class="dashboard-headline is-error">Ups!</h1>
         <p class="dashboard-subline">
-          Du bist angemeldet als <b><%= role %></b>. Verwende das Panel rechts, um in den passenden Bereich zu wechseln.
+          Etwas ist schiefgelaufen.
         </p>
-        <div class="dashboard-meta">
-          <div><strong>Rolle</strong><br><%= role %></div>
-          <div><strong>Sicherheit</strong><br>Session-Cookies, CSRF-Schutz</div>
-          <div class="dashboard-tag">Nur autorisierte Zugriffe</div>
-        </div>
+        <p class="dashboard-easter">Ganz unten gelandet? Diese Adresse braucht einen Pfad.</p>
       </div>
       <div class="dashboard-right">
-        <div>
-          <div class="dashboard-right-label">Account</div>
-          <div class="dashboard-right-email"><%= email %></div>
-          <div class="dashboard-right-role">Level: <%= role %></div>
-        </div>
         <div class="dashboard-nav-row">
-          <% if (role === "admin") { %>
-            <a class="dashboard-link" href="/admin">Admin-Bereich öffnen</a>
-          <% } else if (role === "student") { %>
-            <a class="dashboard-link" href="/student">Schüler-Dashboard</a>
-          <% } else if (role === "teacher") { %>
-            <a class="dashboard-link" href="/teacher/classes">Lehrer-Bereich öffnen</a>
-          <% } else { %>
-            <span class="dashboard-nav-hint">Nutze das Menü deiner Rolle entsprechend.</span>
-          <% } %>
+          <% let startHref = "/"; %>
+          <% if (role === "admin") { startHref = "/admin"; } %>
+          <% if (role === "student") { startHref = "/student"; } %>
+          <% if (role === "teacher") { startHref = "/teacher/classes"; } %>
+          <a class="dashboard-link" href="<%= startHref %>">Startseite</a>
         </div>
         <form class="logout-form" method="POST" action="/logout">
           <input type="hidden" name="_csrf" value="<%= csrfToken %>">
-          <button class="logout-btn" type="submit">Logout</button>
+          <button class="logout-btn" type="submit">Session loeschen</button>
         </form>
       </div>
     </div>

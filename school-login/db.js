@@ -44,6 +44,8 @@ function verifyPassword(stored, password) {
 }
 
 const useFakeDb = process.env.USE_FAKE_DB === "true";
+const seedAdminEnabled = process.env.SEED_ADMIN === "true";
+const seedDemoEnabled = process.env.SEED_DEMO === "true";
 
 function createFakeDb() {
   const users = [];
@@ -590,43 +592,121 @@ function createFakeDb() {
   };
 
   function seedAdmin() {
-    const ADMIN_EMAIL = process.env.ADMIN_EMAIL || "admin@example.com";
-    const ADMIN_PASS = process.env.ADMIN_PASS || "admin1234!ChangeMe";
+    if (!seedAdminEnabled) return;
+    const ADMIN_EMAIL = process.env.ADMIN_EMAIL;
+    const ADMIN_PASS = process.env.ADMIN_PASS;
+    if (!ADMIN_EMAIL || !ADMIN_PASS) {
+      throw new Error("SEED_ADMIN requires ADMIN_EMAIL and ADMIN_PASS.");
+    }
+    if (users.some((u) => u.role === "admin")) return;
     const hash = hashPassword(ADMIN_PASS);
     db.run(
-      "INSERT INTO users (email, password_hash, role, status, must_change_password) VALUES (?,?,?, 'active', 0)",
-      [ADMIN_EMAIL, hash, "admin", "active"],
+      "INSERT INTO users (email, password_hash, role, status, must_change_password) VALUES (?,?,?,?,?)",
+      [ADMIN_EMAIL, hash, "admin", "active", 1],
       () => {}
     );
   }
 
   function seedDemoStudent() {
-    const teacherHash = hashPassword("teacherDemo123!");
-    const studentHash = hashPassword("studentDemo123!");
+    if (!seedDemoEnabled) return;
+    const teacherEmail = process.env.DEMO_TEACHER_EMAIL || "teacher@example.com";
+    const studentEmail = process.env.DEMO_STUDENT_EMAIL || "student@example.com";
+    const teacherPass = process.env.DEMO_TEACHER_PASS;
+    const studentPass = process.env.DEMO_STUDENT_PASS;
+    if (!teacherPass || !studentPass) {
+      throw new Error(
+        "SEED_DEMO requires DEMO_TEACHER_PASS and DEMO_STUDENT_PASS."
+      );
+    }
+    if (users.some((u) => u.email === teacherEmail || u.email === studentEmail)) return;
 
-    db.run("INSERT INTO users (email, password_hash, role, status) VALUES (?,?, 'teacher', 'active')", ["teacher@example.com", teacherHash]);
-    db.run("INSERT INTO users (email, password_hash, role, status) VALUES (?,?, 'student', 'active')", ["student@example.com", studentHash]);
+    const teacherHash = hashPassword(teacherPass);
+    const studentHash = hashPassword(studentPass);
 
-    db.run("INSERT INTO classes (name, subject, teacher_id) VALUES (?,?,?)", ["3AHWII", "Informatik", 2], function () {
-      const createdClassId = this.lastID;
-      db.run("INSERT INTO students (name, email, class_id, school_year) VALUES (?,?,?,?)", ["Max Muster", "student@example.com", createdClassId, "2024/25"], function () {
-        const studentId = this.lastID;
-        const now = new Date();
-
-        db.run("INSERT INTO grade_templates (class_id, name, category, weight, date, description) VALUES (?,?,?,?,?,?)", [createdClassId, "SA 1", "Schularbeit", 40, new Date(now.getTime() - 1000 * 60 * 60 * 24 * 14).toISOString(), "Schularbeit 1"]);
-        db.run("INSERT INTO grade_templates (class_id, name, category, weight, date, description) VALUES (?,?,?,?,?,?)", [createdClassId, "Test 1", "Test", 30, new Date(now.getTime() - 1000 * 60 * 60 * 24 * 7).toISOString(), "Wöchentlicher Test"]);
-        db.run("INSERT INTO grade_templates (class_id, name, category, weight, date, description) VALUES (?,?,?,?,?,?)", [createdClassId, "Mitarbeit", "Mitarbeit", 30, now.toISOString(), "Aktive Teilnahme"]);
-
-        db.run("INSERT INTO grades (student_id, class_id, grade_template_id, grade, note) VALUES (?,?,?,?,?)", [studentId, createdClassId, 1, 2, "Gute Struktur"]);
-        db.run("INSERT INTO grades (student_id, class_id, grade_template_id, grade, note) VALUES (?,?,?,?,?)", [studentId, createdClassId, 2, 1.5, "Sauberer Code"]);
-        db.run("INSERT INTO grades (student_id, class_id, grade_template_id, grade, note) VALUES (?,?,?,?,?)", [studentId, createdClassId, 3, 3, "Mehr Quellenangaben"]);
-
+    db.run(
+      "INSERT INTO users (email, password_hash, role, status, must_change_password) VALUES (?,?,?,?,?)",
+      [teacherEmail, teacherHash, "teacher", "active", 1],
+      function () {
+        const teacherId = this.lastID;
         db.run(
-          "INSERT INTO grade_notifications (student_id, message, type, created_at) VALUES (?,?,?,?)",
-          [studentId, "Neue Note in Informatik eingetragen.", "grade", now.toISOString()]
+          "INSERT INTO users (email, password_hash, role, status, must_change_password) VALUES (?,?,?,?,?)",
+          [studentEmail, studentHash, "student", "active", 1],
+          function () {
+            db.run(
+              "INSERT INTO classes (name, subject, teacher_id) VALUES (?,?,?)",
+              ["3AHWII", "Informatik", teacherId],
+              function () {
+                const createdClassId = this.lastID;
+                db.run(
+                  "INSERT INTO students (name, email, class_id, school_year) VALUES (?,?,?,?)",
+                  ["Max Muster", studentEmail, createdClassId, "2024/25"],
+                  function () {
+                    const studentId = this.lastID;
+                    const now = new Date();
+
+                    db.run(
+                      "INSERT INTO grade_templates (class_id, name, category, weight, date, description) VALUES (?,?,?,?,?,?)",
+                      [
+                        createdClassId,
+                        "SA 1",
+                        "Schularbeit",
+                        40,
+                        new Date(
+                          now.getTime() - 1000 * 60 * 60 * 24 * 14
+                        ).toISOString(),
+                        "Schularbeit 1"
+                      ]
+                    );
+                    db.run(
+                      "INSERT INTO grade_templates (class_id, name, category, weight, date, description) VALUES (?,?,?,?,?,?)",
+                      [
+                        createdClassId,
+                        "Test 1",
+                        "Test",
+                        30,
+                        new Date(
+                          now.getTime() - 1000 * 60 * 60 * 24 * 7
+                        ).toISOString(),
+                        "Wochentlicher Test"
+                      ]
+                    );
+                    db.run(
+                      "INSERT INTO grade_templates (class_id, name, category, weight, date, description) VALUES (?,?,?,?,?,?)",
+                      [
+                        createdClassId,
+                        "Mitarbeit",
+                        "Mitarbeit",
+                        30,
+                        now.toISOString(),
+                        "Aktive Teilnahme"
+                      ]
+                    );
+
+                    db.run(
+                      "INSERT INTO grades (student_id, class_id, grade_template_id, grade, note) VALUES (?,?,?,?,?)",
+                      [studentId, createdClassId, 1, 2, "Gute Struktur"]
+                    );
+                    db.run(
+                      "INSERT INTO grades (student_id, class_id, grade_template_id, grade, note) VALUES (?,?,?,?,?)",
+                      [studentId, createdClassId, 2, 1.5, "Sauberer Code"]
+                    );
+                    db.run(
+                      "INSERT INTO grades (student_id, class_id, grade_template_id, grade, note) VALUES (?,?,?,?,?)",
+                      [studentId, createdClassId, 3, 3, "Mehr Quellenangaben"]
+                    );
+
+                    db.run(
+                      "INSERT INTO grade_notifications (student_id, message, type, created_at) VALUES (?,?,?,?)",
+                      [studentId, "Neue Note in Informatik eingetragen.", "grade", now.toISOString()]
+                    );
+                  }
+                );
+              }
+            );
+          }
         );
-      });
-    });
+      }
+    );
   }
 
   seedAdmin();
@@ -637,12 +717,13 @@ function createFakeDb() {
 if (useFakeDb) {
   const db = createFakeDb();
   const ready = Promise.resolve();
-  module.exports = { db, hashPassword, verifyPassword, ready };
+  module.exports = { db, hashPassword, verifyPassword, ready, pool: null, isFakeDb: true };
   return;
 }
 
-const useSsl = process.env.PGSSL !== "false";
-const ssl = useSsl ? { rejectUnauthorized: false } : undefined;
+const useSsl = String(process.env.PGSSL || "true").toLowerCase() !== "false";
+const verifySsl = String(process.env.PGSSL_VERIFY || "true").toLowerCase() !== "false";
+const ssl = useSsl ? { rejectUnauthorized: verifySsl } : undefined;
 const connectionString = process.env.DATABASE_URL;
 if (!connectionString) {
   const missing = ["PGHOST", "PGPORT", "PGDATABASE", "PGUSER", "PGPASSWORD"].filter(
@@ -730,38 +811,47 @@ const db = {
 };
 
 async function seedAdmin() {
-  const ADMIN_EMAIL = process.env.ADMIN_EMAIL || "admin@example.com";
-  const ADMIN_PASS = process.env.ADMIN_PASS || "admin1234!ChangeMe";
+  if (!seedAdminEnabled) return;
+  const ADMIN_EMAIL = process.env.ADMIN_EMAIL;
+  const ADMIN_PASS = process.env.ADMIN_PASS;
+  if (!ADMIN_EMAIL || !ADMIN_PASS) {
+    throw new Error("SEED_ADMIN requires ADMIN_EMAIL and ADMIN_PASS.");
+  }
 
-  const existing = await pool.query("SELECT id FROM users WHERE email = $1", [ADMIN_EMAIL]);
+  const existing = await pool.query("SELECT id FROM users WHERE role = 'admin' LIMIT 1");
   if (existing.rowCount > 0) return;
 
   const hash = hashPassword(ADMIN_PASS);
   await pool.query(
-    "INSERT INTO users (email, password_hash, role, status, must_change_password) VALUES ($1, $2, 'admin', 'active', false)",
+    "INSERT INTO users (email, password_hash, role, status, must_change_password) VALUES ($1, $2, 'admin', 'active', true)",
     [ADMIN_EMAIL, hash]
   );
   console.log("Seed-Admin angelegt:", ADMIN_EMAIL);
-  console.log("Initial-Passwort:", ADMIN_PASS);
 }
 
 async function seedDemoData() {
-  const teacherEmail = "teacher@example.com";
-  const studentEmail = "student@example.com";
+  if (!seedDemoEnabled) return;
+  const teacherEmail = process.env.DEMO_TEACHER_EMAIL || "teacher@example.com";
+  const studentEmail = process.env.DEMO_STUDENT_EMAIL || "student@example.com";
+  const teacherPass = process.env.DEMO_TEACHER_PASS;
+  const studentPass = process.env.DEMO_STUDENT_PASS;
+  if (!teacherPass || !studentPass) {
+    throw new Error("SEED_DEMO requires DEMO_TEACHER_PASS and DEMO_STUDENT_PASS.");
+  }
 
-  const existing = await pool.query("SELECT id FROM users WHERE email = $1", [teacherEmail]);
+  const existing = await pool.query("SELECT id FROM users WHERE email = $1 OR email = $2", [teacherEmail, studentEmail]);
   if (existing.rowCount > 0) return;
 
-  const teacherHash = hashPassword("teacherDemo123!");
+  const teacherHash = hashPassword(teacherPass);
   const teacherInsert = await pool.query(
-    "INSERT INTO users (email, password_hash, role, status) VALUES ($1, $2, 'teacher', 'active') RETURNING id",
+    "INSERT INTO users (email, password_hash, role, status, must_change_password) VALUES ($1, $2, 'teacher', 'active', true) RETURNING id",
     [teacherEmail, teacherHash]
   );
   const teacherId = teacherInsert.rows[0].id;
 
   const studentUser = await pool.query(
-    "INSERT INTO users (email, password_hash, role, status) VALUES ($1, $2, 'student', 'active') RETURNING id",
-    [studentEmail, hashPassword("studentDemo123!")]
+    "INSERT INTO users (email, password_hash, role, status, must_change_password) VALUES ($1, $2, 'student', 'active', true) RETURNING id",
+    [studentEmail, hashPassword(studentPass)]
   );
   const studentUserId = studentUser.rows[0].id;
 
@@ -933,6 +1023,17 @@ async function initializeDatabase() {
     )
   `);
 
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS sessions (
+      sid TEXT PRIMARY KEY,
+      sess JSONB NOT NULL,
+      expire TIMESTAMPTZ NOT NULL
+    )
+  `);
+  await pool.query(
+    "CREATE INDEX IF NOT EXISTS sessions_expire_idx ON sessions (expire)"
+  );
+
   await seedAdmin();
   await seedDemoData();
 }
@@ -945,5 +1046,7 @@ module.exports = {
   db,
   hashPassword,
   verifyPassword,
-  ready
+  ready,
+  pool,
+  isFakeDb: false
 };

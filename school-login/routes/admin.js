@@ -1,9 +1,11 @@
-const express = require("express");
+﻿const express = require("express");
 const router = express.Router();
 const { db, hashPassword } = require("../db");
 const { requireAuth, requireRole } = require("../middleware/auth");
+const { getPasswordValidationError } = require("../utils/password");
+const { deriveNameFromEmail } = require("../utils/studentName");
 
-const INITIAL_PASSWORD = "2025!HTL";
+const INITIAL_PASSWORD = process.env.INITIAL_PASSWORD || null;
 
 const runAsync = (sql, params = []) =>
   new Promise((resolve, reject) => {
@@ -124,11 +126,71 @@ router.post("/users", async (req, res, next) => {
   }
   if (role === "teacher" && wantsInitial) {
     return res.status(400).render("error", {
-      message: "Für Lehrer darf kein Initial-Passwort vergeben werden.",
+      message: "FÃ¼r Lehrer darf kein Initial-Passwort vergeben werden.",
       status: 400,
       backUrl: "/admin/users/new",
       csrfToken: req.csrfToken()
     });
+  }
+
+  if (wantsInitial) {
+    if (!INITIAL_PASSWORD) {
+      return res.status(400).render("error", {
+        message: "Initial-Passwort ist nicht konfiguriert (ENV INITIAL_PASSWORD).",
+        status: 400,
+        backUrl: "/admin/users/new",
+        csrfToken: req.csrfToken()
+      });
+    }
+    const initialError = getPasswordValidationError(INITIAL_PASSWORD);
+    if (initialError) {
+      return res.status(400).render("error", {
+        message: `Initial-Passwort ist zu schwach: ${initialError}`,
+        status: 400,
+        backUrl: "/admin/users/new",
+        csrfToken: req.csrfToken()
+      });
+    }
+  } else {
+    const passwordError = getPasswordValidationError(password);
+    if (passwordError) {
+      return res.status(400).render("error", {
+        message: passwordError,
+        status: 400,
+        backUrl: "/admin/users/new",
+        csrfToken: req.csrfToken()
+      });
+    }
+  }
+
+  if (wantsInitial) {
+    if (!INITIAL_PASSWORD) {
+      return res.status(400).render("error", {
+        message: "Initial-Passwort ist nicht konfiguriert (ENV INITIAL_PASSWORD).",
+        status: 400,
+        backUrl,
+        csrfToken: req.csrfToken()
+      });
+    }
+    const initialError = getPasswordValidationError(INITIAL_PASSWORD);
+    if (initialError) {
+      return res.status(400).render("error", {
+        message: `Initial-Passwort ist zu schwach: ${initialError}`,
+        status: 400,
+        backUrl,
+        csrfToken: req.csrfToken()
+      });
+    }
+  } else {
+    const passwordError = getPasswordValidationError(password);
+    if (passwordError) {
+      return res.status(400).render("error", {
+        message: passwordError,
+        status: 400,
+        backUrl,
+        csrfToken: req.csrfToken()
+      });
+    }
   }
 
   const chosenPassword = wantsInitial ? INITIAL_PASSWORD : password;
@@ -145,7 +207,7 @@ router.post("/users", async (req, res, next) => {
     console.error("DB error inserting user:", err);
     if (String(err).includes("UNIQUE")) {
       return res.status(409).render("error", {
-        message: "E‑Mail existiert bereits.",
+        message: "Eâ€‘Mail existiert bereits.",
         status: 409,
         backUrl: "/admin/users/new",
         csrfToken: req.csrfToken()
@@ -161,7 +223,7 @@ router.post("/users/bulk", async (req, res, next) => {
 
   if (!bulkRole) {
     return res.status(400).render("error", {
-      message: "Bitte wähle eine Rolle für neue Nutzer.",
+      message: "Bitte wÃ¤hle eine Rolle fÃ¼r neue Nutzer.",
       status: 400,
       backUrl: "/admin/users/new",
       csrfToken: req.csrfToken()
@@ -169,7 +231,7 @@ router.post("/users/bulk", async (req, res, next) => {
   }
   if (wantsInitial && bulkRole === "teacher") {
     return res.status(400).render("error", {
-      message: "Lehrer dürfen kein Initial-Passwort erhalten.",
+      message: "Lehrer dÃ¼rfen kein Initial-Passwort erhalten.",
       status: 400,
       backUrl: "/admin/users/new",
       csrfToken: req.csrfToken()
@@ -196,6 +258,36 @@ router.post("/users/bulk", async (req, res, next) => {
       backUrl: "/admin/users/new",
       csrfToken: req.csrfToken()
     });
+  }
+
+  if (wantsInitial) {
+    if (!INITIAL_PASSWORD) {
+      return res.status(400).render("error", {
+        message: "Initial-Passwort ist nicht konfiguriert (ENV INITIAL_PASSWORD).",
+        status: 400,
+        backUrl: "/admin/users/new",
+        csrfToken: req.csrfToken()
+      });
+    }
+    const initialError = getPasswordValidationError(INITIAL_PASSWORD);
+    if (initialError) {
+      return res.status(400).render("error", {
+        message: `Initial-Passwort ist zu schwach: ${initialError}`,
+        status: 400,
+        backUrl: "/admin/users/new",
+        csrfToken: req.csrfToken()
+      });
+    }
+  } else {
+    const passwordError = getPasswordValidationError(bulkPassword);
+    if (passwordError) {
+      return res.status(400).render("error", {
+        message: passwordError,
+        status: 400,
+        backUrl: "/admin/users/new",
+        csrfToken: req.csrfToken()
+      });
+    }
   }
 
   const chosenPassword = wantsInitial ? INITIAL_PASSWORD : bulkPassword;
@@ -319,7 +411,7 @@ router.post("/users/:id", async (req, res, next) => {
     console.error("DB error updating user:", err);
     if (String(err).includes("UNIQUE")) {
       return res.status(409).render("error", {
-        message: "E‑Mail existiert bereits.",
+        message: "Eâ€‘Mail existiert bereits.",
         status: 409,
         backUrl: `/admin/users/${id}/edit`,
         csrfToken: req.csrfToken()
@@ -420,7 +512,7 @@ router.post("/classes", async (req, res, next) => {
   const { name, subject, teacher_id } = req.body || {};
   if (!name || !subject || !teacher_id) {
     return res.status(400).render("error", {
-      message: "Bitte alle Pflichtfelder ausfüllen.",
+      message: "Bitte alle Pflichtfelder ausfÃ¼llen.",
       status: 400,
       backUrl: "/admin/classes/new",
       csrfToken: req.csrfToken()
@@ -478,7 +570,7 @@ router.post("/classes/:id", async (req, res, next) => {
   const { name, subject, teacher_id } = req.body || {};
   if (!name || !subject || !teacher_id) {
     return res.status(400).render("error", {
-      message: "Bitte alle Pflichtfelder ausfüllen.",
+      message: "Bitte alle Pflichtfelder ausfÃ¼llen.",
       status: 400,
       backUrl: `/admin/classes/${classId}/edit`,
       csrfToken: req.csrfToken()
@@ -602,7 +694,8 @@ router.get("/classes/:id/students/add", async (req, res, next) => {
       csrfToken: req.csrfToken(),
       currentUser: req.session.user,
       activePath: req.originalUrl,
-      error: null
+      error: null,
+      bulkResult: null
     });
   } catch (err) {
     next(err);
@@ -612,13 +705,29 @@ router.get("/classes/:id/students/add", async (req, res, next) => {
 router.post("/classes/:id/students/add", async (req, res, next) => {
   const classId = req.params.id;
   const { name, email } = req.body || {};
-  if (!name || !email) {
+  const resolvedEmail = String(email || "").trim();
+  let resolvedName = String(name || "").trim();
+
+  if (!resolvedEmail) {
     return res.status(400).render("error", {
-      message: "Bitte Name und E-Mail angeben.",
+      message: "Bitte E-Mail angeben.",
       status: 400,
       backUrl: `/admin/classes/${classId}/students/add`,
       csrfToken: req.csrfToken()
     });
+  }
+  if (!resolvedName) {
+    const derived = deriveNameFromEmail(resolvedEmail);
+    if (derived) {
+      resolvedName = derived;
+    } else {
+      return res.status(400).render("error", {
+        message: "Bitte Name angeben (oder E-Mail im Format vorname.nachname@xy).",
+        status: 400,
+        backUrl: `/admin/classes/${classId}/students/add`,
+        csrfToken: req.csrfToken()
+      });
+    }
   }
   try {
     const classData = await getAsync("SELECT id, name FROM classes WHERE id = ?", [classId]);
@@ -631,29 +740,31 @@ router.post("/classes/:id/students/add", async (req, res, next) => {
       });
     }
 
-    const userRow = await getAsync("SELECT id, role FROM users WHERE email = ?", [email]);
+    const userRow = await getAsync("SELECT id, role FROM users WHERE email = ?", [resolvedEmail]);
     if (!userRow || userRow.role !== "student") {
       return res.render("admin/add-student", {
         classData,
         csrfToken: req.csrfToken(),
         currentUser: req.session.user,
         activePath: `/admin/classes/${classId}/students/add`,
-        error: "E-Mail nicht gefunden oder nicht als Schüler registriert."
+        error: "E-Mail nicht gefunden oder nicht als SchÇ¬ler registriert.",
+        bulkResult: null
       });
     }
 
-    const duplicate = await getAsync("SELECT id FROM students WHERE email = ? AND class_id = ?", [email, classId]);
+    const duplicate = await getAsync("SELECT id FROM students WHERE email = ? AND class_id = ?", [resolvedEmail, classId]);
     if (duplicate) {
       return res.render("admin/add-student", {
         classData,
         csrfToken: req.csrfToken(),
         currentUser: req.session.user,
         activePath: `/admin/classes/${classId}/students/add`,
-        error: "Dieser Schüler ist bereits in der Klasse."
+        error: "Dieser SchÇ¬ler ist bereits in der Klasse.",
+        bulkResult: null
       });
     }
 
-    await runAsync("INSERT INTO students (name, email, class_id) VALUES (?,?,?)", [name, email, classId]);
+    await runAsync("INSERT INTO students (name, email, class_id) VALUES (?,?,?)", [resolvedName, resolvedEmail, classId]);
     res.redirect(`/admin/classes/${classId}/students`);
   } catch (err) {
     console.error("DB error adding student:", err);
@@ -661,4 +772,88 @@ router.post("/classes/:id/students/add", async (req, res, next) => {
   }
 });
 
+router.post("/classes/:id/students/add-bulk", async (req, res, next) => {
+  const classId = req.params.id;
+  const bulkEmailsRaw = String((req.body && req.body.bulkEmails) || "");
+  const lines = bulkEmailsRaw
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter(Boolean);
+
+  try {
+    const classData = await getAsync("SELECT id, name FROM classes WHERE id = ?", [classId]);
+    if (!classData) {
+      return res.status(404).render("error", {
+        message: "Klasse nicht gefunden.",
+        status: 404,
+        backUrl: "/admin/classes",
+        csrfToken: req.csrfToken()
+      });
+    }
+
+    if (lines.length === 0) {
+      return res.status(400).render("admin/add-student", {
+        classData,
+        csrfToken: req.csrfToken(),
+        currentUser: req.session.user,
+        activePath: `/admin/classes/${classId}/students/add`,
+        error: "Bitte E-Mails angeben.",
+        bulkResult: null
+      });
+    }
+
+    const bulkResult = { success: [], failed: [] };
+
+    for (const line of lines) {
+      const email = line;
+      const derivedName = deriveNameFromEmail(email);
+      if (!derivedName) {
+        bulkResult.failed.push({
+          email,
+          reason: "Name fehlt (E-Mail Format vorname.nachname@xy)."
+        });
+        continue;
+      }
+
+      const userRow = await getAsync("SELECT id, role FROM users WHERE email = ?", [email]);
+      if (!userRow || userRow.role !== "student") {
+        bulkResult.failed.push({
+          email,
+          reason: "E-Mail nicht gefunden oder nicht als Student registriert."
+        });
+        continue;
+      }
+
+      const duplicate = await getAsync("SELECT id FROM students WHERE email = ? AND class_id = ?", [email, classId]);
+      if (duplicate) {
+        bulkResult.failed.push({
+          email,
+          reason: "Schueler ist bereits in der Klasse."
+        });
+        continue;
+      }
+
+      try {
+        await runAsync("INSERT INTO students (name, email, class_id) VALUES (?,?,?)", [derivedName, email, classId]);
+        bulkResult.success.push(email);
+      } catch (err) {
+        bulkResult.failed.push({ email, reason: String(err) });
+      }
+    }
+
+    return res.render("admin/add-student", {
+      classData,
+      csrfToken: req.csrfToken(),
+      currentUser: req.session.user,
+      activePath: `/admin/classes/${classId}/students/add`,
+      error: null,
+      bulkResult
+    });
+  } catch (err) {
+    console.error("DB error adding students in bulk:", err);
+    next(err);
+  }
+});
+
 module.exports = router;
+

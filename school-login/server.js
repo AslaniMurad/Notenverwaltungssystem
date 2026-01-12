@@ -5,9 +5,11 @@ const csrf = require("csurf");
 const path = require("path");
 const crypto = require("crypto");
 require('dotenv').config({ override: true });
-const { db, verifyPassword, ready } = require("./db");
+const { db, verifyPassword, ready, hashPassword, pool, isFakeDb } = require("./db");
 const { requireAuth } = require("./middleware/auth");
 const { detectDevice } = require("./middleware/deviceDetection");
+const { buildSessionStore } = require("./sessionStore");
+const { getPasswordValidationError } = require("./utils/password");
 
 const adminRouter = require("./routes/admin");
 const studentRouter = require("./routes/student");
@@ -19,6 +21,11 @@ const isProduction = process.env.NODE_ENV === "production";
 if (isProduction) {
   app.set("trust proxy", 1);
 }
+if (isProduction && !process.env.SESSION_SECRET) {
+  throw new Error("SESSION_SECRET must be set in production.");
+}
+
+const sessionStore = buildSessionStore({ pool, isFakeDb });
 
 function isDbConnectionError(err) {
   if (!err) return false;
@@ -36,6 +43,45 @@ function isDbConnectionError(err) {
     message.includes("ENETUNREACH") ||
     message.includes("ECONNRESET")
   );
+}
+
+const LOGIN_RATE_WINDOW_MS = Number(process.env.LOGIN_RATE_LIMIT_WINDOW_MS) || 15 * 60 * 1000;
+const LOGIN_RATE_MAX = Number(process.env.LOGIN_RATE_LIMIT_MAX) || 5;
+const loginAttempts = new Map();
+
+function buildLoginKey(req, email) {
+  const ip = req.ip || "unknown";
+  const normalizedEmail = String(email || "").toLowerCase();
+  return `${ip}|${normalizedEmail}`;
+}
+
+function isLoginRateLimited(key) {
+  const entry = loginAttempts.get(key);
+  if (!entry) return false;
+  const now = Date.now();
+  if (entry.lockedUntil && entry.lockedUntil > now) return true;
+  if (now - entry.firstAttemptAt > LOGIN_RATE_WINDOW_MS) {
+    loginAttempts.delete(key);
+    return false;
+  }
+  return entry.count >= LOGIN_RATE_MAX;
+}
+
+function recordLoginFailure(key) {
+  const now = Date.now();
+  const entry = loginAttempts.get(key);
+  if (!entry || now - entry.firstAttemptAt > LOGIN_RATE_WINDOW_MS) {
+    loginAttempts.set(key, { count: 1, firstAttemptAt: now, lockedUntil: 0 });
+    return;
+  }
+  entry.count += 1;
+  if (entry.count >= LOGIN_RATE_MAX) {
+    entry.lockedUntil = now + LOGIN_RATE_WINDOW_MS;
+  }
+}
+
+function resetLoginAttempts(key) {
+  loginAttempts.delete(key);
 }
 
 app.use(express.urlencoded({ extended: true }));
@@ -61,7 +107,6 @@ function renderLogin(res, req, options = {}) {
     status = 200,
     errorType = null,
     errorMessage = null,
-    lockedInfo = null,
     email = ""
   } = options;
 
@@ -69,16 +114,17 @@ function renderLogin(res, req, options = {}) {
     csrfToken: req.csrfToken(),
     errorType,
     errorMessage,
-    lockedInfo,
     email
   });
 }
 
 // --- Session ---
+const sessionSecret = process.env.SESSION_SECRET || crypto.randomBytes(32).toString("hex");
 app.use(
   session({
     name: "sid",
-    secret: process.env.SESSION_SECRET || crypto.randomBytes(32).toString("hex"),
+    secret: sessionSecret,
+    store: sessionStore,
     resave: false,
     saveUninitialized: false,
     cookie: {
@@ -91,8 +137,24 @@ app.use(
 );
 
 // --- CSRF ---
-const csrfProtection = csrf();
+const multipartAllowList = [/^\/teacher\/add-grade\/\d+\/\d+$/];
+const csrfProtection = csrf({
+  value: (req) =>
+    (req.body && req.body._csrf) ||
+    req.headers["x-csrf-token"] ||
+    req.headers["csrf-token"]
+});
 app.use((req, res, next) => {
+  if (req.method !== "GET" && req.is("multipart/form-data")) {
+    const allowed = multipartAllowList.some((entry) => entry.test(req.path));
+    if (!allowed) {
+      return res.status(415).render("error", {
+        message: "Multipart ist fuer diese Route nicht erlaubt.",
+        status: 415,
+        backUrl: "/"
+      });
+    }
+  }
   if (req.is("multipart/form-data")) {
     return next();
   }
@@ -110,6 +172,24 @@ app.use((req, res, next) => {
   next();
 });
 
+function getRedirectForRole(role) {
+  const redirectMap = {
+    admin: "/admin",
+    teacher: "/teacher/classes",
+    student: "/student"
+  };
+  return redirectMap[role] || "/";
+}
+
+app.use((req, res, next) => {
+  const user = req.session.user;
+  if (!user || !user.must_change_password) return next();
+  if (req.path === "/force-password-change" || req.path === "/logout") {
+    return next();
+  }
+  return res.redirect("/force-password-change");
+});
+
 // --- Startseite (nach Login) ---
 app.get("/", requireAuth, (req, res) => {
   const { email, role } = req.session.user;
@@ -122,10 +202,57 @@ app.get("/login", (req, res) => {
   renderLogin(res, req);
 });
 
+// --- Passwortwechsel erzwingen ---
+app.get("/force-password-change", requireAuth, (req, res) => {
+  if (!req.session.user.must_change_password) {
+    return res.redirect(getRedirectForRole(req.session.user.role));
+  }
+  res.render("force-password-change", {
+    email: req.session.user.email,
+    csrfToken: req.csrfToken(),
+    error: null
+  });
+});
+
+app.post("/force-password-change", requireAuth, (req, res, next) => {
+  if (!req.session.user.must_change_password) {
+    return res.redirect(getRedirectForRole(req.session.user.role));
+  }
+  const newPassword = req.body?.newPassword;
+  const validationError = getPasswordValidationError(newPassword);
+  if (validationError) {
+    return res.status(400).render("force-password-change", {
+      email: req.session.user.email,
+      csrfToken: req.csrfToken(),
+      error: validationError
+    });
+  }
+  const hash = hashPassword(newPassword);
+  db.run(
+    "UPDATE users SET password_hash = ?, must_change_password = ? WHERE id = ?",
+    [hash, 0, req.session.user.id],
+    (err) => {
+      if (err) return next(err);
+      req.session.user.must_change_password = false;
+      return res.redirect(getRedirectForRole(req.session.user.role));
+    }
+  );
+});
+
 // --- Login POST ---
 app.post("/login", (req, res, next) => {
   const { email, password } = req.body || {};
+  const loginKey = buildLoginKey(req, email);
+  if (isLoginRateLimited(loginKey)) {
+    return renderLogin(res, req, {
+      status: 429,
+      errorType: "invalid",
+      errorMessage: "Zu viele Versuche. Bitte spaeter erneut versuchen.",
+      email
+    });
+  }
   if (!email || !password) {
+    recordLoginFailure(loginKey);
     return renderLogin(res, req, {
       status: 400,
       errorType: "invalid",
@@ -135,7 +262,7 @@ app.post("/login", (req, res, next) => {
   }
 
   db.get(
-    "SELECT id, email, password_hash, role, status FROM users WHERE email = ?",
+    "SELECT id, email, password_hash, role, status, must_change_password FROM users WHERE email = ?",
     [email],
     (err, user) => {
       if (err) {
@@ -146,6 +273,7 @@ app.post("/login", (req, res, next) => {
         });
       }
       if (!user || !verifyPassword(user.password_hash, password)) {
+        recordLoginFailure(loginKey);
         return renderLogin(res, req, {
           status: 401,
           errorType: "invalid",
@@ -154,11 +282,12 @@ app.post("/login", (req, res, next) => {
         });
       }
       if (user.status !== "active") {
+        recordLoginFailure(loginKey);
         return renderLogin(res, req, {
-          status: 403,
-          errorType: "locked",
-          lockedInfo: { id: user.id, email: user.email },
-          email: user.email
+          status: 401,
+          errorType: "invalid",
+          errorMessage: "Login fehlgeschlagen.",
+          email
         });
       }
 
@@ -169,15 +298,19 @@ app.post("/login", (req, res, next) => {
           id: user.id,
           email: user.email,
           role: user.role,
-          status: user.status
+          status: user.status,
+          must_change_password: Boolean(user.must_change_password)
         };
 
-        const redirectMap = {
-          admin: "/admin",
-          teacher: "/teacher/classes",
-          student: "/student"
-        };
-        res.redirect(redirectMap[user.role] || "/");
+        resetLoginAttempts(loginKey);
+        db.run("UPDATE users SET last_login = current_timestamp WHERE id = ?", [user.id], () => {});
+        const redirectTarget = user.must_change_password
+          ? "/force-password-change"
+          : getRedirectForRole(user.role);
+        req.session.save((saveErr) => {
+          if (saveErr) return next(saveErr);
+          res.redirect(redirectTarget);
+        });
       });
     }
   );

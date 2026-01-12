@@ -1,7 +1,6 @@
 <%
   const _errorType = typeof errorType !== 'undefined' ? errorType : null;
   const _errorMessage = typeof errorMessage !== 'undefined' ? errorMessage : null;
-  const _lockedInfo = typeof lockedInfo !== 'undefined' ? lockedInfo : null;
   const _csrfToken = typeof csrfToken !== 'undefined' ? csrfToken : '';
   const _email = typeof email !== 'undefined' ? email : '';
 
@@ -32,22 +31,15 @@
           im Rahmen des Unterrichts an der HTBLuVA Waidhofen an der Ybbs.
         </p>
 
-        <% const hasErrorPanel = _errorType === 'locked' || _errorType === 'invalid'; %>
+        <% const hasErrorPanel = _errorType === 'invalid'; %>
         <% if (hasErrorPanel) { %>
-          <div class="login-alert-panel <%= _errorType === 'locked' ? 'login-alert-locked' : 'login-alert-invalid' %>" role="alert">
+          <div class="login-alert-panel login-alert-invalid" role="alert">
             <div class="login-alert-icon">✖</div>
             <div class="login-alert-body">
-              <% if (_errorType === 'locked') { %>
-                <p class="login-alert-title">Konto wurde administrativ gesperrt</p>
-                <p class="login-alert-text">ID: <strong><%= _lockedInfo?.id %></strong> • E-Mail: <strong><%= _lockedInfo?.email %></strong></p>
-                <p class="login-alert-text">Sollte es sich um einen Fehler handeln, melden Sie sich bitte bei einem Administrator:</p>
-                <p class="login-alert-contact">admin@example.com</p>
-              <% } else { %>
-                <p class="login-alert-title">Der Login ist fehlgeschlagen</p>
-                <p class="login-alert-text"><%= _errorMessage || 'Versuchen Sie es erneut.' %></p>
-                <p class="login-alert-text">Sollte es sich um einen Fehler handeln, melden Sie sich bitte bei einem Administrator:</p>
-                <p class="login-alert-contact">admin@example.com</p>
-              <% } %>
+              <p class="login-alert-title">Der Login ist fehlgeschlagen</p>
+              <p class="login-alert-text"><%= _errorMessage || 'Versuchen Sie es erneut.' %></p>
+              <p class="login-alert-text">Sollte es sich um einen Fehler handeln, melden Sie sich bitte bei einem Administrator:</p>
+              <p class="login-alert-contact">admin@example.com</p>
             </div>
           </div>
         <% } %>
