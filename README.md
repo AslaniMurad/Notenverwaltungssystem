@@ -51,24 +51,42 @@ PGPASSWORD=secret
 PGSSL=false
 
 SESSION_SECRET=change-me
+SEED_ADMIN=true
 ADMIN_EMAIL=admin@example.com
 ADMIN_PASS=ChangeMe123!
+INITIAL_PASSWORD=TempPass123!
 PORT=3000
 NODE_ENV=development
+PGSSL=true
+PGSSL_VERIFY=true
 
 # Optional: Demo/Test ohne PostgreSQL
 USE_FAKE_DB=true
+# Optional: Demo-Seed (nur wenn wirklich gewuenscht)
+SEED_DEMO=false
+DEMO_TEACHER_EMAIL=teacher@example.com
+DEMO_TEACHER_PASS=TeacherDemo123!
+DEMO_STUDENT_EMAIL=student@example.com
+DEMO_STUDENT_PASS=StudentDemo123!
 # Alternative zu PG*: DATABASE_URL=postgres://user:pass@host:5432/dbname
 ```
 
 - `DATABASE_URL` ersetzt die einzelnen PG* Variablen.
-- `PGSSL` ist standardmaessig aktiv; fuer lokale DB oft `PGSSL=false`.
+- `PGSSL` ist standardmaessig aktiv; fuer lokale DB oft `PGSSL=false`. Mit `PGSSL_VERIFY=false` kann Zertifikatspruefung (nur fuer lokale Tests) deaktiviert werden.
 - `SESSION_SECRET` sollte in Produktion fix gesetzt werden.
+- `INITIAL_PASSWORD` wird fuer Initial-/Reset-Passwoerter genutzt (erfordert Passwortwechsel beim Login).
+- `MIN_PASSWORD_LENGTH` (optional) definiert die Mindestlaenge fuer Passwoerter.
+
+## Admin anlegen
+1. Setze `SEED_ADMIN=true`, `ADMIN_EMAIL` und `ADMIN_PASS` in der `.env`.
+2. Starte die App einmal; der Admin wird nur angelegt, wenn noch kein Admin existiert.
+3. Entferne `SEED_ADMIN` danach oder setze es auf `false`.
+4. Beim ersten Login ist ein Passwortwechsel erforderlich.
 
 ## Datenbank und Seeds
-- Beim Start erstellt `db.js` die Tabellen, falls sie fehlen: users, classes, students, grade_templates, grades, special_assessments, grade_notifications.
-- Admin wird aus `ADMIN_EMAIL`/`ADMIN_PASS` angelegt (nur wenn noch nicht vorhanden).
-- Demo-User werden einmalig angelegt: teacher@example.com / teacherDemo123!, student@example.com / studentDemo123! (inkl. Beispielklasse 3AHWII).
+- Beim Start erstellt `db.js` die Tabellen, falls sie fehlen: users, classes, students, grade_templates, grades, special_assessments, grade_notifications, sessions.
+- Admin wird nur angelegt, wenn `SEED_ADMIN=true` gesetzt ist und noch kein Admin existiert. Erforderlich: `ADMIN_EMAIL` und `ADMIN_PASS`.
+- Demo-User werden nur angelegt, wenn `SEED_DEMO=true` gesetzt ist (Passwoerter kommen aus `DEMO_TEACHER_PASS` und `DEMO_STUDENT_PASS`).
 - Mit `USE_FAKE_DB=true` laeuft alles in-memory ohne PostgreSQL.
 
 ## Rollen und Funktionen
@@ -108,4 +126,6 @@ Tests nutzen die Fake-DB und pruefen Login sowie Student-Endpunkte.
 - `SESSION_SECRET` setzen (sonst random pro Start).
 - `NODE_ENV=production` aktiviert sichere Cookies und `trust proxy`.
 - `.env` nicht committen; Zugangsdaten nur lokal.
+- `SEED_ADMIN` nur fuer die Erstanlage setzen; danach deaktivieren.
+- `SEED_DEMO` niemals in einer echten Produktion aktivieren.
 - CSRF-Token bei POST Requests mitsenden (Header `X-CSRF-Token`).

@@ -90,7 +90,7 @@
 
                     <form method="POST" action="/admin/users/<%= u.id %>/reset">
                       <input type="hidden" name="_csrf" value="<%= csrfToken %>">
-                      <input type="hidden" name="password" value="temp1234">
+                      <input type="hidden" name="useInitial" value="1">
                       <button class="btn" type="submit">Passwort reset</button>
                     </form>
 

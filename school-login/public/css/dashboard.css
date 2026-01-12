@@ -83,12 +83,28 @@ body.page-dashboard {
   font-weight: 600;
 }
 
+.dashboard-pill.is-error {
+  background: rgba(239, 68, 68, 0.12);
+  border-color: rgba(239, 68, 68, 0.4);
+  color: #b91c1c;
+}
+
 .dashboard-pill .bullet {
   width: 8px;
   height: 8px;
   border-radius: 999px;
   background: #10b981;
   box-shadow: 0 0 8px rgba(16, 185, 129, 0.5);
+}
+
+.dashboard-pill.is-error .bullet {
+  background: #ef4444;
+  box-shadow: 0 0 8px rgba(239, 68, 68, 0.6);
+}
+
+.dashboard-logo.is-error {
+  background: linear-gradient(135deg, #b91c1c, #ef4444);
+  box-shadow: 0 4px 12px rgba(239, 68, 68, 0.3);
 }
 
 .dashboard-headline {
@@ -98,9 +114,20 @@ body.page-dashboard {
   color: var(--dash-accent);
 }
 
+.dashboard-headline.is-error {
+  color: #b91c1c;
+}
+
 .dashboard-subline {
   font-size: 15px;
   color: var(--dash-muted);
+  margin-bottom: 18px;
+}
+
+.dashboard-easter {
+  font-size: 12px;
+  color: var(--dash-muted);
+  margin-top: -6px;
   margin-bottom: 18px;
 }
 
@@ -171,15 +198,18 @@ body.page-dashboard {
 }
 
 .dashboard-link {
-  font-size: 12px;
+  display: block;
+  width: 100%;
+  text-align: center;
+  font-size: 13px;
   color: var(--dash-accent);
   text-decoration: none;
-  padding: 8px 12px;
+  padding: 10px 16px;
   border-radius: 8px;
   background: rgba(37, 99, 235, 0.08);
   border: 1px solid rgba(37, 99, 235, 0.3);
   transition: all 0.2s ease;
-  font-weight: 600;
+  font-weight: 700;
 }
 
 .dashboard-link:hover {

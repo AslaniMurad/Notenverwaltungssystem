@@ -1,4 +1,4 @@
-const express = require("express");
+﻿const express = require("express");
 const router = express.Router();
 const path = require("path");
 const fs = require("fs");
@@ -7,6 +7,7 @@ const multer = require("multer");
 const csrf = require("csurf");
 const { db } = require("../db");
 const { requireAuth, requireRole } = require("../middleware/auth");
+const { deriveNameFromEmail } = require("../utils/studentName");
 
 const runAsync = (sql, params = []) =>
   new Promise((resolve, reject) => {
@@ -34,16 +35,27 @@ const getAsync = (sql, params = []) =>
 
 router.use(requireAuth, requireRole("teacher"));
 
-const csrfProtection = csrf();
+const csrfProtection = csrf({
+  value: (req) =>
+    (req.body && req.body._csrf) ||
+    req.headers["x-csrf-token"] ||
+    req.headers["csrf-token"]
+});
 const GRADE_ATTACHMENT_DIR = path.join(__dirname, "..", "uploads", "grade-attachments");
 const MAX_GRADE_FILE_MB = Math.max(1, Number(process.env.GRADE_FILE_MAX_MB) || 10);
 const MAX_GRADE_FILE_BYTES = MAX_GRADE_FILE_MB * 1024 * 1024;
 const ALLOWED_GRADE_MIME_TYPES = new Set(["application/pdf", "image/jpeg", "image/jpg", "image/png"]);
 const ALLOWED_GRADE_EXTENSIONS = new Set([".pdf", ".jpg", ".jpeg", ".png"]);
+const MAGIC_BYTES = new Map([
+  ["application/pdf", Buffer.from("%PDF-")],
+  ["image/png", Buffer.from([0x89, 0x50, 0x4e, 0x47])],
+  ["image/jpeg", Buffer.from([0xff, 0xd8, 0xff])],
+  ["image/jpg", Buffer.from([0xff, 0xd8, 0xff])]
+]);
 
 fs.mkdirSync(GRADE_ATTACHMENT_DIR, { recursive: true });
 
-const SPECIAL_ASSESSMENT_TYPES = ["Präsentation", "Wunschprüfung", "Benutzerdefiniert"];
+const SPECIAL_ASSESSMENT_TYPES = ["PrÃ¤sentation", "WunschprÃ¼fung", "Benutzerdefiniert"];
 
 function sanitizeFilename(name) {
   return String(name || "datei")
@@ -61,12 +73,26 @@ function normalizeExternalLink(raw) {
   try {
     url = new URL(trimmed);
   } catch {
-    return { error: "Ungültiger Link." };
+    return { error: "UngÃ¼ltiger Link." };
   }
   if (!["http:", "https:"].includes(url.protocol)) {
     return { error: "Der Link muss mit http:// oder https:// beginnen." };
   }
   return { value: url.toString() };
+}
+
+async function hasValidFileSignature(filePath, mime) {
+  const expected = MAGIC_BYTES.get(mime);
+  if (!expected) return false;
+  try {
+    const handle = await fs.promises.open(filePath, "r");
+    const buffer = Buffer.alloc(expected.length);
+    await handle.read(buffer, 0, expected.length, 0);
+    await handle.close();
+    return buffer.equals(expected);
+  } catch {
+    return false;
+  }
 }
 
 async function removeUploadedFile(file) {
@@ -109,10 +135,34 @@ const upload = multer({
   limits: { fileSize: MAX_GRADE_FILE_BYTES }
 });
 
+function runCsrf(req, res) {
+  return new Promise((resolve) => {
+    csrfProtection(req, res, (err) => resolve(err));
+  });
+}
+
 function handleUpload(req, res, next) {
   upload.single("attachment_file")(req, res, async (err) => {
-    if (!err) return next();
+    let uploadErr = err;
     try {
+      const csrfErr = await runCsrf(req, res);
+      if (csrfErr) {
+        await removeUploadedFile(req.file);
+        return next(csrfErr);
+      }
+      if (!uploadErr && req.file) {
+        const signatureOk = await hasValidFileSignature(
+          req.file.path,
+          String(req.file.mimetype || "").toLowerCase()
+        );
+        if (!signatureOk) {
+          await removeUploadedFile(req.file);
+          uploadErr = new Error("Invalid file signature");
+          uploadErr.code = "INVALID_FILE_SIGNATURE";
+        }
+      }
+      if (!uploadErr) return next();
+
       await removeUploadedFile(req.file);
       const classId = req.params.classId;
       const studentId = req.params.studentId;
@@ -123,14 +173,16 @@ function handleUpload(req, res, next) {
       const students = await loadStudents(classId);
       const student = students.find((entry) => String(entry.id) === String(studentId));
       if (!student) {
-        return renderError(res, req, "Schüler nicht gefunden.", 404, `/teacher/students/${classId}`);
+        return renderError(res, req, "SchÃ¼ler nicht gefunden.", 404, `/teacher/students/${classId}`);
       }
       const templates = await loadTemplates(classId);
       const errorMessage =
-        err.code === "LIMIT_FILE_SIZE"
-          ? `Datei ist zu groß. Maximal ${MAX_GRADE_FILE_MB} MB erlaubt.`
-          : err.code === "UNSUPPORTED_FILE_TYPE"
+        uploadErr.code === "LIMIT_FILE_SIZE"
+          ? `Datei ist zu groÃŸ. Maximal ${MAX_GRADE_FILE_MB} MB erlaubt.`
+          : uploadErr.code === "UNSUPPORTED_FILE_TYPE"
           ? "Nur PDF-, JPG- oder PNG-Dateien sind erlaubt."
+          : uploadErr.code === "INVALID_FILE_SIGNATURE"
+          ? "Dateiinhalt passt nicht zum Dateityp."
           : "Upload fehlgeschlagen. Bitte erneut versuchen.";
       return res.status(400).render("teacher/teacher-add-grade", {
         email: req.session.user.email,
@@ -245,7 +297,7 @@ router.post("/create-class", async (req, res, next) => {
   try {
     const { name, subject } = req.body || {};
     if (!name || !subject) {
-      return renderError(res, req, "Bitte alle Pflichtfelder ausfüllen.", 400, "/teacher/create-class");
+      return renderError(res, req, "Bitte alle Pflichtfelder ausfÃ¼llen.", 400, "/teacher/create-class");
     }
 
     await runAsync("INSERT INTO classes (name, subject, teacher_id) VALUES (?,?,?)", [
@@ -318,41 +370,56 @@ router.post("/add-student/:classId", async (req, res, next) => {
   try {
     const classId = req.params.classId;
     const { name, email } = req.body || {};
+    const resolvedEmail = String(email || "").trim();
+    let resolvedName = String(name || "").trim();
     const classData = await loadClassForTeacher(classId, req.session.user.id);
     if (!classData) {
       return renderError(res, req, "Klasse nicht gefunden.", 404, "/teacher/classes");
     }
 
-    if (!name || !email) {
+    if (!resolvedEmail) {
       return res.status(400).render("teacher/teacher-add-student", {
         email: req.session.user.email,
         classData,
         csrfToken: req.csrfToken(),
-        error: "Bitte Name und E-Mail angeben."
+        error: "Bitte E-Mail angeben."
       });
     }
+    if (!resolvedName) {
+      const derived = deriveNameFromEmail(resolvedEmail);
+      if (derived) {
+        resolvedName = derived;
+      } else {
+        return res.status(400).render("teacher/teacher-add-student", {
+          email: req.session.user.email,
+          classData,
+          csrfToken: req.csrfToken(),
+          error: "Bitte Name angeben (oder E-Mail im Format vorname.nachname@xy)."
+        });
+      }
+    }
 
-    const userRow = await getAsync("SELECT id, role FROM users WHERE email = ?", [email]);
+    const userRow = await getAsync("SELECT id, role FROM users WHERE email = ?", [resolvedEmail]);
     if (!userRow || userRow.role !== "student") {
       return res.status(400).render("teacher/teacher-add-student", {
         email: req.session.user.email,
         classData,
         csrfToken: req.csrfToken(),
-        error: "E-Mail nicht gefunden oder nicht als Schüler registriert."
+        error: "E-Mail nicht gefunden oder nicht als SchǬler registriert."
       });
     }
 
-    const duplicate = await getAsync("SELECT id FROM students WHERE email = ? AND class_id = ?", [email, classId]);
+    const duplicate = await getAsync("SELECT id FROM students WHERE email = ? AND class_id = ?", [resolvedEmail, classId]);
     if (duplicate) {
       return res.status(400).render("teacher/teacher-add-student", {
         email: req.session.user.email,
         classData,
         csrfToken: req.csrfToken(),
-        error: "Dieser Schüler ist bereits in der Klasse."
+        error: "Dieser SchǬler ist bereits in der Klasse."
       });
     }
 
-    await runAsync("INSERT INTO students (name, email, class_id) VALUES (?,?,?)", [name, email, classId]);
+    await runAsync("INSERT INTO students (name, email, class_id) VALUES (?,?,?)", [resolvedName, resolvedEmail, classId]);
     res.redirect(`/teacher/students/${classId}`);
   } catch (err) {
     next(err);
@@ -422,7 +489,7 @@ router.get("/student-grades/:classId/:studentId", async (req, res, next) => {
     const students = await loadStudents(classId);
     const student = students.find((entry) => String(entry.id) === String(studentId));
     if (!student) {
-      return renderError(res, req, "Schüler nicht gefunden.", 404, `/teacher/students/${classId}`);
+      return renderError(res, req, "SchÃ¼ler nicht gefunden.", 404, `/teacher/students/${classId}`);
     }
 
     const gradeRows = await loadStudentGrades(student.id);
@@ -526,7 +593,7 @@ router.get("/add-grade/:classId/:studentId", async (req, res, next) => {
     const students = await loadStudents(classId);
     const student = students.find((entry) => String(entry.id) === String(studentId));
     if (!student) {
-      return renderError(res, req, "Schüler nicht gefunden.", 404, `/teacher/students/${classId}`);
+      return renderError(res, req, "SchÃ¼ler nicht gefunden.", 404, `/teacher/students/${classId}`);
     }
 
     const templates = await loadTemplates(classId);
@@ -544,7 +611,7 @@ router.get("/add-grade/:classId/:studentId", async (req, res, next) => {
   }
 });
 
-router.post("/add-grade/:classId/:studentId", csrfProtection, handleUpload, async (req, res, next) => {
+router.post("/add-grade/:classId/:studentId", handleUpload, async (req, res, next) => {
   try {
     const classId = req.params.classId;
     const studentId = req.params.studentId;
@@ -559,7 +626,7 @@ router.post("/add-grade/:classId/:studentId", csrfProtection, handleUpload, asyn
     const student = students.find((entry) => String(entry.id) === String(studentId));
     if (!student) {
       await removeUploadedFile(req.file);
-      return renderError(res, req, "Schüler nicht gefunden.", 404, `/teacher/students/${classId}`);
+      return renderError(res, req, "SchÃ¼ler nicht gefunden.", 404, `/teacher/students/${classId}`);
     }
 
     const templates = await loadTemplates(classId);
@@ -571,7 +638,7 @@ router.post("/add-grade/:classId/:studentId", csrfProtection, handleUpload, asyn
         student,
         templates,
         csrfToken: req.csrfToken(),
-        error: "Bitte alle Pflichtfelder ausfüllen.",
+        error: "Bitte alle Pflichtfelder ausfÃ¼llen.",
         maxFileSizeMb: MAX_GRADE_FILE_MB
       });
     }
@@ -629,7 +696,7 @@ router.post("/add-grade/:classId/:studentId", csrfProtection, handleUpload, asyn
         student,
         templates,
         csrfToken: req.csrfToken(),
-        error: "Prüfungsvorlage nicht gefunden.",
+        error: "PrÃ¼fungsvorlage nicht gefunden.",
         maxFileSizeMb: MAX_GRADE_FILE_MB
       });
     }
@@ -669,7 +736,7 @@ router.post("/add-grade/:classId/:studentId", csrfProtection, handleUpload, asyn
           student,
           templates,
           csrfToken: req.csrfToken(),
-          error: "Diese Prüfung wurde bereits benotet.",
+          error: "Diese PrÃ¼fung wurde bereits benotet.",
           maxFileSizeMb: MAX_GRADE_FILE_MB
         });
       }
@@ -742,7 +809,7 @@ router.post("/create-template/:classId", async (req, res, next) => {
         email: req.session.user.email,
         classData,
         csrfToken: req.csrfToken(),
-        error: "Bitte alle Pflichtfelder ausfüllen."
+        error: "Bitte alle Pflichtfelder ausfÃ¼llen."
       });
     }
     if (weightValue < 0 || weightValue > 100) {
@@ -778,7 +845,7 @@ router.post("/delete-template/:classId/:templateId", async (req, res, next) => {
       [templateId, classId]
     );
     if (!templateRow) {
-      return renderError(res, req, "Prüfung nicht gefunden.", 404, `/teacher/grade-templates/${classId}`);
+      return renderError(res, req, "PrÃ¼fung nicht gefunden.", 404, `/teacher/grade-templates/${classId}`);
     }
 
     await runAsync("DELETE FROM grade_templates WHERE id = ? AND class_id = ?", [templateId, classId]);
@@ -859,7 +926,7 @@ router.post("/special-assessments/:classId", async (req, res, next) => {
           weight,
           grade
         },
-        error: "Bitte alle Pflichtfelder korrekt ausfüllen.",
+        error: "Bitte alle Pflichtfelder korrekt ausfÃ¼llen.",
         csrfToken: req.csrfToken()
       });
     }
@@ -880,7 +947,7 @@ router.post("/special-assessments/:classId", async (req, res, next) => {
           weight,
           grade
         },
-        error: "Bitte eine Bezeichnung für die benutzerdefinierte Sonderleistung angeben.",
+        error: "Bitte eine Bezeichnung fÃ¼r die benutzerdefinierte Sonderleistung angeben.",
         csrfToken: req.csrfToken()
       });
     }
@@ -1081,4 +1148,14 @@ router.get("/class-statistics/:classId", async (req, res, next) => {
   }
 });
 
+router.use((err, req, res, next) => {
+  if (req.file) {
+    return removeUploadedFile(req.file)
+      .then(() => next(err))
+      .catch(() => next(err));
+  }
+  return next(err);
+});
+
 module.exports = router;
+
