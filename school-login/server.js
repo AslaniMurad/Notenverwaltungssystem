@@ -20,6 +20,24 @@ if (isProduction) {
   app.set("trust proxy", 1);
 }
 
+function isDbConnectionError(err) {
+  if (!err) return false;
+  if (Array.isArray(err.errors)) {
+    return err.errors.some(isDbConnectionError);
+  }
+  const code = err.code || "";
+  if (["ECONNRESET", "ETIMEDOUT", "ENETUNREACH", "ECONNREFUSED"].includes(code)) {
+    return true;
+  }
+  const message = String(err.message || "");
+  return (
+    message.includes("Connection terminated unexpectedly") ||
+    message.includes("connect ETIMEDOUT") ||
+    message.includes("ENETUNREACH") ||
+    message.includes("ECONNRESET")
+  );
+}
+
 app.use(express.urlencoded({ extended: true }));
 app.use(express.json());
 app.use(async (req, res, next) => {
@@ -185,6 +203,14 @@ app.use((err, req, res, next) => {
       message:
         "Ungültiges oder abgelaufenes Sicherheits-Token. Bitte Seite neu laden und erneut versuchen.",
       status: 403,
+      backUrl: req.get("referer") || "/login"
+    });
+  }
+  if (isDbConnectionError(err)) {
+    console.error("Database connection error:", err);
+    return res.status(503).render("error", {
+      message: "Datenbank nicht erreichbar. Bitte spaeter erneut versuchen.",
+      status: 503,
       backUrl: req.get("referer") || "/login"
     });
   }

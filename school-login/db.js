@@ -623,6 +623,10 @@ const pool = new Pool(
         ssl
       }
 );
+// Prevent unhandled pool errors from crashing the process.
+pool.on("error", (err) => {
+  console.error("PostgreSQL pool error:", err);
+});
 
 function normalizeArgs(params, cb) {
   if (typeof params === "function") {
