@@ -28,13 +28,6 @@
             <a href="#tasks" data-tab-target="tasks">Aufgaben</a>
             <a href="#returns" data-tab-target="returns">Rückgaben</a>
             <a href="#grades" data-tab-target="grades">Noten</a>
-            <a href="#materials" data-tab-target="materials">Materialien</a>
-            <button class="nav-trigger" data-target="#messages-panel" aria-expanded="false">
-              Kommunikation <span class="chevron">&rsaquo;</span>
-            </button>
-            <div class="nav-panel" id="messages-panel">
-              <a href="#messages" data-tab-target="messages">Nachrichten</a>
-            </div>
             <form class="logout-form" method="POST" action="/logout">
               <% if (typeof csrfToken !== 'undefined') { %>
                 <input type="hidden" name="_csrf" value="<%= csrfToken %>">
@@ -73,8 +66,6 @@
           <div class="tab" data-tab="tasks">Aufgaben</div>
           <div class="tab" data-tab="returns">Rückgaben</div>
           <div class="tab" data-tab="grades">Noten</div>
-          <div class="tab" data-tab="materials">Materialien</div>
-          <div class="tab" data-tab="messages">Nachrichten</div>
         </div>
 
         <main class="student-main">
@@ -209,20 +200,6 @@
             </div>
           </section>
 
-          <section id="materials" class="tab-content">
-            <div class="card">
-              <h3>Materialien</h3>
-              <p class="empty-state">Noch keine Materialien hinterlegt.</p>
-              <div class="upload-box">Datei hochladen</div>
-            </div>
-          </section>
-
-          <section id="messages" class="tab-content">
-            <div class="card">
-              <h3>Nachrichten</h3>
-              <p class="empty-state">Noch keine Nachrichten vorhanden.</p>
-            </div>
-          </section>
         </main>
       </section>
     </div>
