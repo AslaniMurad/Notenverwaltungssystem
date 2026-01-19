@@ -747,7 +747,10 @@ const pool = new Pool(
         user: process.env.PGUSER,
         password: process.env.PGPASSWORD,
         ssl,
-        keepAlive:true
+        keepAlive:true,
+        max: 10,
+        idleTimeoutMillis: 30000,
+        connectionTimeoutMillis: 5000,
       }
 );
 
