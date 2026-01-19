@@ -736,7 +736,7 @@ if (!connectionString) {
   }
 }
 
-/*
+
 const pool = new Pool(
   connectionString
     ? { connectionString, ssl }
@@ -749,7 +749,8 @@ const pool = new Pool(
         ssl
       }
 );
-*/
+
+/*
 const pool = new Pool(
    {
         host: process.env.PGHOST,
@@ -760,7 +761,7 @@ const pool = new Pool(
 
       }
 );
-
+*/
 // Prevent unhandled pool errors from crashing the process.
 pool.on("error", (err) => {
   console.error("PostgreSQL pool error:", err);
