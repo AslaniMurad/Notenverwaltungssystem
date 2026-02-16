@@ -1,0 +1,216 @@
+<%
+  const page = {
+    title: `Lehrer – Sonderleistungen (${classData.name})`,
+    headerTitle: 'Lehrerbereich',
+    styles: ['/css/teacher-pages.css'],
+    scripts: ['/js/app.js'],
+    bodyClass: 'page-teacher',
+    hideHeader: true,
+    hideFooter: true,
+    content: function () { %>
+    <div class="app-shell teacher-shell">
+      <aside class="teacher-sidebar" aria-label="Lehrer Navigation">
+        <div class="sidebar-brand">
+          <div>
+            <div class="sidebar-title">Teacher Panel</div>
+            <div class="sidebar-meta"><%= email %> · Lehrer</div>
+          </div>
+          <span class="sidebar-badge">Eingeloggt</span>
+        </div>
+
+        <div class="app-nav">
+          <div class="nav-section">
+            <div class="nav-section-title">Navigation</div>
+            <a href="/teacher/classes">Meine Klassen</a>
+            <a href="/teacher/create-class">Klasse erstellen</a>
+            <div class="nav-section-title">Klasse: <%= classData.name %> / <%= classData.subject %></div>
+            <a href="/teacher/students/<%= classData.id %>">Schüler</a>
+            <a href="/teacher/grades/<%= classData.id %>">Noten</a>
+            <a class="is-active" href="/teacher/special-assessments/<%= classData.id %>">Sonderleistungen</a>
+            <a href="/teacher/grade-templates/<%= classData.id %>">Prüfungen</a>
+            <a href="/teacher/class-statistics/<%= classData.id %>">Statistiken</a>
+            <form class="logout-form" method="POST" action="/logout">
+              <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+              <button class="app-nav-link" type="submit">Logout</button>
+            </form>
+          </div>
+        </div>
+      </aside>
+
+      <section class="teacher-main">
+        <header class="teacher-main-header">
+          <div>
+            <p class="teacher-eyebrow">Klasse <%= classData.name %></p>
+            <h1>Sonderleistungen</h1>
+            <p class="teacher-muted">Fach: <%= classData.subject %> · Individuelle Zusatzbewertungen</p>
+          </div>
+          <div class="teacher-actions-inline">
+            <a class="btn btn-secondary" href="/teacher/classes">Zurück</a>
+          </div>
+        </header>
+
+        <div class="teacher-alert info">
+          Sonderleistungen fließen zusätzlich in die Gesamtnote ein und können über 100% hinaus gewichtet werden.
+        </div>
+
+        <div class="teacher-card">
+          <div class="teacher-card-header">
+            <div>
+              <p class="teacher-eyebrow">Neue Sonderleistung</p>
+              <h3>Sonderleistung eintragen</h3>
+            </div>
+          </div>
+
+          <% if (error) { %>
+            <div class="teacher-alert error"><%= error %></div>
+          <% } %>
+
+          <form class="teacher-form" method="POST" action="/teacher/special-assessments/<%= classData.id %>">
+            <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+
+            <label for="student_id">Schüler *</label>
+            <select id="student_id" name="student_id" required>
+              <option value="">-- Schüler wählen --</option>
+              <% students.forEach(student => { %>
+                <option value="<%= student.id %>" <%= String(formData.student_id) === String(student.id) ? 'selected' : '' %>>
+                  <%= student.name %> (<%= student.email %>)
+                </option>
+              <% }) %>
+            </select>
+
+            <label for="type">Typ *</label>
+            <select id="type" name="type" required>
+              <option value="">-- Typ wählen --</option>
+              <% specialTypes.forEach(typeOption => { %>
+                <option value="<%= typeOption %>" <%= formData.type === typeOption ? 'selected' : '' %>>
+                  <%= typeOption %>
+                </option>
+              <% }) %>
+            </select>
+            <small class="form-hint">Für "Benutzerdefiniert" ist eine eigene Bezeichnung Pflicht.</small>
+
+            <label for="name">Bezeichnung</label>
+            <input type="text" id="name" name="name" value="<%= formData.name || '' %>" placeholder="z.B. Präsentation Modul 2">
+
+            <label for="description">Beschreibung</label>
+            <textarea id="description" name="description" rows="2" placeholder="Kurzbeschreibung oder Wunsch des Schülers"><%= formData.description || '' %></textarea>
+
+            <label for="weight">Gewichtung (0-100) *</label>
+            <input type="number" id="weight" name="weight" min="0" max="100" step="0.5" required value="<%= formData.weight || '' %>">
+
+            <label for="grade">Note (1-5) *</label>
+            <input type="number" id="grade" name="grade" min="1" max="5" step="0.25" required value="<%= formData.grade || '' %>">
+
+            <div class="teacher-form-actions">
+              <button class="btn btn-primary" type="submit">Sonderleistung speichern</button>
+              <a class="btn btn-secondary" href="/teacher/grades/<%= classData.id %>">Zurück zu Noten</a>
+            </div>
+          </form>
+        </div>
+
+        <div class="teacher-card">
+          <div class="teacher-card-header">
+            <div>
+              <p class="teacher-eyebrow">Übersicht</p>
+              <h3>Sonderleistungen der Klasse</h3>
+            </div>
+            <div class="teacher-meta-chip"><%= assessments.length %> Einträge</div>
+          </div>
+
+          <div class="grades-list">
+            <% if (assessments.length === 0) { %>
+              <div class="teacher-empty">
+                <h4>Noch keine Sonderleistungen</h4>
+                <p>Lege individuelle Bewertungen für einzelne Schüler an.</p>
+              </div>
+            <% } else { %>
+              <% assessments.forEach(assessment => { %>
+                <div class="grade-item">
+                  <div class="grade-item-header">
+                    <div>
+                      <span class="grade-category-badge <%= assessment.type.toLowerCase() %>"><%= assessment.type %></span>
+                      <h4 class="grade-item-title"><%= assessment.name %></h4>
+                      <span class="weight-badge-small"><%= assessment.weight %>%</span>
+                      <span class="grade-date"><%= new Date(assessment.created_at).toLocaleDateString('de-DE') %></span>
+                      <div class="teacher-muted">Schüler: <%= assessment.student_name %></div>
+                    </div>
+                    <div class="grade-item-actions">
+                      <span class="grade-badge grade-<%= Math.round(assessment.grade) %>"><%= assessment.grade %></span>
+                      <form class="inline delete-special-assessment-form" method="POST" action="/teacher/delete-special-assessment/<%= classData.id %>/<%= assessment.id %>" data-assessment-name="<%= assessment.name %>">
+                        <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+                        <button class="btn btn-danger btn-sm" type="button">Löschen</button>
+                      </form>
+                    </div>
+                  </div>
+                  <% if (assessment.description) { %>
+                    <p class="grade-description"><%= assessment.description %></p>
+                  <% } %>
+                </div>
+              <% }) %>
+            <% } %>
+          </div>
+        </div>
+      </section>
+    </div>
+
+    <div id="deleteSpecialAssessmentModal" class="modal-overlay">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h3>Sonderleistung löschen</h3>
+        </div>
+        <div class="modal-body">
+          <p>Möchtest du die Sonderleistung <strong id="deleteSpecialAssessmentName"></strong> wirklich löschen?</p>
+          <p class="teacher-muted">Diese Aktion kann nicht rückgängig gemacht werden.</p>
+        </div>
+        <div class="modal-footer">
+          <button class="btn btn-secondary" id="cancelDeleteSpecialAssessment">Abbrechen</button>
+          <button class="btn btn-danger" id="confirmDeleteSpecialAssessment">Löschen</button>
+        </div>
+      </div>
+    </div>
+
+    <script>
+      const deleteSpecialAssessmentModal = document.getElementById('deleteSpecialAssessmentModal');
+      const deleteSpecialAssessmentName = document.getElementById('deleteSpecialAssessmentName');
+      const cancelDeleteSpecialAssessment = document.getElementById('cancelDeleteSpecialAssessment');
+      const confirmDeleteSpecialAssessment = document.getElementById('confirmDeleteSpecialAssessment');
+      let currentSpecialAssessmentForm = null;
+
+      document.querySelectorAll('.delete-special-assessment-form button[type="button"]').forEach(btn => {
+        btn.addEventListener('click', function(e) {
+          e.preventDefault();
+          currentSpecialAssessmentForm = this.closest('form');
+          const assessmentName = currentSpecialAssessmentForm.dataset.assessmentName;
+          deleteSpecialAssessmentName.textContent = assessmentName;
+          deleteSpecialAssessmentModal.classList.add('active');
+        });
+      });
+
+      cancelDeleteSpecialAssessment.addEventListener('click', () => {
+        deleteSpecialAssessmentModal.classList.remove('active');
+        currentSpecialAssessmentForm = null;
+      });
+
+      confirmDeleteSpecialAssessment.addEventListener('click', () => {
+        if (currentSpecialAssessmentForm) {
+          currentSpecialAssessmentForm.submit();
+        }
+      });
+
+      deleteSpecialAssessmentModal.addEventListener('click', (e) => {
+        if (e.target === deleteSpecialAssessmentModal) {
+          deleteSpecialAssessmentModal.classList.remove('active');
+          currentSpecialAssessmentForm = null;
+        }
+      });
+
+      document.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape' && deleteSpecialAssessmentModal.classList.contains('active')) {
+          deleteSpecialAssessmentModal.classList.remove('active');
+          currentSpecialAssessmentForm = null;
+        }
+      });
+    </script>
+<% } };
+%>
+<%- include('../layout', page) %>

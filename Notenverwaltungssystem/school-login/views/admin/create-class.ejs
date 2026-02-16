@@ -1,0 +1,44 @@
+<%
+  const page = {
+    title: 'Admin — Klasse erstellen',
+    headerTitle: 'Adminbereich',
+    styles: ['/css/admin.css'],
+    scripts: ['/js/app.js'],
+    bodyClass: 'page-admin',
+    hideHeader: true,
+    hideFooter: true,
+    content: function () { %>
+    <div class="app-shell">
+      <%- include('./nav', { csrfToken, currentUser, activePath }) %>
+
+      <section class="app-main">
+        <div class="app-main-header">
+          <div>
+            <p class="app-main-subtitle">Klassen</p>
+            <h1>Neue Klasse anlegen</h1>
+            <p class="admin-muted">Fülle das Formular aus, um eine neue Klasse zu erstellen.</p>
+          </div>
+          
+        </div>
+
+        <div class="admin-card">
+          <form class="admin-form vertical" method="POST" action="/admin/classes">
+            <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+            <label>Klassenname</label>
+            <input type="text" name="name" placeholder="z.B. 3AHWII" required>
+            <label>Fach</label>
+            <input type="text" name="subject" placeholder="z.B. Informatik" required>
+            <label>Zuordnen an Lehrer</label>
+            <select name="teacher_id" required>
+              <option value="">Lehrer auswählen</option>
+              <% teachers.forEach(function(t){ %>
+                <option value="<%= t.id %>"><%= t.email %></option>
+              <% }) %>
+            </select>
+            <button class="btn btn-primary" type="submit">Klasse erstellen</button>
+          </form>
+        </div>
+      </section>
+    </div>
+<% } }; %>
+<%- include('../layout', page) %>

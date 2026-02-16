@@ -1,0 +1,305 @@
+<%
+  const page = {
+    title: `Lehrer — Noten von ${student.name}`,
+    headerTitle: 'Lehrerbereich',
+    styles: ['/css/teacher-pages.css'],
+    scripts: ['/js/app.js'],
+    bodyClass: 'page-teacher',
+    hideHeader: true,
+    hideFooter: true,
+    content: function () { %>
+    <div class="app-shell teacher-shell">
+      <aside class="teacher-sidebar" aria-label="Lehrer Navigation">
+        <div class="sidebar-brand">
+          <div>
+            <div class="sidebar-title">Teacher Panel</div>
+            <div class="sidebar-meta"><%= email %> · Lehrer</div>
+          </div>
+          <span class="sidebar-badge">Eingeloggt</span>
+        </div>
+
+        <div class="app-nav">
+          <div class="nav-section">
+            <div class="nav-section-title">Navigation</div>
+            <a href="/teacher/classes">Meine Klassen</a>
+            <a href="/teacher/create-class">Klasse erstellen</a>
+            <div class="nav-section-title">Klasse: <%= classData.name %> / <%= classData.subject %></div>
+            <a href="/teacher/students/<%= classData.id %>">Schüler</a>
+            <a href="/teacher/grades/<%= classData.id %>">Noten</a>
+            <a href="/teacher/special-assessments/<%= classData.id %>">Sonderleistungen</a>
+            <a href="/teacher/grade-templates/<%= classData.id %>">Prüfungen</a>
+            <a href="/teacher/class-statistics/<%= classData.id %>">Statistiken</a>
+            <form class="logout-form" method="POST" action="/logout">
+              <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+              <button class="app-nav-link" type="submit">Logout</button>
+            </form>
+          </div>
+        </div>
+      </aside>
+
+      <section class="teacher-main">
+        <header class="teacher-main-header">
+          <div>
+            <p class="teacher-eyebrow">Schüler: <%= student.name %></p>
+            <h1>Notendetails</h1>
+            <p class="teacher-muted">Klasse: <%= classData.name %> (<%= classData.subject %>)</p>
+          </div>
+          <div class="teacher-actions-inline">
+            <a class="btn btn-primary" href="/teacher/add-grade/<%= classData.id %>/<%= student.id %>">+ Note hinzufügen</a>
+            <a class="btn btn-secondary" href="/teacher/grades/<%= classData.id %>">Zurück</a>
+          </div>
+        </header>
+
+        <% if (average) { %>
+          <div class="stats-card">
+            <div class="stat-item">
+              <p class="stat-label">Durchschnittsnote</p>
+              <p class="stat-value grade-<%= Math.round(average) %>"><%= average %></p>
+            </div>
+            <div class="stat-item">
+              <p class="stat-label">Anzahl Noten</p>
+              <p class="stat-value"><%= grades.length %></p>
+            </div>
+            <div class="stat-item">
+              <p class="stat-label">Schüler</p>
+              <p class="stat-value-text"><%= student.name %></p>
+            </div>
+          </div>
+        <% } %>
+
+        <div class="teacher-card">
+          <div class="teacher-card-header">
+            <div>
+              <p class="teacher-eyebrow">Wunschnote</p>
+              <h3>Welche Note wuerde helfen?</h3>
+            </div>
+          </div>
+
+          <% if (grades.length === 0) { %>
+            <div class="teacher-empty">
+              <h4>Noch keine Noten</h4>
+              <p>Die Berechnung ist erst verfuegbar, sobald Noten vorliegen.</p>
+            </div>
+          <% } else { %>
+            <form class="teacher-form" onsubmit="return false;">
+              <label for="target-grade">Wunschnote (1-5) *</label>
+              <input type="number" id="target-grade" name="target-grade" min="1" max="5" step="0.1" value="<%= average || '' %>" placeholder="z.B. 2.0">
+              <small class="form-hint">Berechnung fuer eine zusaetzliche Leistung mit neuer Gewichtung.</small>
+            </form>
+
+            <p class="teacher-muted" id="wish-grade-info"></p>
+
+            <div class="grades-table-wrapper">
+              <table class="grades-table">
+                <thead>
+                  <tr>
+                    <th>Gewichtung</th>
+                    <th>Benoetigte Note</th>
+                    <th>Hinweis</th>
+                  </tr>
+                </thead>
+                <tbody id="wish-grade-table"></tbody>
+              </table>
+            </div>
+          <% } %>
+        </div>
+
+        <div class="teacher-card">
+          <div class="teacher-card-header">
+            <div>
+              <p class="teacher-eyebrow">Alle Noten</p>
+              <h3>Notenliste</h3>
+            </div>
+            <div class="teacher-meta-chip"><%= grades.length %> Einträge</div>
+          </div>
+
+          <div class="grades-list">
+            <% if (grades.length === 0) { %>
+              <div class="teacher-empty">
+                <h4>Noch keine Noten</h4>
+                <p>Füge die erste Note für diesen Schüler hinzu.</p>
+                <a class="btn btn-primary" href="/teacher/add-grade/<%= classData.id %>/<%= student.id %>">Note hinzufügen</a>
+              </div>
+            <% } else { %>
+              <% grades.forEach(grade => { %>
+                <div class="grade-item">
+                  <div class="grade-item-header">
+                    <div>
+                      <span class="grade-category-badge <%= grade.category.toLowerCase() %>"><%= grade.category %></span>
+                      <h4 class="grade-item-title"><%= grade.template_name %></h4>
+                      <span class="weight-badge-small"><%= grade.weight %>%</span>
+                      <% if (grade.template_date) { %>
+                        <span class="grade-date"><%= new Date(grade.template_date).toLocaleDateString('de-DE') %></span>
+                      <% } %>
+                    </div>
+                    <div class="grade-item-actions">
+                      <span class="grade-badge grade-<%= Math.round(grade.grade) %>"><%= grade.grade %></span>
+                      <form class="inline delete-grade-form" method="POST" action="<%= grade.delete_action %>" data-grade-info="<%= grade.template_name %> (<%= grade.grade %>)">
+                        <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+                        <button class="btn btn-danger btn-sm" type="button">Löschen</button>
+                      </form>
+                    </div>
+                  </div>
+                  <% if (grade.note) { %>
+                    <p class="grade-description"><%= grade.note %></p>
+                  <% } %>
+                  <% if (grade.has_attachment) { %>
+                    <div class="grade-attachment">
+                      <span class="teacher-muted">Anhang: <%= grade.attachment_name || 'Datei' %></span>
+                      <form class="inline delete-attachment-form" method="POST" action="<%= grade.attachment_delete_action %>">
+                        <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+                        <button class="btn btn-secondary btn-sm" type="submit">Anhang löschen</button>
+                      </form>
+                    </div>
+                  <% } %>
+                </div>
+              <% }) %>
+            <% } %>
+          </div>
+        </div>
+      </section>
+    </div>
+
+    <!-- Lösch-Bestätigungs-Modal -->
+    <div id="deleteGradeModal" class="modal-overlay">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h3>Note löschen</h3>
+        </div>
+        <div class="modal-body">
+          <p>Möchtest du die Note <strong id="deleteGradeInfo"></strong> wirklich löschen?</p>
+          <p class="teacher-muted">Diese Aktion kann nicht rückgängig gemacht werden.</p>
+        </div>
+        <div class="modal-footer">
+          <button class="btn btn-secondary" id="cancelDeleteGrade">Abbrechen</button>
+          <button class="btn btn-danger" id="confirmDeleteGrade">Löschen</button>
+        </div>
+      </div>
+    </div>
+
+    <script>
+      const wishGradeData = <%- JSON.stringify(grades || []).replace(/</g, "\\u003c") %>;
+      const wishGradeInput = document.getElementById('target-grade');
+      const wishGradeInfo = document.getElementById('wish-grade-info');
+      const wishGradeTable = document.getElementById('wish-grade-table');
+      const wishWeights = [5, 10, 15, 20, 25, 30, 40, 50];
+
+      function computeWishGradeBaseline() {
+        const items = (wishGradeData || []).map((grade) => ({
+          value: Number(grade.grade),
+          weight: Number(grade.weight || 0)
+        }));
+        const valid = items.filter((item) => Number.isFinite(item.value) && Number.isFinite(item.weight));
+        const weightedSum = valid.reduce((sum, item) => sum + item.value * item.weight, 0);
+        const weightTotal = valid.reduce((sum, item) => sum + item.weight, 0);
+        const average = weightTotal ? weightedSum / weightTotal : null;
+        return { weightedSum, weightTotal, average };
+      }
+
+      function formatRequiredGrade(required) {
+        if (!Number.isFinite(required)) {
+          return { text: "-", hint: "Keine Berechnung", badge: false };
+        }
+        if (required <= 1) {
+          return { text: "1.00", hint: "oder besser", badge: true, badgeClass: "grade-1" };
+        }
+        if (required > 5) {
+          return { text: "Nicht erreichbar", hint: "", badge: false };
+        }
+        const rounded = Math.min(5, Math.max(1, Math.round(required)));
+        return { text: required.toFixed(2), hint: "", badge: true, badgeClass: `grade-${rounded}` };
+      }
+
+      function renderWishGradeTable() {
+        if (!wishGradeTable || !wishGradeInfo || !wishGradeInput) return;
+
+        const baseline = computeWishGradeBaseline();
+        if (!baseline.weightTotal) {
+          wishGradeInfo.textContent = "Noch keine gewichteten Noten vorhanden.";
+          wishGradeTable.innerHTML = "";
+          return;
+        }
+
+        const target = Number(wishGradeInput.value);
+        if (!Number.isFinite(target) || target < 1 || target > 5) {
+          wishGradeInfo.textContent = "Bitte eine Wunschnote zwischen 1 und 5 eingeben.";
+          wishGradeTable.innerHTML = "";
+          return;
+        }
+
+        const averageLabel = baseline.average != null ? baseline.average.toFixed(2) : "-";
+        const improvementHint =
+          baseline.average != null && target >= baseline.average
+            ? "Hinweis: Wunschnote ist nicht besser als der aktuelle Schnitt."
+            : "";
+        wishGradeInfo.textContent = `Aktueller Schnitt: ${averageLabel} - Gesamtgewicht: ${baseline.weightTotal}%${improvementHint ? " - " + improvementHint : ""}`;
+
+        wishGradeTable.innerHTML = wishWeights
+          .map((weight) => {
+            const required = (target * (baseline.weightTotal + weight) - baseline.weightedSum) / weight;
+            const formatted = formatRequiredGrade(required);
+            const gradeCell = formatted.badge
+              ? `<span class="grade-badge ${formatted.badgeClass}">${formatted.text}</span>`
+              : `<span class="teacher-muted">${formatted.text}</span>`;
+            const hintCell = formatted.hint ? formatted.hint : "-";
+            return `
+              <tr>
+                <td>${weight}%</td>
+                <td>${gradeCell}</td>
+                <td>${hintCell}</td>
+              </tr>
+            `;
+          })
+          .join("");
+      }
+
+      if (wishGradeInput) {
+        wishGradeInput.addEventListener('input', renderWishGradeTable);
+      }
+      renderWishGradeTable();
+
+      // Modal-Logik für Noten-Löschung
+      const deleteGradeModal = document.getElementById('deleteGradeModal');
+      const deleteGradeInfo = document.getElementById('deleteGradeInfo');
+      const cancelDeleteGrade = document.getElementById('cancelDeleteGrade');
+      const confirmDeleteGrade = document.getElementById('confirmDeleteGrade');
+      let currentGradeForm = null;
+
+      document.querySelectorAll('.delete-grade-form button[type="button"]').forEach(btn => {
+        btn.addEventListener('click', function(e) {
+          e.preventDefault();
+          currentGradeForm = this.closest('form');
+          const gradeInfo = currentGradeForm.dataset.gradeInfo;
+          deleteGradeInfo.textContent = gradeInfo;
+          deleteGradeModal.classList.add('active');
+        });
+      });
+
+      cancelDeleteGrade.addEventListener('click', () => {
+        deleteGradeModal.classList.remove('active');
+        currentGradeForm = null;
+      });
+
+      confirmDeleteGrade.addEventListener('click', () => {
+        if (currentGradeForm) {
+          currentGradeForm.submit();
+        }
+      });
+
+      deleteGradeModal.addEventListener('click', (e) => {
+        if (e.target === deleteGradeModal) {
+          deleteGradeModal.classList.remove('active');
+          currentGradeForm = null;
+        }
+      });
+
+      document.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape' && deleteGradeModal.classList.contains('active')) {
+          deleteGradeModal.classList.remove('active');
+          currentGradeForm = null;
+        }
+      });
+    </script>
+<% } };
+%>
+<%- include('../layout', page) %>

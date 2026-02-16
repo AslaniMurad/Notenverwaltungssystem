@@ -1,0 +1,53 @@
+<%
+  const page = {
+    title: 'Admin — Home',
+    headerTitle: 'Adminbereich',
+    headerActions: [],
+    styles: ['/css/admin.css'],
+    scripts: ['/js/app.js'],
+    bodyClass: 'page-admin',
+    hideHeader: true,
+    hideFooter: true,
+    content: function () { %>
+    <div class="app-shell">
+      <%- include('./nav', { csrfToken, currentUser, activePath }) %>
+
+      <section class="app-main">
+        <div class="app-main-header">
+          <div>
+            <p class="app-main-subtitle">Übersicht</p>
+            <h1>Willkommen im Adminbereich</h1>
+            
+          </div>
+          <div class="admin-actions-row">
+            <a class="btn btn-primary" href="/admin/users/new">Nutzer anlegen</a>
+            <a class="btn btn-secondary" href="/admin/classes/new">Klasse erstellen</a>
+          </div>
+        </div>
+
+        <div class="admin-grid">
+          <div class="admin-card">
+            <p class="admin-eyebrow">Nutzer</p>
+            <h3><%= stats.users %> Accounts</h3>
+            
+            <a class="admin-link" href="/admin/users">Zur Nutzerliste →</a>
+          </div>
+          <div class="admin-card">
+            <p class="admin-eyebrow">Klassen</p>
+            <h3><%= stats.classes %> Klassen</h3>
+            
+            <a class="admin-link" href="/admin/classes">Klassen öffnen →</a>
+          </div>
+          <div class="admin-card">
+            <p class="admin-eyebrow">Schüler</p>
+            <h3><%= stats.students %> Einträge</h3>
+            
+            <a class="admin-link" href="/admin/classes">Schüler ansehen →</a>
+          </div>
+        </div>
+
+
+      </section>
+    </div>
+<% } }; %>
+<%- include('../layout', page) %>

@@ -1,0 +1,210 @@
+<%
+  const page = {
+    title: "Schüler-Dashboard",
+    headerTitle: "Schüler-Dashboard",
+    styles: ["/css/student-dashboard.css"],
+    scripts: ["/js/app.js", "/js/student-dashboard.js"],
+    bodyClass: "page-student",
+    hideHeader: true,
+    hideFooter: true,
+    content: function () { %>
+    <% if (locals.isMobile) { %>
+      <button class="mobile-nav-toggle" aria-label="Navigation öffnen"></button>
+    <% } %>
+    <div class="app-shell app-shell-wide">
+      <aside class="app-sidebar" aria-label="Schülernavigation">
+        <div class="sidebar-brand">
+          <div>
+            <div class="sidebar-title">Schüler-Dashboard</div>
+            <div class="sidebar-meta"><%= studentProfile.name %> &middot; <%= studentProfile.class %></div>
+          </div>
+          <span class="sidebar-badge">Aktiv</span>
+        </div>
+
+        <div class="app-nav">
+          <div class="nav-section">
+            <div class="nav-section-title">Bereiche</div>
+            <a class="is-active" href="#overview" data-tab-target="overview">Übersicht</a>
+            <a href="#tasks" data-tab-target="tasks">Aufgaben</a>
+            <a href="#returns" data-tab-target="returns">Rückgaben</a>
+            <a href="#grades" data-tab-target="grades">Noten</a>
+            <form class="logout-form" method="POST" action="/logout">
+              <% if (typeof csrfToken !== 'undefined') { %>
+                <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+              <% } %>
+              <button class="app-nav-link" type="submit">Logout</button>
+            </form>
+          </div>
+        </div>
+      </aside>
+
+      <section class="app-main">
+        <header class="dashboard-hero">
+          <div class="header-left">
+            <img src="/images/htl-waidhofen.png" alt="HTL Waidhofen" class="htl-small" onerror="this.style.display='none'">
+            <div>
+              <h1>HTBLuVA Waidhofen an der Ybbs</h1>
+            </div>
+          </div>
+          <div class="header-right">
+            <div>
+              <strong><%= studentProfile.name %></strong><br>
+              <small>Klasse <%= studentProfile.class %></small><br>
+              <small><%= email %></small>
+            </div>
+            <form class="logout-form" method="POST" action="/logout">
+              <% if (typeof csrfToken !== 'undefined') { %>
+                <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+              <% } %>
+              <button class="logout-button" type="submit">Logout</button>
+            </form>
+          </div>
+        </header>
+
+        <div class="tabs">
+          <div class="tab active" data-tab="overview">Übersicht</div>
+          <div class="tab" data-tab="tasks">Aufgaben</div>
+          <div class="tab" data-tab="returns">Rückgaben</div>
+          <div class="tab" data-tab="grades">Noten</div>
+        </div>
+
+        <main class="student-main">
+                    <section id="overview" class="tab-content active">
+            <div class="card">
+              <h3>&Uuml;bersicht</h3>
+              <div class="info-grid">
+                <div class="stat-tile">
+                  <h4>Durchschnitt</h4>
+                  <strong id="overview-average">-</strong>
+                </div>
+                <div class="stat-tile">
+                  <h4>Offene Aufgaben</h4>
+                  <strong id="overview-open-tasks">-</strong>
+                </div>
+                <div class="stat-tile">
+                  <h4>R&uuml;ckgaben</h4>
+                  <strong id="overview-return-count">-</strong>
+                </div>
+              </div>
+            </div>
+
+            <div class="card">
+              <h3>N&auml;chste Aufgaben</h3>
+              <div id="overview-upcoming" class="overview-list"></div>
+            </div>
+
+            <div class="card">
+              <h3>Letzte R&uuml;ckgaben</h3>
+              <div id="overview-recent-returns" class="overview-list"></div>
+            </div>
+          </section>
+
+                    <section id="tasks" class="tab-content">
+            <div class="card">
+              <h3>Aufgaben</h3>
+              <form id="task-filter" class="filter-grid" aria-label="Aufgaben filtern">
+                <label>Fach
+                  <select name="subject" id="task-filter-subject">
+                    <option value="">Alle</option>
+                    <% subjects.forEach(function(sub){ %>
+                      <option value="<%= sub %>"><%= sub %></option>
+                    <% }) %>
+                  </select>
+                </label>
+                <label>Suche
+                  <input type="search" name="query" id="task-filter-query" placeholder="Titel oder Beschreibung">
+                </label>
+              </form>
+              <div id="task-list"></div>
+            </div>
+          </section>
+
+                    <section id="returns" class="tab-content">
+            <div class="card">
+              <h3>R&uuml;ckgaben</h3>
+              <form id="return-filter" class="filter-grid" aria-label="Rueckgaben filtern">
+                <label>Fach
+                  <select name="subject" id="return-filter-subject">
+                    <option value="">Alle</option>
+                    <% subjects.forEach(function(sub){ %>
+                      <option value="<%= sub %>"><%= sub %></option>
+                    <% }) %>
+                  </select>
+                </label>
+                <label>Suche
+                  <input type="search" name="query" id="return-filter-query" placeholder="Titel oder Beschreibung">
+                </label>
+              </form>
+              <div id="return-list"></div>
+            </div>
+          </section>
+
+          <section id="grades" class="tab-content">
+            <div class="card">
+              <div class="grades-header" style="display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;">
+                <h3>Noten</h3>
+                <div class="button-row">
+                  <a class="btn small secondary" href="/student/grades.csv">CSV Export</a>
+                  <a class="btn small secondary" href="/student/grades.pdf">PDF Export</a>
+                </div>
+              </div>
+              <form id="grade-filter" class="filter-grid" aria-label="Noten filtern">
+                <label>Fach
+                  <select name="subject" id="filter-subject">
+                    <option value="">Alle</option>
+                    <% subjects.forEach(function(sub){ %>
+                      <option value="<%= sub %>"><%= sub %></option>
+                    <% }) %>
+                  </select>
+                </label>
+                <label>Von
+                  <input type="date" name="startDate" id="filter-start">
+                </label>
+                <label>Bis
+                  <input type="date" name="endDate" id="filter-end">
+                </label>
+                <label>Sortierung
+                  <select name="sort" id="filter-sort">
+                    <option value="date">Datum (neueste zuerst)</option>
+                    <option value="value">Beste Note zuerst</option>
+                  </select>
+                </label>
+              </form>
+
+              <div class="info-grid" id="grade-insights">
+                <div class="stat-tile">
+                  <h4>Gesamtdurchschnitt</h4>
+                  <strong id="avg-overall">-</strong>
+                </div>
+                <div class="stat-tile">
+                  <h4>Trend</h4>
+                  <div id="avg-trend" class="badge-inline">-</div>
+                </div>
+                <div class="stat-tile">
+                  <h4>Letzte Aktualisierung</h4>
+                  <small id="avg-updated">-</small>
+                </div>
+              </div>
+
+              <div id="grade-list" aria-live="polite" style="margin-top:10px;"></div>
+            </div>
+
+            <div class="card">
+              <h3>Klassenvergleich</h3>
+              <div id="class-average" class="chart-row"></div>
+            </div>
+
+            <div class="card">
+              <h3>Benachrichtigungen</h3>
+              <div id="notification-list" class="notifications"></div>
+            </div>
+          </section>
+
+        </main>
+      </section>
+    </div>
+    <script type="application/json" id="student-initial-data"><%- JSON.stringify(initialData || {}).replace(/</g, "\\u003c") %></script>
+<% } };
+%>
+<%- include('layout', page) %>
+

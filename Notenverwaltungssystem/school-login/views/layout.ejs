@@ -1,0 +1,43 @@
+<!doctype html>
+<html lang="de">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title><%= title || "School Panel" %></title>
+  <!-- Inter font for improved typography -->
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/css/base.css">
+  <link rel="stylesheet" href="/css/app-shell.css">
+  <% (styles || []).forEach(function(href){ %>
+    <link rel="stylesheet" href="<%= href %>">
+  <% }) %>
+  <% if (locals.isMobile) { %>
+    <link rel="stylesheet" href="/css/mobile.css">
+    <link rel="stylesheet" href="/css/mobile-sidebar.css">
+    <link rel="stylesheet" href="/css/mobile-login.css">
+  <% } %>
+</head>
+<body class="<%= ['app-shell-body', bodyClass, locals.isMobile ? 'mobile-view' : 'desktop-view'].filter(Boolean).join(' ') %>">
+  <% if (!hideHeader) { %>
+    <%- include('partials/site-header', { headerTitle: headerTitle || title, headerActions: headerActions || [], isMobile: locals.isMobile }) %>
+  <% } %>
+
+  <main class="page-shell app-container">
+    <% if (typeof content === 'function') { %>
+      <%- content() %>
+    <% } %>
+  </main>
+
+  <% if (!hideFooter) { %>
+    <%- include('partials/site-footer') %>
+  <% } %>
+
+  <% if (locals.isMobile) { %>
+    <script src="/js/mobile-nav.js"></script>
+    <script src="/js/mobile-login.js"></script>
+  <% } %>
+  <% (scripts || []).forEach(function(src){ %>
+    <script src="<%= src %>"></script>
+  <% }) %>
+</body>
+</html>

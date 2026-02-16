@@ -1,0 +1,167 @@
+<%
+  const page = {
+    title: `Lehrer — Prüfungsvorlagen (${classData.name})`,
+    headerTitle: 'Lehrerbereich',
+    styles: ['/css/teacher-pages.css'],
+    scripts: ['/js/app.js'],
+    bodyClass: 'page-teacher',
+    hideHeader: true,
+    hideFooter: true,
+    content: function () { %>
+    <div class="app-shell teacher-shell">
+      <aside class="teacher-sidebar" aria-label="Lehrer Navigation">
+        <div class="sidebar-brand">
+          <div>
+            <div class="sidebar-title">Teacher Panel</div>
+            <div class="sidebar-meta"><%= email %> · Lehrer</div>
+          </div>
+          <span class="sidebar-badge">Eingeloggt</span>
+        </div>
+
+        <div class="app-nav">
+          <div class="nav-section">
+            <div class="nav-section-title">Navigation</div>
+            <a href="/teacher/classes">Meine Klassen</a>
+            <a href="/teacher/create-class">Klasse erstellen</a>
+            <div class="nav-section-title">Klasse: <%= classData.name %> / <%= classData.subject %></div>
+            <a href="/teacher/students/<%= classData.id %>">Schüler</a>
+            <a href="/teacher/grades/<%= classData.id %>">Noten</a>
+            <a href="/teacher/special-assessments/<%= classData.id %>">Sonderleistungen</a>
+            <a class="is-active" href="/teacher/grade-templates/<%= classData.id %>">Prüfungen</a>
+            <a href="/teacher/class-statistics/<%= classData.id %>">Statistiken</a>
+            <form class="logout-form" method="POST" action="/logout">
+              <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+              <button class="app-nav-link" type="submit">Logout</button>
+            </form>
+          </div>
+        </div>
+      </aside>
+
+      <section class="teacher-main">
+        <header class="teacher-main-header">
+          <div>
+            <p class="teacher-eyebrow">Klasse <%= classData.name %></p>
+            <h1>Prüfungsvorlagen</h1>
+            <p class="teacher-muted">Fach: <%= classData.subject %> · Gesamtgewichtung: <%= totalWeight %>%</p>
+          </div>
+          <div class="teacher-actions-inline">
+            <a class="btn btn-primary" href="/teacher/create-template/<%= classData.id %>">+ Prüfung anlegen</a>
+            <a class="btn btn-secondary" href="/teacher/classes">Zurück</a>
+          </div>
+        </header>
+
+        <% if (totalWeight !== 100 && templates.length > 0) { %>
+          <div class="teacher-alert error">
+            ⚠️ Achtung: Gesamtgewichtung beträgt <%= totalWeight %>%, sollte aber 100% sein!
+          </div>
+        <% } %>
+
+        <div class="teacher-card">
+          <div class="teacher-card-header">
+            <div>
+              <p class="teacher-eyebrow">Tests & Schularbeiten</p>
+              <h3>Verfügbare Prüfungsvorlagen</h3>
+            </div>
+            <div class="teacher-meta-chip"><%= templates.length %> Einträge</div>
+          </div>
+
+          <div class="templates-list">
+            <% if (templates.length === 0) { %>
+              <div class="teacher-empty">
+                <h4>Noch keine Prüfungen angelegt</h4>
+                <p>Erstelle Prüfungsvorlagen (z.B. "1. Schularbeit", "Mitarbeit") mit Gewichtung für die Gesamtnote.</p>
+                <a class="btn btn-primary" href="/teacher/create-template/<%= classData.id %>">+ Erste Prüfung anlegen</a>
+              </div>
+            <% } else { %>
+              <% templates.forEach(template => { %>
+                <div class="template-item">
+                  <div class="template-item-header">
+                    <div>
+                      <span class="grade-category-badge <%= template.category.toLowerCase() %>"><%= template.category %></span>
+                      <h4 class="template-name"><%= template.name %></h4>
+                      <% if (template.date) { %>
+                        <span class="grade-date"><%= new Date(template.date).toLocaleDateString('de-DE') %></span>
+                      <% } %>
+                    </div>
+                    <div class="template-item-actions">
+                      <span class="weight-badge"><%= template.weight %>%</span>
+                      <form class="inline delete-template-form" method="POST" action="/teacher/delete-template/<%= classData.id %>/<%= template.id %>" data-template-name="<%= template.name %>">
+                        <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+                        <button class="btn btn-danger btn-sm" type="button">Löschen</button>
+                      </form>
+                    </div>
+                  </div>
+                  <% if (template.description) { %>
+                    <p class="template-description"><%= template.description %></p>
+                  <% } %>
+                </div>
+              <% }) %>
+            <% } %>
+          </div>
+        </div>
+      </section>
+    </div>
+
+    <!-- Lösch-Bestätigungs-Modal -->
+    <div id="deleteTemplateModal" class="modal-overlay">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h3>Prüfung löschen</h3>
+        </div>
+        <div class="modal-body">
+          <p>Möchtest du die Prüfung <strong id="deleteTemplateName"></strong> wirklich löschen?</p>
+          <p class="teacher-muted">⚠️ Alle Noten, die mit dieser Prüfung verbunden sind, werden ebenfalls gelöscht!</p>
+        </div>
+        <div class="modal-footer">
+          <button class="btn btn-secondary" id="cancelDeleteTemplate">Abbrechen</button>
+          <button class="btn btn-danger" id="confirmDeleteTemplate">Löschen</button>
+        </div>
+      </div>
+    </div>
+
+    <script>
+      // Modal-Logik für Template-Löschung
+      const deleteTemplateModal = document.getElementById('deleteTemplateModal');
+      const deleteTemplateName = document.getElementById('deleteTemplateName');
+      const cancelDeleteTemplate = document.getElementById('cancelDeleteTemplate');
+      const confirmDeleteTemplate = document.getElementById('confirmDeleteTemplate');
+      let currentTemplateForm = null;
+
+      document.querySelectorAll('.delete-template-form button[type="button"]').forEach(btn => {
+        btn.addEventListener('click', function(e) {
+          e.preventDefault();
+          currentTemplateForm = this.closest('form');
+          const templateName = currentTemplateForm.dataset.templateName;
+          deleteTemplateName.textContent = templateName;
+          deleteTemplateModal.classList.add('active');
+        });
+      });
+
+      cancelDeleteTemplate.addEventListener('click', () => {
+        deleteTemplateModal.classList.remove('active');
+        currentTemplateForm = null;
+      });
+
+      confirmDeleteTemplate.addEventListener('click', () => {
+        if (currentTemplateForm) {
+          currentTemplateForm.submit();
+        }
+      });
+
+      deleteTemplateModal.addEventListener('click', (e) => {
+        if (e.target === deleteTemplateModal) {
+          deleteTemplateModal.classList.remove('active');
+          currentTemplateForm = null;
+        }
+      });
+
+      document.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape' && deleteTemplateModal.classList.contains('active')) {
+          deleteTemplateModal.classList.remove('active');
+          currentTemplateForm = null;
+        }
+      });
+    </script>
+<% } };
+%>
+<%- include('../layout', page) %>

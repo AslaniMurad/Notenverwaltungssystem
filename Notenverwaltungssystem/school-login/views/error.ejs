@@ -1,0 +1,23 @@
+<%
+  const page = {
+    title: `Fehler — ${status}`,
+    styles: ['/css/error.css'],
+    scripts: ['/js/app.js'],
+    bodyClass: 'page-error',
+    hideHeader: true,
+    hideFooter: true,
+    content: function() { %>
+      <div class="error-card" role="alert">
+        <h1>Fehler <%= status %></h1>
+        <p><%= message %></p>
+
+        <div class="error-actions">
+          <button class="btn-primary" onclick="(function(){ var backUrl = <%- JSON.stringify(backUrl || '') %>; if (backUrl && backUrl.startsWith('/') && !backUrl.startsWith('//')) { location.href = backUrl; } else { history.back(); } })()">← Zurück</button>
+          <button class="btn-secondary" onclick="location.href='/'">Zur Startseite</button>
+          <button class="btn-secondary" onclick="location.href='/login'">Zum Login</button>
+        </div>
+      </div>
+<% } };
+%>
+<%- include('layout', page) %>
+

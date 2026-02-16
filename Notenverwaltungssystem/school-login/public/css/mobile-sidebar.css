@@ -1,0 +1,346 @@
+/* public/css/mobile-sidebar.css - Mobile-spezifische Sidebar Styles */
+
+/* Wird automatisch nur auf mobilen Geräten geladen */
+
+/* === MOBILE SIDEBAR ANPASSUNGEN === */
+
+/* Sidebar standardmäßig versteckt auf Mobile */
+.mobile-view .app-sidebar,
+.mobile-view .teacher-sidebar {
+  position: fixed;
+  left: -100%;
+  top: 0;
+  height: 100vh;
+  width: 280px;
+  max-width: 80vw;
+  z-index: 1000;
+  background: #fff;
+  box-shadow: 2px 0 10px rgba(0,0,0,0.1);
+  transition: left 0.3s ease;
+  overflow-y: auto;
+}
+
+/* Sidebar anzeigen wenn aktiv */
+.mobile-view .app-sidebar.mobile-active,
+.mobile-view .teacher-sidebar.mobile-active {
+  left: 0;
+}
+
+/* Overlay wenn Sidebar offen ist */
+.mobile-view .app-sidebar.mobile-active::after,
+.mobile-view .teacher-sidebar.mobile-active::after {
+  content: '';
+  position: fixed;
+  top: 0;
+  left: 280px;
+  right: 0;
+  bottom: 0;
+  background: rgba(0,0,0,0.5);
+  z-index: 999;
+  animation: fadeIn 0.3s ease;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+/* Mobile Navigation Toggle Button */
+.mobile-nav-toggle {
+  position: fixed;
+  top: 15px;
+  left: 15px;
+  z-index: 1001;
+  background: #007bff;
+  color: white;
+  border: none;
+  border-radius: 8px;
+  width: 50px;
+  height: 50px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  box-shadow: 0 4px 10px rgba(0,0,0,0.2);
+  font-size: 24px;
+  transition: all 0.3s ease;
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
+}
+
+.mobile-nav-toggle:active {
+  transform: scale(0.95);
+}
+
+.mobile-nav-toggle.active {
+  background: #dc3545;
+  left: 295px;
+}
+
+/* Main Content Anpassung auf Mobile */
+.mobile-view .app-main,
+.mobile-view .teacher-main {
+  margin-left: 0;
+  width: 100%;
+  padding: 70px 15px 20px 15px;
+}
+
+/* Dashboard Hero Header Mobile */
+.mobile-view .dashboard-hero {
+  flex-direction: column;
+  gap: 15px;
+  text-align: center;
+  padding: 15px;
+}
+
+.mobile-view .header-left,
+.mobile-view .header-right {
+  width: 100%;
+}
+
+.mobile-view .dashboard-hero h1 {
+  font-size: 20px;
+}
+
+.mobile-view .dashboard-hero p {
+  font-size: 14px;
+}
+
+/* Tabs Mobile */
+.mobile-view .tabs {
+  flex-wrap: wrap;
+  padding: 10px;
+  gap: 8px;
+}
+
+.mobile-view .tab {
+  padding: 10px 12px;
+  font-size: 14px;
+  flex: 1 1 calc(50% - 8px);
+  text-align: center;
+  min-width: 100px;
+}
+
+/* Cards Mobile */
+.mobile-view .card {
+  padding: 15px;
+  margin-bottom: 15px;
+}
+
+/* Sidebar Brand Mobile */
+.mobile-view .sidebar-brand {
+  padding: 20px 15px;
+  border-bottom: 2px solid #f0f0f0;
+}
+
+.mobile-view .sidebar-title {
+  font-size: 18px;
+}
+
+.mobile-view .sidebar-meta {
+  font-size: 12px;
+}
+
+/* Navigation Links Mobile */
+.mobile-view .app-nav {
+  padding: 10px;
+}
+
+.mobile-view .app-nav a,
+.mobile-view .app-nav button {
+  padding: 14px 15px;
+  font-size: 15px;
+  margin: 5px 0;
+}
+
+/* Teacher Actions Mobile */
+.mobile-view .teacher-actions-inline {
+  flex-direction: column;
+  width: 100%;
+}
+
+.mobile-view .teacher-actions-inline .btn {
+  width: 100%;
+  margin: 5px 0;
+}
+
+/* Class Grid Mobile */
+.mobile-view .class-grid {
+  grid-template-columns: 1fr;
+}
+
+/* Statistics Mobile */
+.mobile-view .stats-grid {
+  grid-template-columns: 1fr;
+}
+
+.mobile-view .stat-card {
+  padding: 20px;
+}
+
+/* Forms Mobile */
+.mobile-view .form-group {
+  margin-bottom: 15px;
+}
+
+.mobile-view label {
+  font-size: 14px;
+  margin-bottom: 8px;
+  display: block;
+}
+
+/* Buttons Mobile */
+.mobile-view .btn {
+  padding: 14px 20px;
+  font-size: 15px;
+  width: 100%;
+  margin: 8px 0;
+}
+
+.mobile-view .btn-group {
+  flex-direction: column;
+}
+
+/* Teacher Card Mobile */
+.mobile-view .teacher-card-header {
+  flex-direction: column;
+  gap: 15px;
+}
+
+.mobile-view .teacher-card-actions {
+  width: 100%;
+}
+
+/* Accordion Mobile */
+.mobile-view .accordion {
+  padding: 15px 10px;
+}
+
+.mobile-view .accordion-title {
+  font-size: 14px;
+}
+
+/* Grade Cards Mobile */
+.mobile-view .grade-card {
+  padding: 15px;
+  margin: 10px 0;
+}
+
+.mobile-view .grade-item {
+  flex-direction: column;
+  padding: 12px;
+  gap: 10px;
+}
+
+/* Student List Mobile */
+.mobile-view .student-list-item {
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 15px;
+}
+
+/* Class Info Mobile */
+.mobile-view .class-info {
+  flex-direction: column;
+  gap: 10px;
+}
+
+.mobile-view .class-actions {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+/* Messages Mobile */
+.mobile-view .message-card {
+  padding: 12px;
+  margin: 8px 0;
+}
+
+/* Search Bar Mobile */
+.mobile-view .search-bar {
+  width: 100%;
+  padding: 12px;
+  font-size: 15px;
+}
+
+/* Filter Controls Mobile */
+.mobile-view .filter-controls {
+  flex-direction: column;
+  gap: 10px;
+}
+
+.mobile-view .filter-item {
+  width: 100%;
+}
+
+/* Pagination Mobile */
+.mobile-view .pagination {
+  flex-wrap: wrap;
+  gap: 5px;
+}
+
+.mobile-view .pagination a,
+.mobile-view .pagination button {
+  padding: 8px 12px;
+  font-size: 14px;
+}
+
+/* Modal Mobile */
+.mobile-view .modal-content {
+  width: 95%;
+  max-width: 95%;
+  margin: 10px;
+}
+
+/* Alert Mobile */
+.mobile-view .alert {
+  padding: 12px;
+  font-size: 14px;
+  margin: 10px 0;
+}
+
+/* Header Actions Mobile */
+.mobile-view .teacher-main-header {
+  flex-direction: column;
+  gap: 15px;
+  padding: 15px;
+}
+
+/* Empty State Mobile */
+.mobile-view .empty-state {
+  padding: 30px 15px;
+}
+
+.mobile-view .empty-state h3 {
+  font-size: 18px;
+}
+
+.mobile-view .empty-state p {
+  font-size: 14px;
+}
+
+/* Badge Mobile */
+.mobile-view .badge,
+.mobile-view .sidebar-badge {
+  font-size: 11px;
+  padding: 4px 10px;
+}
+
+/* Info Box Mobile */
+.mobile-view .info-box {
+  padding: 12px;
+  margin: 10px 0;
+}
+
+/* Timeline Mobile */
+.mobile-view .timeline {
+  padding-left: 20px;
+}
+
+.mobile-view .timeline-item {
+  padding: 10px;
+  font-size: 14px;
+}

@@ -1,0 +1,88 @@
+<%
+  const search = query || {};
+  const page = {
+    title: 'Admin — Nutzerübersicht',
+    headerTitle: 'Adminbereich',
+    headerActions: [],
+    styles: ['/css/admin.css'],
+    scripts: ['/js/app.js'],
+    bodyClass: 'page-admin',
+    hideHeader: true,
+    hideFooter: true,
+    content: function () { %>
+    <div class="app-shell">
+      <%- include('./nav', { csrfToken, currentUser, activePath }) %>
+
+      <section class="app-main">
+        <div class="app-main-header">
+          <div>
+            <p class="app-main-subtitle">Nutzer</p>
+            <h1>Nutzerverwaltung</h1>
+            
+          </div>
+          <a class="btn btn-primary" href="/admin/users/new">+ Nutzer anlegen</a>
+        </div>
+
+        <div class="admin-card">
+          <div class="admin-topbar">
+            <div>
+              <p class="admin-eyebrow">Suche</p>
+              <h3>Nutzer filtern</h3>
+            </div>
+          </div>
+          <form class="admin-form" method="GET" action="/admin/users">
+            <input type="number" name="id" min="1" step="1" placeholder="ID" value="<%= search.id || '' %>">
+            <input type="text" name="email" placeholder="E-Mail" value="<%= search.email || '' %>">
+            <select name="role">
+              <option value="">Alle Rollen</option>
+              <option value="admin" <%= search.role === 'admin' ? 'selected' : '' %>>Admin</option>
+              <option value="teacher" <%= search.role === 'teacher' ? 'selected' : '' %>>Lehrer</option>
+              <option value="student" <%= search.role === 'student' ? 'selected' : '' %>>Schueler</option>
+            </select>
+            <button class="btn btn-secondary" type="submit">Suchen</button>
+            <a class="btn" href="/admin/users">Zuruecksetzen</a>
+          </form>
+        </div>
+
+        <div class="admin-card" id="list">
+          <div class="admin-topbar">
+            <h3 class="admin-heading-spaced">Nutzerliste</h3>
+            <span class="admin-badge"><%= users.length %> Einträge</span>
+          </div>
+          <table class="admin-table">
+            <thead>
+              <tr><th>ID</th><th>E-Mail</th><th>Rolle</th><th>Status</th><th>Initial?</th><th>Erstellt</th><th>Aktionen</th></tr>
+            </thead>
+            <tbody>
+              <% if (!users || users.length === 0) { %>
+                <tr><td colspan="7" class="admin-muted">Keine Nutzer gefunden.</td></tr>
+              <% } %>
+              <% users.forEach(function(u){ %>
+                <tr>
+                  <td><%= u.id %></td>
+                  <td><a class="admin-link" href="/admin/users/<%= u.id %>"><%= u.email %></a></td>
+                  <td><%= u.role %></td>
+                  <td><%= u.status %></td>
+                  <td><%= u.must_change_password ? 'Ja' : 'Nein' %></td>
+                  <td><%= u.created_at || '-' %></td>
+                  <td class="admin-actions">
+                    <a class="btn btn-secondary" href="/admin/users/<%= u.id %>/edit">Bearbeiten</a>
+                    <form method="POST" action="/admin/users/<%= u.id %>/reset">
+                      <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+                      <input type="hidden" name="useInitial" value="1">
+                      <button class="btn" type="submit">Passwort reset</button>
+                    </form>
+                    <form method="POST" action="/admin/users/<%= u.id %>/delete" onsubmit="return confirm('Nutzer wirklich löschen (soft-delete)?');">
+                      <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+                      <button class="btn btn-danger" type="submit">Löschen</button>
+                    </form>
+                  </td>
+                </tr>
+              <% }) %>
+            </tbody>
+          </table>
+        </div>
+      </section>
+    </div>
+<% } }; %>
+<%- include('../layout', page) %>
