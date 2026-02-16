@@ -6,8 +6,8 @@
   -webkit-text-size-adjust: 100%;
 }
 
-body.mobile-view,
-html {
+html.mobile-view,
+body.mobile-view {
   overflow-x: hidden;
   max-width: 100vw;
 }

@@ -4,20 +4,48 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title><%= title || "School Panel" %></title>
-  <!-- Inter font for improved typography -->
+  <script>
+    (function () {
+      function detectMobile() {
+        var ua = navigator.userAgent || "";
+        var uaMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Windows Phone|Opera Mini|Mobile|CriOS/i.test(ua);
+        var smallViewport = window.matchMedia && window.matchMedia("(max-width: 900px)").matches;
+        var coarsePointer = window.matchMedia && window.matchMedia("(pointer: coarse)").matches;
+        var noHover = window.matchMedia && window.matchMedia("(hover: none)").matches;
+        return Boolean(uaMobile || smallViewport || (coarsePointer && noHover));
+      }
+
+      function applyDeviceClasses(isMobile) {
+        var html = document.documentElement;
+        html.classList.toggle("mobile-view", isMobile);
+        html.classList.toggle("desktop-view", !isMobile);
+        html.setAttribute("data-device", isMobile ? "mobile" : "desktop");
+
+        if (document.body) {
+          document.body.classList.toggle("mobile-view", isMobile);
+          document.body.classList.toggle("desktop-view", !isMobile);
+          document.body.setAttribute("data-device", isMobile ? "mobile" : "desktop");
+        }
+      }
+
+      var isMobile = detectMobile();
+      applyDeviceClasses(isMobile);
+      document.addEventListener("DOMContentLoaded", function () {
+        applyDeviceClasses(detectMobile());
+      });
+    })();
+  </script>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="/css/base.css">
   <link rel="stylesheet" href="/css/app-shell.css">
+  <link rel="stylesheet" href="/css/mobile.css">
+  <link rel="stylesheet" href="/css/mobile-sidebar.css">
+  <link rel="stylesheet" href="/css/mobile-login.css">
   <% (styles || []).forEach(function(href){ %>
     <link rel="stylesheet" href="<%= href %>">
   <% }) %>
-  <% if (locals.isMobile) { %>
-    <link rel="stylesheet" href="/css/mobile.css">
-    <link rel="stylesheet" href="/css/mobile-sidebar.css">
-    <link rel="stylesheet" href="/css/mobile-login.css">
-  <% } %>
 </head>
-<body class="<%= ['app-shell-body', bodyClass, locals.isMobile ? 'mobile-view' : 'desktop-view'].filter(Boolean).join(' ') %>">
+<body class="<%= ['app-shell-body', bodyClass, locals.isMobile ? 'mobile-view' : 'desktop-view'].filter(Boolean).join(' ') %>" data-server-device="<%= locals.isMobile ? 'mobile' : 'desktop' %>">
   <% if (!hideHeader) { %>
     <%- include('partials/site-header', { headerTitle: headerTitle || title, headerActions: headerActions || [], isMobile: locals.isMobile }) %>
   <% } %>
@@ -32,10 +60,8 @@
     <%- include('partials/site-footer') %>
   <% } %>
 
-  <% if (locals.isMobile) { %>
-    <script src="/js/mobile-nav.js"></script>
-    <script src="/js/mobile-login.js"></script>
-  <% } %>
+  <script src="/js/mobile-nav.js"></script>
+  <script src="/js/mobile-login.js"></script>
   <% (scripts || []).forEach(function(src){ %>
     <script src="<%= src %>"></script>
   <% }) %>
