@@ -1,0 +1,44 @@
+﻿<%
+  const page = {
+    title: 'Dashboard',
+    headerTitle: 'Dashboard',
+    headerActions: [],
+    styles: ['/css/dashboard.css'],
+    scripts: ['/js/app.js'],
+    bodyClass: 'page-dashboard',
+    hideHeader: false,
+    hideFooter: true,
+    content: function () { %>
+    <div class="dashboard-shell">
+      <div>
+        <div class="dashboard-brand">
+          <div class="dashboard-logo is-error">!</div>
+          <div class="brand-title-quiet">School Panel</div>
+        </div>
+        <div class="dashboard-pill is-error">
+          <span class="bullet"></span>
+          WRONG PATH!
+        </div>
+        <h1 class="dashboard-headline is-error">Ups!</h1>
+        <p class="dashboard-subline">
+          Etwas ist schiefgelaufen.
+        </p>
+        <p class="dashboard-easter">Ganz unten gelandet? Diese Adresse braucht einen Pfad.</p>
+      </div>
+      <div class="dashboard-right">
+        <div class="dashboard-nav-row">
+          <% let startHref = "/"; %>
+          <% if (role === "admin") { startHref = "/admin"; } %>
+          <% if (role === "student") { startHref = "/student"; } %>
+          <% if (role === "teacher") { startHref = "/teacher/classes"; } %>
+          <a class="dashboard-link" href="<%= startHref %>">Startseite</a>
+        </div>
+        <form class="logout-form" method="POST" action="/logout">
+          <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+          <button class="logout-btn" type="submit">Session loeschen</button>
+        </form>
+      </div>
+    </div>
+<% } };
+%>
+<%- include('layout', page) %>

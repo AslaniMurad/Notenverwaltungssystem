@@ -1,0 +1,120 @@
+<%
+  const isTeacher = user.role === 'teacher';
+  const isStudent = user.role === 'student';
+  const studentName = isStudent && classes.length ? classes[0].student_name : null;
+  const studentYear = isStudent && classes.length ? classes[0].school_year : null;
+
+  const page = {
+    title: 'Admin - Nutzerprofil',
+    headerTitle: 'Adminbereich',
+    styles: ['/css/admin.css'],
+    scripts: ['/js/app.js'],
+    bodyClass: 'page-admin',
+    hideHeader: true,
+    hideFooter: true,
+    content: function () { %>
+    <div class="app-shell">
+      <%- include('./nav', { csrfToken, currentUser, activePath }) %>
+
+      <section class="app-main">
+        <div class="app-main-header">
+          <div>
+            <p class="app-main-subtitle">Nutzerprofil</p>
+            <h1><%= user.email %></h1>
+            <p class="admin-muted">Rolle: <%= user.role %> | Status: <%= user.status %></p>
+          </div>
+          <div class="admin-actions-row">
+            <a class="btn btn-secondary" href="/admin/users/<%= user.id %>/edit">Bearbeiten</a>
+            <a class="btn" href="/admin/users">Zurueck</a>
+          </div>
+        </div>
+
+        <div class="admin-card">
+          <div class="admin-topbar">
+            <div>
+              <p class="admin-eyebrow">Details</p>
+              <h3>Nutzerinfos</h3>
+            </div>
+          </div>
+          <div class="admin-row wrap">
+            <div>
+              <p class="admin-muted">E-Mail</p>
+              <strong><%= user.email %></strong>
+            </div>
+            <div>
+              <p class="admin-muted">Rolle</p>
+              <strong><%= user.role %></strong>
+            </div>
+            <div>
+              <p class="admin-muted">Status</p>
+              <strong><%= user.status %></strong>
+            </div>
+            <% if (user.created_at) { %>
+              <div>
+                <p class="admin-muted">Erstellt</p>
+                <strong><%= user.created_at %></strong>
+              </div>
+            <% } %>
+            <% if (studentName) { %>
+              <div>
+                <p class="admin-muted">Name</p>
+                <strong><%= studentName %></strong>
+              </div>
+            <% } %>
+            <% if (studentYear) { %>
+              <div>
+                <p class="admin-muted">Schuljahr</p>
+                <strong><%= studentYear %></strong>
+              </div>
+            <% } %>
+          </div>
+        </div>
+
+        <div class="admin-card">
+          <div class="admin-topbar">
+            <p class="admin-eyebrow">Klassen</p>
+            <span class="admin-badge"><%= classes.length %> Eintraege</span>
+          </div>
+          <div class="admin-list">
+            <% if (!classes || classes.length === 0) { %>
+              <div class="admin-empty">
+                <% if (isStudent) { %>
+                  Keine Klassen fuer diesen Schueler gefunden.
+                <% } else if (isTeacher) { %>
+                  Keine Klassen fuer diesen Lehrer gefunden.
+                <% } else { %>
+                  Keine Klasseninfos fuer diese Rolle vorhanden.
+                <% } %>
+              </div>
+            <% } else if (isTeacher) { %>
+              <% classes.forEach(function(entry){ %>
+                <div class="admin-class-card">
+                  <div>
+                    <strong><%= entry.name %></strong>
+                    <p class="admin-muted">Fach: <%= entry.subject %></p>
+                  </div>
+                  <div class="admin-actions-row">
+                    <a class="btn btn-secondary" href="/admin/classes/<%= entry.id %>/students">Schueler anzeigen</a>
+                  </div>
+                </div>
+              <% }) %>
+            <% } else if (isStudent) { %>
+              <% classes.forEach(function(entry){ %>
+                <div class="admin-class-card">
+                  <div>
+                    <strong><%= entry.class_name %></strong>
+                    <p class="admin-muted">Fach: <%= entry.subject %></p>
+                    <p class="admin-muted">Lehrer: <%= entry.teacher_email || '-' %></p>
+                  </div>
+                  <div class="admin-actions-row">
+                    <a class="btn btn-secondary" href="/admin/classes/<%= entry.class_id %>/students?email=<%= encodeURIComponent(user.email) %>">Zur Klasse</a>
+                  </div>
+                </div>
+              <% }) %>
+            <% } %>
+          </div>
+        </div>
+      </section>
+    </div>
+<% } }; %>
+<%- include('../layout', page) %>

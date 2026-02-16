@@ -1,0 +1,153 @@
+<%
+  const page = {
+    title: `Lehrer — Schüler (${classData.name})`,
+    headerTitle: 'Lehrerbereich',
+    styles: ['/css/teacher-pages.css'],
+    scripts: ['/js/app.js'],
+    bodyClass: 'page-teacher',
+    hideHeader: true,
+    hideFooter: true,
+    content: function () { %>
+    <div class="app-shell teacher-shell">
+      <aside class="teacher-sidebar" aria-label="Lehrer Navigation">
+        <div class="sidebar-brand">
+          <div>
+            <div class="sidebar-title">Teacher Panel</div>
+            <div class="sidebar-meta"><%= email %> · Lehrer</div>
+          </div>
+          <span class="sidebar-badge">Eingeloggt</span>
+        </div>
+
+        <div class="app-nav">
+          <div class="nav-section">
+            <div class="nav-section-title">Navigation</div>
+            <a href="/teacher/classes">Meine Klassen</a>
+            <a href="/teacher/create-class">Klasse erstellen</a>
+            <div class="nav-section-title">Klasse: <%= classData.name %> / <%= classData.subject %></div>
+            <a class="is-active" href="/teacher/students/<%= classData.id %>">Schüler</a>
+            <a href="/teacher/grades/<%= classData.id %>">Noten</a>
+            <a href="/teacher/special-assessments/<%= classData.id %>">Sonderleistungen</a>
+            <a href="/teacher/grade-templates/<%= classData.id %>">Prüfungen</a>
+            <a href="/teacher/class-statistics/<%= classData.id %>">Statistiken</a>
+            <form class="logout-form" method="POST" action="/logout">
+              <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+              <button class="app-nav-link" type="submit">Logout</button>
+            </form>
+          </div>
+        </div>
+      </aside>
+
+      <section class="teacher-main">
+        <header class="teacher-main-header">
+          <div>
+            <p class="teacher-eyebrow">Klasse <%= classData.name %></p>
+            <h1>Schüler verwalten</h1>
+            <p class="teacher-muted">Fach: <%= classData.subject %> · Rolle: Lehrer</p>
+          </div>
+          <div class="teacher-actions-inline">
+            <a class="btn btn-primary" href="/teacher/add-student/<%= classData.id %>">+ Schüler hinzufügen</a>
+            <a class="btn btn-secondary" href="/teacher/classes">Zurück</a>
+          </div>
+        </header>
+
+        <div class="teacher-card">
+          <div class="teacher-card-header">
+            <div>
+              <p class="teacher-eyebrow">Schüler</p>
+              <h3><%= students.length %> Schüler in dieser Klasse</h3>
+            </div>
+          </div>
+
+          <div class="teacher-list">
+            <% if (students.length === 0) { %>
+              <div class="teacher-empty">
+                <h4>Noch keine Schüler</h4>
+                <p>Füge Schüler hinzu, um die Klasse zu füllen.</p>
+                <a class="btn btn-primary" href="/teacher/add-student/<%= classData.id %>">Schüler hinzufügen</a>
+              </div>
+            <% } else { %>
+              <% students.forEach(student => { %>
+                <div class="teacher-student-card">
+                  <div>
+                    <p class="teacher-eyebrow">Schüler</p>
+                    <h4><%= student.name %></h4>
+                    <p class="teacher-muted"><%= student.email %></p>
+                  </div>
+                  <div class="teacher-card-actions">
+                    <form class="inline delete-student-form" method="POST" action="/teacher/delete-student/<%= classData.id %>/<%= student.id %>" data-student-name="<%= student.name %>">
+                      <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+                      <button class="btn btn-danger" type="button">Entfernen</button>
+                    </form>
+                  </div>
+                </div>
+              <% }) %>
+            <% } %>
+          </div>
+        </div>
+      </section>
+    </div>
+
+    <!-- Lösch-Bestätigungs-Modal -->
+    <div id="deleteModal" class="modal-overlay">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h3>Schüler entfernen</h3>
+        </div>
+        <div class="modal-body">
+          <p>Möchtest du den Schüler <strong id="deleteStudentName"></strong> wirklich aus der Klasse entfernen?</p>
+        </div>
+        <div class="modal-footer">
+          <button class="btn btn-secondary" id="cancelDelete">Abbrechen</button>
+          <button class="btn btn-danger" id="confirmDelete">Entfernen</button>
+        </div>
+      </div>
+    </div>
+
+    <script>
+      // Modal-Logik für Schüler-Löschung
+      const deleteModal = document.getElementById('deleteModal');
+      const deleteStudentName = document.getElementById('deleteStudentName');
+      const cancelDelete = document.getElementById('cancelDelete');
+      const confirmDelete = document.getElementById('confirmDelete');
+      let currentForm = null;
+
+      document.querySelectorAll('.delete-student-form button[type="button"]').forEach(btn => {
+        btn.addEventListener('click', function(e) {
+          e.preventDefault();
+          currentForm = this.closest('form');
+          const studentName = currentForm.dataset.studentName;
+          deleteStudentName.textContent = studentName;
+          deleteModal.classList.add('active');
+        });
+      });
+
+      cancelDelete.addEventListener('click', () => {
+        deleteModal.classList.remove('active');
+        currentForm = null;
+      });
+
+      confirmDelete.addEventListener('click', () => {
+        if (currentForm) {
+          currentForm.submit();
+        }
+      });
+
+      // Modal schließen bei Klick auf Overlay
+      deleteModal.addEventListener('click', (e) => {
+        if (e.target === deleteModal) {
+          deleteModal.classList.remove('active');
+          currentForm = null;
+        }
+      });
+
+      // ESC-Taste zum Schließen
+      document.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape' && deleteModal.classList.contains('active')) {
+          deleteModal.classList.remove('active');
+          currentForm = null;
+        }
+      });
+    </script>
+<% } };
+%>
+<%- include('../layout', page) %>

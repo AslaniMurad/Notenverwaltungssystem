@@ -1,0 +1,111 @@
+<%
+  const page = {
+    title: `Lehrer — Note hinzufügen`,
+    headerTitle: 'Lehrerbereich',
+    styles: ['/css/teacher-pages.css'],
+    scripts: ['/js/app.js'],
+    bodyClass: 'page-teacher',
+    hideHeader: true,
+    hideFooter: true,
+    content: function () { %>
+    <div class="app-shell teacher-shell">
+      <aside class="teacher-sidebar" aria-label="Lehrer Navigation">
+        <div class="sidebar-brand">
+          <div>
+            <div class="sidebar-title">Teacher Panel</div>
+            <div class="sidebar-meta"><%= email %> · Lehrer</div>
+          </div>
+          <span class="sidebar-badge">Eingeloggt</span>
+        </div>
+
+        <div class="app-nav">
+          <div class="nav-section">
+            <div class="nav-section-title">Navigation</div>
+            <a href="/teacher/classes">Meine Klassen</a>
+            <a href="/teacher/create-class">Klasse erstellen</a>
+            <div class="nav-section-title">Klasse: <%= classData.name %> / <%= classData.subject %></div>
+            <a href="/teacher/students/<%= classData.id %>">Schüler</a>
+            <a href="/teacher/grades/<%= classData.id %>">Noten</a>
+            <a href="/teacher/special-assessments/<%= classData.id %>">Sonderleistungen</a>
+            <a href="/teacher/grade-templates/<%= classData.id %>">Prüfungen</a>
+            <a href="/teacher/class-statistics/<%= classData.id %>">Statistiken</a>
+            <form class="logout-form" method="POST" action="/logout">
+              <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+              <button class="app-nav-link" type="submit">Logout</button>
+            </form>
+          </div>
+        </div>
+      </aside>
+
+      <section class="teacher-main">
+        <header class="teacher-main-header">
+          <div>
+            <p class="teacher-eyebrow">Note hinzufügen</p>
+            <h1><%= student.name %></h1>
+            <p class="teacher-muted">Klasse: <%= classData.name %> · <%= classData.subject %></p>
+          </div>
+          <div class="teacher-actions-inline">
+            <a class="btn btn-secondary" href="/teacher/student-grades/<%= classData.id %>/<%= student.id %>">Abbrechen</a>
+          </div>
+        </header>
+
+        <div class="teacher-card">
+          <div class="teacher-card-header">
+            <div>
+              <p class="teacher-eyebrow">Neue Note</p>
+              <h3>Note für <%= student.name %> eintragen</h3>
+            </div>
+          </div>
+
+          <% if (error) { %>
+            <div class="teacher-alert error"><%= error %></div>
+          <% } %>
+
+          <% if (templates.length === 0) { %>
+            <div class="teacher-alert error">
+              ⚠️ Noch keine Prüfungsvorlagen vorhanden. <a href="/teacher/grade-templates/<%= classData.id %>">Jetzt Prüfung anlegen</a>
+            </div>
+          <% } else { %>
+            <form class="teacher-form" method="POST" action="/teacher/add-grade/<%= classData.id %>/<%= student.id %>" enctype="multipart/form-data">
+              <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+
+              <label for="grade_template_id">Prüfung *</label>
+              <select id="grade_template_id" name="grade_template_id" required>
+                <option value="">-- Prüfung wählen --</option>
+                <% templates.forEach(template => { %>
+                  <option value="<%= template.id %>">
+                    <%= template.name %> (<%= template.category %>, <%= template.weight %>%)
+                    <% if (template.date) { %> - <%= new Date(template.date).toLocaleDateString('de-DE') %><% } %>
+                  </option>
+                <% }) %>
+              </select>
+              <small class="form-hint">Wähle eine Prüfungsvorlage aus. Jede Prüfung kann pro Schüler nur einmal benotet werden.</small>
+
+              <label for="grade">Note (1-5) *</label>
+              <input type="number" id="grade" name="grade" min="1" max="5" step="0.25" required placeholder="z.B. 2 oder 2.5">
+              <small class="form-hint">Notenskala: 1 (Sehr gut) bis 5 (Nicht genügend)</small>
+
+              <label for="note">Notiz (optional)</label>
+              <textarea id="note" name="note" rows="2" placeholder="z.B. Sehr gute Mitarbeit, kleine Fehler bei Aufgabe 3"></textarea>
+              <small class="form-hint">Optional kannst du eine korrigierte Arbeit anhängen oder einen externen Link angeben.</small>
+
+              <label for="attachment_file">Korrigierte Arbeit hochladen (optional)</label>
+              <input type="file" id="attachment_file" name="attachment_file" accept=".pdf,.jpg,.jpeg,.png,application/pdf,image/jpeg,image/png">
+              <small class="form-hint">Erlaubt: PDF, JPG, PNG. Maximal <%= maxFileSizeMb %> MB.</small>
+
+              <label for="external_link">Oder externer Link (optional)</label>
+              <input type="url" id="external_link" name="external_link" placeholder="https://drive.google.com/...">
+              <small class="form-hint">Nur http/https. Bitte keine Datei + Link gleichzeitig.</small>
+
+              <div class="teacher-form-actions">
+                <button class="btn btn-primary" type="submit">Note speichern</button>
+                <a class="btn btn-secondary" href="/teacher/student-grades/<%= classData.id %>/<%= student.id %>">Zurück</a>
+              </div>
+            </form>
+          <% } %>
+        </div>
+      </section>
+    </div>
+<% } };
+%>
+<%- include('../layout', page) %>

@@ -1,0 +1,47 @@
+<%
+  const page = {
+    title: 'Admin — Klasse bearbeiten',
+    headerTitle: 'Adminbereich',
+    styles: ['/css/admin.css'],
+    scripts: ['/js/app.js'],
+    bodyClass: 'page-admin',
+    hideHeader: true,
+    hideFooter: true,
+    content: function () { %>
+    <div class="app-shell">
+      <%- include('./nav', { csrfToken, currentUser, activePath }) %>
+
+      <section class="app-main">
+        <div class="app-main-header">
+          <div>
+            <p class="app-main-subtitle">Klassen</p>
+            <h1>Klasse bearbeiten</h1>
+            <p class="admin-muted">Passe Name, Fach oder Lehrer an.</p>
+          </div>
+          <a class="btn btn-secondary" href="/admin/classes">Zurück</a>
+        </div>
+
+        <div class="admin-card-narrow">
+          <form class="admin-edit-form" method="POST" action="/admin/classes/<%= classData.id %>">
+            <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+
+            <label for="name">Klassenname</label>
+            <input id="name" name="name" value="<%= classData.name %>" type="text" required>
+
+            <label for="subject">Fach</label>
+            <input id="subject" name="subject" value="<%= classData.subject %>" type="text" required>
+
+            <label for="teacher">Lehrer</label>
+            <select id="teacher" name="teacher_id" required>
+              <% teachers.forEach(function(t){ %>
+                <option value="<%= t.id %>" <%= t.id === classData.teacher_id ? 'selected' : '' %>><%= t.email %></option>
+              <% }) %>
+            </select>
+
+            <button class="btn btn-primary" type="submit">Speichern</button>
+          </form>
+        </div>
+      </section>
+    </div>
+<% } }; %>
+<%- include('../layout', page) %>

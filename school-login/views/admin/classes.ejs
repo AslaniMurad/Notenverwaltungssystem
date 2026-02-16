@@ -1,0 +1,68 @@
+<%
+  const page = {
+    title: 'Admin — Klassen',
+    headerTitle: 'Adminbereich',
+    styles: ['/css/admin.css'],
+    scripts: ['/js/app.js'],
+    bodyClass: 'page-admin',
+    hideHeader: true,
+    hideFooter: true,
+    content: function () { %>
+    <div class="app-shell">
+      <%- include('./nav', { csrfToken, currentUser, activePath }) %>
+
+      <section class="app-main">
+        <div class="app-main-header">
+          <div>
+            <p class="app-main-subtitle">Klassen</p>
+            <h1>Alle Klassen verwalten</h1>
+            <p class="admin-muted">Übersicht aller Klassen im System.</p>
+          </div>
+          <a class="btn btn-primary" href="/admin/classes/new">+ Neue Klasse</a>
+        </div>
+
+        <div class="admin-card">
+          <div class="admin-topbar">
+            <div>
+              <p class="admin-eyebrow">Suche</p>
+              <h3>Nach Klassen suchen</h3>
+            </div>
+            <span class="admin-badge"><%= classes.length %> Treffer</span>
+          </div>
+          <form class="admin-form" method="GET" action="/admin/classes">
+            <input type="text" name="q" placeholder="Name, Fach oder Lehrer" value="<%= query %>">
+            <button class="btn btn-secondary" type="submit">Suchen</button>
+            <a class="btn" href="/admin/classes">Zurücksetzen</a>
+          </form>
+        </div>
+
+        <div class="admin-card">
+          <h3 class="admin-heading-spaced">Klassenübersicht</h3>
+          <div class="admin-grid">
+            <% if (classes.length === 0) { %>
+              <div class="admin-empty">Keine Klassen gefunden.</div>
+            <% } %>
+            <% classes.forEach(function(cls){ %>
+              <div class="admin-class-card">
+                <div>
+                  <p class="admin-eyebrow">Fach</p>
+                  <h4><%= cls.subject %></h4>
+                  <p class="admin-muted">Klasse: <%= cls.name %></p>
+                  <p class="admin-muted">Lehrer: <%= cls.teacher_email || '–' %></p>
+                </div>
+                <div class="admin-row wrap">
+                  <a class="btn btn-primary" href="/admin/classes/<%= cls.id %>/students">Schüler</a>
+                  <a class="btn btn-secondary" href="/admin/classes/<%= cls.id %>/edit">Bearbeiten</a>
+                  <form method="POST" action="/admin/classes/<%= cls.id %>/delete" onsubmit="return confirm('Klasse und Schüler löschen?');">
+                    <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+                    <button class="btn btn-danger" type="submit">Löschen</button>
+                  </form>
+                </div>
+              </div>
+            <% }) %>
+          </div>
+        </div>
+      </section>
+    </div>
+<% } }; %>
+<%- include('../layout', page) %>

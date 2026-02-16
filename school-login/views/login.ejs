@@ -1,0 +1,73 @@
+<%
+  const _errorType = typeof errorType !== 'undefined' ? errorType : null;
+  const _errorMessage = typeof errorMessage !== 'undefined' ? errorMessage : null;
+  const _csrfToken = typeof csrfToken !== 'undefined' ? csrfToken : '';
+  const _email = typeof email !== 'undefined' ? email : '';
+
+  const page = {
+    title: 'Login | School Panel',
+    styles: ['/css/login.css'],
+    scripts: ['/js/app.js'],
+    bodyClass: 'page-login',
+    hideHeader: true,
+    hideFooter: true,
+    content: function () { %>
+    <div class="login-card card">
+        <div class="login-brand">
+          <img src="/images/htl-waidhofen.png" alt="HTL Waidhofen" class="login-mark" onerror="this.style.display='none'">
+          <div>
+            <div class="login-eyebrow">HTL Waidhofen</div>
+            <div class="login-title-inline">Notenverwaltung</div>
+          </div>
+        </div>
+
+        <hr style="border:none;border-top:2px solid #0052CC;margin:20px 0;width:60px;margin-left:auto;margin-right:auto;">
+
+        <h1 style="font-size: 28px; font-weight: 800; color: #003DA5; margin-bottom: 8px; text-align:center;">Willkommen</h1>
+        <p class="login-subtitle">Melde dich mit deinen Schulzugangsdaten an</p>
+        <p class="login-notice">
+          Hinweis (freiwillig, in Anlehnung an &sect; 25 MedienG):
+          Diese Website ist ein zeitlich befristetes Schulprojekt zu Demonstrationszwecken
+          im Rahmen des Unterrichts an der HTBLuVA Waidhofen an der Ybbs.
+        </p>
+
+        <% const hasErrorPanel = _errorType === 'invalid'; %>
+        <% if (hasErrorPanel) { %>
+          <div class="login-alert-panel login-alert-invalid" role="alert">
+            <div class="login-alert-icon">✖</div>
+            <div class="login-alert-body">
+              <p class="login-alert-title">Der Login ist fehlgeschlagen</p>
+              <p class="login-alert-text"><%= _errorMessage || 'Versuchen Sie es erneut.' %></p>
+              <p class="login-alert-text">Sollte es sich um einen Fehler handeln, melden Sie sich bitte bei einem Administrator:</p>
+              <p class="login-alert-contact">admin@example.com</p>
+            </div>
+          </div>
+        <% } %>
+
+        <form method="POST" action="/login">
+          <input type="hidden" name="_csrf" value="<%= _csrfToken %>">
+
+          <label class="login-label" for="email">E-Mail-Adresse</label>
+          <input class="login-input" id="email" name="email" type="email" placeholder="vorname.nachname@htlwy.at" required value="<%= _email %>">
+
+          <label class="login-label" for="password">Passwort</label>
+          <input class="login-input" id="password" name="password" type="password" placeholder="Dein Passwort" required>
+
+          <div class="login-hint-row">
+            <!-- TODO: Add a remeber me functionality -->
+            
+          </div>
+
+          <button class="btn-login-submit" type="submit">Login</button>
+        </form>
+
+        <div class="login-foot">
+          <div class="login-foot-item">
+            <span class="login-foot-icon">👥</span>
+            <span>Sitz, Grasberger, Granzer, Aslani, Reisinger</span>
+          </div>
+        </div>
+      </div>
+<% } };
+%>
+<%- include('layout', page) %>
