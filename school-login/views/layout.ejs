@@ -1,10 +1,21 @@
 <!doctype html>
-<html lang="de">
+<html lang="de" class="css-loading">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title><%= title || "School Panel" %></title>
+  <style>
+    html.css-loading body { visibility: hidden; }
+    html.css-ready body { visibility: visible; }
+  </style>
+  <noscript>
+    <style>
+      html.css-loading body { visibility: visible; }
+    </style>
+  </noscript>
   <!-- Inter font for improved typography -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="/css/base.css">
   <link rel="stylesheet" href="/css/app-shell.css">
@@ -16,6 +27,47 @@
     <link rel="stylesheet" href="/css/mobile-sidebar.css">
     <link rel="stylesheet" href="/css/mobile-login.css">
   <% } %>
+  <script>
+    (function () {
+      const root = document.documentElement;
+      const styleLinks = Array.from(document.querySelectorAll('link[rel="stylesheet"]'))
+        .filter((link) => String(link.getAttribute("href") || "").startsWith("/css/"));
+      let revealed = false;
+      const reveal = () => {
+        if (revealed) return;
+        revealed = true;
+        root.classList.remove("css-loading");
+        root.classList.add("css-ready");
+      };
+
+      if (!styleLinks.length) {
+        reveal();
+        return;
+      }
+
+      let pending = 0;
+      const done = () => {
+        pending -= 1;
+        if (pending <= 0) {
+          requestAnimationFrame(reveal);
+        }
+      };
+
+      styleLinks.forEach((link) => {
+        if (link.sheet) return;
+        pending += 1;
+        link.addEventListener("load", done, { once: true });
+        link.addEventListener("error", done, { once: true });
+      });
+
+      if (pending === 0) {
+        reveal();
+      } else {
+        window.addEventListener("pageshow", reveal, { once: true });
+        window.setTimeout(reveal, 1800);
+      }
+    })();
+  </script>
 </head>
 <body class="<%= ['app-shell-body', bodyClass, locals.isMobile ? 'mobile-view' : 'desktop-view'].filter(Boolean).join(' ') %>">
   <% if (!hideHeader) { %>

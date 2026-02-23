@@ -100,7 +100,13 @@ app.use(async (req, res, next) => {
 // set view engine & static
 app.set("views", path.join(__dirname, "views"));
 app.set("view engine", "ejs");
-app.use(express.static(path.join(__dirname, "public")));
+app.use(
+  express.static(path.join(__dirname, "public"), {
+    etag: true,
+    lastModified: true,
+    maxAge: isProduction ? "7d" : "1h"
+  })
+);
 
 function renderLogin(res, req, options = {}) {
   const {
