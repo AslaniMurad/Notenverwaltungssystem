@@ -1,13 +1,14 @@
 <%
   const page = {
-    title: `Lehrer — Prüfungsvorlagen (${classData.name})`,
+    title: `Lehrer - Pruefungsvorlagen (${classData.name})`,
     headerTitle: 'Lehrerbereich',
     styles: ['/css/teacher-pages.css'],
     scripts: ['/js/app.js'],
     bodyClass: 'page-teacher',
     hideHeader: true,
     hideFooter: true,
-    content: function () { %>
+    content: function () {
+%>
     <div class="app-shell teacher-shell">
       <aside class="teacher-sidebar" aria-label="Lehrer Navigation">
         <div class="sidebar-brand">
@@ -24,11 +25,12 @@
             <a href="/teacher/classes">Meine Klassen</a>
             <a href="/teacher/create-class">Klasse erstellen</a>
             <div class="nav-section-title">Klasse: <%= classData.name %> / <%= classData.subject %></div>
-            <a href="/teacher/students/<%= classData.id %>">Schüler</a>
+            <a href="/teacher/students/<%= classData.id %>">Schueler</a>
             <a href="/teacher/grades/<%= classData.id %>">Noten</a>
             <a href="/teacher/special-assessments/<%= classData.id %>">Sonderleistungen</a>
-            <a class="is-active" href="/teacher/grade-templates/<%= classData.id %>">Prüfungen</a>
+            <a class="is-active" href="/teacher/grade-templates/<%= classData.id %>">Pruefungen</a>
             <a href="/teacher/class-statistics/<%= classData.id %>">Statistiken</a>
+            <a href="/teacher/settings">Einstellungen</a>
             <form class="logout-form" method="POST" action="/logout">
               <input type="hidden" name="_csrf" value="<%= csrfToken %>">
               <button class="app-nav-link" type="submit">Logout</button>
@@ -41,36 +43,45 @@
         <header class="teacher-main-header">
           <div>
             <p class="teacher-eyebrow">Klasse <%= classData.name %></p>
-            <h1>Prüfungsvorlagen</h1>
-            <p class="teacher-muted">Fach: <%= classData.subject %> · Gesamtgewichtung: <%= totalWeight %>%</p>
+            <h1>Pruefungsvorlagen</h1>
+            <p class="teacher-muted">
+              Fach: <%= classData.subject %>
+              <% if (activeProfile) { %>
+                · Aktives Profil: <%= activeProfile.name %> (Punkte)
+              <% } %>
+            </p>
           </div>
           <div class="teacher-actions-inline">
-            <a class="btn btn-primary" href="/teacher/create-template/<%= classData.id %>">+ Prüfung anlegen</a>
-            <a class="btn btn-secondary" href="/teacher/classes">Zurück</a>
+            <a class="btn btn-primary" href="/teacher/create-template/<%= classData.id %>">+ Pruefung anlegen</a>
+            <a class="btn btn-secondary" href="/teacher/classes">Zurueck</a>
           </div>
         </header>
 
-        <% if (totalWeight !== 100 && templates.length > 0) { %>
+        <% if (!activeProfile) { %>
           <div class="teacher-alert error">
-            ⚠️ Achtung: Gesamtgewichtung beträgt <%= totalWeight %>%, sollte aber 100% sein!
+            Bitte zuerst das Bewertungsschema in den <a href="/teacher/settings">Einstellungen</a> konfigurieren.
           </div>
         <% } %>
+
+        <div class="teacher-alert info">
+          Gesamtgewichtung: <%= totalPointWeight %> Punkte.
+        </div>
 
         <div class="teacher-card">
           <div class="teacher-card-header">
             <div>
-              <p class="teacher-eyebrow">Tests & Schularbeiten</p>
-              <h3>Verfügbare Prüfungsvorlagen</h3>
+              <p class="teacher-eyebrow">Pruefungen</p>
+              <h3>Verfuegbare Vorlagen</h3>
             </div>
-            <div class="teacher-meta-chip"><%= templates.length %> Einträge</div>
+            <div class="teacher-meta-chip"><%= templates.length %> Eintraege</div>
           </div>
 
           <div class="templates-list">
             <% if (templates.length === 0) { %>
               <div class="teacher-empty">
-                <h4>Noch keine Prüfungen angelegt</h4>
-                <p>Erstelle Prüfungsvorlagen (z.B. "1. Schularbeit", "Mitarbeit") mit Gewichtung für die Gesamtnote.</p>
-                <a class="btn btn-primary" href="/teacher/create-template/<%= classData.id %>">+ Erste Prüfung anlegen</a>
+                <h4>Noch keine Pruefungen angelegt</h4>
+                <p>Lege zuerst dein Bewertungsschema fest und erstelle dann die erste Vorlage.</p>
+                <a class="btn btn-primary" href="/teacher/create-template/<%= classData.id %>">+ Erste Pruefung anlegen</a>
               </div>
             <% } else { %>
               <% templates.forEach(template => { %>
@@ -84,10 +95,10 @@
                       <% } %>
                     </div>
                     <div class="template-item-actions">
-                      <span class="weight-badge"><%= template.weight %>%</span>
+                      <span class="weight-badge"><%= template.weight_label || template.weight %></span>
                       <form class="inline delete-template-form" method="POST" action="/teacher/delete-template/<%= classData.id %>/<%= template.id %>" data-template-name="<%= template.name %>">
                         <input type="hidden" name="_csrf" value="<%= csrfToken %>">
-                        <button class="btn btn-danger btn-sm" type="button">Löschen</button>
+                        <button class="btn btn-danger btn-sm" type="button">Loeschen</button>
                       </form>
                     </div>
                   </div>
@@ -102,37 +113,34 @@
       </section>
     </div>
 
-    <!-- Lösch-Bestätigungs-Modal -->
     <div id="deleteTemplateModal" class="modal-overlay">
       <div class="modal-content">
         <div class="modal-header">
-          <h3>Prüfung löschen</h3>
+          <h3>Pruefung loeschen</h3>
         </div>
         <div class="modal-body">
-          <p>Möchtest du die Prüfung <strong id="deleteTemplateName"></strong> wirklich löschen?</p>
-          <p class="teacher-muted">⚠️ Alle Noten, die mit dieser Prüfung verbunden sind, werden ebenfalls gelöscht!</p>
+          <p>Moechtest du die Pruefung <strong id="deleteTemplateName"></strong> wirklich loeschen?</p>
+          <p class="teacher-muted">Alle zugeordneten Noten werden ebenfalls entfernt.</p>
         </div>
         <div class="modal-footer">
           <button class="btn btn-secondary" id="cancelDeleteTemplate">Abbrechen</button>
-          <button class="btn btn-danger" id="confirmDeleteTemplate">Löschen</button>
+          <button class="btn btn-danger" id="confirmDeleteTemplate">Loeschen</button>
         </div>
       </div>
     </div>
 
     <script>
-      // Modal-Logik für Template-Löschung
       const deleteTemplateModal = document.getElementById('deleteTemplateModal');
       const deleteTemplateName = document.getElementById('deleteTemplateName');
       const cancelDeleteTemplate = document.getElementById('cancelDeleteTemplate');
       const confirmDeleteTemplate = document.getElementById('confirmDeleteTemplate');
       let currentTemplateForm = null;
 
-      document.querySelectorAll('.delete-template-form button[type="button"]').forEach(btn => {
-        btn.addEventListener('click', function(e) {
-          e.preventDefault();
-          currentTemplateForm = this.closest('form');
-          const templateName = currentTemplateForm.dataset.templateName;
-          deleteTemplateName.textContent = templateName;
+      document.querySelectorAll('.delete-template-form button[type="button"]').forEach((btn) => {
+        btn.addEventListener('click', (event) => {
+          event.preventDefault();
+          currentTemplateForm = btn.closest('form');
+          deleteTemplateName.textContent = currentTemplateForm.dataset.templateName || '';
           deleteTemplateModal.classList.add('active');
         });
       });
@@ -143,20 +151,18 @@
       });
 
       confirmDeleteTemplate.addEventListener('click', () => {
-        if (currentTemplateForm) {
-          currentTemplateForm.submit();
-        }
+        if (currentTemplateForm) currentTemplateForm.submit();
       });
 
-      deleteTemplateModal.addEventListener('click', (e) => {
-        if (e.target === deleteTemplateModal) {
+      deleteTemplateModal.addEventListener('click', (event) => {
+        if (event.target === deleteTemplateModal) {
           deleteTemplateModal.classList.remove('active');
           currentTemplateForm = null;
         }
       });
 
-      document.addEventListener('keydown', (e) => {
-        if (e.key === 'Escape' && deleteTemplateModal.classList.contains('active')) {
+      document.addEventListener('keydown', (event) => {
+        if (event.key === 'Escape' && deleteTemplateModal.classList.contains('active')) {
           deleteTemplateModal.classList.remove('active');
           currentTemplateForm = null;
         }

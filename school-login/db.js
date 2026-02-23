@@ -55,6 +55,8 @@ function createFakeDb() {
   const grades = [];
   const specialAssessments = [];
   const notifications = [];
+  const teacherGradingProfiles = [];
+  const teacherGradingProfileItems = [];
   let userId = 1;
   let classId = 1;
   let studentId = 1;
@@ -62,6 +64,8 @@ function createFakeDb() {
   let gradeId = 1;
   let specialAssessmentId = 1;
   let notificationId = 1;
+  let gradingProfileId = 1;
+  let gradingProfileItemId = 1;
 
   const db = {
     serialize(fn) {
@@ -187,14 +191,126 @@ function createFakeDb() {
           students.push(newStudent);
           lastID = newStudent.id;
         }
+      } else if (/INSERT INTO teacher_grading_profiles/i.test(sql)) {
+        const teacher_id = params[0];
+        const name = params[1];
+        const scoring_mode = params.length >= 9 ? params[3] : "points_or_grade";
+        const grade1_min_percent = params.length >= 9 ? Number(params[4]) : 88.5;
+        const grade2_min_percent = params.length >= 9 ? Number(params[5]) : 75;
+        const grade3_min_percent = params.length >= 9 ? Number(params[6]) : 62.5;
+        const grade4_min_percent = params.length >= 9 ? Number(params[7]) : 50;
+        const is_active = params.length >= 9 ? params[8] : params[3];
+        if (
+          teacherGradingProfiles.some(
+            (profile) =>
+              profile.teacher_id === Number(teacher_id) &&
+              String(profile.name).toLowerCase() === String(name).toLowerCase()
+          )
+        ) {
+          err = new Error("UNIQUE constraint failed: teacher_grading_profiles.teacher_id, teacher_grading_profiles.name");
+        } else {
+          const profile = {
+            id: gradingProfileId++,
+            teacher_id: Number(teacher_id),
+            name,
+            weight_mode: "points",
+            scoring_mode: String(scoring_mode || "points_or_grade"),
+            grade1_min_percent,
+            grade2_min_percent,
+            grade3_min_percent,
+            grade4_min_percent,
+            is_active: Boolean(is_active),
+            created_at: new Date().toISOString(),
+            updated_at: new Date().toISOString()
+          };
+          teacherGradingProfiles.push(profile);
+          lastID = profile.id;
+        }
+      } else if (/UPDATE teacher_grading_profiles SET name = \?, weight_mode = \?, scoring_mode = \?, grade1_min_percent = \?, grade2_min_percent = \?, grade3_min_percent = \?, grade4_min_percent = \?, updated_at = current_timestamp WHERE id = \? AND teacher_id = \?/i.test(sql)) {
+        const [name, weight_mode, scoring_mode, grade1_min_percent, grade2_min_percent, grade3_min_percent, grade4_min_percent, id, teacher_id] = params;
+        const profile = teacherGradingProfiles.find(
+          (entry) => entry.id === Number(id) && entry.teacher_id === Number(teacher_id)
+        );
+        if (profile) {
+          profile.name = name;
+          profile.weight_mode = "points";
+          profile.scoring_mode = String(scoring_mode || "points_or_grade");
+          profile.grade1_min_percent = Number(grade1_min_percent);
+          profile.grade2_min_percent = Number(grade2_min_percent);
+          profile.grade3_min_percent = Number(grade3_min_percent);
+          profile.grade4_min_percent = Number(grade4_min_percent);
+          profile.updated_at = new Date().toISOString();
+        }
+      } else if (/UPDATE teacher_grading_profiles SET name = \?, weight_mode = \?, updated_at = current_timestamp WHERE id = \? AND teacher_id = \?/i.test(sql)) {
+        const [name, weight_mode, id, teacher_id] = params;
+        const profile = teacherGradingProfiles.find(
+          (entry) => entry.id === Number(id) && entry.teacher_id === Number(teacher_id)
+        );
+        if (profile) {
+          profile.name = name;
+          profile.weight_mode = "points";
+          profile.updated_at = new Date().toISOString();
+        }
+      } else if (/UPDATE teacher_grading_profiles SET is_active = \? WHERE teacher_id = \?/i.test(sql)) {
+        const [is_active, teacher_id] = params;
+        teacherGradingProfiles.forEach((profile) => {
+          if (profile.teacher_id === Number(teacher_id)) {
+            profile.is_active = Boolean(is_active);
+            profile.updated_at = new Date().toISOString();
+          }
+        });
+      } else if (/UPDATE teacher_grading_profiles SET is_active = \?, updated_at = current_timestamp WHERE id = \? AND teacher_id = \?/i.test(sql)) {
+        const [is_active, id, teacher_id] = params;
+        const profile = teacherGradingProfiles.find(
+          (entry) => entry.id === Number(id) && entry.teacher_id === Number(teacher_id)
+        );
+        if (profile) {
+          profile.is_active = Boolean(is_active);
+          profile.updated_at = new Date().toISOString();
+        }
+      } else if (/DELETE FROM teacher_grading_profile_items WHERE profile_id = \?/i.test(sql)) {
+        const [profile_id] = params;
+        for (let i = teacherGradingProfileItems.length - 1; i >= 0; i -= 1) {
+          if (teacherGradingProfileItems[i].profile_id === Number(profile_id)) {
+            teacherGradingProfileItems.splice(i, 1);
+          }
+        }
+      } else if (/INSERT INTO teacher_grading_profile_items/i.test(sql)) {
+        const [profile_id, category, weight] = params;
+        const existing = teacherGradingProfileItems.find(
+          (entry) =>
+            entry.profile_id === Number(profile_id) &&
+            String(entry.category).toLowerCase() === String(category).toLowerCase()
+        );
+        if (existing) {
+          existing.weight = Number(weight);
+          existing.updated_at = new Date().toISOString();
+          lastID = existing.id;
+        } else {
+          const item = {
+            id: gradingProfileItemId++,
+            profile_id: Number(profile_id),
+            category,
+            weight: Number(weight),
+            created_at: new Date().toISOString(),
+            updated_at: new Date().toISOString()
+          };
+          teacherGradingProfileItems.push(item);
+          lastID = item.id;
+        }
       } else if (/INSERT INTO grade_templates/i.test(sql)) {
-        const [class_id, name, category, weight, date, description] = params;
+        const [class_id, name, category, weight] = params;
+        const hasWeightMode = params.length >= 7;
+        const weight_mode = hasWeightMode ? params[4] : "points";
+        const date = hasWeightMode ? params[5] : params[4];
+        const description = hasWeightMode ? params[6] : params[5];
         const template = {
           id: gradeTemplateId++,
           class_id: Number(class_id),
           name,
           category,
           weight: Number(weight),
+          weight_mode: "points",
           date: date || null,
           description: description || null,
           created_at: new Date().toISOString()
@@ -202,34 +318,47 @@ function createFakeDb() {
         gradeTemplates.push(template);
         lastID = template.id;
       } else if (/INSERT INTO grades/i.test(sql)) {
-        const [
-          student_id,
-          class_id,
-          grade_template_id,
-          grade,
-          note,
-          attachment_path,
-          attachment_original_name,
-          attachment_mime,
-          attachment_size,
-          external_link
-        ] = params;
-        const newGrade = {
-          id: gradeId++,
-          student_id: Number(student_id),
-          class_id: Number(class_id),
-          grade_template_id: Number(grade_template_id),
-          grade: Number(grade),
-          note: note || null,
-          attachment_path: attachment_path || null,
-          attachment_original_name: attachment_original_name || null,
-          attachment_mime: attachment_mime || null,
-          attachment_size: attachment_size ? Number(attachment_size) : null,
-          external_link: external_link || null,
-          created_at: new Date().toISOString()
-        };
-        grades.push(newGrade);
-        lastID = newGrade.id;
+        const student_id = params[0];
+        const class_id = params[1];
+        const grade_template_id = params[2];
+        const grade = params[3];
+        const hasPoints = params.length >= 12;
+        const points_achieved = hasPoints ? params[4] : null;
+        const points_max = hasPoints ? params[5] : null;
+        const note = hasPoints ? params[6] : params[4];
+        const attachment_path = hasPoints ? params[7] : params[5];
+        const attachment_original_name = hasPoints ? params[8] : params[6];
+        const attachment_mime = hasPoints ? params[9] : params[7];
+        const attachment_size = hasPoints ? params[10] : params[8];
+        const external_link = hasPoints ? params[11] : params[9];
+        const duplicate = grades.find(
+          (entry) =>
+            entry.student_id === Number(student_id) &&
+            entry.grade_template_id === Number(grade_template_id)
+        );
+        if (duplicate) {
+          err = new Error("UNIQUE constraint failed: grades.student_id, grades.grade_template_id");
+        } else {
+          const newGrade = {
+            id: gradeId++,
+            student_id: Number(student_id),
+            class_id: Number(class_id),
+            grade_template_id: Number(grade_template_id),
+            grade: Number(grade),
+            points_achieved:
+              points_achieved != null && points_achieved !== "" ? Number(points_achieved) : null,
+            points_max: points_max != null && points_max !== "" ? Number(points_max) : null,
+            note: note || null,
+            attachment_path: attachment_path || null,
+            attachment_original_name: attachment_original_name || null,
+            attachment_mime: attachment_mime || null,
+            attachment_size: attachment_size ? Number(attachment_size) : null,
+            external_link: external_link || null,
+            created_at: new Date().toISOString()
+          };
+          grades.push(newGrade);
+          lastID = newGrade.id;
+        }
       } else if (/INSERT INTO special_assessments/i.test(sql)) {
         const [student_id, class_id, type, name, description, weight, grade] = params;
         const assessment = {
@@ -355,6 +484,42 @@ function createFakeDb() {
         const [id, teacher_id] = params;
         const classRow = classes.find((c) => c.id === Number(id) && c.teacher_id === Number(teacher_id));
         row = classRow ? { id: classRow.id, name: classRow.name } : undefined;
+      } else if (/FROM teacher_grading_profiles\s+WHERE id = \? AND teacher_id = \?/i.test(sql)) {
+        const [id, teacher_id] = params;
+        const profile = teacherGradingProfiles.find(
+          (entry) => entry.id === Number(id) && entry.teacher_id === Number(teacher_id)
+        );
+        row = profile ? { ...profile } : undefined;
+      } else if (/FROM teacher_grading_profiles\s+WHERE teacher_id = \? AND is_active = \?/i.test(sql)) {
+        const [teacher_id, is_active] = params;
+        const profile = teacherGradingProfiles
+          .filter(
+            (entry) =>
+              entry.teacher_id === Number(teacher_id) &&
+              Boolean(entry.is_active) === Boolean(is_active)
+          )
+          .sort((a, b) => {
+            if (a.created_at === b.created_at) return a.id - b.id;
+            return new Date(a.created_at) - new Date(b.created_at);
+          })[0];
+        row = profile ? { ...profile } : undefined;
+      } else if (/FROM teacher_grading_profiles\s+WHERE teacher_id = \?\s+ORDER BY created_at ASC, id ASC\s+LIMIT 1/i.test(sql)) {
+        const [teacher_id] = params;
+        const profile = teacherGradingProfiles
+          .filter((entry) => entry.teacher_id === Number(teacher_id))
+          .sort((a, b) => {
+            if (a.created_at === b.created_at) return a.id - b.id;
+            return new Date(a.created_at) - new Date(b.created_at);
+          })[0];
+        row = profile ? { ...profile } : undefined;
+      } else if (/SELECT id FROM teacher_grading_profiles WHERE teacher_id = \? AND is_active = \? LIMIT 1/i.test(sql)) {
+        const [teacher_id, is_active] = params;
+        const profile = teacherGradingProfiles.find(
+          (entry) =>
+            entry.teacher_id === Number(teacher_id) &&
+            Boolean(entry.is_active) === Boolean(is_active)
+        );
+        row = profile ? { id: profile.id } : undefined;
       } else if (/SELECT id FROM students WHERE email = \? AND class_id = \?/i.test(sql)) {
         const [email, class_id] = params;
         const student = students.find((s) => s.email === email && s.class_id === Number(class_id));
@@ -365,6 +530,12 @@ function createFakeDb() {
           (entry) => entry.id === Number(assessmentId) && entry.class_id === Number(clsId)
         );
         row = assessment ? { id: assessment.id } : undefined;
+      } else if (/SELECT id FROM grade_templates WHERE id = \? AND class_id = \?/i.test(sql)) {
+        const [templateId, clsId] = params;
+        const template = gradeTemplates.find(
+          (entry) => entry.id === Number(templateId) && entry.class_id === Number(clsId)
+        );
+        row = template ? { id: template.id } : undefined;
       } else if (/SELECT attachment_path FROM grades WHERE id = \? AND class_id = \?/i.test(sql)) {
         const [gradeId, clsId] = params;
         const grade = grades.find(
@@ -416,6 +587,23 @@ function createFakeDb() {
           .filter((u) => u.role === "teacher" && u.status === "active")
           .sort((a, b) => a.email.localeCompare(b.email))
           .map((u) => ({ id: u.id, email: u.email }));
+      } else if (/FROM teacher_grading_profiles\s+WHERE teacher_id = \?\s+ORDER BY is_active DESC, created_at ASC, id ASC/i.test(sql)) {
+        const [teacher_id] = params;
+        rows = teacherGradingProfiles
+          .filter((profile) => profile.teacher_id === Number(teacher_id))
+          .sort((a, b) => {
+            if (Boolean(a.is_active) !== Boolean(b.is_active)) {
+              return Boolean(a.is_active) ? -1 : 1;
+            }
+            if (a.created_at === b.created_at) return a.id - b.id;
+            return new Date(a.created_at) - new Date(b.created_at);
+          })
+          .map((profile) => ({ ...profile }));
+      } else if (/SELECT category, weight FROM teacher_grading_profile_items WHERE profile_id = \?/i.test(sql)) {
+        const [profile_id] = params;
+        rows = teacherGradingProfileItems
+          .filter((item) => item.profile_id === Number(profile_id))
+          .map((item) => ({ category: item.category, weight: item.weight }));
       } else if (/SELECT c.id, c.name, c.subject, c.created_at, u.email AS teacher_email, u.id AS teacher_id/i.test(sql)) {
         rows = classes
           .filter((c) => {
@@ -482,12 +670,15 @@ function createFakeDb() {
             return {
               id: g.id,
               grade: g.grade,
+              points_achieved: g.points_achieved ?? null,
+              points_max: g.points_max ?? null,
               note: g.note,
               created_at: g.created_at,
               template_id: template.id,
               name: template.name,
               category: template.category,
               weight: template.weight,
+              weight_mode: template.weight_mode || "points",
               date: template.date,
               description: template.description,
               class_subject: cls.subject,
@@ -506,12 +697,15 @@ function createFakeDb() {
             return {
               id: entry.id,
               grade: entry.grade,
+              points_achieved: null,
+              points_max: null,
               note: entry.description || null,
               created_at: entry.created_at,
               template_id: null,
               name: entry.name,
               category: entry.type,
               weight: entry.weight,
+              weight_mode: null,
               date: entry.created_at,
               description: entry.description,
               class_subject: cls.subject,
@@ -551,7 +745,7 @@ function createFakeDb() {
         const [id] = params;
         const cls = classes.find((c) => c.id === Number(id));
         rows = cls ? [{ ...cls }] : [];
-      } else if (/SELECT id, name, category, weight, date, description FROM grade_templates WHERE class_id = \? ORDER BY date, name/i.test(sql)) {
+      } else if (/SELECT id, name, category, weight, weight_mode, date, description FROM grade_templates WHERE class_id = \? ORDER BY date, name/i.test(sql)) {
         const [clsId] = params;
         rows = gradeTemplates
           .filter((t) => t.class_id === Number(clsId))
@@ -559,7 +753,7 @@ function createFakeDb() {
             if (a.date && b.date && a.date !== b.date) return new Date(a.date) - new Date(b.date);
             return a.name.localeCompare(b.name);
           })
-          .map((t) => ({ ...t }));
+          .map((t) => ({ ...t, weight_mode: t.weight_mode || "points" }));
       } else if (/FROM special_assessments sa\s+JOIN students s ON s\.id = sa\.student_id\s+WHERE sa\.class_id = \?/i.test(sql)) {
         const [clsId] = params;
         rows = specialAssessments
@@ -963,12 +1157,127 @@ async function initializeDatabase() {
   `);
 
   await pool.query(`
+    CREATE TABLE IF NOT EXISTS teacher_grading_profiles (
+      id SERIAL PRIMARY KEY,
+      teacher_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      name TEXT NOT NULL,
+      weight_mode TEXT NOT NULL DEFAULT 'points' CHECK (weight_mode IN ('percent', 'points')),
+      scoring_mode TEXT NOT NULL DEFAULT 'points_or_grade' CHECK (scoring_mode IN ('grade_only', 'points_only', 'points_or_grade', 'points_and_grade')),
+      grade1_min_percent NUMERIC NOT NULL DEFAULT 88.5,
+      grade2_min_percent NUMERIC NOT NULL DEFAULT 75,
+      grade3_min_percent NUMERIC NOT NULL DEFAULT 62.5,
+      grade4_min_percent NUMERIC NOT NULL DEFAULT 50,
+      is_active BOOLEAN NOT NULL DEFAULT FALSE,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    )
+  `);
+
+  await pool.query(
+    "ALTER TABLE teacher_grading_profiles ADD COLUMN IF NOT EXISTS scoring_mode TEXT"
+  );
+  await pool.query(
+    "UPDATE teacher_grading_profiles SET scoring_mode = 'points_or_grade' WHERE scoring_mode IS NULL"
+  );
+  await pool.query(
+    "ALTER TABLE teacher_grading_profiles ALTER COLUMN scoring_mode SET DEFAULT 'points_or_grade'"
+  );
+  await pool.query(
+    "ALTER TABLE teacher_grading_profiles ALTER COLUMN scoring_mode SET NOT NULL"
+  );
+  await pool.query(`
+    DO $$
+    BEGIN
+      IF NOT EXISTS (
+        SELECT 1
+        FROM pg_constraint
+        WHERE conname = 'teacher_grading_profiles_scoring_mode_check'
+      ) THEN
+        ALTER TABLE teacher_grading_profiles
+        ADD CONSTRAINT teacher_grading_profiles_scoring_mode_check
+        CHECK (scoring_mode IN ('grade_only', 'points_only', 'points_or_grade', 'points_and_grade'));
+      END IF;
+    END $$;
+  `);
+
+  await pool.query(
+    "ALTER TABLE teacher_grading_profiles ADD COLUMN IF NOT EXISTS grade1_min_percent NUMERIC DEFAULT 88.5"
+  );
+  await pool.query(
+    "ALTER TABLE teacher_grading_profiles ADD COLUMN IF NOT EXISTS grade2_min_percent NUMERIC DEFAULT 75"
+  );
+  await pool.query(
+    "ALTER TABLE teacher_grading_profiles ADD COLUMN IF NOT EXISTS grade3_min_percent NUMERIC DEFAULT 62.5"
+  );
+  await pool.query(
+    "ALTER TABLE teacher_grading_profiles ADD COLUMN IF NOT EXISTS grade4_min_percent NUMERIC DEFAULT 50"
+  );
+  await pool.query(
+    "UPDATE teacher_grading_profiles SET grade1_min_percent = 88.5 WHERE grade1_min_percent IS NULL"
+  );
+  await pool.query(
+    "UPDATE teacher_grading_profiles SET grade2_min_percent = 75 WHERE grade2_min_percent IS NULL"
+  );
+  await pool.query(
+    "UPDATE teacher_grading_profiles SET grade3_min_percent = 62.5 WHERE grade3_min_percent IS NULL"
+  );
+  await pool.query(
+    "UPDATE teacher_grading_profiles SET grade4_min_percent = 50 WHERE grade4_min_percent IS NULL"
+  );
+  await pool.query(
+    "ALTER TABLE teacher_grading_profiles ALTER COLUMN grade1_min_percent SET DEFAULT 88.5"
+  );
+  await pool.query(
+    "ALTER TABLE teacher_grading_profiles ALTER COLUMN grade2_min_percent SET DEFAULT 75"
+  );
+  await pool.query(
+    "ALTER TABLE teacher_grading_profiles ALTER COLUMN grade3_min_percent SET DEFAULT 62.5"
+  );
+  await pool.query(
+    "ALTER TABLE teacher_grading_profiles ALTER COLUMN grade4_min_percent SET DEFAULT 50"
+  );
+  await pool.query(
+    "ALTER TABLE teacher_grading_profiles ALTER COLUMN grade1_min_percent SET NOT NULL"
+  );
+  await pool.query(
+    "ALTER TABLE teacher_grading_profiles ALTER COLUMN grade2_min_percent SET NOT NULL"
+  );
+  await pool.query(
+    "ALTER TABLE teacher_grading_profiles ALTER COLUMN grade3_min_percent SET NOT NULL"
+  );
+  await pool.query(
+    "ALTER TABLE teacher_grading_profiles ALTER COLUMN grade4_min_percent SET NOT NULL"
+  );
+
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS teacher_grading_profile_items (
+      id SERIAL PRIMARY KEY,
+      profile_id INTEGER NOT NULL REFERENCES teacher_grading_profiles(id) ON DELETE CASCADE,
+      category TEXT NOT NULL,
+      weight NUMERIC NOT NULL CHECK (weight >= 0),
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      UNIQUE (profile_id, category)
+    )
+  `);
+  await pool.query(
+    "ALTER TABLE teacher_grading_profile_items DROP CONSTRAINT IF EXISTS teacher_grading_profile_items_weight_check"
+  );
+  await pool.query(
+    "ALTER TABLE teacher_grading_profile_items ADD CONSTRAINT teacher_grading_profile_items_weight_check CHECK (weight >= 0)"
+  );
+
+  await pool.query(
+    "CREATE UNIQUE INDEX IF NOT EXISTS teacher_grading_profiles_name_idx ON teacher_grading_profiles (teacher_id, name)"
+  );
+
+  await pool.query(`
     CREATE TABLE IF NOT EXISTS grade_templates (
       id SERIAL PRIMARY KEY,
       class_id INTEGER NOT NULL REFERENCES classes(id) ON DELETE CASCADE,
       name TEXT NOT NULL,
       category TEXT NOT NULL CHECK (category IN ('Schularbeit', 'Test', 'Wiederholung', 'Mitarbeit', 'Projekt', 'Hausübung')),
-      weight NUMERIC NOT NULL CHECK (weight >= 0 AND weight <= 100),
+      weight NUMERIC NOT NULL CHECK (weight >= 0),
       date TIMESTAMPTZ,
       description TEXT,
       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
@@ -976,11 +1285,43 @@ async function initializeDatabase() {
   `);
 
   await pool.query(
+    "ALTER TABLE grade_templates DROP CONSTRAINT IF EXISTS grade_templates_weight_check"
+  );
+  await pool.query(
+    "ALTER TABLE grade_templates ADD CONSTRAINT grade_templates_weight_check CHECK (weight >= 0)"
+  );
+  await pool.query(
     "ALTER TABLE grade_templates ADD COLUMN IF NOT EXISTS description TEXT"
   );
   await pool.query(
     "ALTER TABLE grade_templates ADD COLUMN IF NOT EXISTS date TIMESTAMPTZ"
   );
+  await pool.query(
+    "ALTER TABLE grade_templates ADD COLUMN IF NOT EXISTS weight_mode TEXT"
+  );
+  await pool.query(
+    "UPDATE grade_templates SET weight_mode = 'points' WHERE weight_mode IS NULL"
+  );
+  await pool.query(
+    "ALTER TABLE grade_templates ALTER COLUMN weight_mode SET DEFAULT 'points'"
+  );
+  await pool.query(
+    "ALTER TABLE grade_templates ALTER COLUMN weight_mode SET NOT NULL"
+  );
+  await pool.query(`
+    DO $$
+    BEGIN
+      IF NOT EXISTS (
+        SELECT 1
+        FROM pg_constraint
+        WHERE conname = 'grade_templates_weight_mode_check'
+      ) THEN
+        ALTER TABLE grade_templates
+        ADD CONSTRAINT grade_templates_weight_mode_check
+        CHECK (weight_mode IN ('percent', 'points'));
+      END IF;
+    END $$;
+  `);
 
   await pool.query(`
     CREATE TABLE IF NOT EXISTS grades (
@@ -989,6 +1330,8 @@ async function initializeDatabase() {
       class_id INTEGER NOT NULL REFERENCES classes(id) ON DELETE CASCADE,
       grade_template_id INTEGER NOT NULL REFERENCES grade_templates(id) ON DELETE CASCADE,
       grade NUMERIC NOT NULL CHECK (grade >= 1 AND grade <= 5),
+      points_achieved NUMERIC,
+      points_max NUMERIC,
       note TEXT,
       attachment_path TEXT,
       attachment_original_name TEXT,
@@ -1000,6 +1343,12 @@ async function initializeDatabase() {
     )
   `);
 
+  await pool.query(
+    "ALTER TABLE grades ADD COLUMN IF NOT EXISTS points_achieved NUMERIC"
+  );
+  await pool.query(
+    "ALTER TABLE grades ADD COLUMN IF NOT EXISTS points_max NUMERIC"
+  );
   await pool.query(
     "ALTER TABLE grades ADD COLUMN IF NOT EXISTS attachment_path TEXT"
   );
@@ -1024,11 +1373,18 @@ async function initializeDatabase() {
       type TEXT NOT NULL CHECK (type IN ('Präsentation', 'Wunschprüfung', 'Benutzerdefiniert')),
       name TEXT NOT NULL,
       description TEXT,
-      weight NUMERIC NOT NULL CHECK (weight >= 0 AND weight <= 100),
+      weight NUMERIC NOT NULL CHECK (weight >= 0),
       grade NUMERIC NOT NULL CHECK (grade >= 1 AND grade <= 5),
       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
     )
   `);
+
+  await pool.query(
+    "ALTER TABLE special_assessments DROP CONSTRAINT IF EXISTS special_assessments_weight_check"
+  );
+  await pool.query(
+    "ALTER TABLE special_assessments ADD CONSTRAINT special_assessments_weight_check CHECK (weight >= 0)"
+  );
 
   await pool.query(`
     CREATE TABLE IF NOT EXISTS grade_notifications (

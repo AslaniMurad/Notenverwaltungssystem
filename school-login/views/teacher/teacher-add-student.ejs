@@ -29,6 +29,7 @@
             <a href="/teacher/special-assessments/<%= classData.id %>">Sonderleistungen</a>
             <a href="/teacher/grade-templates/<%= classData.id %>">PrÃ¼fungen</a>
             <a href="/teacher/class-statistics/<%= classData.id %>">Statistiken</a>
+            <a href="/teacher/settings">Einstellungen</a>
             <form class="logout-form" method="POST" action="/logout">
               <input type="hidden" name="_csrf" value="<%= csrfToken %>">
               <button class="app-nav-link" type="submit">Logout</button>
@@ -83,5 +84,6 @@
 <% } };
 %>
 <%- include('../layout', page) %>
+
 
 
