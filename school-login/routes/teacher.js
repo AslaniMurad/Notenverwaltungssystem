@@ -74,6 +74,22 @@ const DEFAULT_GRADE_THRESHOLDS = {
   grade3_min_percent: 62.5,
   grade4_min_percent: 50
 };
+const PARTICIPATION_SYMBOL_OPTIONS = [
+  { value: "plus", label: "+" },
+  { value: "plus_tilde", label: "+~" },
+  { value: "neutral", label: "~" },
+  { value: "minus_tilde", label: "-~" },
+  { value: "minus", label: "-" }
+];
+const DEFAULT_PARTICIPATION_CONFIG = {
+  ma_enabled: false,
+  ma_weight: 5,
+  ma_grade_plus: 1.5,
+  ma_grade_plus_tilde: 2.5,
+  ma_grade_neutral: 3,
+  ma_grade_minus_tilde: 3.5,
+  ma_grade_minus: 4.5
+};
 const TEMPLATE_CATEGORY_DEFINITIONS = [
   {
     key: "Schularbeit",
@@ -197,6 +213,113 @@ function buildGradeFromPercent(percent, thresholds) {
   return 5;
 }
 
+function normalizeParticipationConfig(source = {}) {
+  const pick = (key, fallback) => {
+    const value = Number(source[key]);
+    return Number.isFinite(value) ? value : fallback;
+  };
+  const rawEnabled = source?.ma_enabled;
+  const enabled =
+    rawEnabled === true ||
+    rawEnabled === 1 ||
+    rawEnabled === "1" ||
+    rawEnabled === "true" ||
+    rawEnabled === "on";
+  return {
+    ma_enabled: enabled,
+    ma_weight: pick("ma_weight", DEFAULT_PARTICIPATION_CONFIG.ma_weight),
+    ma_grade_plus: pick("ma_grade_plus", DEFAULT_PARTICIPATION_CONFIG.ma_grade_plus),
+    ma_grade_plus_tilde: pick("ma_grade_plus_tilde", DEFAULT_PARTICIPATION_CONFIG.ma_grade_plus_tilde),
+    ma_grade_neutral: pick("ma_grade_neutral", DEFAULT_PARTICIPATION_CONFIG.ma_grade_neutral),
+    ma_grade_minus_tilde: pick("ma_grade_minus_tilde", DEFAULT_PARTICIPATION_CONFIG.ma_grade_minus_tilde),
+    ma_grade_minus: pick("ma_grade_minus", DEFAULT_PARTICIPATION_CONFIG.ma_grade_minus)
+  };
+}
+
+function parseParticipationConfigFromBody(body) {
+  return normalizeParticipationConfig({
+    ma_enabled: body?.ma_enabled,
+    ma_weight: parseNumericInput(body?.ma_weight),
+    ma_grade_plus: parseNumericInput(body?.ma_grade_plus),
+    ma_grade_plus_tilde: parseNumericInput(body?.ma_grade_plus_tilde),
+    ma_grade_neutral: parseNumericInput(body?.ma_grade_neutral),
+    ma_grade_minus_tilde: parseNumericInput(body?.ma_grade_minus_tilde),
+    ma_grade_minus: parseNumericInput(body?.ma_grade_minus)
+  });
+}
+
+function validateParticipationConfig(config) {
+  const value = normalizeParticipationConfig(config);
+  if (!Number.isFinite(value.ma_weight) || value.ma_weight < 0) {
+    return "MA-Gewichtung muss mindestens 0 Punkte sein.";
+  }
+  const gradeValues = [
+    value.ma_grade_plus,
+    value.ma_grade_plus_tilde,
+    value.ma_grade_neutral,
+    value.ma_grade_minus_tilde,
+    value.ma_grade_minus
+  ];
+  if (gradeValues.some((entry) => !Number.isFinite(entry) || entry < 1 || entry > 5)) {
+    return "MA-Notenwirkung muss zwischen 1 und 5 liegen.";
+  }
+  if (
+    !(
+      value.ma_grade_plus < value.ma_grade_plus_tilde &&
+      value.ma_grade_plus_tilde < value.ma_grade_neutral &&
+      value.ma_grade_neutral < value.ma_grade_minus_tilde &&
+      value.ma_grade_minus_tilde < value.ma_grade_minus
+    )
+  ) {
+    return "MA-Notenwirkung muss streng steigend sein (+ < +~ < ~ < -~ < -).";
+  }
+  if (value.ma_enabled && value.ma_weight <= 0) {
+    return "Wenn MA aktiv ist, muss die MA-Gewichtung größer als 0 sein.";
+  }
+  return null;
+}
+
+function normalizeParticipationSymbol(symbol) {
+  const normalized = String(symbol || "").trim().toLowerCase();
+  if (normalized === "~") return "neutral";
+  if (normalized === "tilde") return "neutral";
+  return PARTICIPATION_SYMBOL_OPTIONS.some((entry) => entry.value === normalized) ? normalized : null;
+}
+
+function getParticipationGrade(symbol, config) {
+  const normalized = normalizeParticipationSymbol(symbol);
+  if (!normalized) return null;
+  const source = normalizeParticipationConfig(config);
+  if (normalized === "plus") return source.ma_grade_plus;
+  if (normalized === "plus_tilde") return source.ma_grade_plus_tilde;
+  if (normalized === "neutral") return source.ma_grade_neutral;
+  if (normalized === "minus_tilde") return source.ma_grade_minus_tilde;
+  if (normalized === "minus") return source.ma_grade_minus;
+  return null;
+}
+
+function getParticipationSymbolLabel(symbol) {
+  const normalized = normalizeParticipationSymbol(symbol);
+  const option = PARTICIPATION_SYMBOL_OPTIONS.find((entry) => entry.value === normalized);
+  return option ? option.label : String(symbol || "");
+}
+
+function buildParticipationAverageRows(marks, config) {
+  const participation = normalizeParticipationConfig(config);
+  if (!participation.ma_enabled || participation.ma_weight <= 0) return [];
+  return (marks || [])
+    .map((mark) => {
+      const grade = getParticipationGrade(mark.symbol, participation);
+      if (!Number.isFinite(grade)) return null;
+      return {
+        grade,
+        weight: participation.ma_weight,
+        is_participation: true
+      };
+    })
+    .filter(Boolean);
+}
+
 function getScoringModeLabel(mode) {
   const normalized = normalizeScoringMode(mode);
   const entry = SCORING_MODE_OPTIONS.find((option) => option.value === normalized);
@@ -304,7 +427,7 @@ async function loadProfileItems(profileId) {
 
 async function loadTeacherProfiles(teacherId) {
   const profiles = await allAsync(
-    `SELECT id, teacher_id, name, weight_mode, scoring_mode, grade1_min_percent, grade2_min_percent, grade3_min_percent, grade4_min_percent, is_active, created_at, updated_at
+    `SELECT id, teacher_id, name, weight_mode, scoring_mode, grade1_min_percent, grade2_min_percent, grade3_min_percent, grade4_min_percent, ma_enabled, ma_weight, ma_grade_plus, ma_grade_plus_tilde, ma_grade_neutral, ma_grade_minus_tilde, ma_grade_minus, is_active, created_at, updated_at
      FROM teacher_grading_profiles
      WHERE teacher_id = ?
      ORDER BY is_active DESC, created_at ASC, id ASC`,
@@ -315,13 +438,14 @@ async function loadTeacherProfiles(teacherId) {
     weight_mode: resolveWeightMode(profile.weight_mode),
     scoring_mode: normalizeScoringMode(profile.scoring_mode),
     thresholds: normalizeThresholds(profile),
+    participation: normalizeParticipationConfig(profile),
     is_active: Boolean(profile.is_active)
   }));
 }
 
 async function loadTeacherProfileById(profileId, teacherId) {
   const profile = await getAsync(
-    `SELECT id, teacher_id, name, weight_mode, scoring_mode, grade1_min_percent, grade2_min_percent, grade3_min_percent, grade4_min_percent, is_active, created_at, updated_at
+    `SELECT id, teacher_id, name, weight_mode, scoring_mode, grade1_min_percent, grade2_min_percent, grade3_min_percent, grade4_min_percent, ma_enabled, ma_weight, ma_grade_plus, ma_grade_plus_tilde, ma_grade_neutral, ma_grade_minus_tilde, ma_grade_minus, is_active, created_at, updated_at
      FROM teacher_grading_profiles
      WHERE id = ? AND teacher_id = ?`,
     [profileId, teacherId]
@@ -332,13 +456,14 @@ async function loadTeacherProfileById(profileId, teacherId) {
     weight_mode: resolveWeightMode(profile.weight_mode),
     scoring_mode: normalizeScoringMode(profile.scoring_mode),
     thresholds: normalizeThresholds(profile),
+    participation: normalizeParticipationConfig(profile),
     is_active: Boolean(profile.is_active)
   };
 }
 
 async function loadActiveTeacherProfile(teacherId) {
   const activeProfile = await getAsync(
-    `SELECT id, teacher_id, name, weight_mode, scoring_mode, grade1_min_percent, grade2_min_percent, grade3_min_percent, grade4_min_percent, is_active, created_at, updated_at
+    `SELECT id, teacher_id, name, weight_mode, scoring_mode, grade1_min_percent, grade2_min_percent, grade3_min_percent, grade4_min_percent, ma_enabled, ma_weight, ma_grade_plus, ma_grade_plus_tilde, ma_grade_neutral, ma_grade_minus_tilde, ma_grade_minus, is_active, created_at, updated_at
      FROM teacher_grading_profiles
      WHERE teacher_id = ? AND is_active = ?
      ORDER BY created_at ASC, id ASC
@@ -356,6 +481,7 @@ async function loadActiveTeacherProfile(teacherId) {
       weight_mode: resolveWeightMode(activeProfile.weight_mode),
       scoring_mode: normalizeScoringMode(activeProfile.scoring_mode),
       thresholds: normalizeThresholds(activeProfile),
+      participation: normalizeParticipationConfig(activeProfile),
       is_active: Boolean(activeProfile.is_active),
       weights,
       total_weight: computeWeightsTotal(weights)
@@ -363,7 +489,7 @@ async function loadActiveTeacherProfile(teacherId) {
   }
 
   const fallback = await getAsync(
-    `SELECT id, teacher_id, name, weight_mode, scoring_mode, grade1_min_percent, grade2_min_percent, grade3_min_percent, grade4_min_percent, is_active, created_at, updated_at
+    `SELECT id, teacher_id, name, weight_mode, scoring_mode, grade1_min_percent, grade2_min_percent, grade3_min_percent, grade4_min_percent, ma_enabled, ma_weight, ma_grade_plus, ma_grade_plus_tilde, ma_grade_neutral, ma_grade_minus_tilde, ma_grade_minus, is_active, created_at, updated_at
      FROM teacher_grading_profiles
      WHERE teacher_id = ?
      ORDER BY created_at ASC, id ASC
@@ -384,6 +510,7 @@ async function loadActiveTeacherProfile(teacherId) {
     weight_mode: resolveWeightMode(fallback.weight_mode),
     scoring_mode: normalizeScoringMode(fallback.scoring_mode),
     thresholds: normalizeThresholds(fallback),
+    participation: normalizeParticipationConfig(fallback),
     is_active: true,
     weights,
     total_weight: computeWeightsTotal(weights)
@@ -653,6 +780,16 @@ function computeWeightedAverage(grades) {
   return weightTotal ? Number((weightedSum / weightTotal).toFixed(2)) : null;
 }
 
+async function loadParticipationMarks(classId, studentId) {
+  return allAsync(
+    `SELECT id, student_id, class_id, symbol, note, created_at
+     FROM participation_marks
+     WHERE class_id = ? AND student_id = ?
+     ORDER BY created_at DESC`,
+    [classId, studentId]
+  );
+}
+
 async function buildSettingsPageData(teacherId, selectedProfileId, formOverride = null) {
   const profiles = await loadTeacherProfiles(teacherId);
   const setupComplete = profiles.length > 0;
@@ -668,11 +805,15 @@ async function buildSettingsPageData(teacherId, selectedProfileId, formOverride 
   let selectedMode = WEIGHT_MODE_POINTS;
   let selectedScoringMode = DEFAULT_SCORING_MODE;
   let selectedThresholds = normalizeThresholds();
+  let selectedParticipation = normalizeParticipationConfig();
   if (selectedProfile) {
     selectedMode = resolveWeightMode(selectedProfile.weight_mode);
     selectedWeights = mergeWeightsWithDefaults(await loadProfileItems(selectedProfile.id), selectedMode);
     selectedScoringMode = normalizeScoringMode(selectedProfile.scoring_mode);
     selectedThresholds = normalizeThresholds(selectedProfile.thresholds || selectedProfile);
+    selectedParticipation = normalizeParticipationConfig(
+      selectedProfile.participation || selectedProfile
+    );
   }
 
   const selectedTotal = computeWeightsTotal(selectedWeights);
@@ -685,6 +826,7 @@ async function buildSettingsPageData(teacherId, selectedProfileId, formOverride 
       weight_mode: selectedMode,
       scoring_mode: selectedScoringMode,
       thresholds: selectedThresholds,
+      participation: selectedParticipation,
       set_active: selectedProfile ? Boolean(selectedProfile.is_active) : true,
       weights: selectedWeights
     };
@@ -697,6 +839,7 @@ async function buildSettingsPageData(teacherId, selectedProfileId, formOverride 
       mode_label: getWeightUnit(profile.weight_mode),
       scoring_mode: normalizeScoringMode(profile.scoring_mode),
       thresholds: normalizeThresholds(profile.thresholds || profile),
+      participation: normalizeParticipationConfig(profile.participation || profile),
       is_active: Boolean(profile.is_active)
     })),
     selectedProfile,
@@ -771,21 +914,52 @@ router.get("/settings", async (req, res, next) => {
   try {
     const teacherId = req.session.user.id;
     const selectedProfileId = req.query.profile_id ? Number(req.query.profile_id) : null;
-    const pageData = await buildSettingsPageData(teacherId, selectedProfileId);
+    const isCreateMode = String(req.query.new || "") === "1";
+    const isEditMode = String(req.query.edit || "") === "1";
+
+    let pageData = await buildSettingsPageData(teacherId, selectedProfileId);
+    if (isCreateMode) {
+      const sourceProfile = pageData.activeProfile || pageData.selectedProfile;
+      const createFormData = {
+        profile_id: "",
+        profile_name: "",
+        weight_mode: WEIGHT_MODE_POINTS,
+        scoring_mode: normalizeScoringMode(sourceProfile?.scoring_mode),
+        thresholds: normalizeThresholds(sourceProfile?.thresholds || sourceProfile || {}),
+        participation: normalizeParticipationConfig(
+          sourceProfile?.participation || sourceProfile || {}
+        ),
+        set_active: !pageData.activeProfile,
+        weights: mergeWeightsWithDefaults(sourceProfile?.weights || {}, WEIGHT_MODE_POINTS)
+      };
+      pageData = await buildSettingsPageData(teacherId, null, createFormData);
+    }
+
+    const showConfigForm =
+      !pageData.setupComplete ||
+      isCreateMode ||
+      (isEditMode && Number.isInteger(selectedProfileId) && selectedProfileId > 0);
+    const message = req.query.saved
+      ? "Bewertungsschema gespeichert."
+      : req.query.deleted
+      ? "Profil gelöscht."
+      : null;
 
     res.render("teacher/teacher-settings", {
       email: req.session.user.email,
       csrfToken: req.csrfToken(),
       categoryDefinitions: TEMPLATE_CATEGORY_DEFINITIONS,
       scoringModeOptions: SCORING_MODE_OPTIONS,
+      participationSymbolOptions: PARTICIPATION_SYMBOL_OPTIONS,
       setupComplete: pageData.setupComplete,
       showSetupFlow: !pageData.setupComplete || String(req.query.setup || "") === "1",
+      showConfigForm,
       profiles: pageData.profiles,
       activeProfile: pageData.activeProfile,
       selectedProfile: pageData.selectedProfile,
-      selectedTotal: pageData.selectedTotal,
+      selectedTotal: computeWeightsTotal(pageData.formData.weights),
       formData: pageData.formData,
-      message: req.query.saved ? "Bewertungsschema gespeichert." : null,
+      message,
       error: null
     });
   } catch (err) {
@@ -801,6 +975,7 @@ router.post("/settings/save-profile", async (req, res, next) => {
     const weightMode = WEIGHT_MODE_POINTS;
     const scoringMode = normalizeScoringMode(req.body?.scoring_mode);
     const thresholds = parseThresholdsFromBody(req.body || {});
+    const participation = parseParticipationConfigFromBody(req.body || {});
     const requestedSetActive = req.body?.set_active === "1" || req.body?.set_active === "on";
     const parsedWeights = parseWeightsFromBody(req.body || {});
     const existingProfiles = await loadTeacherProfiles(teacherId);
@@ -811,6 +986,7 @@ router.post("/settings/save-profile", async (req, res, next) => {
       weight_mode: weightMode,
       scoring_mode: scoringMode,
       thresholds,
+      participation,
       set_active: requestedSetActive,
       weights: mergeWeightsWithDefaults(parsedWeights, weightMode)
     };
@@ -822,8 +998,10 @@ router.post("/settings/save-profile", async (req, res, next) => {
         csrfToken: req.csrfToken(),
         categoryDefinitions: TEMPLATE_CATEGORY_DEFINITIONS,
         scoringModeOptions: SCORING_MODE_OPTIONS,
+        participationSymbolOptions: PARTICIPATION_SYMBOL_OPTIONS,
         setupComplete: pageData.setupComplete,
         showSetupFlow: !pageData.setupComplete,
+        showConfigForm: true,
         profiles: pageData.profiles,
         activeProfile: pageData.activeProfile,
         selectedProfile: pageData.selectedProfile,
@@ -842,8 +1020,10 @@ router.post("/settings/save-profile", async (req, res, next) => {
         csrfToken: req.csrfToken(),
         categoryDefinitions: TEMPLATE_CATEGORY_DEFINITIONS,
         scoringModeOptions: SCORING_MODE_OPTIONS,
+        participationSymbolOptions: PARTICIPATION_SYMBOL_OPTIONS,
         setupComplete: pageData.setupComplete,
         showSetupFlow: !pageData.setupComplete,
+        showConfigForm: true,
         profiles: pageData.profiles,
         activeProfile: pageData.activeProfile,
         selectedProfile: pageData.selectedProfile,
@@ -862,8 +1042,10 @@ router.post("/settings/save-profile", async (req, res, next) => {
         csrfToken: req.csrfToken(),
         categoryDefinitions: TEMPLATE_CATEGORY_DEFINITIONS,
         scoringModeOptions: SCORING_MODE_OPTIONS,
+        participationSymbolOptions: PARTICIPATION_SYMBOL_OPTIONS,
         setupComplete: pageData.setupComplete,
         showSetupFlow: !pageData.setupComplete,
+        showConfigForm: true,
         profiles: pageData.profiles,
         activeProfile: pageData.activeProfile,
         selectedProfile: pageData.selectedProfile,
@@ -871,6 +1053,28 @@ router.post("/settings/save-profile", async (req, res, next) => {
         formData: pageData.formData,
         message: null,
         error: thresholdError
+      });
+    }
+
+    const participationError = validateParticipationConfig(participation);
+    if (participationError) {
+      const pageData = await buildSettingsPageData(teacherId, formData.profile_id, formData);
+      return res.status(400).render("teacher/teacher-settings", {
+        email: req.session.user.email,
+        csrfToken: req.csrfToken(),
+        categoryDefinitions: TEMPLATE_CATEGORY_DEFINITIONS,
+        scoringModeOptions: SCORING_MODE_OPTIONS,
+        participationSymbolOptions: PARTICIPATION_SYMBOL_OPTIONS,
+        setupComplete: pageData.setupComplete,
+        showSetupFlow: !pageData.setupComplete,
+        showConfigForm: true,
+        profiles: pageData.profiles,
+        activeProfile: pageData.activeProfile,
+        selectedProfile: pageData.selectedProfile,
+        selectedTotal: computeWeightsTotal(formData.weights),
+        formData: pageData.formData,
+        message: null,
+        error: participationError
       });
     }
 
@@ -888,7 +1092,7 @@ router.post("/settings/save-profile", async (req, res, next) => {
     if (profileExists) {
       await runAsync(
         `UPDATE teacher_grading_profiles
-         SET name = ?, weight_mode = ?, scoring_mode = ?, grade1_min_percent = ?, grade2_min_percent = ?, grade3_min_percent = ?, grade4_min_percent = ?, updated_at = current_timestamp
+         SET name = ?, weight_mode = ?, scoring_mode = ?, grade1_min_percent = ?, grade2_min_percent = ?, grade3_min_percent = ?, grade4_min_percent = ?, ma_enabled = ?, ma_weight = ?, ma_grade_plus = ?, ma_grade_plus_tilde = ?, ma_grade_neutral = ?, ma_grade_minus_tilde = ?, ma_grade_minus = ?, updated_at = current_timestamp
          WHERE id = ? AND teacher_id = ?`,
         [
           profileName,
@@ -898,6 +1102,13 @@ router.post("/settings/save-profile", async (req, res, next) => {
           thresholds.grade2_min_percent,
           thresholds.grade3_min_percent,
           thresholds.grade4_min_percent,
+          participation.ma_enabled ? 1 : 0,
+          participation.ma_weight,
+          participation.ma_grade_plus,
+          participation.ma_grade_plus_tilde,
+          participation.ma_grade_neutral,
+          participation.ma_grade_minus_tilde,
+          participation.ma_grade_minus,
           profileExists.id,
           teacherId
         ]
@@ -906,8 +1117,8 @@ router.post("/settings/save-profile", async (req, res, next) => {
     } else {
       const result = await runAsync(
         `INSERT INTO teacher_grading_profiles
-         (teacher_id, name, weight_mode, scoring_mode, grade1_min_percent, grade2_min_percent, grade3_min_percent, grade4_min_percent, is_active)
-         VALUES (?,?,?,?,?,?,?,?,?)`,
+         (teacher_id, name, weight_mode, scoring_mode, grade1_min_percent, grade2_min_percent, grade3_min_percent, grade4_min_percent, ma_enabled, ma_weight, ma_grade_plus, ma_grade_plus_tilde, ma_grade_neutral, ma_grade_minus_tilde, ma_grade_minus, is_active)
+         VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
         [
           teacherId,
           profileName,
@@ -917,6 +1128,13 @@ router.post("/settings/save-profile", async (req, res, next) => {
           thresholds.grade2_min_percent,
           thresholds.grade3_min_percent,
           thresholds.grade4_min_percent,
+          participation.ma_enabled ? 1 : 0,
+          participation.ma_weight,
+          participation.ma_grade_plus,
+          participation.ma_grade_plus_tilde,
+          participation.ma_grade_neutral,
+          participation.ma_grade_minus_tilde,
+          participation.ma_grade_minus,
           shouldSetActive
         ]
       );
@@ -965,6 +1183,7 @@ router.post("/settings/save-profile", async (req, res, next) => {
         weight_mode: WEIGHT_MODE_POINTS,
         scoring_mode: normalizeScoringMode(req.body?.scoring_mode),
         thresholds: parseThresholdsFromBody(req.body || {}),
+        participation: parseParticipationConfigFromBody(req.body || {}),
         set_active: req.body?.set_active === "1" || req.body?.set_active === "on",
         weights: mergeWeightsWithDefaults(parseWeightsFromBody(req.body || {}), WEIGHT_MODE_POINTS)
       };
@@ -974,8 +1193,10 @@ router.post("/settings/save-profile", async (req, res, next) => {
         csrfToken: req.csrfToken(),
         categoryDefinitions: TEMPLATE_CATEGORY_DEFINITIONS,
         scoringModeOptions: SCORING_MODE_OPTIONS,
+        participationSymbolOptions: PARTICIPATION_SYMBOL_OPTIONS,
         setupComplete: pageData.setupComplete,
         showSetupFlow: !pageData.setupComplete,
+        showConfigForm: true,
         profiles: pageData.profiles,
         activeProfile: pageData.activeProfile,
         selectedProfile: pageData.selectedProfile,
@@ -1005,6 +1226,47 @@ router.post("/settings/activate-profile/:profileId", async (req, res, next) => {
     );
 
     res.redirect(`/teacher/settings?profile_id=${profileId}&saved=1`);
+  } catch (err) {
+    next(err);
+  }
+});
+
+router.post("/settings/delete-profile/:profileId", async (req, res, next) => {
+  try {
+    const teacherId = req.session.user.id;
+    const profileId = Number(req.params.profileId);
+    const profile = await loadTeacherProfileById(profileId, teacherId);
+    if (!profile) {
+      return renderError(res, req, "Profil nicht gefunden.", 404, "/teacher/settings");
+    }
+
+    await runAsync("DELETE FROM teacher_grading_profiles WHERE id = ? AND teacher_id = ?", [
+      profileId,
+      teacherId
+    ]);
+
+    if (profile.is_active) {
+      const fallback = await getAsync(
+        `SELECT id
+         FROM teacher_grading_profiles
+         WHERE teacher_id = ?
+         ORDER BY created_at ASC, id ASC
+         LIMIT 1`,
+        [teacherId]
+      );
+      if (fallback?.id) {
+        await runAsync("UPDATE teacher_grading_profiles SET is_active = ? WHERE teacher_id = ?", [
+          false,
+          teacherId
+        ]);
+        await runAsync(
+          "UPDATE teacher_grading_profiles SET is_active = ?, updated_at = current_timestamp WHERE id = ? AND teacher_id = ?",
+          [true, fallback.id, teacherId]
+        );
+      }
+    }
+
+    res.redirect("/teacher/settings?deleted=1");
   } catch (err) {
     next(err);
   }
@@ -1135,14 +1397,23 @@ router.get("/grades/:classId", async (req, res, next) => {
 
     const students = await loadStudents(classId);
     const templates = await loadTemplates(classId);
+    const activeProfile = await loadActiveTeacherProfile(req.session.user.id);
+    const participation = normalizeParticipationConfig(
+      activeProfile?.participation || activeProfile || {}
+    );
     const possibleCount = templates.length;
     const studentsWithGrades = await Promise.all(
       students.map(async (student) => {
         const grades = await loadStudentGrades(student.id);
-        const average = computeWeightedAverage(grades);
+        const participationMarks = await loadParticipationMarks(classId, student.id);
+        const average = computeWeightedAverage([
+          ...grades,
+          ...buildParticipationAverageRows(participationMarks, participation)
+        ]);
         return {
           ...student,
           grade_count: grades.length,
+          ma_count: participationMarks.length,
           average_grade: average
         };
       })
@@ -1153,8 +1424,57 @@ router.get("/grades/:classId", async (req, res, next) => {
       classData,
       students: studentsWithGrades,
       possibleCount,
+      activeProfile,
+      participationEnabled: participation.ma_enabled,
+      participationSymbolOptions: PARTICIPATION_SYMBOL_OPTIONS,
+      message: req.query.ma_saved ? "Mitarbeit eingetragen." : null,
       csrfToken: req.csrfToken()
     });
+  } catch (err) {
+    next(err);
+  }
+});
+
+router.post("/grades/:classId/participation", async (req, res, next) => {
+  try {
+    const classId = req.params.classId;
+    const classData = await loadClassForTeacher(classId, req.session.user.id);
+    if (!classData) {
+      return renderError(res, req, "Klasse nicht gefunden.", 404, "/teacher/classes");
+    }
+
+    const activeProfile = await loadActiveTeacherProfile(req.session.user.id);
+    if (!activeProfile) {
+      return res.redirect("/teacher/settings?setup=1");
+    }
+    const participation = normalizeParticipationConfig(
+      activeProfile.participation || activeProfile
+    );
+    if (!participation.ma_enabled || participation.ma_weight <= 0) {
+      return res.redirect(`/teacher/grades/${classId}`);
+    }
+
+    const studentId = Number(req.body?.student_id);
+    const symbol = normalizeParticipationSymbol(req.body?.ma_symbol);
+    const note = String(req.body?.ma_note || "").trim();
+
+    const students = await loadStudents(classId);
+    const student = students.find((entry) => Number(entry.id) === studentId);
+    if (!student || !symbol) {
+      return res.redirect(`/teacher/grades/${classId}`);
+    }
+
+    await runAsync(
+      "INSERT INTO participation_marks (student_id, class_id, teacher_id, symbol, note) VALUES (?,?,?,?,?)",
+      [student.id, classId, req.session.user.id, symbol, note || null]
+    );
+    await runAsync("INSERT INTO grade_notifications (student_id, message, type) VALUES (?,?,?)", [
+      student.id,
+      "Neue Mitarbeit eingetragen.",
+      "grade"
+    ]);
+
+    res.redirect(`/teacher/grades/${classId}?ma_saved=1`);
   } catch (err) {
     next(err);
   }
@@ -1177,6 +1497,10 @@ router.get("/student-grades/:classId/:studentId", async (req, res, next) => {
 
     const gradeRows = await loadStudentGrades(student.id);
     const activeProfile = await loadActiveTeacherProfile(req.session.user.id);
+    const participationConfig = normalizeParticipationConfig(
+      activeProfile?.participation || activeProfile || {}
+    );
+    const participationMarks = await loadParticipationMarks(classId, student.id);
     const fallbackMode = resolveWeightMode(activeProfile?.weight_mode);
     const grades = gradeRows.map((row) => {
       const hasAttachment = Boolean(row.attachment_path);
@@ -1209,13 +1533,49 @@ router.get("/student-grades/:classId/:studentId", async (req, res, next) => {
           : `/teacher/delete-grade/${classId}/${row.id}`
       };
     });
-    const average = computeWeightedAverage(gradeRows);
+    const participationAverageRows = buildParticipationAverageRows(
+      participationMarks,
+      participationConfig
+    );
+    const participationEntries = (participationMarks || [])
+      .map((mark) => {
+        const gradeValue = getParticipationGrade(mark.symbol, participationConfig);
+        if (!Number.isFinite(gradeValue)) return null;
+        return {
+          id: mark.id,
+          symbol: normalizeParticipationSymbol(mark.symbol),
+          symbol_label: getParticipationSymbolLabel(mark.symbol),
+          note: mark.note || "",
+          created_at: mark.created_at,
+          grade: Number(gradeValue.toFixed(2)),
+          weight: Number(participationConfig.ma_weight || 0),
+          weight_label: formatWeightLabel(participationConfig.ma_weight, WEIGHT_MODE_POINTS)
+        };
+      })
+      .filter(Boolean);
+    const wishGradeRows = [
+      ...gradeRows.map((row) => ({
+        grade: Number(row.grade),
+        weight: Number(row.weight || 0),
+        source: "grade"
+      })),
+      ...participationAverageRows.map((row) => ({
+        grade: Number(row.grade),
+        weight: Number(row.weight || 0),
+        source: "participation"
+      }))
+    ].filter((row) => Number.isFinite(row.grade) && Number.isFinite(row.weight) && row.weight > 0);
+
+    const average = computeWeightedAverage([...gradeRows, ...participationAverageRows]);
 
     res.render("teacher/teacher-student-grades", {
       email: req.session.user.email,
       classData,
       student,
       grades,
+      participationEnabled: participationConfig.ma_enabled && participationConfig.ma_weight > 0,
+      participationEntries,
+      wishGradeRows,
       average,
       activeWeightMode: fallbackMode,
       csrfToken: req.csrfToken()
@@ -1932,12 +2292,19 @@ router.get("/class-statistics/:classId", async (req, res, next) => {
     const students = await loadStudents(classId);
     const templates = await loadTemplates(classId);
     const activeProfile = await loadActiveTeacherProfile(req.session.user.id);
+    const participationConfig = normalizeParticipationConfig(
+      activeProfile?.participation || activeProfile || {}
+    );
     const studentMap = new Map(students.map((student) => [String(student.id), student]));
     const gradesByStudent = new Map();
 
     for (const student of students) {
       const grades = await loadStudentGrades(student.id);
-      gradesByStudent.set(String(student.id), grades);
+      const participationMarks = await loadParticipationMarks(classId, student.id);
+      gradesByStudent.set(String(student.id), [
+        ...grades,
+        ...buildParticipationAverageRows(participationMarks, participationConfig)
+      ]);
     }
 
     const templateStats = templates.map((template) => {

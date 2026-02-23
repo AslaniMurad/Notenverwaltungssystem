@@ -1,19 +1,20 @@
-﻿<%
+<%
   const page = {
-    title: `Lehrer â€” Noten (${classData.name})`,
-    headerTitle: 'Lehrerbereich',
-    styles: ['/css/teacher-pages.css'],
-    scripts: ['/js/app.js'],
-    bodyClass: 'page-teacher',
+    title: `Lehrer - Noten (${classData.name})`,
+    headerTitle: "Lehrerbereich",
+    styles: ["/css/teacher-pages.css"],
+    scripts: ["/js/app.js"],
+    bodyClass: "page-teacher",
     hideHeader: true,
     hideFooter: true,
-    content: function () { %>
+    content: function () {
+%>
     <div class="app-shell teacher-shell">
       <aside class="teacher-sidebar" aria-label="Lehrer Navigation">
         <div class="sidebar-brand">
           <div>
             <div class="sidebar-title">Teacher Panel</div>
-            <div class="sidebar-meta"><%= email %> Â· Lehrer</div>
+            <div class="sidebar-meta"><%= email %> - Lehrer</div>
           </div>
           <span class="sidebar-badge">Eingeloggt</span>
         </div>
@@ -24,10 +25,10 @@
             <a href="/teacher/classes">Meine Klassen</a>
             <a href="/teacher/create-class">Klasse erstellen</a>
             <div class="nav-section-title">Klasse: <%= classData.name %> / <%= classData.subject %></div>
-            <a href="/teacher/students/<%= classData.id %>">SchÃ¼ler</a>
+            <a href="/teacher/students/<%= classData.id %>">Schueler</a>
             <a class="is-active" href="/teacher/grades/<%= classData.id %>">Noten</a>
             <a href="/teacher/special-assessments/<%= classData.id %>">Sonderleistungen</a>
-            <a href="/teacher/grade-templates/<%= classData.id %>">PrÃ¼fungen</a>
+            <a href="/teacher/grade-templates/<%= classData.id %>">Pruefungen</a>
             <a href="/teacher/class-statistics/<%= classData.id %>">Statistiken</a>
             <a href="/teacher/settings">Einstellungen</a>
             <form class="logout-form" method="POST" action="/logout">
@@ -42,28 +43,39 @@
         <header class="teacher-main-header">
           <div>
             <p class="teacher-eyebrow">Klasse <%= classData.name %></p>
-            <h1>NotenÃ¼bersicht</h1>
-            <p class="teacher-muted">Fach: <%= classData.subject %> Â· Rolle: Lehrer</p>
+            <h1>Notenuebersicht</h1>
+            <p class="teacher-muted">Fach: <%= classData.subject %> - Rolle: Lehrer</p>
           </div>
           <div class="teacher-actions-inline">
-            <a class="btn btn-secondary" href="/teacher/classes">ZurÃ¼ck</a>
+            <a class="btn btn-secondary" href="/teacher/classes">Zurueck</a>
           </div>
         </header>
+
+        <% if (message) { %>
+          <div class="teacher-alert info"><%= message %></div>
+        <% } %>
+
+        <% if (!participationEnabled) { %>
+          <div class="teacher-alert info">
+            Mitarbeit ist im aktiven Profil deaktiviert. Du kannst sie in den
+            <a href="/teacher/settings">Einstellungen</a> aktivieren.
+          </div>
+        <% } %>
 
         <div class="teacher-card">
           <div class="teacher-card-header">
             <div>
-              <p class="teacher-eyebrow">SchÃ¼ler & Noten</p>
-              <h3><%= students.length %> SchÃ¼ler in dieser Klasse</h3>
+              <p class="teacher-eyebrow">Schueler und Noten</p>
+              <h3><%= students.length %> Schueler in dieser Klasse</h3>
             </div>
           </div>
 
           <div class="grades-table-wrapper">
             <% if (students.length === 0) { %>
               <div class="teacher-empty">
-                <h4>Noch keine SchÃ¼ler</h4>
-                <p>FÃ¼ge erst SchÃ¼ler zur Klasse hinzu.</p>
-                <a class="btn btn-primary" href="/teacher/add-student/<%= classData.id %>">SchÃ¼ler hinzufÃ¼gen</a>
+                <h4>Noch keine Schueler</h4>
+                <p>Fuege zuerst Schueler zur Klasse hinzu.</p>
+                <a class="btn btn-primary" href="/teacher/add-student/<%= classData.id %>">Schueler hinzufuegen</a>
               </div>
             <% } else { %>
               <table class="grades-table">
@@ -72,29 +84,45 @@
                     <th>Name</th>
                     <th>E-Mail</th>
                     <th>Anzahl Noten</th>
+                    <% if (participationEnabled) { %>
+                      <th>MA</th>
+                    <% } %>
                     <th>Durchschnitt</th>
                     <th>Aktionen</th>
                   </tr>
                 </thead>
                 <tbody>
-                  <% students.forEach(student => { %>
+                  <% students.forEach((student) => { %>
                     <tr>
                       <td><strong><%= student.name %></strong></td>
                       <td><%= student.email %></td>
                       <td><span class="badge-count"><%= student.grade_count %>/<%= possibleCount || 0 %></span></td>
+                      <% if (participationEnabled) { %>
+                        <td><span class="badge-count"><%= student.ma_count || 0 %></span></td>
+                      <% } %>
                       <td>
-                        <% if (student.average_grade) { %>
+                        <% if (student.average_grade != null) { %>
                           <span class="grade-badge grade-<%= Math.round(student.average_grade) %>">
                             <%= student.average_grade %>
                           </span>
                         <% } else { %>
-                          <span class="teacher-muted">â€”</span>
+                          <span class="teacher-muted">-</span>
                         <% } %>
                       </td>
                       <td>
                         <div class="table-actions">
                           <a class="btn btn-primary btn-sm" href="/teacher/student-grades/<%= classData.id %>/<%= student.id %>">Details</a>
                           <a class="btn btn-secondary btn-sm" href="/teacher/add-grade/<%= classData.id %>/<%= student.id %>">+ Bewertung</a>
+                          <% if (participationEnabled) { %>
+                            <button
+                              class="btn btn-secondary btn-sm open-ma-modal"
+                              type="button"
+                              data-student-id="<%= student.id %>"
+                              data-student-name="<%= student.name %>"
+                            >
+                              MA
+                            </button>
+                          <% } %>
                         </div>
                       </td>
                     </tr>
@@ -106,7 +134,81 @@
         </div>
       </section>
     </div>
+
+    <% if (participationEnabled) { %>
+      <div id="participationModal" class="modal-overlay">
+        <div class="modal-content">
+          <div class="modal-header">
+            <h3>Mitarbeit eintragen</h3>
+          </div>
+          <form method="POST" action="/teacher/grades/<%= classData.id %>/participation" class="teacher-form" id="participationForm">
+            <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+            <input type="hidden" name="student_id" id="ma_student_id">
+            <div class="modal-body">
+              <p>Schueler: <strong id="ma_student_name"></strong></p>
+              <label for="ma_symbol">Benotung</label>
+              <select id="ma_symbol" name="ma_symbol" required>
+                <option value="">Bitte waehlen</option>
+                <% (participationSymbolOptions || []).forEach((symbolOption) => { %>
+                  <option value="<%= symbolOption.value %>"><%= symbolOption.label %></option>
+                <% }) %>
+              </select>
+
+              <label for="ma_note">Notiz (optional)</label>
+              <textarea id="ma_note" name="ma_note" rows="3" maxlength="400" placeholder="Warum diese MA?"></textarea>
+            </div>
+            <div class="modal-footer">
+              <button class="btn btn-secondary" id="cancelParticipation" type="button">Abbrechen</button>
+              <button class="btn btn-primary" type="submit">Speichern</button>
+            </div>
+          </form>
+        </div>
+      </div>
+    <% } %>
+
+    <script>
+      (function() {
+        const modal = document.getElementById("participationModal");
+        if (!modal) return;
+
+        const openButtons = document.querySelectorAll(".open-ma-modal");
+        const cancelButton = document.getElementById("cancelParticipation");
+        const studentIdInput = document.getElementById("ma_student_id");
+        const studentNameEl = document.getElementById("ma_student_name");
+        const symbolField = document.getElementById("ma_symbol");
+        const noteField = document.getElementById("ma_note");
+
+        function closeModal() {
+          modal.classList.remove("active");
+          if (studentIdInput) studentIdInput.value = "";
+          if (studentNameEl) studentNameEl.textContent = "";
+          if (symbolField) symbolField.value = "";
+          if (noteField) noteField.value = "";
+        }
+
+        openButtons.forEach((button) => {
+          button.addEventListener("click", () => {
+            const studentId = button.dataset.studentId || "";
+            const studentName = button.dataset.studentName || "";
+            if (studentIdInput) studentIdInput.value = studentId;
+            if (studentNameEl) studentNameEl.textContent = studentName;
+            modal.classList.add("active");
+          });
+        });
+
+        cancelButton?.addEventListener("click", closeModal);
+
+        modal.addEventListener("click", (event) => {
+          if (event.target === modal) closeModal();
+        });
+
+        document.addEventListener("keydown", (event) => {
+          if (event.key === "Escape" && modal.classList.contains("active")) {
+            closeModal();
+          }
+        });
+      })();
+    </script>
 <% } };
 %>
-<%- include('../layout', page) %>
-
+<%- include("../layout", page) %>
