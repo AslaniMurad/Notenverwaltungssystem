@@ -78,6 +78,27 @@
   gap: 16px;
 }
 
+.teacher-collapsible {
+  width: 100%;
+}
+
+.teacher-collapsible-summary {
+  list-style: none;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.teacher-collapsible-summary::-webkit-details-marker {
+  display: none;
+}
+
+.teacher-collapsible-body {
+  margin-top: 12px;
+}
+
 .teacher-card-header {
   display: flex;
   justify-content: space-between;
@@ -126,6 +147,61 @@
 .teacher-list {
   display: grid;
   gap: 10px;
+}
+
+.teacher-message-item {
+  border: 1px solid var(--teacher-border);
+  border-radius: 12px;
+  padding: 14px;
+  background: #ffffff;
+  display: grid;
+  gap: 10px;
+}
+
+.teacher-message-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.teacher-message-context {
+  margin: 0;
+  font-size: 14px;
+  color: #374151;
+}
+
+.teacher-message-bubble {
+  border: 1px solid var(--teacher-border);
+  border-radius: 10px;
+  padding: 10px;
+}
+
+.teacher-message-bubble.student {
+  background: #f8fafc;
+  border-left: 3px solid #2563eb;
+}
+
+.teacher-message-bubble.teacher {
+  background: #f0fdf4;
+  border-left: 3px solid #059669;
+}
+
+.teacher-message-bubble p {
+  margin: 0;
+}
+
+.teacher-reply-form {
+  margin-top: 4px;
+}
+
+.grade-message-panel {
+  margin-top: 10px;
+  padding: 12px;
+  border: 1px solid var(--teacher-border);
+  border-radius: 10px;
+  background: #f8fafc;
 }
 
 .teacher-empty {

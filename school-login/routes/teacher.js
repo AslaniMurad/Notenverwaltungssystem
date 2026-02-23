@@ -254,6 +254,80 @@ async function loadSpecialAssessments(classId) {
   );
 }
 
+async function loadClassGradeMessages(classId) {
+  return allAsync(
+    `SELECT gm.id, gm.grade_id, gm.student_id, gm.student_message, gm.teacher_reply, gm.created_at, gm.replied_at,
+            s.name AS student_name, s.email AS student_email, gt.name AS test_name, g.grade AS grade_value
+     FROM grade_messages gm
+     JOIN grades g ON g.id = gm.grade_id
+     JOIN students s ON s.id = gm.student_id
+     LEFT JOIN grade_templates gt ON gt.id = g.grade_template_id
+     WHERE g.class_id = ? AND s.class_id = ?
+     ORDER BY gm.created_at ASC`,
+    [classId, classId]
+  );
+}
+
+async function loadStudentGradeMessages(classId, studentId) {
+  return allAsync(
+    `SELECT gm.id, gm.grade_id, gm.student_message, gm.teacher_reply, gm.created_at, gm.replied_at
+     FROM grade_messages gm
+     JOIN grades g ON g.id = gm.grade_id
+     WHERE g.class_id = ? AND g.student_id = ? AND gm.student_id = ?
+     ORDER BY gm.created_at ASC`,
+    [classId, studentId, studentId]
+  );
+}
+
+function groupClassMessageThreads(rows) {
+  const threadMap = new Map();
+  let openMessageCount = 0;
+
+  rows.forEach((row) => {
+    const key = `${row.grade_id}:${row.student_id}`;
+    if (!threadMap.has(key)) {
+      threadMap.set(key, {
+        grade_id: row.grade_id,
+        student_id: row.student_id,
+        student_name: row.student_name,
+        student_email: row.student_email,
+        test_name: row.test_name,
+        grade_value: row.grade_value,
+        latest_at: row.created_at,
+        messages: []
+      });
+    }
+
+    const thread = threadMap.get(key);
+    thread.messages.push({
+      id: row.id,
+      student_message: row.student_message,
+      teacher_reply: row.teacher_reply || null,
+      created_at: row.created_at,
+      replied_at: row.replied_at || null
+    });
+    thread.latest_at = row.created_at;
+    if (!row.teacher_reply) openMessageCount += 1;
+  });
+
+  const messageThreads = Array.from(threadMap.values()).sort(
+    (a, b) => new Date(b.latest_at) - new Date(a.latest_at)
+  );
+
+  return { messageThreads, openMessageCount };
+}
+
+async function loadMessageForTeacher(classId, messageId, teacherId) {
+  return getAsync(
+    `SELECT gm.id, gm.student_id
+     FROM grade_messages gm
+     JOIN grades g ON g.id = gm.grade_id
+     JOIN classes c ON c.id = g.class_id
+     WHERE gm.id = ? AND c.id = ? AND c.teacher_id = ?`,
+    [messageId, classId, teacherId]
+  );
+}
+
 function computeWeightedAverage(grades) {
   let weightedSum = 0;
   let weightTotal = 0;
@@ -336,12 +410,55 @@ router.get("/students/:classId", async (req, res, next) => {
     }
 
     const students = await loadStudents(classId);
+    const messages = await loadClassGradeMessages(classId);
+    const { messageThreads, openMessageCount } = groupClassMessageThreads(messages);
     res.render("teacher/teacher-students", {
       email: req.session.user.email,
       classData,
       students,
+      messageThreads,
+      openMessageCount,
       csrfToken: req.csrfToken()
     });
+  } catch (err) {
+    next(err);
+  }
+});
+
+router.post("/students/:classId/messages/:messageId/reply", async (req, res, next) => {
+  try {
+    const classId = req.params.classId;
+    const messageId = Number(req.params.messageId);
+    const classData = await loadClassForTeacher(classId, req.session.user.id);
+    if (!classData) {
+      return renderError(res, req, "Klasse nicht gefunden.", 404, "/teacher/classes");
+    }
+    if (!messageId) {
+      return renderError(res, req, "Ungültige Nachrichten-ID.", 400, `/teacher/students/${classId}`);
+    }
+
+    const messageRow = await loadMessageForTeacher(classId, messageId, req.session.user.id);
+    if (!messageRow) {
+      return renderError(res, req, "Nachricht nicht gefunden.", 404, `/teacher/students/${classId}`);
+    }
+
+    const reply = String(req.body?.reply || "").trim();
+    if (!reply) {
+      return renderError(res, req, "Bitte eine Antwort eingeben.", 400, `/teacher/students/${classId}`);
+    }
+    if (reply.length > 1000) {
+      return renderError(res, req, "Antwort darf maximal 1000 Zeichen lang sein.", 400, `/teacher/students/${classId}`);
+    }
+
+    await runAsync(
+      "UPDATE grade_messages SET teacher_reply = ?, replied_at = current_timestamp WHERE id = ?",
+      [reply, messageId]
+    );
+    await runAsync(
+      "INSERT INTO grade_notifications (student_id, message, type) VALUES (?,?,?)",
+      [messageRow.student_id, "Lehrkraft hat auf deine Rückgabe-Nachricht geantwortet.", "info"]
+    );
+    res.redirect(`/teacher/students/${classId}`);
   } catch (err) {
     next(err);
   }
@@ -493,8 +610,23 @@ router.get("/student-grades/:classId/:studentId", async (req, res, next) => {
     }
 
     const gradeRows = await loadStudentGrades(student.id);
+    const gradeMessages = await loadStudentGradeMessages(classId, student.id);
+    const messagesByGrade = new Map();
+    gradeMessages.forEach((message) => {
+      const key = String(message.grade_id);
+      const list = messagesByGrade.get(key) || [];
+      list.push({
+        id: message.id,
+        student_message: message.student_message,
+        teacher_reply: message.teacher_reply || null,
+        created_at: message.created_at,
+        replied_at: message.replied_at || null
+      });
+      messagesByGrade.set(key, list);
+    });
     const grades = gradeRows.map((row) => {
       const hasAttachment = Boolean(row.attachment_path);
+      const messages = row.is_special ? [] : messagesByGrade.get(String(row.id)) || [];
       return {
         id: row.id,
         grade: row.grade,
@@ -509,6 +641,8 @@ router.get("/student-grades/:classId/:studentId", async (req, res, next) => {
         attachment_delete_action: hasAttachment
           ? `/teacher/delete-grade-attachment/${classId}/${row.id}`
           : null,
+        messages,
+        open_message_count: messages.filter((message) => !message.teacher_reply).length,
         delete_action: row.is_special
           ? `/teacher/delete-special-assessment/${classId}/${row.id}`
           : `/teacher/delete-grade/${classId}/${row.id}`

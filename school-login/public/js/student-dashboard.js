@@ -41,7 +41,17 @@
       grade: Number(entry.grade),
       attachment_download_url: entry.attachment_download_url || null,
       attachment_name: entry.attachment_name || null,
-      external_link: entry.external_link || null
+      external_link: entry.external_link || null,
+      can_message: Boolean(entry.can_message),
+      messages: Array.isArray(entry.messages)
+        ? entry.messages.map((message) => ({
+            id: message.id,
+            student_message: message.student_message || "",
+            teacher_reply: message.teacher_reply || null,
+            created_at: message.created_at || null,
+            replied_at: message.replied_at || null
+          }))
+        : []
     };
   }
 
@@ -425,6 +435,90 @@
       .join("");
   }
 
+  function decorateReturnRows(ordered, container) {
+    const rows = container.querySelectorAll(".return-row");
+    rows.forEach((row, index) => {
+      const entry = ordered[index];
+      if (!entry) return;
+      const body = row.firstElementChild;
+      if (!body) return;
+
+      if (entry.messages.length) {
+        const thread = document.createElement("div");
+        thread.className = "return-message-thread";
+        thread.innerHTML = entry.messages
+          .map((message) => {
+            const teacherPart = message.teacher_reply
+              ? `
+                <div class="return-message-row teacher">
+                  <strong>Lehrkraft</strong>
+                  <p>${escapeHtml(message.teacher_reply)}</p>
+                  <small>${formatDate(message.replied_at, true)}</small>
+                </div>
+              `
+              : '<div class="return-message-row pending"><small>Noch keine Antwort der Lehrkraft.</small></div>';
+            return `
+              <div class="return-message-row student">
+                <strong>Du</strong>
+                <p>${escapeHtml(message.student_message)}</p>
+                <small>${formatDate(message.created_at, true)}</small>
+              </div>
+              ${teacherPart}
+            `;
+          })
+          .join("");
+        body.appendChild(thread);
+      }
+
+      if (!entry.can_message) return;
+
+      const form = document.createElement("form");
+      form.className = "return-message-form";
+      form.setAttribute("data-grade-id", String(entry.id));
+      form.innerHTML = `
+        <label for="message-${entry.id}">Frage zur Benotung</label>
+        <textarea id="message-${entry.id}" name="message" rows="2" maxlength="1000" placeholder="z.B. Warum wurde Teilaufgabe 3 mit 0 Punkten bewertet?" required></textarea>
+        <div class="return-message-actions">
+          <button class="btn small" type="submit">Nachricht senden</button>
+          <small class="return-message-feedback" data-feedback></small>
+        </div>
+      `;
+      form.addEventListener("submit", async (event) => {
+        event.preventDefault();
+        const textarea = form.querySelector("textarea[name='message']");
+        const feedbackEl = form.querySelector("[data-feedback]");
+        const gradeId = form.getAttribute("data-grade-id");
+        const message = textarea ? textarea.value.trim() : "";
+        if (!message) {
+          if (feedbackEl) feedbackEl.textContent = "Bitte Nachricht eingeben.";
+          return;
+        }
+
+        const headers = { "Content-Type": "application/json" };
+        if (csrfToken) headers["X-CSRF-Token"] = csrfToken;
+
+        try {
+          const response = await fetch(`/student/returns/${gradeId}/message`, {
+            method: "POST",
+            headers,
+            body: JSON.stringify({ message })
+          });
+          const payload = await response.json().catch(() => ({}));
+          if (!response.ok) {
+            if (feedbackEl) feedbackEl.textContent = payload.error || "Nachricht konnte nicht gesendet werden.";
+            return;
+          }
+          if (textarea) textarea.value = "";
+          if (feedbackEl) feedbackEl.textContent = "Nachricht gesendet.";
+          await loadReturnsFromServer();
+        } catch (err) {
+          if (feedbackEl) feedbackEl.textContent = "Serverfehler beim Senden.";
+        }
+      });
+      body.appendChild(form);
+    });
+  }
+
   function renderReturns() {
     const container = document.getElementById("return-list");
     if (!container) return;
@@ -486,6 +580,7 @@
         `;
       })
       .join("");
+    decorateReturnRows(ordered, container);
   }
 
   async function refreshGrades(skipRequest = false) {

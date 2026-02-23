@@ -1,6 +1,6 @@
 <%
   const page = {
-    title: `Lehrer — Schüler (${classData.name})`,
+    title: `Lehrer - Schueler (${classData.name})`,
     headerTitle: 'Lehrerbereich',
     styles: ['/css/teacher-pages.css'],
     scripts: ['/js/app.js'],
@@ -13,7 +13,7 @@
         <div class="sidebar-brand">
           <div>
             <div class="sidebar-title">Teacher Panel</div>
-            <div class="sidebar-meta"><%= email %> · Lehrer</div>
+            <div class="sidebar-meta"><%= email %> - Lehrer</div>
           </div>
           <span class="sidebar-badge">Eingeloggt</span>
         </div>
@@ -24,10 +24,10 @@
             <a href="/teacher/classes">Meine Klassen</a>
             <a href="/teacher/create-class">Klasse erstellen</a>
             <div class="nav-section-title">Klasse: <%= classData.name %> / <%= classData.subject %></div>
-            <a class="is-active" href="/teacher/students/<%= classData.id %>">Schüler</a>
+            <a class="is-active" href="/teacher/students/<%= classData.id %>">Schueler</a>
             <a href="/teacher/grades/<%= classData.id %>">Noten</a>
             <a href="/teacher/special-assessments/<%= classData.id %>">Sonderleistungen</a>
-            <a href="/teacher/grade-templates/<%= classData.id %>">Prüfungen</a>
+            <a href="/teacher/grade-templates/<%= classData.id %>">Pruefungen</a>
             <a href="/teacher/class-statistics/<%= classData.id %>">Statistiken</a>
             <form class="logout-form" method="POST" action="/logout">
               <input type="hidden" name="_csrf" value="<%= csrfToken %>">
@@ -41,35 +41,35 @@
         <header class="teacher-main-header">
           <div>
             <p class="teacher-eyebrow">Klasse <%= classData.name %></p>
-            <h1>Schüler verwalten</h1>
-            <p class="teacher-muted">Fach: <%= classData.subject %> · Rolle: Lehrer</p>
+            <h1>Schueler verwalten</h1>
+            <p class="teacher-muted">Fach: <%= classData.subject %> - Rolle: Lehrer</p>
           </div>
           <div class="teacher-actions-inline">
-            <a class="btn btn-primary" href="/teacher/add-student/<%= classData.id %>">+ Schüler hinzufügen</a>
-            <a class="btn btn-secondary" href="/teacher/classes">Zurück</a>
+            <a class="btn btn-primary" href="/teacher/add-student/<%= classData.id %>">+ Schueler hinzufuegen</a>
+            <a class="btn btn-secondary" href="/teacher/classes">Zurueck</a>
           </div>
         </header>
 
         <div class="teacher-card">
           <div class="teacher-card-header">
             <div>
-              <p class="teacher-eyebrow">Schüler</p>
-              <h3><%= students.length %> Schüler in dieser Klasse</h3>
+              <p class="teacher-eyebrow">Schueler</p>
+              <h3><%= students.length %> Schueler in dieser Klasse</h3>
             </div>
           </div>
 
           <div class="teacher-list">
             <% if (students.length === 0) { %>
               <div class="teacher-empty">
-                <h4>Noch keine Schüler</h4>
-                <p>Füge Schüler hinzu, um die Klasse zu füllen.</p>
-                <a class="btn btn-primary" href="/teacher/add-student/<%= classData.id %>">Schüler hinzufügen</a>
+                <h4>Noch keine Schueler</h4>
+                <p>Fuege Schueler hinzu, um die Klasse zu fuellen.</p>
+                <a class="btn btn-primary" href="/teacher/add-student/<%= classData.id %>">Schueler hinzufuegen</a>
               </div>
             <% } else { %>
               <% students.forEach(student => { %>
                 <div class="teacher-student-card">
                   <div>
-                    <p class="teacher-eyebrow">Schüler</p>
+                    <p class="teacher-eyebrow">Schueler</p>
                     <h4><%= student.name %></h4>
                     <p class="teacher-muted"><%= student.email %></p>
                   </div>
@@ -84,17 +84,81 @@
             <% } %>
           </div>
         </div>
+
+        <div class="teacher-card">
+          <details class="teacher-collapsible" <%= openMessageCount > 0 ? 'open' : '' %>>
+            <summary class="teacher-collapsible-summary">
+              <div>
+                <p class="teacher-eyebrow">Rueckgaben</p>
+                <h3>Fragen zu Tests</h3>
+              </div>
+              <div class="teacher-meta-chip"><%= openMessageCount %> offen</div>
+            </summary>
+
+            <div class="teacher-collapsible-body">
+              <% if (!messageThreads || messageThreads.length === 0) { %>
+                <div class="teacher-empty">
+                  <h4>Keine Fragen vorhanden</h4>
+                  <p>Schuelerfragen zu Rueckgaben erscheinen hier.</p>
+                </div>
+              <% } else { %>
+                <div class="teacher-list">
+                  <% messageThreads.forEach(thread => { %>
+                    <div class="teacher-message-item">
+                      <div class="teacher-message-head">
+                        <div>
+                          <strong><%= thread.student_name %></strong>
+                          <span class="teacher-muted"><%= thread.student_email %></span>
+                        </div>
+                        <small class="teacher-muted"><%= new Date(thread.latest_at).toLocaleString('de-DE') %></small>
+                      </div>
+                      <p class="teacher-message-context">
+                        Test: <strong><%= thread.test_name || 'Unbekannter Test' %></strong>
+                        <% if (thread.grade_value != null) { %>
+                          - Note: <strong><%= thread.grade_value %></strong>
+                        <% } %>
+                      </p>
+                      <% thread.messages.forEach(message => { %>
+                        <div class="teacher-message-bubble student">
+                          <p><%= message.student_message %></p>
+                          <small class="teacher-muted"><%= new Date(message.created_at).toLocaleString('de-DE') %></small>
+                        </div>
+
+                        <% if (message.teacher_reply) { %>
+                          <div class="teacher-message-bubble teacher">
+                            <p><%= message.teacher_reply %></p>
+                            <small class="teacher-muted">
+                              Beantwortet: <%= message.replied_at ? new Date(message.replied_at).toLocaleString('de-DE') : '-' %>
+                            </small>
+                          </div>
+                        <% } else { %>
+                          <form class="teacher-form teacher-reply-form" method="POST" action="/teacher/students/<%= classData.id %>/messages/<%= message.id %>/reply">
+                            <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+                            <label for="reply-<%= message.id %>">Antwort</label>
+                            <textarea id="reply-<%= message.id %>" name="reply" rows="3" maxlength="1000" required placeholder="Antwort an den Schueler..."></textarea>
+                            <div class="teacher-form-actions">
+                              <button class="btn btn-primary" type="submit">Antwort senden</button>
+                            </div>
+                          </form>
+                        <% } %>
+                      <% }) %>
+                    </div>
+                  <% }) %>
+                </div>
+              <% } %>
+            </div>
+          </details>
+        </div>
       </section>
     </div>
 
-    <!-- Lösch-Bestätigungs-Modal -->
     <div id="deleteModal" class="modal-overlay">
       <div class="modal-content">
         <div class="modal-header">
-          <h3>Schüler entfernen</h3>
+          <h3>Schueler entfernen</h3>
         </div>
         <div class="modal-body">
-          <p>Möchtest du den Schüler <strong id="deleteStudentName"></strong> wirklich aus der Klasse entfernen?</p>
+          <p>Moechtest du den Schueler <strong id="deleteStudentName"></strong> wirklich aus der Klasse entfernen?</p>
         </div>
         <div class="modal-footer">
           <button class="btn btn-secondary" id="cancelDelete">Abbrechen</button>
@@ -104,7 +168,6 @@
     </div>
 
     <script>
-      // Modal-Logik für Schüler-Löschung
       const deleteModal = document.getElementById('deleteModal');
       const deleteStudentName = document.getElementById('deleteStudentName');
       const cancelDelete = document.getElementById('cancelDelete');
@@ -132,7 +195,6 @@
         }
       });
 
-      // Modal schließen bei Klick auf Overlay
       deleteModal.addEventListener('click', (e) => {
         if (e.target === deleteModal) {
           deleteModal.classList.remove('active');
@@ -140,7 +202,6 @@
         }
       });
 
-      // ESC-Taste zum Schließen
       document.addEventListener('keydown', (e) => {
         if (e.key === 'Escape' && deleteModal.classList.contains('active')) {
           deleteModal.classList.remove('active');
