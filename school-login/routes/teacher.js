@@ -1470,11 +1470,27 @@ router.get("/grades/:classId", async (req, res, next) => {
           ...grades,
           ...buildParticipationAverageRows(participationMarks, participation)
         ], { absenceMode });
+        const pointTotals = grades.reduce(
+          (acc, row) => {
+            const achieved = Number(row.points_achieved);
+            const max = Number(row.points_max);
+            if (Number.isFinite(achieved) && Number.isFinite(max) && max > 0) {
+              acc.achieved += achieved;
+              acc.max += max;
+            }
+            return acc;
+          },
+          { achieved: 0, max: 0 }
+        );
+        const hasPointTotals = pointTotals.max > 0;
         return {
           ...student,
           grade_count: grades.length,
           ma_count: participationMarks.length,
-          average_grade: average
+          average_grade: average,
+          points_achieved_total: hasPointTotals ? Number(pointTotals.achieved.toFixed(2)) : null,
+          points_max_total: hasPointTotals ? Number(pointTotals.max.toFixed(2)) : null,
+          points_percent: hasPointTotals ? Number(((pointTotals.achieved / pointTotals.max) * 100).toFixed(2)) : null
         };
       })
     );
@@ -1634,6 +1650,26 @@ router.get("/student-grades/:classId/:studentId", async (req, res, next) => {
     const average = computeWeightedAverage([...gradeRows, ...participationAverageRows], {
       absenceMode
     });
+    const studentPointTotals = gradeRows.reduce(
+      (acc, row) => {
+        const achieved = Number(row.points_achieved);
+        const max = Number(row.points_max);
+        if (Number.isFinite(achieved) && Number.isFinite(max) && max > 0) {
+          acc.achieved += achieved;
+          acc.max += max;
+        }
+        return acc;
+      },
+      { achieved: 0, max: 0 }
+    );
+    const pointsSummary =
+      studentPointTotals.max > 0
+        ? {
+            achieved: Number(studentPointTotals.achieved.toFixed(2)),
+            max: Number(studentPointTotals.max.toFixed(2)),
+            percent: Number(((studentPointTotals.achieved / studentPointTotals.max) * 100).toFixed(2))
+          }
+        : null;
 
     res.render("teacher/teacher-student-grades", {
       email: req.session.user.email,
@@ -1644,6 +1680,7 @@ router.get("/student-grades/:classId/:studentId", async (req, res, next) => {
       participationEntries,
       wishGradeRows,
       average,
+      pointsSummary,
       activeWeightMode: fallbackMode,
       csrfToken: req.csrfToken()
     });
@@ -1823,6 +1860,25 @@ router.get("/student-grades/:classId/:studentId/details", async (req, res, next)
       average: runningWeightTotal > 0 ? Number((runningWeightedSum / runningWeightTotal).toFixed(2)) : null,
       reference_average: referenceAverage
     };
+    const detailPointTotals = gradeRows.reduce(
+      (acc, row) => {
+        const achieved = Number(row.points_achieved);
+        const max = Number(row.points_max);
+        if (Number.isFinite(achieved) && Number.isFinite(max) && max > 0) {
+          acc.achieved += achieved;
+          acc.max += max;
+        }
+        return acc;
+      },
+      { achieved: 0, max: 0 }
+    );
+    summary.points_achieved_total =
+      detailPointTotals.max > 0 ? Number(detailPointTotals.achieved.toFixed(2)) : null;
+    summary.points_max_total = detailPointTotals.max > 0 ? Number(detailPointTotals.max.toFixed(2)) : null;
+    summary.points_percent =
+      detailPointTotals.max > 0
+        ? Number(((detailPointTotals.achieved / detailPointTotals.max) * 100).toFixed(2))
+        : null;
 
     const gradedTemplateIds = new Set(
       gradeRows

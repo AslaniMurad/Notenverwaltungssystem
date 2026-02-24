@@ -53,11 +53,15 @@
           </div>
         </header>
 
-        <% if (average != null) { %>
+        <% if (average != null || pointsSummary) { %>
           <div class="stats-card">
             <div class="stat-item">
               <p class="stat-label">Durchschnittsnote</p>
-              <p class="stat-value grade-<%= Math.round(average) %>"><%= average %></p>
+              <% if (average != null) { %>
+                <p class="stat-value grade-<%= Math.round(average) %>"><%= average %></p>
+              <% } else { %>
+                <p class="stat-value">-</p>
+              <% } %>
             </div>
             <div class="stat-item">
               <p class="stat-label">Bewertungen</p>
@@ -66,6 +70,15 @@
             <div class="stat-item">
               <p class="stat-label">Mitarbeit</p>
               <p class="stat-value"><%= (participationEntries || []).length %></p>
+            </div>
+            <div class="stat-item">
+              <p class="stat-label">Punkte (aktuell)</p>
+              <% if (pointsSummary) { %>
+                <p class="stat-value"><%= pointsSummary.achieved %>/<%= pointsSummary.max %></p>
+                <p class="teacher-muted"><%= pointsSummary.percent %>%</p>
+              <% } else { %>
+                <p class="stat-value">-</p>
+              <% } %>
             </div>
           </div>
         <% } %>

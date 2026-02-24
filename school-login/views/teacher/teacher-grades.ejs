@@ -87,6 +87,7 @@
                     <% if (participationEnabled) { %>
                       <th>MA</th>
                     <% } %>
+                    <th>Punkte (aktuell)</th>
                     <th>Durchschnitt</th>
                     <th>Aktionen</th>
                   </tr>
@@ -100,6 +101,16 @@
                       <% if (participationEnabled) { %>
                         <td><span class="badge-count"><%= student.ma_count || 0 %></span></td>
                       <% } %>
+                      <td>
+                        <% if (student.points_max_total != null) { %>
+                          <div>
+                            <strong><%= student.points_achieved_total %>/<%= student.points_max_total %></strong>
+                          </div>
+                          <div class="teacher-muted"><%= student.points_percent %>%</div>
+                        <% } else { %>
+                          <span class="teacher-muted">-</span>
+                        <% } %>
+                      </td>
                       <td>
                         <% if (student.average_grade != null) { %>
                           <span class="grade-badge grade-<%= Math.round(student.average_grade) %>">

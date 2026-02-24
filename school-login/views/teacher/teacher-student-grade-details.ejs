@@ -81,6 +81,15 @@
             Ausgeschlossene Eintraege: <strong><%= summary.excluded_count %></strong> |
             Referenzschnitt (System): <strong><%= summary.reference_average != null ? summary.reference_average : "-" %></strong>
           </p>
+          <p class="teacher-muted">
+            Punkte (aktuell moeglich):
+            <strong>
+              <%= summary.points_achieved_total != null ? summary.points_achieved_total : "-" %>/<%= summary.points_max_total != null ? summary.points_max_total : "-" %>
+            </strong>
+            <% if (summary.points_percent != null) { %>
+              (<%= summary.points_percent %>%)
+            <% } %>
+          </p>
         </div>
 
         <div class="teacher-card">
