@@ -216,6 +216,7 @@ function createFakeDb() {
         const name = params[1];
         const weight_mode = params[2] || "points";
         let scoring_mode = "points_or_grade";
+        let absence_mode = "include_zero";
         let grade1_min_percent = 88.5;
         let grade2_min_percent = 75;
         let grade3_min_percent = 62.5;
@@ -229,7 +230,22 @@ function createFakeDb() {
         let ma_grade_minus = 4.5;
         let is_active = params[3];
 
-        if (params.length >= 16) {
+        if (params.length >= 17) {
+          scoring_mode = params[3] || "points_or_grade";
+          absence_mode = params[4] || "include_zero";
+          grade1_min_percent = Number(params[5]);
+          grade2_min_percent = Number(params[6]);
+          grade3_min_percent = Number(params[7]);
+          grade4_min_percent = Number(params[8]);
+          ma_enabled = Boolean(params[9]);
+          ma_weight = Number(params[10]);
+          ma_grade_plus = Number(params[11]);
+          ma_grade_plus_tilde = Number(params[12]);
+          ma_grade_neutral = Number(params[13]);
+          ma_grade_minus_tilde = Number(params[14]);
+          ma_grade_minus = Number(params[15]);
+          is_active = params[16];
+        } else if (params.length >= 16) {
           scoring_mode = params[3] || "points_or_grade";
           grade1_min_percent = Number(params[4]);
           grade2_min_percent = Number(params[5]);
@@ -267,6 +283,7 @@ function createFakeDb() {
             name,
             weight_mode: String(weight_mode || "points"),
             scoring_mode: String(scoring_mode || "points_or_grade"),
+            absence_mode: String(absence_mode || "include_zero"),
             grade1_min_percent,
             grade2_min_percent,
             grade3_min_percent,
@@ -285,11 +302,12 @@ function createFakeDb() {
           teacherGradingProfiles.push(profile);
           lastID = profile.id;
         }
-      } else if (/UPDATE teacher_grading_profiles\s+SET name = \?, weight_mode = \?, scoring_mode = \?, grade1_min_percent = \?, grade2_min_percent = \?, grade3_min_percent = \?, grade4_min_percent = \?, ma_enabled = \?, ma_weight = \?, ma_grade_plus = \?, ma_grade_plus_tilde = \?, ma_grade_neutral = \?, ma_grade_minus_tilde = \?, ma_grade_minus = \?, updated_at = current_timestamp\s+WHERE id = \? AND teacher_id = \?/i.test(sql)) {
+      } else if (/UPDATE teacher_grading_profiles\s+SET name = \?, weight_mode = \?, scoring_mode = \?, absence_mode = \?, grade1_min_percent = \?, grade2_min_percent = \?, grade3_min_percent = \?, grade4_min_percent = \?, ma_enabled = \?, ma_weight = \?, ma_grade_plus = \?, ma_grade_plus_tilde = \?, ma_grade_neutral = \?, ma_grade_minus_tilde = \?, ma_grade_minus = \?, updated_at = current_timestamp\s+WHERE id = \? AND teacher_id = \?/i.test(sql)) {
         const [
           name,
           weight_mode,
           scoring_mode,
+          absence_mode,
           grade1_min_percent,
           grade2_min_percent,
           grade3_min_percent,
@@ -311,6 +329,7 @@ function createFakeDb() {
           profile.name = String(name);
           profile.weight_mode = String(weight_mode || "points");
           profile.scoring_mode = String(scoring_mode || "points_or_grade");
+          profile.absence_mode = String(absence_mode || "include_zero");
           profile.grade1_min_percent = Number(grade1_min_percent);
           profile.grade2_min_percent = Number(grade2_min_percent);
           profile.grade3_min_percent = Number(grade3_min_percent);
@@ -411,23 +430,40 @@ function createFakeDb() {
         }
       } else if (/INSERT INTO grade_templates/i.test(sql)) {
         const [class_id, name, category, weight] = params;
+        const hasMaxPoints = params.length >= 8;
         const hasWeightMode = params.length >= 7;
         const weight_mode = hasWeightMode ? params[4] : "points";
-        const date = hasWeightMode ? params[5] : params[4];
-        const description = hasWeightMode ? params[6] : params[5];
+        const max_points = hasMaxPoints ? params[5] : null;
+        const date = hasMaxPoints ? params[6] : hasWeightMode ? params[5] : params[4];
+        const description = hasMaxPoints ? params[7] : hasWeightMode ? params[6] : params[5];
         const template = {
           id: gradeTemplateId++,
           class_id: Number(class_id),
           name,
           category,
           weight: Number(weight),
-          weight_mode: "points",
+          weight_mode: String(weight_mode || "points"),
+          max_points: max_points != null && max_points !== "" ? Number(max_points) : null,
           date: date || null,
           description: description || null,
           created_at: new Date().toISOString()
         };
         gradeTemplates.push(template);
         lastID = template.id;
+      } else if (/UPDATE grade_templates SET name = \?, category = \?, weight = \?, max_points = \?, date = \?, description = \? WHERE id = \? AND class_id = \?/i.test(sql)) {
+        const [name, category, weight, max_points, date, description, id, class_id] = params;
+        const template = gradeTemplates.find(
+          (entry) => entry.id === Number(id) && entry.class_id === Number(class_id)
+        );
+        if (template) {
+          template.name = String(name);
+          template.category = String(category);
+          template.weight = Number(weight);
+          template.max_points =
+            max_points != null && max_points !== "" ? Number(max_points) : null;
+          template.date = date || null;
+          template.description = description || null;
+        }
       } else if (/INSERT INTO grades/i.test(sql)) {
         const student_id = params[0];
         const class_id = params[1];
@@ -442,6 +478,7 @@ function createFakeDb() {
         const attachment_mime = hasPoints ? params[9] : params[7];
         const attachment_size = hasPoints ? params[10] : params[8];
         const external_link = hasPoints ? params[11] : params[9];
+        const is_absent = hasPoints && params.length >= 13 ? params[12] : 0;
         const duplicate = grades.find(
           (entry) =>
             entry.student_id === Number(student_id) &&
@@ -465,6 +502,7 @@ function createFakeDb() {
             attachment_mime: attachment_mime || null,
             attachment_size: attachment_size ? Number(attachment_size) : null,
             external_link: external_link || null,
+            is_absent: Boolean(is_absent),
             created_at: new Date().toISOString()
           };
           grades.push(newGrade);
@@ -608,6 +646,38 @@ function createFakeDb() {
         const [id, teacher_id] = params;
         const classRow = classes.find((c) => c.id === Number(id) && c.teacher_id === Number(teacher_id));
         row = classRow ? { id: classRow.id, name: classRow.name } : undefined;
+      } else if (/SELECT gp\.absence_mode FROM classes c[\s\S]*WHERE c\.id = \?/i.test(sql)) {
+        const [is_active, classId] = params;
+        const classRow = classes.find((entry) => entry.id === Number(classId));
+        if (classRow) {
+          const activeProfile = teacherGradingProfiles
+            .filter(
+              (entry) =>
+                entry.teacher_id === Number(classRow.teacher_id) &&
+                Boolean(entry.is_active) === Boolean(is_active)
+            )
+            .sort((a, b) => {
+              if (a.created_at === b.created_at) return a.id - b.id;
+              return new Date(a.created_at) - new Date(b.created_at);
+            })[0];
+          row = { absence_mode: activeProfile?.absence_mode || "include_zero" };
+        }
+      } else if (/SELECT id, name, category, weight, max_points, date, description FROM grade_templates WHERE id = \? AND class_id = \?/i.test(sql)) {
+        const [templateId, clsId] = params;
+        const template = gradeTemplates.find(
+          (entry) => entry.id === Number(templateId) && entry.class_id === Number(clsId)
+        );
+        row = template
+          ? {
+              id: template.id,
+              name: template.name,
+              category: template.category,
+              weight: template.weight,
+              max_points: template.max_points ?? null,
+              date: template.date || null,
+              description: template.description || null
+            }
+          : undefined;
       } else if (/FROM teacher_grading_profiles\s+WHERE id = \? AND teacher_id = \?/i.test(sql)) {
         const [id, teacher_id] = params;
         const profile = teacherGradingProfiles.find(
@@ -654,6 +724,12 @@ function createFakeDb() {
           (entry) => entry.id === Number(assessmentId) && entry.class_id === Number(clsId)
         );
         row = assessment ? { id: assessment.id } : undefined;
+      } else if (/SELECT id, max_points FROM grade_templates WHERE id = \? AND class_id = \?/i.test(sql)) {
+        const [templateId, clsId] = params;
+        const template = gradeTemplates.find(
+          (entry) => entry.id === Number(templateId) && entry.class_id === Number(clsId)
+        );
+        row = template ? { id: template.id, max_points: template.max_points ?? null } : undefined;
       } else if (/SELECT id FROM grade_templates WHERE id = \? AND class_id = \?/i.test(sql)) {
         const [templateId, clsId] = params;
         const template = gradeTemplates.find(
@@ -784,6 +860,14 @@ function createFakeDb() {
           .filter((s) => (!emailNeedle ? true : s.email.toLowerCase().includes(emailNeedle)))
           .sort((a, b) => a.name.localeCompare(b.name))
           .map((s) => ({ id: s.id, name: s.name, email: s.email }));
+      } else if (/SELECT grade_template_id FROM grades WHERE class_id = \? AND student_id = \?/i.test(sql)) {
+        const [class_id, student_id] = params;
+        rows = grades
+          .filter(
+            (entry) =>
+              entry.class_id === Number(class_id) && entry.student_id === Number(student_id)
+          )
+          .map((entry) => ({ grade_template_id: entry.grade_template_id }));
       } else if (/FROM grades g[\s\S]*UNION ALL[\s\S]*special_assessments/i.test(sql) && /WHERE g\.student_id = \?/i.test(sql)) {
         const [student_id] = params;
         const baseRows = grades
@@ -803,6 +887,7 @@ function createFakeDb() {
               category: template.category,
               weight: template.weight,
               weight_mode: template.weight_mode || "points",
+              template_max_points: template.max_points ?? null,
               date: template.date,
               description: template.description,
               class_subject: cls.subject,
@@ -811,6 +896,7 @@ function createFakeDb() {
               attachment_mime: g.attachment_mime || null,
               attachment_size: g.attachment_size || null,
               external_link: g.external_link || null,
+              is_absent: g.is_absent ? 1 : 0,
               is_special: 0
             };
           });
@@ -830,6 +916,7 @@ function createFakeDb() {
               category: entry.type,
               weight: entry.weight,
               weight_mode: null,
+              template_max_points: null,
               date: entry.created_at,
               description: entry.description,
               class_subject: cls.subject,
@@ -838,6 +925,7 @@ function createFakeDb() {
               attachment_mime: null,
               attachment_size: null,
               external_link: null,
+              is_absent: 0,
               is_special: 1
             };
           });
@@ -849,14 +937,20 @@ function createFakeDb() {
           .filter((g) => studentIds.includes(g.student_id))
           .map((g) => {
             const template = gradeTemplates.find((t) => t.id === g.grade_template_id) || {};
-            return { subject: template.name, value: g.grade, weight: template.weight };
+            return {
+              subject: template.name,
+              value: g.grade,
+              weight: template.weight,
+              is_absent: g.is_absent ? 1 : 0
+            };
           });
         const specialRows = specialAssessments
           .filter((entry) => entry.class_id === Number(class_id))
           .map((entry) => ({
             subject: entry.name,
             value: entry.grade,
-            weight: entry.weight
+            weight: entry.weight,
+            is_absent: 0
           }));
         rows = [...regularRows, ...specialRows];
       } else if (/FROM participation_marks\s+WHERE class_id = \? AND student_id = \?\s+ORDER BY created_at DESC/i.test(sql)) {
@@ -885,7 +979,7 @@ function createFakeDb() {
         const [id] = params;
         const cls = classes.find((c) => c.id === Number(id));
         rows = cls ? [{ ...cls }] : [];
-      } else if (/SELECT id, name, category, weight, weight_mode, date, description FROM grade_templates WHERE class_id = \? ORDER BY date, name/i.test(sql)) {
+      } else if (/SELECT id, name, category, weight, (weight_mode, )?(max_points, )?date, description FROM grade_templates WHERE class_id = \? ORDER BY date, name/i.test(sql)) {
         const [clsId] = params;
         rows = gradeTemplates
           .filter((t) => t.class_id === Number(clsId))
@@ -893,7 +987,11 @@ function createFakeDb() {
             if (a.date && b.date && a.date !== b.date) return new Date(a.date) - new Date(b.date);
             return a.name.localeCompare(b.name);
           })
-          .map((t) => ({ ...t, weight_mode: t.weight_mode || "points" }));
+          .map((t) => ({
+            ...t,
+            weight_mode: t.weight_mode || "points",
+            max_points: t.max_points ?? null
+          }));
       } else if (/FROM special_assessments sa\s+JOIN students s ON s\.id = sa\.student_id\s+WHERE sa\.class_id = \?/i.test(sql)) {
         const [clsId] = params;
         rows = specialAssessments
@@ -1303,6 +1401,7 @@ async function initializeDatabase() {
       name TEXT NOT NULL,
       weight_mode TEXT NOT NULL DEFAULT 'points' CHECK (weight_mode IN ('percent', 'points')),
       scoring_mode TEXT NOT NULL DEFAULT 'points_or_grade' CHECK (scoring_mode IN ('grade_only', 'points_only', 'points_or_grade', 'points_and_grade')),
+      absence_mode TEXT NOT NULL DEFAULT 'include_zero' CHECK (absence_mode IN ('include_zero', 'exclude')),
       grade1_min_percent NUMERIC NOT NULL DEFAULT 88.5,
       grade2_min_percent NUMERIC NOT NULL DEFAULT 75,
       grade3_min_percent NUMERIC NOT NULL DEFAULT 62.5,
@@ -1343,6 +1442,32 @@ async function initializeDatabase() {
         ALTER TABLE teacher_grading_profiles
         ADD CONSTRAINT teacher_grading_profiles_scoring_mode_check
         CHECK (scoring_mode IN ('grade_only', 'points_only', 'points_or_grade', 'points_and_grade'));
+      END IF;
+    END $$;
+  `);
+  await pool.query(
+    "ALTER TABLE teacher_grading_profiles ADD COLUMN IF NOT EXISTS absence_mode TEXT"
+  );
+  await pool.query(
+    "UPDATE teacher_grading_profiles SET absence_mode = 'include_zero' WHERE absence_mode IS NULL"
+  );
+  await pool.query(
+    "ALTER TABLE teacher_grading_profiles ALTER COLUMN absence_mode SET DEFAULT 'include_zero'"
+  );
+  await pool.query(
+    "ALTER TABLE teacher_grading_profiles ALTER COLUMN absence_mode SET NOT NULL"
+  );
+  await pool.query(`
+    DO $$
+    BEGIN
+      IF NOT EXISTS (
+        SELECT 1
+        FROM pg_constraint
+        WHERE conname = 'teacher_grading_profiles_absence_mode_check'
+      ) THEN
+        ALTER TABLE teacher_grading_profiles
+        ADD CONSTRAINT teacher_grading_profiles_absence_mode_check
+        CHECK (absence_mode IN ('include_zero', 'exclude'));
       END IF;
     END $$;
   `);
@@ -1545,6 +1670,7 @@ async function initializeDatabase() {
       name TEXT NOT NULL,
       category TEXT NOT NULL CHECK (category IN ('Schularbeit', 'Test', 'Wiederholung', 'Mitarbeit', 'Projekt', 'Hausübung')),
       weight NUMERIC NOT NULL CHECK (weight >= 0),
+      max_points NUMERIC,
       date TIMESTAMPTZ,
       description TEXT,
       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
@@ -1565,6 +1691,9 @@ async function initializeDatabase() {
   );
   await pool.query(
     "ALTER TABLE grade_templates ADD COLUMN IF NOT EXISTS weight_mode TEXT"
+  );
+  await pool.query(
+    "ALTER TABLE grade_templates ADD COLUMN IF NOT EXISTS max_points NUMERIC"
   );
   await pool.query(
     "UPDATE grade_templates SET weight_mode = 'points' WHERE weight_mode IS NULL"
@@ -1589,6 +1718,12 @@ async function initializeDatabase() {
       END IF;
     END $$;
   `);
+  await pool.query(
+    "ALTER TABLE grade_templates DROP CONSTRAINT IF EXISTS grade_templates_max_points_check"
+  );
+  await pool.query(
+    "ALTER TABLE grade_templates ADD CONSTRAINT grade_templates_max_points_check CHECK (max_points IS NULL OR max_points > 0)"
+  );
 
   await pool.query(`
     CREATE TABLE IF NOT EXISTS grades (
@@ -1597,6 +1732,7 @@ async function initializeDatabase() {
       class_id INTEGER NOT NULL REFERENCES classes(id) ON DELETE CASCADE,
       grade_template_id INTEGER NOT NULL REFERENCES grade_templates(id) ON DELETE CASCADE,
       grade NUMERIC NOT NULL CHECK (grade >= 1 AND grade <= 5),
+      is_absent BOOLEAN NOT NULL DEFAULT FALSE,
       points_achieved NUMERIC,
       points_max NUMERIC,
       note TEXT,
@@ -1612,6 +1748,18 @@ async function initializeDatabase() {
 
   await pool.query(
     "ALTER TABLE grades ADD COLUMN IF NOT EXISTS points_achieved NUMERIC"
+  );
+  await pool.query(
+    "ALTER TABLE grades ADD COLUMN IF NOT EXISTS is_absent BOOLEAN DEFAULT FALSE"
+  );
+  await pool.query(
+    "UPDATE grades SET is_absent = FALSE WHERE is_absent IS NULL"
+  );
+  await pool.query(
+    "ALTER TABLE grades ALTER COLUMN is_absent SET DEFAULT FALSE"
+  );
+  await pool.query(
+    "ALTER TABLE grades ALTER COLUMN is_absent SET NOT NULL"
   );
   await pool.query(
     "ALTER TABLE grades ADD COLUMN IF NOT EXISTS points_max NUMERIC"

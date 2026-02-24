@@ -96,6 +96,10 @@
                     </div>
                     <div class="template-item-actions">
                       <span class="weight-badge"><%= template.weight_label || template.weight %></span>
+                      <% if (template.max_points != null && Number(template.max_points) > 0) { %>
+                        <span class="weight-badge-small">Max: <%= template.max_points %> Punkte</span>
+                      <% } %>
+                      <a class="btn btn-secondary btn-sm" href="/teacher/edit-template/<%= classData.id %>/<%= template.id %>">Bearbeiten</a>
                       <form class="inline delete-template-form" method="POST" action="/teacher/delete-template/<%= classData.id %>/<%= template.id %>" data-template-name="<%= template.name %>">
                         <input type="hidden" name="_csrf" value="<%= csrfToken %>">
                         <button class="btn btn-danger btn-sm" type="button">Loeschen</button>

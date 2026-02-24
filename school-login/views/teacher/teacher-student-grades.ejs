@@ -171,6 +171,9 @@
                       <% } %>
                     </div>
                     <div class="grade-item-actions">
+                      <% if (grade.is_absent) { %>
+                        <span class="badge-count">Nicht da</span>
+                      <% } %>
                       <span class="grade-badge grade-<%= Math.round(grade.grade) %>"><%= grade.grade %></span>
                       <form class="inline delete-grade-form" method="POST" action="<%= grade.delete_action %>" data-grade-info="<%= grade.template_name %> (<%= grade.grade %>)">
                         <input type="hidden" name="_csrf" value="<%= csrfToken %>">
@@ -178,6 +181,9 @@
                       </form>
                     </div>
                   </div>
+                  <% if (grade.is_absent) { %>
+                    <p class="teacher-muted">Als Abwesenheit erfasst.</p>
+                  <% } %>
                   <% if (grade.note) { %>
                     <p class="grade-description"><%= grade.note %></p>
                   <% } %>

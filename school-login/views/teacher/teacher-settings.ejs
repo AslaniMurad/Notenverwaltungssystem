@@ -10,9 +10,13 @@
     content: function () {
       const activeUnit = "Punkte";
       const scoringLabelByValue = {};
+      const absenceLabelByValue = {};
       const symbolLabelByValue = {};
       (scoringModeOptions || []).forEach((option) => {
         scoringLabelByValue[option.value] = option.label;
+      });
+      (absenceModeOptions || []).forEach((option) => {
+        absenceLabelByValue[option.value] = option.label;
       });
       (participationSymbolOptions || []).forEach((option) => {
         symbolLabelByValue[option.value] = option.label;
@@ -89,7 +93,7 @@
                   <div>
                     <h4><%= profile.name %></h4>
                     <p class="teacher-muted">
-                      Modus: Punkte - Eingabe: <%= scoringLabelByValue[profile.scoring_mode] || profile.scoring_mode %>
+                      Modus: Punkte - Eingabe: <%= scoringLabelByValue[profile.scoring_mode] || profile.scoring_mode %> - Abwesenheit: <%= absenceLabelByValue[profile.absence_mode] || profile.absence_mode || "Mit 0% werten (schlechteste Leistung)" %>
                     </p>
                   </div>
                   <div class="settings-profile-actions">
@@ -163,6 +167,19 @@
                 <% }) %>
               </select>
               <small class="form-hint">Legt fest, ob bei neuen Bewertungen Noten, Punkte oder beides eingegeben wird.</small>
+
+              <label for="absence_mode">Bei "nicht da" *</label>
+              <select id="absence_mode" name="absence_mode" required>
+                <% (absenceModeOptions || []).forEach((option) => { %>
+                  <option
+                    value="<%= option.value %>"
+                    <%= String(formData.absence_mode || "") === String(option.value) ? "selected" : "" %>
+                  >
+                    <%= option.label %>
+                  </option>
+                <% }) %>
+              </select>
+              <small class="form-hint">Legt fest, ob Abwesenheiten den Schnitt verschlechtern oder neutral bleiben.</small>
 
               <div class="settings-grid">
                 <div class="settings-weight-item">

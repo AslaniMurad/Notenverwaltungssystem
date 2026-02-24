@@ -68,6 +68,13 @@ const SCORING_MODE_OPTIONS = [
   { value: SCORING_MODE_POINTS_AND_GRADE, label: "Punkte und Noten" }
 ];
 const DEFAULT_SCORING_MODE = SCORING_MODE_POINTS_OR_GRADE;
+const ABSENCE_MODE_INCLUDE_ZERO = "include_zero";
+const ABSENCE_MODE_EXCLUDE = "exclude";
+const ABSENCE_MODE_OPTIONS = [
+  { value: ABSENCE_MODE_INCLUDE_ZERO, label: "Mit 0% werten (schlechteste Leistung)" },
+  { value: ABSENCE_MODE_EXCLUDE, label: "Nicht gewichten (neutral)" }
+];
+const DEFAULT_ABSENCE_MODE = ABSENCE_MODE_INCLUDE_ZERO;
 const DEFAULT_GRADE_THRESHOLDS = {
   grade1_min_percent: 88.5,
   grade2_min_percent: 75,
@@ -164,6 +171,12 @@ function normalizeScoringMode(mode) {
   const normalized = String(mode || "").trim().toLowerCase();
   const validModes = new Set(SCORING_MODE_OPTIONS.map((entry) => entry.value));
   return validModes.has(normalized) ? normalized : DEFAULT_SCORING_MODE;
+}
+
+function normalizeAbsenceMode(mode) {
+  const normalized = String(mode || "").trim().toLowerCase();
+  const validModes = new Set(ABSENCE_MODE_OPTIONS.map((entry) => entry.value));
+  return validModes.has(normalized) ? normalized : DEFAULT_ABSENCE_MODE;
 }
 
 function normalizeThresholds(source = {}) {
@@ -427,7 +440,7 @@ async function loadProfileItems(profileId) {
 
 async function loadTeacherProfiles(teacherId) {
   const profiles = await allAsync(
-    `SELECT id, teacher_id, name, weight_mode, scoring_mode, grade1_min_percent, grade2_min_percent, grade3_min_percent, grade4_min_percent, ma_enabled, ma_weight, ma_grade_plus, ma_grade_plus_tilde, ma_grade_neutral, ma_grade_minus_tilde, ma_grade_minus, is_active, created_at, updated_at
+    `SELECT id, teacher_id, name, weight_mode, scoring_mode, absence_mode, grade1_min_percent, grade2_min_percent, grade3_min_percent, grade4_min_percent, ma_enabled, ma_weight, ma_grade_plus, ma_grade_plus_tilde, ma_grade_neutral, ma_grade_minus_tilde, ma_grade_minus, is_active, created_at, updated_at
      FROM teacher_grading_profiles
      WHERE teacher_id = ?
      ORDER BY is_active DESC, created_at ASC, id ASC`,
@@ -437,6 +450,7 @@ async function loadTeacherProfiles(teacherId) {
     ...profile,
     weight_mode: resolveWeightMode(profile.weight_mode),
     scoring_mode: normalizeScoringMode(profile.scoring_mode),
+    absence_mode: normalizeAbsenceMode(profile.absence_mode),
     thresholds: normalizeThresholds(profile),
     participation: normalizeParticipationConfig(profile),
     is_active: Boolean(profile.is_active)
@@ -445,7 +459,7 @@ async function loadTeacherProfiles(teacherId) {
 
 async function loadTeacherProfileById(profileId, teacherId) {
   const profile = await getAsync(
-    `SELECT id, teacher_id, name, weight_mode, scoring_mode, grade1_min_percent, grade2_min_percent, grade3_min_percent, grade4_min_percent, ma_enabled, ma_weight, ma_grade_plus, ma_grade_plus_tilde, ma_grade_neutral, ma_grade_minus_tilde, ma_grade_minus, is_active, created_at, updated_at
+    `SELECT id, teacher_id, name, weight_mode, scoring_mode, absence_mode, grade1_min_percent, grade2_min_percent, grade3_min_percent, grade4_min_percent, ma_enabled, ma_weight, ma_grade_plus, ma_grade_plus_tilde, ma_grade_neutral, ma_grade_minus_tilde, ma_grade_minus, is_active, created_at, updated_at
      FROM teacher_grading_profiles
      WHERE id = ? AND teacher_id = ?`,
     [profileId, teacherId]
@@ -455,6 +469,7 @@ async function loadTeacherProfileById(profileId, teacherId) {
     ...profile,
     weight_mode: resolveWeightMode(profile.weight_mode),
     scoring_mode: normalizeScoringMode(profile.scoring_mode),
+    absence_mode: normalizeAbsenceMode(profile.absence_mode),
     thresholds: normalizeThresholds(profile),
     participation: normalizeParticipationConfig(profile),
     is_active: Boolean(profile.is_active)
@@ -463,7 +478,7 @@ async function loadTeacherProfileById(profileId, teacherId) {
 
 async function loadActiveTeacherProfile(teacherId) {
   const activeProfile = await getAsync(
-    `SELECT id, teacher_id, name, weight_mode, scoring_mode, grade1_min_percent, grade2_min_percent, grade3_min_percent, grade4_min_percent, ma_enabled, ma_weight, ma_grade_plus, ma_grade_plus_tilde, ma_grade_neutral, ma_grade_minus_tilde, ma_grade_minus, is_active, created_at, updated_at
+    `SELECT id, teacher_id, name, weight_mode, scoring_mode, absence_mode, grade1_min_percent, grade2_min_percent, grade3_min_percent, grade4_min_percent, ma_enabled, ma_weight, ma_grade_plus, ma_grade_plus_tilde, ma_grade_neutral, ma_grade_minus_tilde, ma_grade_minus, is_active, created_at, updated_at
      FROM teacher_grading_profiles
      WHERE teacher_id = ? AND is_active = ?
      ORDER BY created_at ASC, id ASC
@@ -480,6 +495,7 @@ async function loadActiveTeacherProfile(teacherId) {
       ...activeProfile,
       weight_mode: resolveWeightMode(activeProfile.weight_mode),
       scoring_mode: normalizeScoringMode(activeProfile.scoring_mode),
+      absence_mode: normalizeAbsenceMode(activeProfile.absence_mode),
       thresholds: normalizeThresholds(activeProfile),
       participation: normalizeParticipationConfig(activeProfile),
       is_active: Boolean(activeProfile.is_active),
@@ -489,7 +505,7 @@ async function loadActiveTeacherProfile(teacherId) {
   }
 
   const fallback = await getAsync(
-    `SELECT id, teacher_id, name, weight_mode, scoring_mode, grade1_min_percent, grade2_min_percent, grade3_min_percent, grade4_min_percent, ma_enabled, ma_weight, ma_grade_plus, ma_grade_plus_tilde, ma_grade_neutral, ma_grade_minus_tilde, ma_grade_minus, is_active, created_at, updated_at
+    `SELECT id, teacher_id, name, weight_mode, scoring_mode, absence_mode, grade1_min_percent, grade2_min_percent, grade3_min_percent, grade4_min_percent, ma_enabled, ma_weight, ma_grade_plus, ma_grade_plus_tilde, ma_grade_neutral, ma_grade_minus_tilde, ma_grade_minus, is_active, created_at, updated_at
      FROM teacher_grading_profiles
      WHERE teacher_id = ?
      ORDER BY created_at ASC, id ASC
@@ -509,6 +525,7 @@ async function loadActiveTeacherProfile(teacherId) {
     ...fallback,
     weight_mode: resolveWeightMode(fallback.weight_mode),
     scoring_mode: normalizeScoringMode(fallback.scoring_mode),
+    absence_mode: normalizeAbsenceMode(fallback.absence_mode),
     thresholds: normalizeThresholds(fallback),
     participation: normalizeParticipationConfig(fallback),
     is_active: true,
@@ -581,7 +598,12 @@ function buildDefaultAddGradeFormData(source = {}) {
     grade_template_id: source.grade_template_id || "",
     grade: source.grade != null ? String(source.grade) : "",
     points_achieved: source.points_achieved != null ? String(source.points_achieved) : "",
-    points_max: source.points_max != null ? String(source.points_max) : "",
+    is_absent:
+      source.is_absent === true ||
+      source.is_absent === 1 ||
+      source.is_absent === "1" ||
+      source.is_absent === "true" ||
+      source.is_absent === "on",
     note: source.note || "",
     external_link: source.external_link || ""
   };
@@ -600,11 +622,13 @@ async function renderAddGradeForm(req, res, payload) {
     classData,
     student,
     templates,
+    gradedTemplateIds = [],
     error = null,
     formData = {}
   } = payload || {};
   const activeProfile = await loadActiveTeacherProfile(req.session.user.id);
   const scoringMode = normalizeScoringMode(activeProfile?.scoring_mode);
+  const absenceMode = normalizeAbsenceMode(activeProfile?.absence_mode);
   const thresholds = normalizeThresholds(activeProfile?.thresholds || activeProfile || {});
 
   return res.status(status).render("teacher/teacher-add-grade", {
@@ -612,9 +636,11 @@ async function renderAddGradeForm(req, res, payload) {
     classData,
     student,
     templates,
+    gradedTemplateIds: Array.isArray(gradedTemplateIds) ? gradedTemplateIds.map(String) : [],
     activeProfile,
     scoringMode,
     scoringModeLabel: getScoringModeLabel(scoringMode),
+    absenceMode,
     thresholds,
     formData: buildDefaultAddGradeFormData(formData),
     csrfToken: req.csrfToken(),
@@ -687,6 +713,7 @@ function handleUpload(req, res, next) {
         return renderError(res, req, "SchÃ¼ler nicht gefunden.", 404, `/teacher/students/${classId}`);
       }
       const templates = await loadTemplates(classId);
+      const gradedTemplateIds = await loadGradedTemplateIdsForStudent(classId, student.id);
       const errorMessage =
         uploadErr.code === "LIMIT_FILE_SIZE"
           ? `Datei ist zu groÃŸ. Maximal ${MAX_GRADE_FILE_MB} MB erlaubt.`
@@ -700,6 +727,7 @@ function handleUpload(req, res, next) {
         classData,
         student,
         templates,
+        gradedTemplateIds,
         error: errorMessage,
         formData: req.body || {}
       });
@@ -731,7 +759,7 @@ async function loadStudents(classId) {
 
 async function loadTemplates(classId) {
   const templates = await allAsync(
-    "SELECT id, name, category, weight, weight_mode, date, description FROM grade_templates WHERE class_id = ? ORDER BY date, name",
+    "SELECT id, name, category, weight, weight_mode, max_points, date, description FROM grade_templates WHERE class_id = ? ORDER BY date, name",
     [classId]
   );
   return templates.map((template) => enrichWeightData(template));
@@ -739,19 +767,27 @@ async function loadTemplates(classId) {
 
 async function loadStudentGrades(studentId) {
   return allAsync(
-    `SELECT g.id, g.grade, g.points_achieved, g.points_max, g.note, g.created_at, g.grade_template_id as template_id, gt.name, gt.category, gt.weight, gt.weight_mode, gt.date, gt.description, c.subject as class_subject, g.attachment_path, g.attachment_original_name, g.attachment_mime, g.attachment_size, g.external_link, 0 as is_special
+    `SELECT g.id, g.grade, g.points_achieved, g.points_max, g.note, g.created_at, g.grade_template_id as template_id, gt.name, gt.category, gt.weight, gt.weight_mode, gt.max_points as template_max_points, gt.date, gt.description, c.subject as class_subject, g.attachment_path, g.attachment_original_name, g.attachment_mime, g.attachment_size, g.external_link, g.is_absent, 0 as is_special
      FROM grades g
      JOIN grade_templates gt ON gt.id = g.grade_template_id
      JOIN classes c ON c.id = g.class_id
      WHERE g.student_id = ?
      UNION ALL
-     SELECT sa.id, sa.grade, NULL as points_achieved, NULL as points_max, sa.description as note, sa.created_at, NULL as template_id, sa.name, sa.type as category, sa.weight, NULL as weight_mode, sa.created_at as date, sa.description, c.subject as class_subject, NULL as attachment_path, NULL as attachment_original_name, NULL as attachment_mime, NULL as attachment_size, NULL as external_link, 1 as is_special
+     SELECT sa.id, sa.grade, NULL as points_achieved, NULL as points_max, sa.description as note, sa.created_at, NULL as template_id, sa.name, sa.type as category, sa.weight, NULL as weight_mode, NULL as template_max_points, sa.created_at as date, sa.description, c.subject as class_subject, NULL as attachment_path, NULL as attachment_original_name, NULL as attachment_mime, NULL as attachment_size, NULL as external_link, false as is_absent, 1 as is_special
      FROM special_assessments sa
      JOIN classes c ON c.id = sa.class_id
      WHERE sa.student_id = ?
      ORDER BY created_at DESC`,
     [studentId, studentId]
   );
+}
+
+async function loadGradedTemplateIdsForStudent(classId, studentId) {
+  const rows = await allAsync(
+    "SELECT grade_template_id FROM grades WHERE class_id = ? AND student_id = ?",
+    [classId, studentId]
+  );
+  return rows.map((row) => String(row.grade_template_id));
 }
 
 async function loadSpecialAssessments(classId) {
@@ -765,11 +801,18 @@ async function loadSpecialAssessments(classId) {
   );
 }
 
-function computeWeightedAverage(grades) {
+function shouldSkipGradeForAbsence(grade, absenceMode) {
+  if (!grade || !grade.is_absent) return false;
+  return normalizeAbsenceMode(absenceMode) === ABSENCE_MODE_EXCLUDE;
+}
+
+function computeWeightedAverage(grades, options = {}) {
+  const absenceMode = normalizeAbsenceMode(options.absenceMode);
   let weightedSum = 0;
   let weightTotal = 0;
 
   grades.forEach((grade) => {
+    if (shouldSkipGradeForAbsence(grade, absenceMode)) return;
     const value = Number(grade.grade);
     const weight = Number(grade.weight || 1);
     if (Number.isNaN(value) || Number.isNaN(weight)) return;
@@ -804,12 +847,14 @@ async function buildSettingsPageData(teacherId, selectedProfileId, formOverride 
   let selectedWeights = buildDefaultWeights(WEIGHT_MODE_POINTS);
   let selectedMode = WEIGHT_MODE_POINTS;
   let selectedScoringMode = DEFAULT_SCORING_MODE;
+  let selectedAbsenceMode = DEFAULT_ABSENCE_MODE;
   let selectedThresholds = normalizeThresholds();
   let selectedParticipation = normalizeParticipationConfig();
   if (selectedProfile) {
     selectedMode = resolveWeightMode(selectedProfile.weight_mode);
     selectedWeights = mergeWeightsWithDefaults(await loadProfileItems(selectedProfile.id), selectedMode);
     selectedScoringMode = normalizeScoringMode(selectedProfile.scoring_mode);
+    selectedAbsenceMode = normalizeAbsenceMode(selectedProfile.absence_mode);
     selectedThresholds = normalizeThresholds(selectedProfile.thresholds || selectedProfile);
     selectedParticipation = normalizeParticipationConfig(
       selectedProfile.participation || selectedProfile
@@ -825,6 +870,7 @@ async function buildSettingsPageData(teacherId, selectedProfileId, formOverride 
       profile_name: defaultProfileName,
       weight_mode: selectedMode,
       scoring_mode: selectedScoringMode,
+      absence_mode: selectedAbsenceMode,
       thresholds: selectedThresholds,
       participation: selectedParticipation,
       set_active: selectedProfile ? Boolean(selectedProfile.is_active) : true,
@@ -838,6 +884,7 @@ async function buildSettingsPageData(teacherId, selectedProfileId, formOverride 
       ...profile,
       mode_label: getWeightUnit(profile.weight_mode),
       scoring_mode: normalizeScoringMode(profile.scoring_mode),
+      absence_mode: normalizeAbsenceMode(profile.absence_mode),
       thresholds: normalizeThresholds(profile.thresholds || profile),
       participation: normalizeParticipationConfig(profile.participation || profile),
       is_active: Boolean(profile.is_active)
@@ -925,6 +972,7 @@ router.get("/settings", async (req, res, next) => {
         profile_name: "",
         weight_mode: WEIGHT_MODE_POINTS,
         scoring_mode: normalizeScoringMode(sourceProfile?.scoring_mode),
+        absence_mode: normalizeAbsenceMode(sourceProfile?.absence_mode),
         thresholds: normalizeThresholds(sourceProfile?.thresholds || sourceProfile || {}),
         participation: normalizeParticipationConfig(
           sourceProfile?.participation || sourceProfile || {}
@@ -950,6 +998,7 @@ router.get("/settings", async (req, res, next) => {
       csrfToken: req.csrfToken(),
       categoryDefinitions: TEMPLATE_CATEGORY_DEFINITIONS,
       scoringModeOptions: SCORING_MODE_OPTIONS,
+      absenceModeOptions: ABSENCE_MODE_OPTIONS,
       participationSymbolOptions: PARTICIPATION_SYMBOL_OPTIONS,
       setupComplete: pageData.setupComplete,
       showSetupFlow: !pageData.setupComplete || String(req.query.setup || "") === "1",
@@ -974,6 +1023,7 @@ router.post("/settings/save-profile", async (req, res, next) => {
     const profileName = String(req.body?.profile_name || "").trim();
     const weightMode = WEIGHT_MODE_POINTS;
     const scoringMode = normalizeScoringMode(req.body?.scoring_mode);
+    const absenceMode = normalizeAbsenceMode(req.body?.absence_mode);
     const thresholds = parseThresholdsFromBody(req.body || {});
     const participation = parseParticipationConfigFromBody(req.body || {});
     const requestedSetActive = req.body?.set_active === "1" || req.body?.set_active === "on";
@@ -985,6 +1035,7 @@ router.post("/settings/save-profile", async (req, res, next) => {
       profile_name: profileName,
       weight_mode: weightMode,
       scoring_mode: scoringMode,
+      absence_mode: absenceMode,
       thresholds,
       participation,
       set_active: requestedSetActive,
@@ -998,6 +1049,7 @@ router.post("/settings/save-profile", async (req, res, next) => {
         csrfToken: req.csrfToken(),
         categoryDefinitions: TEMPLATE_CATEGORY_DEFINITIONS,
         scoringModeOptions: SCORING_MODE_OPTIONS,
+        absenceModeOptions: ABSENCE_MODE_OPTIONS,
         participationSymbolOptions: PARTICIPATION_SYMBOL_OPTIONS,
         setupComplete: pageData.setupComplete,
         showSetupFlow: !pageData.setupComplete,
@@ -1020,6 +1072,7 @@ router.post("/settings/save-profile", async (req, res, next) => {
         csrfToken: req.csrfToken(),
         categoryDefinitions: TEMPLATE_CATEGORY_DEFINITIONS,
         scoringModeOptions: SCORING_MODE_OPTIONS,
+        absenceModeOptions: ABSENCE_MODE_OPTIONS,
         participationSymbolOptions: PARTICIPATION_SYMBOL_OPTIONS,
         setupComplete: pageData.setupComplete,
         showSetupFlow: !pageData.setupComplete,
@@ -1042,6 +1095,7 @@ router.post("/settings/save-profile", async (req, res, next) => {
         csrfToken: req.csrfToken(),
         categoryDefinitions: TEMPLATE_CATEGORY_DEFINITIONS,
         scoringModeOptions: SCORING_MODE_OPTIONS,
+        absenceModeOptions: ABSENCE_MODE_OPTIONS,
         participationSymbolOptions: PARTICIPATION_SYMBOL_OPTIONS,
         setupComplete: pageData.setupComplete,
         showSetupFlow: !pageData.setupComplete,
@@ -1064,6 +1118,7 @@ router.post("/settings/save-profile", async (req, res, next) => {
         csrfToken: req.csrfToken(),
         categoryDefinitions: TEMPLATE_CATEGORY_DEFINITIONS,
         scoringModeOptions: SCORING_MODE_OPTIONS,
+        absenceModeOptions: ABSENCE_MODE_OPTIONS,
         participationSymbolOptions: PARTICIPATION_SYMBOL_OPTIONS,
         setupComplete: pageData.setupComplete,
         showSetupFlow: !pageData.setupComplete,
@@ -1092,12 +1147,13 @@ router.post("/settings/save-profile", async (req, res, next) => {
     if (profileExists) {
       await runAsync(
         `UPDATE teacher_grading_profiles
-         SET name = ?, weight_mode = ?, scoring_mode = ?, grade1_min_percent = ?, grade2_min_percent = ?, grade3_min_percent = ?, grade4_min_percent = ?, ma_enabled = ?, ma_weight = ?, ma_grade_plus = ?, ma_grade_plus_tilde = ?, ma_grade_neutral = ?, ma_grade_minus_tilde = ?, ma_grade_minus = ?, updated_at = current_timestamp
+         SET name = ?, weight_mode = ?, scoring_mode = ?, absence_mode = ?, grade1_min_percent = ?, grade2_min_percent = ?, grade3_min_percent = ?, grade4_min_percent = ?, ma_enabled = ?, ma_weight = ?, ma_grade_plus = ?, ma_grade_plus_tilde = ?, ma_grade_neutral = ?, ma_grade_minus_tilde = ?, ma_grade_minus = ?, updated_at = current_timestamp
          WHERE id = ? AND teacher_id = ?`,
         [
           profileName,
           weightMode,
           scoringMode,
+          absenceMode,
           thresholds.grade1_min_percent,
           thresholds.grade2_min_percent,
           thresholds.grade3_min_percent,
@@ -1117,13 +1173,14 @@ router.post("/settings/save-profile", async (req, res, next) => {
     } else {
       const result = await runAsync(
         `INSERT INTO teacher_grading_profiles
-         (teacher_id, name, weight_mode, scoring_mode, grade1_min_percent, grade2_min_percent, grade3_min_percent, grade4_min_percent, ma_enabled, ma_weight, ma_grade_plus, ma_grade_plus_tilde, ma_grade_neutral, ma_grade_minus_tilde, ma_grade_minus, is_active)
-         VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+         (teacher_id, name, weight_mode, scoring_mode, absence_mode, grade1_min_percent, grade2_min_percent, grade3_min_percent, grade4_min_percent, ma_enabled, ma_weight, ma_grade_plus, ma_grade_plus_tilde, ma_grade_neutral, ma_grade_minus_tilde, ma_grade_minus, is_active)
+         VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
         [
           teacherId,
           profileName,
           weightMode,
           scoringMode,
+          absenceMode,
           thresholds.grade1_min_percent,
           thresholds.grade2_min_percent,
           thresholds.grade3_min_percent,
@@ -1182,6 +1239,7 @@ router.post("/settings/save-profile", async (req, res, next) => {
         profile_name: String(req.body?.profile_name || "").trim(),
         weight_mode: WEIGHT_MODE_POINTS,
         scoring_mode: normalizeScoringMode(req.body?.scoring_mode),
+        absence_mode: normalizeAbsenceMode(req.body?.absence_mode),
         thresholds: parseThresholdsFromBody(req.body || {}),
         participation: parseParticipationConfigFromBody(req.body || {}),
         set_active: req.body?.set_active === "1" || req.body?.set_active === "on",
@@ -1193,6 +1251,7 @@ router.post("/settings/save-profile", async (req, res, next) => {
         csrfToken: req.csrfToken(),
         categoryDefinitions: TEMPLATE_CATEGORY_DEFINITIONS,
         scoringModeOptions: SCORING_MODE_OPTIONS,
+        absenceModeOptions: ABSENCE_MODE_OPTIONS,
         participationSymbolOptions: PARTICIPATION_SYMBOL_OPTIONS,
         setupComplete: pageData.setupComplete,
         showSetupFlow: !pageData.setupComplete,
@@ -1401,6 +1460,7 @@ router.get("/grades/:classId", async (req, res, next) => {
     const participation = normalizeParticipationConfig(
       activeProfile?.participation || activeProfile || {}
     );
+    const absenceMode = normalizeAbsenceMode(activeProfile?.absence_mode);
     const possibleCount = templates.length;
     const studentsWithGrades = await Promise.all(
       students.map(async (student) => {
@@ -1409,7 +1469,7 @@ router.get("/grades/:classId", async (req, res, next) => {
         const average = computeWeightedAverage([
           ...grades,
           ...buildParticipationAverageRows(participationMarks, participation)
-        ]);
+        ], { absenceMode });
         return {
           ...student,
           grade_count: grades.length,
@@ -1500,6 +1560,7 @@ router.get("/student-grades/:classId/:studentId", async (req, res, next) => {
     const participationConfig = normalizeParticipationConfig(
       activeProfile?.participation || activeProfile || {}
     );
+    const absenceMode = normalizeAbsenceMode(activeProfile?.absence_mode);
     const participationMarks = await loadParticipationMarks(classId, student.id);
     const fallbackMode = resolveWeightMode(activeProfile?.weight_mode);
     const grades = gradeRows.map((row) => {
@@ -1516,6 +1577,7 @@ router.get("/student-grades/:classId/:studentId", async (req, res, next) => {
         points_max: hasPoints ? pointsMax : null,
         points_percent: pointsPercent,
         note: row.note,
+        is_absent: Boolean(row.is_absent),
         category: row.category,
         weight: row.weight,
         weight_mode: resolvedWeightMode,
@@ -1557,6 +1619,7 @@ router.get("/student-grades/:classId/:studentId", async (req, res, next) => {
       ...gradeRows.map((row) => ({
         grade: Number(row.grade),
         weight: Number(row.weight || 0),
+        is_absent: Boolean(row.is_absent),
         source: "grade"
       })),
       ...participationAverageRows.map((row) => ({
@@ -1564,9 +1627,13 @@ router.get("/student-grades/:classId/:studentId", async (req, res, next) => {
         weight: Number(row.weight || 0),
         source: "participation"
       }))
-    ].filter((row) => Number.isFinite(row.grade) && Number.isFinite(row.weight) && row.weight > 0);
+    ]
+      .filter((row) => !shouldSkipGradeForAbsence(row, absenceMode))
+      .filter((row) => Number.isFinite(row.grade) && Number.isFinite(row.weight) && row.weight > 0);
 
-    const average = computeWeightedAverage([...gradeRows, ...participationAverageRows]);
+    const average = computeWeightedAverage([...gradeRows, ...participationAverageRows], {
+      absenceMode
+    });
 
     res.render("teacher/teacher-student-grades", {
       email: req.session.user.email,
@@ -1653,10 +1720,12 @@ router.get("/add-grade/:classId/:studentId", async (req, res, next) => {
     }
 
     const templates = await loadTemplates(classId);
+    const gradedTemplateIds = await loadGradedTemplateIdsForStudent(classId, student.id);
     return renderAddGradeForm(req, res, {
       classData,
       student,
       templates,
+      gradedTemplateIds,
       formData: {}
     });
   } catch (err) {
@@ -1672,9 +1741,9 @@ router.post("/add-grade/:classId/:studentId", handleUpload, async (req, res, nex
       grade_template_id,
       grade,
       points_achieved,
-      points_max,
       note,
-      external_link
+      external_link,
+      is_absent
     } = req.body || {};
     const classData = await loadClassForTeacher(classId, req.session.user.id);
     if (!classData) {
@@ -1690,6 +1759,7 @@ router.post("/add-grade/:classId/:studentId", handleUpload, async (req, res, nex
     }
 
     const templates = await loadTemplates(classId);
+    const gradedTemplateIds = await loadGradedTemplateIdsForStudent(classId, student.id);
     const activeProfile = await loadActiveTeacherProfile(req.session.user.id);
     if (!activeProfile) {
       await removeUploadedFile(req.file);
@@ -1697,180 +1767,143 @@ router.post("/add-grade/:classId/:studentId", handleUpload, async (req, res, nex
     }
 
     const scoringMode = normalizeScoringMode(activeProfile.scoring_mode);
+    const absenceMode = normalizeAbsenceMode(activeProfile.absence_mode);
     const thresholds = normalizeThresholds(activeProfile.thresholds || activeProfile);
     const gradeInput = parseOptionalNumber(grade);
     const pointsAchievedInput = parseOptionalNumber(points_achieved);
-    const pointsMaxInput = parseOptionalNumber(points_max);
     const hasGrade = gradeInput.provided;
-    const hasAnyPoints = pointsAchievedInput.provided || pointsMaxInput.provided;
-    const hasCompletePoints = pointsAchievedInput.provided && pointsMaxInput.provided;
+    const hasPoints = pointsAchievedInput.provided;
+    const isAbsent =
+      is_absent === true ||
+      is_absent === 1 ||
+      is_absent === "1" ||
+      is_absent === "true" ||
+      is_absent === "on";
     const formData = req.body || {};
 
-    if (!grade_template_id) {
+    const renderValidationError = async (status, error) => {
       await removeUploadedFile(req.file);
       return renderAddGradeForm(req, res, {
-        status: 400,
+        status,
         classData,
         student,
         templates,
+        gradedTemplateIds,
         formData,
-        error: "Bitte eine Pruefung auswaehlen."
+        error
       });
-    }
+    };
 
-    if (hasAnyPoints && !hasCompletePoints) {
-      await removeUploadedFile(req.file);
-      return renderAddGradeForm(req, res, {
-        status: 400,
-        classData,
-        student,
-        templates,
-        formData,
-        error: "Bitte erreichte und maximale Punkte gemeinsam ausfuellen."
-      });
+    if (!grade_template_id) {
+      return renderValidationError(400, "Bitte eine Pruefung auswaehlen.");
     }
 
     if (hasGrade && (!Number.isFinite(gradeInput.value) || gradeInput.value < 1 || gradeInput.value > 5)) {
-      await removeUploadedFile(req.file);
-      return renderAddGradeForm(req, res, {
-        status: 400,
-        classData,
-        student,
-        templates,
-        formData,
-        error: "Note muss zwischen 1 und 5 liegen."
-      });
+      return renderValidationError(400, "Note muss zwischen 1 und 5 liegen.");
     }
 
-    if (
-      hasCompletePoints &&
-      (!Number.isFinite(pointsAchievedInput.value) ||
-        !Number.isFinite(pointsMaxInput.value) ||
-        pointsAchievedInput.value < 0 ||
-        pointsMaxInput.value <= 0 ||
-        pointsAchievedInput.value > pointsMaxInput.value)
-    ) {
-      await removeUploadedFile(req.file);
-      return renderAddGradeForm(req, res, {
-        status: 400,
-        classData,
-        student,
-        templates,
-        formData,
-        error: "Punkte muessen gueltig sein (0 <= erreicht <= max, max > 0)."
-      });
+    if (hasPoints && (!Number.isFinite(pointsAchievedInput.value) || pointsAchievedInput.value < 0)) {
+      return renderValidationError(400, "Erreichte Punkte muessen mindestens 0 sein.");
     }
 
-    if (scoringMode === SCORING_MODE_GRADE_ONLY && !hasGrade) {
-      await removeUploadedFile(req.file);
-      return renderAddGradeForm(req, res, {
-        status: 400,
-        classData,
-        student,
-        templates,
-        formData,
-        error: "Dieses Profil verlangt eine Note."
-      });
+    const templateRow = await getAsync(
+      "SELECT id, max_points FROM grade_templates WHERE id = ? AND class_id = ?",
+      [grade_template_id, classId]
+    );
+    if (!templateRow) {
+      return renderValidationError(400, "Pruefungsvorlage nicht gefunden.");
     }
-    if (scoringMode === SCORING_MODE_POINTS_ONLY && !hasCompletePoints) {
-      await removeUploadedFile(req.file);
-      return renderAddGradeForm(req, res, {
-        status: 400,
-        classData,
-        student,
-        templates,
-        formData,
-        error: "Dieses Profil verlangt Punkte."
-      });
+    const templateMaxPointsRaw = Number(templateRow.max_points);
+    const templateHasMaxPoints =
+      Number.isFinite(templateMaxPointsRaw) && templateMaxPointsRaw > 0;
+
+    if (hasPoints && !templateHasMaxPoints) {
+      return renderValidationError(
+        400,
+        "Diese Pruefung hat keine maximalen Punkte. Bitte in der Pruefungsvorlage setzen."
+      );
     }
-    if (scoringMode === SCORING_MODE_POINTS_AND_GRADE && (!hasGrade || !hasCompletePoints)) {
-      await removeUploadedFile(req.file);
-      return renderAddGradeForm(req, res, {
-        status: 400,
-        classData,
-        student,
-        templates,
-        formData,
-        error: "Dieses Profil verlangt Punkte und Note."
-      });
+
+    if (hasPoints && templateHasMaxPoints && pointsAchievedInput.value > templateMaxPointsRaw) {
+      return renderValidationError(
+        400,
+        `Erreichte Punkte duerfen die maximalen Punkte (${templateMaxPointsRaw}) nicht uebersteigen.`
+      );
     }
-    if (scoringMode === SCORING_MODE_POINTS_OR_GRADE && !hasGrade && !hasCompletePoints) {
-      await removeUploadedFile(req.file);
-      return renderAddGradeForm(req, res, {
-        status: 400,
-        classData,
-        student,
-        templates,
-        formData,
-        error: "Bitte mindestens Note oder Punkte angeben."
-      });
+
+    const hasCompletePoints = hasPoints && templateHasMaxPoints;
+
+    if (!isAbsent) {
+      if (scoringMode === SCORING_MODE_GRADE_ONLY && !hasGrade) {
+        return renderValidationError(400, "Dieses Profil verlangt eine Note.");
+      }
+      if (scoringMode === SCORING_MODE_POINTS_ONLY && !hasCompletePoints) {
+        return renderValidationError(
+          400,
+          templateHasMaxPoints
+            ? "Dieses Profil verlangt Punkte."
+            : "Dieses Profil verlangt Punkte. Bitte zuerst maximale Punkte in der Pruefungsvorlage setzen."
+        );
+      }
+      if (scoringMode === SCORING_MODE_POINTS_AND_GRADE && (!hasGrade || !hasCompletePoints)) {
+        return renderValidationError(
+          400,
+          templateHasMaxPoints
+            ? "Dieses Profil verlangt Punkte und Note."
+            : "Dieses Profil verlangt Punkte und Note. Bitte zuerst maximale Punkte in der Pruefungsvorlage setzen."
+        );
+      }
+      if (scoringMode === SCORING_MODE_POINTS_OR_GRADE && !hasGrade && !hasCompletePoints) {
+        return renderValidationError(
+          400,
+          templateHasMaxPoints
+            ? "Bitte mindestens Note oder Punkte angeben."
+            : "Bitte mindestens eine Note angeben oder maximale Punkte in der Pruefungsvorlage setzen."
+        );
+      }
     }
 
     const linkResult = normalizeExternalLink(external_link);
     if (linkResult.error) {
-      await removeUploadedFile(req.file);
-      return renderAddGradeForm(req, res, {
-        status: 400,
-        classData,
-        student,
-        templates,
-        formData,
-        error: linkResult.error
-      });
+      return renderValidationError(400, linkResult.error);
     }
 
     if (req.file && linkResult.value) {
-      await removeUploadedFile(req.file);
-      return renderAddGradeForm(req, res, {
-        status: 400,
-        classData,
-        student,
-        templates,
-        formData,
-        error: "Bitte entweder eine Datei hochladen oder einen Link angeben, nicht beides."
-      });
+      return renderValidationError(
+        400,
+        "Bitte entweder eine Datei hochladen oder einen Link angeben, nicht beides."
+      );
     }
 
-    const resolvedPointsAchieved = hasCompletePoints ? Number(pointsAchievedInput.value) : null;
-    const resolvedPointsMax = hasCompletePoints ? Number(pointsMaxInput.value) : null;
-    let resolvedGrade = hasGrade ? Number(gradeInput.value) : null;
-    if (
-      scoringMode === SCORING_MODE_POINTS_ONLY &&
-      resolvedPointsAchieved != null &&
-      resolvedPointsMax != null
-    ) {
-      const percent = (resolvedPointsAchieved / resolvedPointsMax) * 100;
-      resolvedGrade = buildGradeFromPercent(percent, thresholds);
-    } else if (resolvedGrade == null && resolvedPointsAchieved != null && resolvedPointsMax != null) {
-      const percent = (resolvedPointsAchieved / resolvedPointsMax) * 100;
-      resolvedGrade = buildGradeFromPercent(percent, thresholds);
+    let resolvedPointsAchieved = null;
+    let resolvedPointsMax = null;
+    let resolvedGrade = null;
+
+    if (isAbsent) {
+      if (absenceMode === ABSENCE_MODE_INCLUDE_ZERO) {
+        if (!templateHasMaxPoints) {
+          return renderValidationError(
+            400,
+            "Fuer 'Mit 0% werten' braucht die Pruefung maximale Punkte in der Vorlage."
+          );
+        }
+        resolvedPointsAchieved = 0;
+        resolvedPointsMax = templateMaxPointsRaw;
+      }
+      resolvedGrade = 5;
+    } else {
+      resolvedPointsAchieved = hasCompletePoints ? Number(pointsAchievedInput.value) : null;
+      resolvedPointsMax = hasCompletePoints ? Number(templateMaxPointsRaw) : null;
+      resolvedGrade = hasGrade ? Number(gradeInput.value) : null;
+
+      if (resolvedGrade == null && resolvedPointsAchieved != null && resolvedPointsMax != null) {
+        const percent = (resolvedPointsAchieved / resolvedPointsMax) * 100;
+        resolvedGrade = buildGradeFromPercent(percent, thresholds);
+      }
     }
+
     if (!Number.isFinite(resolvedGrade) || resolvedGrade < 1 || resolvedGrade > 5) {
-      await removeUploadedFile(req.file);
-      return renderAddGradeForm(req, res, {
-        status: 400,
-        classData,
-        student,
-        templates,
-        formData,
-        error: "Note konnte nicht berechnet werden."
-      });
-    }
-
-    const templateRow = await getAsync(
-      "SELECT id FROM grade_templates WHERE id = ? AND class_id = ?",
-      [grade_template_id, classId]
-    );
-    if (!templateRow) {
-      await removeUploadedFile(req.file);
-      return renderAddGradeForm(req, res, {
-        status: 400,
-        classData,
-        student,
-        templates,
-        formData,
-        error: "Pruefungsvorlage nicht gefunden."
-      });
+      return renderValidationError(400, "Note konnte nicht berechnet werden.");
     }
 
     const attachmentPath = req.file ? req.file.filename : null;
@@ -1880,7 +1913,7 @@ router.post("/add-grade/:classId/:studentId", handleUpload, async (req, res, nex
 
     try {
       await runAsync(
-        "INSERT INTO grades (student_id, class_id, grade_template_id, grade, points_achieved, points_max, note, attachment_path, attachment_original_name, attachment_mime, attachment_size, external_link) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)",
+        "INSERT INTO grades (student_id, class_id, grade_template_id, grade, points_achieved, points_max, note, attachment_path, attachment_original_name, attachment_mime, attachment_size, external_link, is_absent) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)",
         [
           studentId,
           classId,
@@ -1893,7 +1926,8 @@ router.post("/add-grade/:classId/:studentId", handleUpload, async (req, res, nex
           attachmentOriginalName,
           attachmentMime,
           attachmentSize,
-          linkResult.value
+          linkResult.value,
+          isAbsent ? 1 : 0
         ]
       );
       await runAsync("INSERT INTO grade_notifications (student_id, message, type) VALUES (?,?,?)", [
@@ -1909,6 +1943,7 @@ router.post("/add-grade/:classId/:studentId", handleUpload, async (req, res, nex
           classData,
           student,
           templates,
+          gradedTemplateIds,
           formData,
           error: "Diese Pruefung wurde bereits benotet."
         });
@@ -1971,6 +2006,7 @@ router.get("/create-template/:classId", async (req, res, next) => {
         name: "",
         category: "",
         weight: "",
+        max_points: "",
         date: "",
         description: ""
       },
@@ -1985,7 +2021,7 @@ router.get("/create-template/:classId", async (req, res, next) => {
 router.post("/create-template/:classId", async (req, res, next) => {
   try {
     const classId = req.params.classId;
-    const { name, category, weight, date, description } = req.body || {};
+    const { name, category, weight, max_points, date, description } = req.body || {};
     const classData = await loadClassForTeacher(classId, req.session.user.id);
     if (!classData) {
       return renderError(res, req, "Klasse nicht gefunden.", 404, "/teacher/classes");
@@ -2001,10 +2037,14 @@ router.post("/create-template/:classId", async (req, res, next) => {
       : NaN;
     const rawWeightValue = parseNumericInput(weight);
     const weightValue = Number.isFinite(rawWeightValue) ? rawWeightValue : profileSuggestedWeight;
+    const parsedMaxPoints = parseNumericInput(max_points);
+    const hasMaxPointsInput = String(max_points || "").trim() !== "";
+    const maxPointsValue = hasMaxPointsInput ? parsedMaxPoints : null;
     const formData = {
       name: name || "",
       category: normalizedCategory || category || "",
       weight: Number.isFinite(rawWeightValue) ? rawWeightValue : "",
+      max_points: hasMaxPointsInput ? max_points : "",
       date: date || "",
       description: description || ""
     };
@@ -2031,19 +2071,172 @@ router.post("/create-template/:classId", async (req, res, next) => {
         error: `Gewichtung muss mindestens 0 ${getWeightUnit(activeProfile.weight_mode)} sein.`
       });
     }
+    if (hasMaxPointsInput && (!Number.isFinite(maxPointsValue) || maxPointsValue <= 0)) {
+      return res.status(400).render("teacher/teacher-create-template", {
+        email: req.session.user.email,
+        classData,
+        activeProfile,
+        categoryDefinitions: TEMPLATE_CATEGORY_DEFINITIONS,
+        formData,
+        csrfToken: req.csrfToken(),
+        error: "Maximale Punkte muessen groesser als 0 sein."
+      });
+    }
 
     await runAsync(
-      "INSERT INTO grade_templates (class_id, name, category, weight, weight_mode, date, description) VALUES (?,?,?,?,?,?,?)",
+      "INSERT INTO grade_templates (class_id, name, category, weight, weight_mode, max_points, date, description) VALUES (?,?,?,?,?,?,?,?)",
       [
         classId,
         String(name).trim(),
         normalizedCategory,
         weightValue,
         resolveWeightMode(activeProfile.weight_mode),
+        hasMaxPointsInput ? maxPointsValue : null,
         date || null,
         description || null
       ]
     );
+    res.redirect(`/teacher/grade-templates/${classId}`);
+  } catch (err) {
+    next(err);
+  }
+});
+
+router.get("/edit-template/:classId/:templateId", async (req, res, next) => {
+  try {
+    const classId = req.params.classId;
+    const templateId = req.params.templateId;
+    const classData = await loadClassForTeacher(classId, req.session.user.id);
+    if (!classData) {
+      return renderError(res, req, "Klasse nicht gefunden.", 404, "/teacher/classes");
+    }
+    const activeProfile = await loadActiveTeacherProfile(req.session.user.id);
+    if (!activeProfile) {
+      return res.redirect("/teacher/settings?setup=1");
+    }
+
+    const template = await getAsync(
+      "SELECT id, name, category, weight, max_points, date, description FROM grade_templates WHERE id = ? AND class_id = ?",
+      [templateId, classId]
+    );
+    if (!template) {
+      return renderError(res, req, "Pruefung nicht gefunden.", 404, `/teacher/grade-templates/${classId}`);
+    }
+
+    const dateValue =
+      template.date && !Number.isNaN(new Date(template.date).getTime())
+        ? new Date(template.date).toISOString().slice(0, 10)
+        : "";
+
+    res.render("teacher/teacher-edit-template", {
+      email: req.session.user.email,
+      classData,
+      activeProfile,
+      categoryDefinitions: TEMPLATE_CATEGORY_DEFINITIONS,
+      templateId,
+      formData: {
+        name: template.name || "",
+        category: template.category || "",
+        weight: template.weight != null ? String(template.weight) : "",
+        max_points: template.max_points != null ? String(template.max_points) : "",
+        date: dateValue,
+        description: template.description || ""
+      },
+      csrfToken: req.csrfToken(),
+      error: null
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
+router.post("/edit-template/:classId/:templateId", async (req, res, next) => {
+  try {
+    const classId = req.params.classId;
+    const templateId = req.params.templateId;
+    const { name, category, weight, max_points, date, description } = req.body || {};
+    const classData = await loadClassForTeacher(classId, req.session.user.id);
+    if (!classData) {
+      return renderError(res, req, "Klasse nicht gefunden.", 404, "/teacher/classes");
+    }
+    const activeProfile = await loadActiveTeacherProfile(req.session.user.id);
+    if (!activeProfile) {
+      return res.redirect("/teacher/settings?setup=1");
+    }
+
+    const existingTemplate = await getAsync(
+      "SELECT id FROM grade_templates WHERE id = ? AND class_id = ?",
+      [templateId, classId]
+    );
+    if (!existingTemplate) {
+      return renderError(res, req, "Pruefung nicht gefunden.", 404, `/teacher/grade-templates/${classId}`);
+    }
+
+    const normalizedCategory = normalizeCategoryKey(category);
+    const rawWeightValue = parseNumericInput(weight);
+    const parsedMaxPoints = parseNumericInput(max_points);
+    const hasMaxPointsInput = String(max_points || "").trim() !== "";
+    const maxPointsValue = hasMaxPointsInput ? parsedMaxPoints : null;
+    const formData = {
+      name: name || "",
+      category: normalizedCategory || category || "",
+      weight: Number.isFinite(rawWeightValue) ? rawWeightValue : weight || "",
+      max_points: hasMaxPointsInput ? max_points : "",
+      date: date || "",
+      description: description || ""
+    };
+
+    if (!name || !normalizedCategory || !Number.isFinite(rawWeightValue)) {
+      return res.status(400).render("teacher/teacher-edit-template", {
+        email: req.session.user.email,
+        classData,
+        activeProfile,
+        categoryDefinitions: TEMPLATE_CATEGORY_DEFINITIONS,
+        templateId,
+        formData,
+        csrfToken: req.csrfToken(),
+        error: "Bitte alle Pflichtfelder ausfuellen."
+      });
+    }
+    if (rawWeightValue < 0) {
+      return res.status(400).render("teacher/teacher-edit-template", {
+        email: req.session.user.email,
+        classData,
+        activeProfile,
+        categoryDefinitions: TEMPLATE_CATEGORY_DEFINITIONS,
+        templateId,
+        formData,
+        csrfToken: req.csrfToken(),
+        error: `Gewichtung muss mindestens 0 ${getWeightUnit(activeProfile.weight_mode)} sein.`
+      });
+    }
+    if (hasMaxPointsInput && (!Number.isFinite(maxPointsValue) || maxPointsValue <= 0)) {
+      return res.status(400).render("teacher/teacher-edit-template", {
+        email: req.session.user.email,
+        classData,
+        activeProfile,
+        categoryDefinitions: TEMPLATE_CATEGORY_DEFINITIONS,
+        templateId,
+        formData,
+        csrfToken: req.csrfToken(),
+        error: "Maximale Punkte muessen groesser als 0 sein."
+      });
+    }
+
+    await runAsync(
+      "UPDATE grade_templates SET name = ?, category = ?, weight = ?, max_points = ?, date = ?, description = ? WHERE id = ? AND class_id = ?",
+      [
+        String(name).trim(),
+        normalizedCategory,
+        rawWeightValue,
+        hasMaxPointsInput ? maxPointsValue : null,
+        date || null,
+        description || null,
+        templateId,
+        classId
+      ]
+    );
+
     res.redirect(`/teacher/grade-templates/${classId}`);
   } catch (err) {
     next(err);
@@ -2295,6 +2488,7 @@ router.get("/class-statistics/:classId", async (req, res, next) => {
     const participationConfig = normalizeParticipationConfig(
       activeProfile?.participation || activeProfile || {}
     );
+    const absenceMode = normalizeAbsenceMode(activeProfile?.absence_mode);
     const studentMap = new Map(students.map((student) => [String(student.id), student]));
     const gradesByStudent = new Map();
 
@@ -2314,6 +2508,7 @@ router.get("/class-statistics/:classId", async (req, res, next) => {
         const student = studentMap.get(studentId);
         grades.forEach((grade) => {
           if (grade.is_special) return;
+          if (shouldSkipGradeForAbsence(grade, absenceMode)) return;
           const matchesById =
             grade.template_id && Number(grade.template_id) === Number(template.id);
           const matchesByName = !grade.template_id && grade.name === template.name;
@@ -2364,6 +2559,7 @@ router.get("/class-statistics/:classId", async (req, res, next) => {
 
     gradesByStudent.forEach((grades) => {
       grades.forEach((grade) => {
+        if (shouldSkipGradeForAbsence(grade, absenceMode)) return;
         const value = Number(grade.grade);
         const weight = Number(grade.weight || 1);
         if (Number.isNaN(value) || Number.isNaN(weight)) return;
