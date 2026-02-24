@@ -136,6 +136,7 @@
                     <th>Notenwirkung</th>
                     <th>Gewichtung</th>
                     <th>Notiz</th>
+                    <th>Aktion</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -148,6 +149,12 @@
                       </td>
                       <td><%= entry.weight_label %></td>
                       <td><%= entry.note || "-" %></td>
+                      <td>
+                        <form class="inline" method="POST" action="/teacher/delete-participation/<%= classData.id %>/<%= student.id %>/<%= entry.id %>">
+                          <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+                          <button class="btn btn-danger btn-sm" type="submit">X</button>
+                        </form>
+                      </td>
                     </tr>
                   <% }) %>
                 </tbody>

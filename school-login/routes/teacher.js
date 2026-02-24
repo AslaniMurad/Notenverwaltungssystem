@@ -806,6 +806,25 @@ function shouldSkipGradeForAbsence(grade, absenceMode) {
   return normalizeAbsenceMode(absenceMode) === ABSENCE_MODE_EXCLUDE;
 }
 
+function isValidGradeValue(value) {
+  const numeric = Number(value);
+  return Number.isFinite(numeric) && numeric >= 1 && numeric <= 5;
+}
+
+function isValidWeightValue(value) {
+  const numeric = Number(value);
+  return Number.isFinite(numeric) && numeric >= 0;
+}
+
+function escapeCsvValue(value) {
+  const stringValue = value == null ? "" : String(value);
+  const guarded = /^[=+\-@\t\r]/.test(stringValue) ? `'${stringValue}` : stringValue;
+  if (/[",\n]/.test(guarded)) {
+    return `"${guarded.replace(/"/g, '""')}"`;
+  }
+  return guarded;
+}
+
 function computeWeightedAverage(grades, options = {}) {
   const absenceMode = normalizeAbsenceMode(options.absenceMode);
   let weightedSum = 0;
@@ -813,9 +832,9 @@ function computeWeightedAverage(grades, options = {}) {
 
   grades.forEach((grade) => {
     if (shouldSkipGradeForAbsence(grade, absenceMode)) return;
-    const value = Number(grade.grade);
-    const weight = Number(grade.weight || 1);
-    if (Number.isNaN(value) || Number.isNaN(weight)) return;
+    const value = Number(grade?.grade);
+    const weight = grade?.weight == null ? 1 : Number(grade.weight);
+    if (!isValidGradeValue(value) || !isValidWeightValue(weight)) return;
     weightedSum += value * weight;
     weightTotal += weight;
   });
@@ -1556,6 +1575,44 @@ router.post("/grades/:classId/participation", async (req, res, next) => {
   }
 });
 
+router.post("/delete-participation/:classId/:studentId/:markId", async (req, res, next) => {
+  try {
+    const classId = req.params.classId;
+    const studentId = req.params.studentId;
+    const markId = req.params.markId;
+    const classData = await loadClassForTeacher(classId, req.session.user.id);
+    if (!classData) {
+      return renderError(res, req, "Klasse nicht gefunden.", 404, "/teacher/classes");
+    }
+
+    const students = await loadStudents(classId);
+    const student = students.find((entry) => String(entry.id) === String(studentId));
+    if (!student) {
+      return renderError(res, req, "Schueler nicht gefunden.", 404, `/teacher/students/${classId}`);
+    }
+
+    const participationMarks = await loadParticipationMarks(classId, student.id);
+    const targetMark = participationMarks.find((entry) => String(entry.id) === String(markId));
+    if (!targetMark) {
+      return renderError(
+        res,
+        req,
+        "Mitarbeitseintrag nicht gefunden.",
+        404,
+        `/teacher/student-grades/${classId}/${studentId}`
+      );
+    }
+
+    await runAsync(
+      "DELETE FROM participation_marks WHERE id = ? AND class_id = ? AND student_id = ?",
+      [markId, classId, student.id]
+    );
+    res.redirect(`/teacher/student-grades/${classId}/${studentId}`);
+  } catch (err) {
+    next(err);
+  }
+});
+
 router.get("/student-grades/:classId/:studentId", async (req, res, next) => {
   try {
     const classId = req.params.classId;
@@ -1645,7 +1702,12 @@ router.get("/student-grades/:classId/:studentId", async (req, res, next) => {
       }))
     ]
       .filter((row) => !shouldSkipGradeForAbsence(row, absenceMode))
-      .filter((row) => Number.isFinite(row.grade) && Number.isFinite(row.weight) && row.weight > 0);
+      .filter(
+        (row) =>
+          isValidGradeValue(row.grade) &&
+          isValidWeightValue(row.weight) &&
+          Number(row.weight) > 0
+      );
 
     const average = computeWeightedAverage([...gradeRows, ...participationAverageRows], {
       absenceMode
@@ -1722,11 +1784,11 @@ router.get("/student-grades/:classId/:studentId/details", async (req, res, next)
     gradeRows.forEach((row, index) => {
       const gradeValue = Number(row.grade);
       const rawWeight = Number(row.weight);
-      const effectiveWeight = Number(row.weight || 1);
+      const effectiveWeight = row.weight == null ? 1 : Number(row.weight);
       const isAbsent = Boolean(row.is_absent);
       const skippedForAbsence = shouldSkipGradeForAbsence({ is_absent: isAbsent }, absenceMode);
-      const hasValidGrade = Number.isFinite(gradeValue);
-      const hasValidWeight = Number.isFinite(effectiveWeight);
+      const hasValidGrade = isValidGradeValue(gradeValue);
+      const hasValidWeight = isValidWeightValue(effectiveWeight);
       const included = !skippedForAbsence && hasValidGrade && hasValidWeight;
       const contributionValue = included ? gradeValue * effectiveWeight : 0;
       const pointsAchieved = Number(row.points_achieved);
@@ -1756,9 +1818,9 @@ router.get("/student-grades/:classId/:studentId/details", async (req, res, next)
         included,
         include_reason: includeReason,
         grade: hasValidGrade ? Number(gradeValue.toFixed(2)) : null,
-        raw_weight: Number.isFinite(rawWeight) ? Number(rawWeight.toFixed(2)) : null,
+        raw_weight: isValidWeightValue(rawWeight) ? Number(rawWeight.toFixed(2)) : null,
         effective_weight: hasValidWeight ? Number(effectiveWeight.toFixed(2)) : null,
-        contribution: Number(contributionValue.toFixed(4)),
+        contribution: contributionValue,
         points_achieved: hasPoints ? Number(pointsAchieved.toFixed(2)) : null,
         points_max: hasPoints ? Number(pointsMax.toFixed(2)) : null,
         points_percent: pointsPercent,
@@ -1773,9 +1835,9 @@ router.get("/student-grades/:classId/:studentId/details", async (req, res, next)
       const mappedGrade = getParticipationGrade(mark.symbol, participationConfig);
       const gradeValue = Number(mappedGrade);
       const rawWeight = Number(participationConfig.ma_weight);
-      const effectiveWeight = Number(participationConfig.ma_weight || 1);
-      const hasValidGrade = Number.isFinite(gradeValue);
-      const hasValidWeight = Number.isFinite(effectiveWeight);
+      const effectiveWeight = participationConfig.ma_weight == null ? 1 : Number(participationConfig.ma_weight);
+      const hasValidGrade = isValidGradeValue(gradeValue);
+      const hasValidWeight = isValidWeightValue(effectiveWeight);
       const included = participationEnabledForAverage && hasValidGrade && hasValidWeight;
       const contributionValue = included ? gradeValue * effectiveWeight : 0;
       const symbolLabel = getParticipationSymbolLabel(mark.symbol);
@@ -1800,9 +1862,9 @@ router.get("/student-grades/:classId/:studentId/details", async (req, res, next)
         included,
         include_reason: includeReason,
         grade: hasValidGrade ? Number(gradeValue.toFixed(2)) : null,
-        raw_weight: Number.isFinite(rawWeight) ? Number(rawWeight.toFixed(2)) : null,
+        raw_weight: isValidWeightValue(rawWeight) ? Number(rawWeight.toFixed(2)) : null,
         effective_weight: hasValidWeight ? Number(effectiveWeight.toFixed(2)) : null,
-        contribution: Number(contributionValue.toFixed(4)),
+        contribution: contributionValue,
         points_achieved: null,
         points_max: null,
         points_percent: null,
@@ -1901,6 +1963,111 @@ router.get("/student-grades/:classId/:studentId/details", async (req, res, next)
       symbol: option.label,
       grade: getParticipationGrade(option.value, participationConfig)
     }));
+
+    const exportFormat = String(req.query.format || "").toLowerCase();
+    if (exportFormat === "csv_raw" || exportFormat === "csv_rechenweg") {
+      const csvLines = [];
+      const pushCsv = (row) => csvLines.push(row.map(escapeCsvValue).join(","));
+      const fileNameSafeStudent = String(student.name || "schueler")
+        .replace(/[^a-zA-Z0-9_-]/g, "_")
+        .slice(0, 80);
+
+      pushCsv(["Sektion", "Schluessel", "Wert"]);
+      pushCsv(["Meta", "Klasse", classData.name || ""]);
+      pushCsv(["Meta", "Schueler", student.name || ""]);
+      pushCsv(["Meta", "Fach", classData.subject || ""]);
+      csvLines.push("");
+
+      if (exportFormat === "csv_raw") {
+        pushCsv([
+          "Rohdaten",
+          "Schritt",
+          "Typ",
+          "Bezeichnung",
+          "Kategorie",
+          "Erfasst am",
+          "Pruefungsdatum",
+          "Note",
+          "Gewicht roh",
+          "Gewicht effektiv",
+          "Beitrag",
+          "Punkte erreicht",
+          "Punkte max",
+          "Punkte Prozent",
+          "Punkte->Note",
+          "Abwesend",
+          "Gewichtet",
+          "Grund",
+          "Notiz"
+        ]);
+        calculationRows.forEach((row) => {
+          pushCsv([
+            "Rohdaten",
+            row.step,
+            row.source_type,
+            row.source_name,
+            row.category,
+            row.created_at || "",
+            row.exam_date || "",
+            row.grade != null ? Number(row.grade).toFixed(2) : "",
+            row.raw_weight != null ? Number(row.raw_weight).toFixed(2) : "",
+            row.effective_weight != null ? Number(row.effective_weight).toFixed(2) : "",
+            row.contribution != null ? Number(row.contribution).toFixed(4) : "",
+            row.points_achieved != null ? row.points_achieved : "",
+            row.points_max != null ? row.points_max : "",
+            row.points_percent != null ? Number(row.points_percent).toFixed(2) : "",
+            row.grade_from_points != null ? Number(row.grade_from_points).toFixed(2) : "",
+            row.is_absent ? "Ja" : "Nein",
+            row.included ? "Ja" : "Nein",
+            row.include_reason,
+            row.note || ""
+          ]);
+        });
+
+        const csvContent = csvLines.join("\n");
+        res.setHeader("Content-Type", "text/csv; charset=utf-8");
+        res.setHeader(
+          "Content-Disposition",
+          `attachment; filename=rohdaten_${fileNameSafeStudent}.csv`
+        );
+        return res.send(csvContent);
+      }
+
+      pushCsv([
+        "Rechenweg",
+        "Schritt",
+        "Quelle",
+        "Gewichtet",
+        "Note",
+        "Gewicht effektiv",
+        "Beitrag",
+        "Laufende Summe",
+        "Laufendes Gewicht",
+        "Laufender Schnitt"
+      ]);
+      calculationRows.forEach((row) => {
+        pushCsv([
+          "Rechenweg",
+          row.step,
+          `${row.source_type}: ${row.source_name}`,
+          row.included ? "Ja" : "Nein",
+          row.grade != null ? Number(row.grade).toFixed(2) : "",
+          row.effective_weight != null ? Number(row.effective_weight).toFixed(2) : "",
+          row.contribution != null ? Number(row.contribution).toFixed(4) : "",
+          row.running_weighted_sum != null ? Number(row.running_weighted_sum).toFixed(4) : "",
+          row.running_weight_total != null ? Number(row.running_weight_total).toFixed(4) : "",
+          row.running_average != null ? Number(row.running_average).toFixed(4) : ""
+        ]);
+      });
+
+      const csvContent = csvLines.join("\n");
+      res.setHeader("Content-Type", "text/csv; charset=utf-8");
+      res.setHeader(
+        "Content-Disposition",
+        `attachment; filename=rechenweg_${fileNameSafeStudent}.csv`
+      );
+      return res.send(csvContent);
+    }
 
     res.render("teacher/teacher-student-grade-details", {
       email: req.session.user.email,
@@ -2792,7 +2959,7 @@ router.get("/class-statistics/:classId", async (req, res, next) => {
           if (!matchesById && !matchesByName) return;
 
           const value = Number(grade.grade);
-          if (Number.isNaN(value)) return;
+          if (!isValidGradeValue(value)) return;
           templateGrades.push({ value, studentName: student?.name || "" });
         });
       });
@@ -2838,8 +3005,8 @@ router.get("/class-statistics/:classId", async (req, res, next) => {
       grades.forEach((grade) => {
         if (shouldSkipGradeForAbsence(grade, absenceMode)) return;
         const value = Number(grade.grade);
-        const weight = Number(grade.weight || 1);
-        if (Number.isNaN(value) || Number.isNaN(weight)) return;
+        const weight = grade?.weight == null ? 1 : Number(grade.weight);
+        if (!isValidGradeValue(value) || !isValidWeightValue(weight)) return;
         allValues.push(value);
         weightedSum += value * weight;
         weightTotal += weight;

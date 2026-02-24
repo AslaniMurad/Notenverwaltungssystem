@@ -62,6 +62,16 @@ function normalizeAbsenceMode(mode) {
   return DEFAULT_ABSENCE_MODE;
 }
 
+function isValidGradeValue(value) {
+  const numeric = Number(value);
+  return Number.isFinite(numeric) && numeric >= 1 && numeric <= 5;
+}
+
+function isValidWeightValue(value) {
+  const numeric = Number(value);
+  return Number.isFinite(numeric) && numeric >= 0;
+}
+
 async function loadClassAbsenceMode(classId) {
   const row = await getAsync(
     `SELECT gp.absence_mode
@@ -134,8 +144,8 @@ function mapGradeRow(row, classInfo) {
   }
   return {
     id: row.id,
-    value: Number(row.grade),
-    weight: Number(row.weight || 1),
+    value: row.grade == null ? null : Number(row.grade),
+    weight: row.weight == null ? 1 : Number(row.weight),
     is_absent: Boolean(row.is_absent),
     subject,
     teacher: classInfo?.teacher_email || null,
@@ -190,13 +200,14 @@ function computeAverages(grades, options = {}) {
 
   grades.forEach((grade) => {
     if (grade?.is_absent && absenceMode === ABSENCE_MODE_EXCLUDE) return;
-    const weight = Number(grade.weight || 1);
-    if (Number.isNaN(grade.value) || Number.isNaN(weight)) return;
-    weightedSum += grade.value * weight;
+    const value = Number(grade?.value);
+    const weight = grade?.weight == null ? 1 : Number(grade.weight);
+    if (!isValidGradeValue(value) || !isValidWeightValue(weight)) return;
+    weightedSum += value * weight;
     weightTotal += weight;
 
     const bucket = subjectMap.get(grade.subject) || { weightedSum: 0, weightTotal: 0 };
-    bucket.weightedSum += grade.value * weight;
+    bucket.weightedSum += value * weight;
     bucket.weightTotal += weight;
     subjectMap.set(grade.subject, bucket);
   });
@@ -217,16 +228,19 @@ function computeClassAverages(rows, options = {}) {
   const bucket = new Map();
   rows.forEach((row) => {
     if (row?.is_absent && absenceMode === ABSENCE_MODE_EXCLUDE) return;
+    const value = Number(row?.value);
+    const weight = row?.weight == null ? 1 : Number(row.weight);
+    if (!isValidGradeValue(value) || !isValidWeightValue(weight)) return;
     const key = row.subject || "Fach";
-    const entry = bucket.get(key) || { sum: 0, count: 0 };
-    entry.sum += Number(row.value);
-    entry.count += 1;
+    const entry = bucket.get(key) || { weightedSum: 0, weightTotal: 0 };
+    entry.weightedSum += value * weight;
+    entry.weightTotal += weight;
     bucket.set(key, entry);
   });
 
   return Array.from(bucket.entries()).map(([subject, info]) => ({
     subject,
-    average: info.count ? Number((info.sum / info.count).toFixed(2)) : null
+    average: info.weightTotal ? Number((info.weightedSum / info.weightTotal).toFixed(2)) : null
   }));
 }
 

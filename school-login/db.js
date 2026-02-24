@@ -546,6 +546,17 @@ function createFakeDb() {
         };
         participationMarks.push(mark);
         lastID = mark.id;
+      } else if (/DELETE FROM participation_marks WHERE id = \? AND class_id = \? AND student_id = \?/i.test(sql)) {
+        const [idParam, classIdParam, studentIdParam] = params;
+        for (let i = participationMarks.length - 1; i >= 0; i -= 1) {
+          if (
+            participationMarks[i].id === Number(idParam) &&
+            participationMarks[i].class_id === Number(classIdParam) &&
+            participationMarks[i].student_id === Number(studentIdParam)
+          ) {
+            participationMarks.splice(i, 1);
+          }
+        }
       } else if (/INSERT INTO grade_notifications/i.test(sql)) {
         const [student_id, message, type, created_at] = params;
         const notification = {
