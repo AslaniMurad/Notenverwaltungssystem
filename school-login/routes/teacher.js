@@ -1652,6 +1652,227 @@ router.get("/student-grades/:classId/:studentId", async (req, res, next) => {
   }
 });
 
+router.get("/student-grades/:classId/:studentId/details", async (req, res, next) => {
+  try {
+    const classId = req.params.classId;
+    const studentId = req.params.studentId;
+    const classData = await loadClassForTeacher(classId, req.session.user.id);
+    if (!classData) {
+      return renderError(res, req, "Klasse nicht gefunden.", 404, "/teacher/classes");
+    }
+
+    const students = await loadStudents(classId);
+    const student = students.find((entry) => String(entry.id) === String(studentId));
+    if (!student) {
+      return renderError(res, req, "Schueler nicht gefunden.", 404, `/teacher/students/${classId}`);
+    }
+
+    const gradeRows = await loadStudentGrades(student.id);
+    const templates = await loadTemplates(classId);
+    const activeProfile = await loadActiveTeacherProfile(req.session.user.id);
+    const participationConfig = normalizeParticipationConfig(
+      activeProfile?.participation || activeProfile || {}
+    );
+    const participationMarks = await loadParticipationMarks(classId, student.id);
+    const absenceMode = normalizeAbsenceMode(activeProfile?.absence_mode);
+    const thresholds = normalizeThresholds(activeProfile?.thresholds || activeProfile || {});
+    const scoringMode = normalizeScoringMode(activeProfile?.scoring_mode);
+    const participationEnabledForAverage =
+      participationConfig.ma_enabled && Number(participationConfig.ma_weight) > 0;
+
+    const detailRows = [];
+
+    gradeRows.forEach((row, index) => {
+      const gradeValue = Number(row.grade);
+      const rawWeight = Number(row.weight);
+      const effectiveWeight = Number(row.weight || 1);
+      const isAbsent = Boolean(row.is_absent);
+      const skippedForAbsence = shouldSkipGradeForAbsence({ is_absent: isAbsent }, absenceMode);
+      const hasValidGrade = Number.isFinite(gradeValue);
+      const hasValidWeight = Number.isFinite(effectiveWeight);
+      const included = !skippedForAbsence && hasValidGrade && hasValidWeight;
+      const contributionValue = included ? gradeValue * effectiveWeight : 0;
+      const pointsAchieved = Number(row.points_achieved);
+      const pointsMax = Number(row.points_max);
+      const hasPoints = Number.isFinite(pointsAchieved) && Number.isFinite(pointsMax) && pointsMax > 0;
+      const pointsPercent = hasPoints ? Number(((pointsAchieved / pointsMax) * 100).toFixed(2)) : null;
+      const gradeFromPoints =
+        pointsPercent != null ? buildGradeFromPercent(pointsPercent, thresholds) : null;
+
+      let includeReason = "Gewichtet in Gesamtnote.";
+      if (skippedForAbsence) {
+        includeReason = "Nicht gewichtet (Abwesenheit laut Profil).";
+      } else if (!hasValidGrade) {
+        includeReason = "Nicht gewichtet (ungueltige Note).";
+      } else if (!hasValidWeight) {
+        includeReason = "Nicht gewichtet (ungueltige Gewichtung).";
+      }
+
+      detailRows.push({
+        source_type: Boolean(row.is_special) ? "Sonderleistung" : "Pruefung",
+        source_name: row.name || (Boolean(row.is_special) ? "Sonderleistung" : "Pruefung"),
+        category: row.category || "-",
+        created_at: row.created_at || null,
+        exam_date: row.date || null,
+        note: row.note || "",
+        is_absent: isAbsent,
+        included,
+        include_reason: includeReason,
+        grade: hasValidGrade ? Number(gradeValue.toFixed(2)) : null,
+        raw_weight: Number.isFinite(rawWeight) ? Number(rawWeight.toFixed(2)) : null,
+        effective_weight: hasValidWeight ? Number(effectiveWeight.toFixed(2)) : null,
+        contribution: Number(contributionValue.toFixed(4)),
+        points_achieved: hasPoints ? Number(pointsAchieved.toFixed(2)) : null,
+        points_max: hasPoints ? Number(pointsMax.toFixed(2)) : null,
+        points_percent: pointsPercent,
+        grade_from_points: Number.isFinite(gradeFromPoints) ? gradeFromPoints : null,
+        symbol_label: null,
+        row_origin: "grade",
+        sort_index: index
+      });
+    });
+
+    participationMarks.forEach((mark, index) => {
+      const mappedGrade = getParticipationGrade(mark.symbol, participationConfig);
+      const gradeValue = Number(mappedGrade);
+      const rawWeight = Number(participationConfig.ma_weight);
+      const effectiveWeight = Number(participationConfig.ma_weight || 1);
+      const hasValidGrade = Number.isFinite(gradeValue);
+      const hasValidWeight = Number.isFinite(effectiveWeight);
+      const included = participationEnabledForAverage && hasValidGrade && hasValidWeight;
+      const contributionValue = included ? gradeValue * effectiveWeight : 0;
+      const symbolLabel = getParticipationSymbolLabel(mark.symbol);
+
+      let includeReason = "Gewichtet in Gesamtnote.";
+      if (!participationEnabledForAverage) {
+        includeReason = "Nicht gewichtet (MA im Profil deaktiviert oder Gewichtung 0).";
+      } else if (!hasValidGrade) {
+        includeReason = "Nicht gewichtet (Symbol nicht im MA-Schema).";
+      } else if (!hasValidWeight) {
+        includeReason = "Nicht gewichtet (ungueltige MA-Gewichtung).";
+      }
+
+      detailRows.push({
+        source_type: "Mitarbeit",
+        source_name: `MA ${symbolLabel}`,
+        category: "Mitarbeit",
+        created_at: mark.created_at || null,
+        exam_date: null,
+        note: mark.note || "",
+        is_absent: false,
+        included,
+        include_reason: includeReason,
+        grade: hasValidGrade ? Number(gradeValue.toFixed(2)) : null,
+        raw_weight: Number.isFinite(rawWeight) ? Number(rawWeight.toFixed(2)) : null,
+        effective_weight: hasValidWeight ? Number(effectiveWeight.toFixed(2)) : null,
+        contribution: Number(contributionValue.toFixed(4)),
+        points_achieved: null,
+        points_max: null,
+        points_percent: null,
+        grade_from_points: null,
+        symbol_label: symbolLabel,
+        row_origin: "participation",
+        sort_index: gradeRows.length + index
+      });
+    });
+
+    const sortedRows = detailRows
+      .map((row) => {
+        const timeValue = row.created_at ? new Date(row.created_at).getTime() : Number.POSITIVE_INFINITY;
+        return {
+          ...row,
+          sort_time: Number.isFinite(timeValue) ? timeValue : Number.POSITIVE_INFINITY
+        };
+      })
+      .sort((a, b) => {
+        if (a.sort_time === b.sort_time) return a.sort_index - b.sort_index;
+        return a.sort_time - b.sort_time;
+      });
+
+    let runningWeightedSum = 0;
+    let runningWeightTotal = 0;
+    const calculationRows = sortedRows.map((row, index) => {
+      if (row.included) {
+        runningWeightedSum += Number(row.contribution || 0);
+        runningWeightTotal += Number(row.effective_weight || 0);
+      }
+      const runningAverage =
+        runningWeightTotal > 0 ? Number((runningWeightedSum / runningWeightTotal).toFixed(4)) : null;
+      return {
+        ...row,
+        step: index + 1,
+        running_weighted_sum: Number(runningWeightedSum.toFixed(4)),
+        running_weight_total: Number(runningWeightTotal.toFixed(4)),
+        running_average: runningAverage
+      };
+    });
+
+    const participationAverageRows = buildParticipationAverageRows(
+      participationMarks,
+      participationConfig
+    );
+    const referenceAverage = computeWeightedAverage([...gradeRows, ...participationAverageRows], {
+      absenceMode
+    });
+
+    const summary = {
+      included_count: calculationRows.filter((row) => row.included).length,
+      excluded_count: calculationRows.filter((row) => !row.included).length,
+      weighted_sum: Number(runningWeightedSum.toFixed(4)),
+      weight_total: Number(runningWeightTotal.toFixed(4)),
+      average: runningWeightTotal > 0 ? Number((runningWeightedSum / runningWeightTotal).toFixed(2)) : null,
+      reference_average: referenceAverage
+    };
+
+    const gradedTemplateIds = new Set(
+      gradeRows
+        .filter((row) => !row.is_special && row.template_id != null)
+        .map((row) => String(row.template_id))
+    );
+    const openTemplates = templates
+      .filter((template) => !gradedTemplateIds.has(String(template.id)))
+      .map((template) => ({
+        id: template.id,
+        name: template.name,
+        category: template.category,
+        weight_label: template.weight_label || formatWeightLabel(template.weight, template.weight_mode),
+        max_points: template.max_points != null ? Number(template.max_points) : null,
+        date: template.date || null,
+        description: template.description || ""
+      }));
+
+    const participationScale = PARTICIPATION_SYMBOL_OPTIONS.map((option) => ({
+      symbol: option.label,
+      grade: getParticipationGrade(option.value, participationConfig)
+    }));
+
+    res.render("teacher/teacher-student-grade-details", {
+      email: req.session.user.email,
+      classData,
+      student,
+      activeProfile,
+      profileInfo: {
+        scoring_mode: scoringMode,
+        scoring_mode_label: getScoringModeLabel(scoringMode),
+        absence_mode: absenceMode,
+        absence_mode_label:
+          absenceMode === ABSENCE_MODE_EXCLUDE
+            ? "Nicht gewichten (neutral)"
+            : "Mit 0% werten (schlechteste Leistung)",
+        thresholds,
+        participation: participationConfig
+      },
+      participationScale,
+      calculationRows,
+      openTemplates,
+      summary,
+      csrfToken: req.csrfToken()
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
 router.post("/delete-grade/:classId/:gradeId", async (req, res, next) => {
   try {
     const classId = req.params.classId;
