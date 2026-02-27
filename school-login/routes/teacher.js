@@ -842,6 +842,63 @@ function computeWeightedAverage(grades, options = {}) {
   return weightTotal ? Number((weightedSum / weightTotal).toFixed(2)) : null;
 }
 
+function mapGradeToEstimatedPercent(grade, thresholdsSource) {
+  const value = Number(grade);
+  if (!isValidGradeValue(value)) return null;
+
+  const thresholds = normalizeThresholds(thresholdsSource || {});
+  const anchors = [
+    { grade: 1, percent: 100 },
+    { grade: 2, percent: Number(thresholds.grade2_min_percent) },
+    { grade: 3, percent: Number(thresholds.grade3_min_percent) },
+    { grade: 4, percent: Number(thresholds.grade4_min_percent) },
+    { grade: 5, percent: 0 }
+  ];
+
+  const clamped = Math.min(5, Math.max(1, value));
+  if (clamped === 1) return 100;
+  if (clamped === 5) return 0;
+
+  const lower = Math.floor(clamped);
+  const upper = Math.ceil(clamped);
+  const lowerAnchor = anchors.find((entry) => entry.grade === lower);
+  const upperAnchor = anchors.find((entry) => entry.grade === upper);
+  if (!lowerAnchor || !upperAnchor) return null;
+  if (lower === upper) return Number(lowerAnchor.percent);
+
+  const ratio = (clamped - lower) / (upper - lower);
+  return Number((lowerAnchor.percent + (upperAnchor.percent - lowerAnchor.percent) * ratio).toFixed(4));
+}
+
+function computePointTotalsWithParticipation(entries, options = {}) {
+  const thresholds = normalizeThresholds(options.thresholds || {});
+  return (entries || []).reduce(
+    (acc, row) => {
+      const achieved = Number(row?.points_achieved);
+      const max = Number(row?.points_max);
+      if (Number.isFinite(achieved) && Number.isFinite(max) && max > 0) {
+        acc.achieved += achieved;
+        acc.max += max;
+        return acc;
+      }
+
+      if (!row?.is_participation) return acc;
+
+      const weight = Number(row?.weight);
+      const grade = Number(row?.grade);
+      if (!isValidWeightValue(weight) || weight <= 0 || !isValidGradeValue(grade)) return acc;
+
+      const estimatedPercent = mapGradeToEstimatedPercent(grade, thresholds);
+      if (!Number.isFinite(estimatedPercent)) return acc;
+
+      acc.max += weight;
+      acc.achieved += weight * (estimatedPercent / 100);
+      return acc;
+    },
+    { achieved: 0, max: 0 }
+  );
+}
+
 async function loadParticipationMarks(classId, studentId) {
   return allAsync(
     `SELECT id, student_id, class_id, symbol, note, created_at
@@ -1583,26 +1640,20 @@ router.get("/grades/:classId", async (req, res, next) => {
       activeProfile?.participation || activeProfile || {}
     );
     const absenceMode = normalizeAbsenceMode(activeProfile?.absence_mode);
+    const thresholds = normalizeThresholds(activeProfile?.thresholds || activeProfile || {});
     const possibleCount = templates.length;
     const studentsWithGrades = await Promise.all(
       studentsBase.map(async (student) => {
         const grades = await loadStudentGrades(student.id);
         const participationMarks = await loadParticipationMarks(classId, student.id);
+        const participationAverageRows = buildParticipationAverageRows(participationMarks, participation);
         const average = computeWeightedAverage([
           ...grades,
-          ...buildParticipationAverageRows(participationMarks, participation)
+          ...participationAverageRows
         ], { absenceMode });
-        const pointTotals = grades.reduce(
-          (acc, row) => {
-            const achieved = Number(row.points_achieved);
-            const max = Number(row.points_max);
-            if (Number.isFinite(achieved) && Number.isFinite(max) && max > 0) {
-              acc.achieved += achieved;
-              acc.max += max;
-            }
-            return acc;
-          },
-          { achieved: 0, max: 0 }
+        const pointTotals = computePointTotalsWithParticipation(
+          [...grades, ...participationAverageRows],
+          { thresholds }
         );
         const hasPointTotals = pointTotals.max > 0;
         return {
@@ -1779,6 +1830,7 @@ router.get("/student-grades/:classId/:studentId", async (req, res, next) => {
       activeProfile?.participation || activeProfile || {}
     );
     const absenceMode = normalizeAbsenceMode(activeProfile?.absence_mode);
+    const thresholds = normalizeThresholds(activeProfile?.thresholds || activeProfile || {});
     const participationMarks = await loadParticipationMarks(classId, student.id);
     const fallbackMode = resolveWeightMode(activeProfile?.weight_mode);
     const grades = gradeRows.map((row) => {
@@ -1857,17 +1909,9 @@ router.get("/student-grades/:classId/:studentId", async (req, res, next) => {
     const average = computeWeightedAverage([...gradeRows, ...participationAverageRows], {
       absenceMode
     });
-    const studentPointTotals = gradeRows.reduce(
-      (acc, row) => {
-        const achieved = Number(row.points_achieved);
-        const max = Number(row.points_max);
-        if (Number.isFinite(achieved) && Number.isFinite(max) && max > 0) {
-          acc.achieved += achieved;
-          acc.max += max;
-        }
-        return acc;
-      },
-      { achieved: 0, max: 0 }
+    const studentPointTotals = computePointTotalsWithParticipation(
+      [...gradeRows, ...participationAverageRows],
+      { thresholds }
     );
     const pointsSummary =
       studentPointTotals.max > 0
@@ -1986,6 +2030,14 @@ router.get("/student-grades/:classId/:studentId/details", async (req, res, next)
       const included = participationEnabledForAverage && hasValidGrade && hasValidWeight;
       const contributionValue = included ? gradeValue * effectiveWeight : 0;
       const symbolLabel = getParticipationSymbolLabel(mark.symbol);
+      const estimatedPercent = hasValidGrade
+        ? mapGradeToEstimatedPercent(gradeValue, thresholds)
+        : null;
+      const hasEstimatedPoints = hasValidWeight && Number.isFinite(estimatedPercent);
+      const estimatedPointsMax = hasEstimatedPoints ? Number(effectiveWeight.toFixed(2)) : null;
+      const estimatedPointsAchieved = hasEstimatedPoints
+        ? Number((effectiveWeight * (estimatedPercent / 100)).toFixed(2))
+        : null;
 
       let includeReason = "Gewichtet in Gesamtnote.";
       if (!participationEnabledForAverage) {
@@ -2010,9 +2062,9 @@ router.get("/student-grades/:classId/:studentId/details", async (req, res, next)
         raw_weight: isValidWeightValue(rawWeight) ? Number(rawWeight.toFixed(2)) : null,
         effective_weight: hasValidWeight ? Number(effectiveWeight.toFixed(2)) : null,
         contribution: contributionValue,
-        points_achieved: null,
-        points_max: null,
-        points_percent: null,
+        points_achieved: estimatedPointsAchieved,
+        points_max: estimatedPointsMax,
+        points_percent: hasEstimatedPoints ? Number(estimatedPercent.toFixed(2)) : null,
         grade_from_points: null,
         symbol_label: symbolLabel,
         row_origin: "participation",
@@ -2067,17 +2119,9 @@ router.get("/student-grades/:classId/:studentId/details", async (req, res, next)
       average: runningWeightTotal > 0 ? Number((runningWeightedSum / runningWeightTotal).toFixed(2)) : null,
       reference_average: referenceAverage
     };
-    const detailPointTotals = gradeRows.reduce(
-      (acc, row) => {
-        const achieved = Number(row.points_achieved);
-        const max = Number(row.points_max);
-        if (Number.isFinite(achieved) && Number.isFinite(max) && max > 0) {
-          acc.achieved += achieved;
-          acc.max += max;
-        }
-        return acc;
-      },
-      { achieved: 0, max: 0 }
+    const detailPointTotals = computePointTotalsWithParticipation(
+      [...gradeRows, ...participationAverageRows],
+      { thresholds }
     );
     summary.points_achieved_total =
       detailPointTotals.max > 0 ? Number(detailPointTotals.achieved.toFixed(2)) : null;
