@@ -9,47 +9,36 @@
     hideFooter: true,
     content: function () {
       const categoryClass = (value) =>
-        ({
-          hausubung: "hausaufgabe",
-          hausuebung: "hausaufgabe",
-          "hausa-bung": "hausaufgabe",
-          prasentation: "prasentation",
-          praesentation: "prasentation",
-          "pra-sentation": "prasentation",
-          wunschprufung: "wunschprufung",
-          wunschpruefung: "wunschprufung",
-          "wunschpr-fung": "wunschprufung"
-        })[
-          String(value || "")
-            .replace(/Ã¤/g, "ä")
-            .replace(/Ã¶/g, "ö")
-            .replace(/Ã¼/g, "ü")
-            .replace(/ÃŸ/g, "ß")
-            .replace(/Â/g, "")
-            .normalize("NFD")
-            .replace(/[\u0300-\u036f]/g, "")
-            .toLowerCase()
-            .replace(/[^a-z0-9]+/g, "-")
-            .replace(/^-+|-+$/g, "")
-        ] ||
         String(value || "")
-          .replace(/Ã¤/g, "ä")
-          .replace(/Ã¶/g, "ö")
-          .replace(/Ã¼/g, "ü")
-          .replace(/ÃŸ/g, "ß")
-          .replace(/Â/g, "")
           .normalize("NFD")
           .replace(/[\u0300-\u036f]/g, "")
           .toLowerCase()
           .replace(/[^a-z0-9]+/g, "-")
           .replace(/^-+|-+$/g, "");
+      const categoryStyle = (value) => {
+        const key = categoryClass(value);
+        const palette = {
+          schularbeit: { bg: "#fee2e2", fg: "#991b1b" },
+          test: { bg: "#dbeafe", fg: "#1e40af" },
+          projekt: { bg: "#d1fae5", fg: "#065f46" },
+          hausaufgabe: { bg: "#fef3c7", fg: "#92400e" },
+          mitarbeit: { bg: "#ede9fe", fg: "#5b21b6" },
+          wiederholung: { bg: "#e0f2fe", fg: "#0c4a6e" },
+          prasentation: { bg: "#fee2e2", fg: "#991b1b" },
+          wunschprufung: { bg: "#e0f2fe", fg: "#0369a1" },
+          benutzerdefiniert: { bg: "#ede9fe", fg: "#5b21b6" },
+          mundlich: { bg: "#fce7f3", fg: "#9f1239" }
+        };
+        const tone = palette[key];
+        return tone ? `--cat-bg:${tone.bg};--cat-fg:${tone.fg};` : "";
+      };
 %>
     <div class="app-shell teacher-shell">
       <aside class="teacher-sidebar" aria-label="Lehrer Navigation">
         <div class="sidebar-brand">
           <div>
             <div class="sidebar-title">Teacher Panel</div>
-            <div class="sidebar-meta"><%= email %> · Lehrer</div>
+            <div class="sidebar-meta"><%= email %> - Lehrer</div>
           </div>
           <span class="sidebar-badge">Eingeloggt</span>
         </div>
@@ -82,7 +71,7 @@
             <p class="teacher-muted">
               Fach: <%= classData.subject %>
               <% if (activeProfile) { %>
-                · Aktives Profil: <%= activeProfile.name %> (Punkte)
+                - Aktives Profil: <%= activeProfile.name %> (Punkte)
               <% } %>
             </p>
           </div>
@@ -134,7 +123,7 @@
                   <% templates.forEach(template => { %>
                     <tr>
                       <td>
-                        <span class="grade-category-badge <%= categoryClass(template.category) %>"><%= template.category %></span>
+                        <span class="grade-category-badge <%= template.category_slug || categoryClass(template.category) %>" style="<%= categoryStyle(template.category_slug || template.category) %>"><%= template.category %></span>
                       </td>
                       <td>
                         <div class="template-table-main">
@@ -182,6 +171,32 @@
     </div>
 
     <script>
+      (function applyCategoryBadgeClasses() {
+        const normalizeToken = (value) =>
+          String(value || '')
+            .normalize('NFD')
+            .replace(/[\u0300-\u036f]/g, '')
+            .toLowerCase()
+            .replace(/[^a-z0-9]+/g, ' ')
+            .trim();
+
+        document.querySelectorAll('.grade-category-badge').forEach((badge) => {
+          const token = normalizeToken(badge.textContent);
+          let key = '';
+          if (token.includes('schularbeit')) key = 'schularbeit';
+          else if (token.includes('mitarbeit')) key = 'mitarbeit';
+          else if (token.includes('wiederholung')) key = 'wiederholung';
+          else if (token.includes('hausaufgabe') || token.includes('hausubung') || token.includes('hausuebung')) key = 'hausaufgabe';
+          else if (token.includes('projekt')) key = 'projekt';
+          else if (token.includes('test')) key = 'test';
+          else if (token.includes('prasentation') || token.includes('praesentation')) key = 'prasentation';
+          else if (token.includes('wunschprufung') || token.includes('wunschpruefung')) key = 'wunschprufung';
+          else if (token.includes('benutzerdefiniert')) key = 'benutzerdefiniert';
+          else if (token.includes('mundlich')) key = 'mundlich';
+          if (key) badge.classList.add(key);
+        });
+      })();
+
       const deleteTemplateModal = document.getElementById('deleteTemplateModal');
       const deleteTemplateName = document.getElementById('deleteTemplateName');
       const cancelDeleteTemplate = document.getElementById('cancelDeleteTemplate');

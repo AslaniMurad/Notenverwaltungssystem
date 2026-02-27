@@ -2410,7 +2410,16 @@ router.get("/grade-templates/:classId", async (req, res, next) => {
       return renderError(res, req, "Klasse nicht gefunden.", 404, "/teacher/classes");
     }
 
-    const templates = await loadTemplates(classId);
+    const templates = (await loadTemplates(classId)).map((template) => {
+      const categoryKey = normalizeCategoryKey(template.category);
+      const categorySlug = categoryKey
+        ? (CATEGORY_BY_KEY.get(categoryKey)?.slug || "")
+        : "";
+      return {
+        ...template,
+        category_slug: categorySlug
+      };
+    });
     const activeProfile = await loadActiveTeacherProfile(req.session.user.id);
     const totalPointWeight = Number(
       templates.reduce((sum, template) => sum + Number(template.weight || 0), 0).toFixed(2)
