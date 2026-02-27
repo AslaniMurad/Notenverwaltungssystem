@@ -872,8 +872,11 @@ function mapGradeToEstimatedPercent(grade, thresholdsSource) {
 
 function computePointTotalsWithParticipation(entries, options = {}) {
   const thresholds = normalizeThresholds(options.thresholds || {});
+  const absenceMode = normalizeAbsenceMode(options.absenceMode);
   return (entries || []).reduce(
     (acc, row) => {
+      if (shouldSkipGradeForAbsence(row, absenceMode)) return acc;
+
       const achieved = Number(row?.points_achieved);
       const max = Number(row?.points_max);
       if (Number.isFinite(achieved) && Number.isFinite(max) && max > 0) {
@@ -1653,7 +1656,7 @@ router.get("/grades/:classId", async (req, res, next) => {
         ], { absenceMode });
         const pointTotals = computePointTotalsWithParticipation(
           [...grades, ...participationAverageRows],
-          { thresholds }
+          { thresholds, absenceMode }
         );
         const hasPointTotals = pointTotals.max > 0;
         return {
@@ -1911,7 +1914,7 @@ router.get("/student-grades/:classId/:studentId", async (req, res, next) => {
     });
     const studentPointTotals = computePointTotalsWithParticipation(
       [...gradeRows, ...participationAverageRows],
-      { thresholds }
+      { thresholds, absenceMode }
     );
     const pointsSummary =
       studentPointTotals.max > 0
@@ -2121,7 +2124,7 @@ router.get("/student-grades/:classId/:studentId/details", async (req, res, next)
     };
     const detailPointTotals = computePointTotalsWithParticipation(
       [...gradeRows, ...participationAverageRows],
-      { thresholds }
+      { thresholds, absenceMode }
     );
     summary.points_achieved_total =
       detailPointTotals.max > 0 ? Number(detailPointTotals.achieved.toFixed(2)) : null;
