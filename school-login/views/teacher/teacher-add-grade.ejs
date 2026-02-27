@@ -1,13 +1,24 @@
 <%
   const page = {
-    title: `Lehrer — Note hinzufügen`,
+    title: `Lehrer — Bewertung hinzufügen`,
     headerTitle: 'Lehrerbereich',
     styles: ['/css/teacher-pages.css'],
     scripts: ['/js/app.js'],
     bodyClass: 'page-teacher',
     hideHeader: true,
     hideFooter: true,
-    content: function () { %>
+    content: function () {
+      const mode = scoringMode || 'points_or_grade';
+      const requiresGrade = mode === 'grade_only' || mode === 'points_and_grade';
+      const allowsGrade = mode !== 'points_only';
+      const requiresPoints = mode === 'points_only' || mode === 'points_and_grade';
+      const allowsPoints = mode !== 'grade_only';
+      const thresholdsData = thresholds || {};
+      const gradedTemplateSet = new Set((gradedTemplateIds || []).map(String));
+      const absenceModeLabel = absenceMode === 'exclude'
+        ? 'Nicht gewichten (neutral)'
+        : 'Mit 0% werten (schlechteste Leistung)';
+%>
     <div class="app-shell teacher-shell">
       <aside class="teacher-sidebar" aria-label="Lehrer Navigation">
         <div class="sidebar-brand">
@@ -20,9 +31,10 @@
 
         <div class="app-nav">
           <div class="nav-section">
-            <div class="nav-section-title">Navigation</div>
+            <div class="nav-section-title">Menue</div>
             <a href="/teacher/classes">Meine Klassen</a>
             <a href="/teacher/create-class">Klasse erstellen</a>
+            <a href="/teacher/settings">Einstellungen</a>
             <div class="nav-section-title">Klasse: <%= classData.name %> / <%= classData.subject %></div>
             <a href="/teacher/students/<%= classData.id %>">Schüler</a>
             <a href="/teacher/grades/<%= classData.id %>">Noten</a>
@@ -40,7 +52,7 @@
       <section class="teacher-main">
         <header class="teacher-main-header">
           <div>
-            <p class="teacher-eyebrow">Note hinzufügen</p>
+            <p class="teacher-eyebrow">Bewertung hinzufügen</p>
             <h1><%= student.name %></h1>
             <p class="teacher-muted">Klasse: <%= classData.name %> · <%= classData.subject %></p>
           </div>
@@ -52,8 +64,8 @@
         <div class="teacher-card">
           <div class="teacher-card-header">
             <div>
-              <p class="teacher-eyebrow">Neue Note</p>
-              <h3>Note für <%= student.name %> eintragen</h3>
+              <p class="teacher-eyebrow">Neue Bewertung</p>
+              <h3>Bewertung für <%= student.name %> eintragen</h3>
             </div>
           </div>
 
@@ -69,24 +81,151 @@
             <form class="teacher-form" method="POST" action="/teacher/add-grade/<%= classData.id %>/<%= student.id %>" enctype="multipart/form-data">
               <input type="hidden" name="_csrf" value="<%= csrfToken %>">
 
-              <label for="grade_template_id">Prüfung *</label>
-              <select id="grade_template_id" name="grade_template_id" required>
-                <option value="">-- Prüfung wählen --</option>
-                <% templates.forEach(template => { %>
-                  <option value="<%= template.id %>">
-                    <%= template.name %> (<%= template.category %>, <%= template.weight %>%)
-                    <% if (template.date) { %> - <%= new Date(template.date).toLocaleDateString('de-DE') %><% } %>
-                  </option>
-                <% }) %>
-              </select>
-              <small class="form-hint">Wähle eine Prüfungsvorlage aus. Jede Prüfung kann pro Schüler nur einmal benotet werden.</small>
+              <div class="teacher-alert info">
+                Bewertungsmodus dieses Profils: <strong><%= scoringModeLabel || 'Punkte oder Noten' %></strong>
+              </div>
 
-              <label for="grade">Note (1-5) *</label>
-              <input type="number" id="grade" name="grade" min="1" max="5" step="0.25" required placeholder="z.B. 2 oder 2.5">
-              <small class="form-hint">Notenskala: 1 (Sehr gut) bis 5 (Nicht genügend)</small>
+              <label for="template_search">Pruefung *</label>
+              <div class="template-picker" id="templatePicker">
+                <div class="template-picker-toolbar">
+                  <input
+                    type="search"
+                    id="template_search"
+                    class="template-picker-search"
+                    placeholder="Pruefung suchen (Name, Kategorie, Datum)"
+                    autocomplete="off"
+                  >
+                  <select id="template_sort" class="template-picker-sort" aria-label="Sortierung">
+                    <option value="date_desc">Datum: Neueste zuerst</option>
+                    <option value="date_asc">Datum: Aelteste zuerst</option>
+                  </select>
+                </div>
+
+                <div class="grades-table-wrapper template-picker-table-wrapper">
+                  <table class="grades-table template-picker-table">
+                    <thead>
+                      <tr>
+                        <th>Auswahl</th>
+                        <th>Name</th>
+                        <th>Kategorie</th>
+                        <th>Gewicht</th>
+                        <th>Max. Punkte</th>
+                        <th>Datum</th>
+                        <th>Status</th>
+                      </tr>
+                    </thead>
+                    <tbody id="template_picker_body">
+                      <% templates.forEach(template => {
+                        const selected = String(formData.grade_template_id || '') === String(template.id);
+                        const isGraded = gradedTemplateSet.has(String(template.id));
+                        const maxPoints = Number(template.max_points);
+                        const maxPointsLabel = Number.isFinite(maxPoints) && maxPoints > 0 ? String(maxPoints) : '-';
+                        const parsedDate = template.date ? new Date(template.date).getTime() : NaN;
+                        const dateLabel = Number.isFinite(parsedDate)
+                          ? new Date(parsedDate).toLocaleDateString('de-DE')
+                          : '-';
+                        const dateValue = Number.isFinite(parsedDate) ? parsedDate : -1;
+                        const searchText = [
+                          template.name || '',
+                          template.category || '',
+                          template.weight_label || template.weight || '',
+                          maxPointsLabel,
+                          isGraded ? 'bereits bewertet' : 'offen',
+                          dateLabel
+                        ].join(' ').toLowerCase();
+                      %>
+                        <tr
+                          class="template-row <%= selected ? 'is-selected' : '' %> <%= isGraded ? 'is-graded' : '' %>"
+                          data-template-search="<%= searchText %>"
+                          data-template-date="<%= dateValue %>"
+                          data-template-max-points="<%= maxPointsLabel %>"
+                          data-template-locked="<%= isGraded ? '1' : '0' %>"
+                        >
+                          <td class="template-select-cell">
+                            <input
+                              class="template-select-input"
+                              type="radio"
+                              name="grade_template_id"
+                              value="<%= template.id %>"
+                              <%= selected && !isGraded ? 'checked' : '' %>
+                              <%= isGraded ? 'disabled' : '' %>
+                              required
+                              aria-label="Pruefung <%= template.name %> auswaehlen"
+                            >
+                          </td>
+                          <td><strong><%= template.name %></strong></td>
+                          <td><%= template.category %></td>
+                          <td><%= template.weight_label || template.weight %></td>
+                          <td><%= maxPointsLabel %></td>
+                          <td><%= dateLabel %></td>
+                          <td>
+                            <% if (isGraded) { %>
+                              <span class="template-status template-status-graded">Bereits bewertet</span>
+                            <% } else { %>
+                              <span class="template-status template-status-open">Offen</span>
+                            <% } %>
+                          </td>
+                        </tr>
+                      <% }) %>
+                      <tr id="templateNoResults" class="template-empty-row" hidden>
+                        <td colspan="7">Keine passenden Pruefungen gefunden.</td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
+
+                <p id="templateSelectionInfo" class="template-picker-selection"></p>
+              </div>
+              <small class="form-hint">Standardmaessig werden die neuesten 3 Pruefungen gezeigt. Mit Suche oder Sortierung siehst du alle.</small>
+
+              <label class="checkbox-line" for="is_absent">
+                <input
+                  type="checkbox"
+                  id="is_absent"
+                  name="is_absent"
+                  value="1"
+                  <%= formData.is_absent ? 'checked' : '' %>
+                >
+                Schueler war bei dieser Pruefung nicht da
+              </label>
+              <small class="form-hint">Aktuelle Regel aus Einstellungen: <%= absenceModeLabel %>.</small>
+
+              <% if (allowsGrade) { %>
+                <label for="grade">Note (1-5)<%= requiresGrade ? ' *' : '' %></label>
+                <input
+                  type="number"
+                  id="grade"
+                  name="grade"
+                  min="1"
+                  max="5"
+                  step="0.25"
+                  <%= requiresGrade ? 'required' : '' %>
+                  placeholder="z.B. 2 oder 2.5"
+                  value="<%= formData.grade || '' %>"
+                >
+                <small class="form-hint">Notenskala: 1 (Sehr gut) bis 5 (Nicht genügend)</small>
+              <% } %>
+
+              <% if (allowsPoints) { %>
+                <label for="points_achieved">Erreichte Punkte<%= requiresPoints ? ' *' : '' %></label>
+                <input
+                  type="number"
+                  id="points_achieved"
+                  name="points_achieved"
+                  min="0"
+                  step="0.25"
+                  placeholder="z.B. 18"
+                  value="<%= formData.points_achieved || '' %>"
+                >
+                <p id="templateMaxPointsInfo" class="teacher-muted">Maximale Punkte aus Vorlage: -</p>
+                <small class="form-hint">
+                  Wenn keine Note eingegeben ist, wird die Note aus Punkten berechnet
+                  (1 ab <%= thresholdsData.grade1_min_percent %>%, 2 ab <%= thresholdsData.grade2_min_percent %>%, 3 ab <%= thresholdsData.grade3_min_percent %>%, 4 ab <%= thresholdsData.grade4_min_percent %>%).
+                </small>
+              <% } %>
 
               <label for="note">Notiz (optional)</label>
-              <textarea id="note" name="note" rows="2" placeholder="z.B. Sehr gute Mitarbeit, kleine Fehler bei Aufgabe 3"></textarea>
+              <textarea id="note" name="note" rows="2" placeholder="z.B. Sehr gute Mitarbeit, kleine Fehler bei Aufgabe 3"><%= formData.note || '' %></textarea>
               <small class="form-hint">Optional kannst du eine korrigierte Arbeit anhängen oder einen externen Link angeben.</small>
 
               <label for="attachment_file">Korrigierte Arbeit hochladen (optional)</label>
@@ -94,11 +233,11 @@
               <small class="form-hint">Erlaubt: PDF, JPG, PNG. Maximal <%= maxFileSizeMb %> MB.</small>
 
               <label for="external_link">Oder externer Link (optional)</label>
-              <input type="url" id="external_link" name="external_link" placeholder="https://drive.google.com/...">
+              <input type="url" id="external_link" name="external_link" placeholder="https://drive.google.com/..." value="<%= formData.external_link || '' %>">
               <small class="form-hint">Nur http/https. Bitte keine Datei + Link gleichzeitig.</small>
 
               <div class="teacher-form-actions">
-                <button class="btn btn-primary" type="submit">Note speichern</button>
+                <button class="btn btn-primary" type="submit">Bewertung speichern</button>
                 <a class="btn btn-secondary" href="/teacher/student-grades/<%= classData.id %>/<%= student.id %>">Zurück</a>
               </div>
             </form>
@@ -106,6 +245,139 @@
         </div>
       </section>
     </div>
+
+    <script>
+      (function initTemplatePicker() {
+        const picker = document.getElementById("templatePicker");
+        if (!picker) return;
+
+        const requiresGrade = <%= requiresGrade ? "true" : "false" %>;
+        const requiresPoints = <%= requiresPoints ? "true" : "false" %>;
+        const searchInput = document.getElementById("template_search");
+        const sortSelect = document.getElementById("template_sort");
+        const body = document.getElementById("template_picker_body");
+        const noResults = document.getElementById("templateNoResults");
+        const selectionInfo = document.getElementById("templateSelectionInfo");
+        const templateMaxPointsInfo = document.getElementById("templateMaxPointsInfo");
+        const absentField = document.getElementById("is_absent");
+        const gradeField = document.getElementById("grade");
+        const pointsField = document.getElementById("points_achieved");
+        const rows = Array.from(body.querySelectorAll(".template-row"));
+        const DEFAULT_LIMIT = 3;
+
+        function compareRows(a, b, mode) {
+          const parsedADate = Number(a.dataset.templateDate || -1);
+          const parsedBDate = Number(b.dataset.templateDate || -1);
+          const aDate = Number.isFinite(parsedADate) ? parsedADate : -1;
+          const bDate = Number.isFinite(parsedBDate) ? parsedBDate : -1;
+          const aMissing = aDate < 0;
+          const bMissing = bDate < 0;
+          if (aMissing !== bMissing) return aMissing ? 1 : -1;
+          if (mode === "date_asc") return aDate - bDate;
+          return bDate - aDate;
+        }
+
+        function updateSelectionState() {
+          let selectedLabel = "";
+          let selectedMaxPoints = "-";
+          rows.forEach((row) => {
+            const radio = row.querySelector('input[type="radio"]');
+            const isSelected = radio && radio.checked;
+            row.classList.toggle("is-selected", Boolean(isSelected));
+            if (isSelected) {
+              const cells = row.querySelectorAll("td");
+              const name = cells[1] ? cells[1].innerText.trim() : "";
+              const date = cells[5] ? cells[5].innerText.trim() : "";
+              selectedMaxPoints = row.dataset.templateMaxPoints || "-";
+              selectedLabel = date && date !== "-"
+                ? "Ausgewaehlt: " + name + " (" + date + ")"
+                : "Ausgewaehlt: " + name;
+            }
+          });
+          selectionInfo.textContent = selectedLabel || "Noch keine Pruefung ausgewaehlt.";
+          if (templateMaxPointsInfo) {
+            templateMaxPointsInfo.textContent = "Maximale Punkte aus Vorlage: " + selectedMaxPoints;
+          }
+          updateInputRequirements(selectedMaxPoints);
+        }
+
+        function updateInputRequirements(maxPointsLabel) {
+          const hasMaxPoints = Number(maxPointsLabel) > 0;
+          const isAbsent = Boolean(absentField && absentField.checked);
+
+          if (gradeField) {
+            gradeField.disabled = isAbsent;
+            gradeField.required = !isAbsent && requiresGrade;
+          }
+          if (pointsField) {
+            pointsField.disabled = isAbsent;
+            pointsField.required = !isAbsent && requiresPoints && hasMaxPoints;
+            if (hasMaxPoints) {
+              pointsField.max = String(maxPointsLabel);
+            } else {
+              pointsField.removeAttribute("max");
+            }
+          }
+        }
+
+        function applyFilterAndSort() {
+          const query = String(searchInput.value || "").trim().toLowerCase();
+          const mode = sortSelect.value;
+          const filteredRows = rows
+            .filter((row) => row.dataset.templateSearch.includes(query))
+            .sort((a, b) => compareRows(a, b, mode));
+          const shouldShowAll = query.length > 0 || mode !== "date_desc";
+          const selectedRow = rows.find((row) => {
+            const radio = row.querySelector('input[type="radio"]');
+            return radio && radio.checked;
+          });
+          const visibleRows = shouldShowAll
+            ? filteredRows
+            : filteredRows.slice(0, DEFAULT_LIMIT);
+
+          if (!shouldShowAll && selectedRow && !visibleRows.includes(selectedRow)) {
+            visibleRows.push(selectedRow);
+          }
+
+          rows.forEach((row) => {
+            row.hidden = true;
+          });
+
+          visibleRows.forEach((row) => {
+            row.hidden = false;
+            body.appendChild(row);
+          });
+
+          noResults.hidden = visibleRows.length > 0;
+          body.appendChild(noResults);
+        }
+
+        rows.forEach((row) => {
+          row.addEventListener("click", (event) => {
+            if (row.dataset.templateLocked === "1") return;
+            const radio = row.querySelector('input[type="radio"]');
+            if (!radio) return;
+            if (event.target !== radio) {
+              radio.checked = true;
+            }
+            updateSelectionState();
+          });
+
+          const radio = row.querySelector('input[type="radio"]');
+          if (radio) {
+            radio.addEventListener("change", updateSelectionState);
+          }
+        });
+
+        absentField?.addEventListener("change", updateSelectionState);
+        searchInput.addEventListener("input", applyFilterAndSort);
+        sortSelect.addEventListener("change", applyFilterAndSort);
+
+        applyFilterAndSort();
+        updateSelectionState();
+      })();
+    </script>
 <% } };
 %>
 <%- include('../layout', page) %>
+

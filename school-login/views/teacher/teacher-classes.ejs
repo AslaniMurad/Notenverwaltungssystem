@@ -23,9 +23,10 @@
 
         <div class="app-nav">
           <div class="nav-section">
-            <div class="nav-section-title">Navigation</div>
+            <div class="nav-section-title">Menue</div>
             <a class="is-active" href="/teacher/classes">Meine Klassen</a>
             <a href="/teacher/create-class">Klasse erstellen</a>
+            <a href="/teacher/settings">Einstellungen</a>
             <form class="logout-form" method="POST" action="/logout">
               <input type="hidden" name="_csrf" value="<%= csrfToken %>">
               <button class="app-nav-link" type="submit">Logout</button>
@@ -47,13 +48,45 @@
           </div>
         </header>
 
+        <form class="teacher-search-form" method="GET" action="/teacher/classes">
+          <input
+            class="form-input teacher-search-input"
+            type="search"
+            name="q"
+            placeholder="Klasse oder Fach suchen"
+            value="<%= (search && search.q) || '' %>"
+          >
+          <select class="form-select teacher-search-select" name="sort" aria-label="Sortierung">
+            <option value="newest" <%= (search && search.sort) === 'newest' ? 'selected' : '' %>>Neueste zuerst</option>
+            <option value="oldest" <%= (search && search.sort) === 'oldest' ? 'selected' : '' %>>Aelteste zuerst</option>
+            <option value="name_asc" <%= (search && search.sort) === 'name_asc' ? 'selected' : '' %>>Name A-Z</option>
+            <option value="name_desc" <%= (search && search.sort) === 'name_desc' ? 'selected' : '' %>>Name Z-A</option>
+            <option value="subject_asc" <%= (search && search.sort) === 'subject_asc' ? 'selected' : '' %>>Fach A-Z</option>
+            <option value="subject_desc" <%= (search && search.sort) === 'subject_desc' ? 'selected' : '' %>>Fach Z-A</option>
+          </select>
+          <button class="btn btn-primary" type="submit">Suchen</button>
+          <a class="btn btn-secondary" href="/teacher/classes">Reset</a>
+        </form>
+
+        <% if (!setupComplete) { %>
+          <div class="teacher-alert error">
+            Bitte richte zuerst dein Bewertungsschema ein:
+            <a href="/teacher/settings?setup=1">Jetzt Einstellungen oeffnen</a>
+          </div>
+        <% } else if (activeProfile) { %>
+          <div class="teacher-alert info">
+            Aktives Profil: <strong><%= activeProfile.name %></strong>
+            (Punkte)
+          </div>
+        <% } %>
+
         <div class="teacher-card">
           <div class="teacher-card-header">
             <div>
               <p class="teacher-eyebrow">Klassen</p>
               <h3>Aktive Klassen</h3>
             </div>
-            <div class="teacher-meta-chip"><%= classes.length %> Einträge</div>
+            <div class="teacher-meta-chip"><%= classes.length %> / <%= totalClassCount %> Eintraege</div>
           </div>
 
           <div class="teacher-grid">
@@ -88,3 +121,4 @@
 <% } };
 %>
 <%- include('../layout', page) %>
+

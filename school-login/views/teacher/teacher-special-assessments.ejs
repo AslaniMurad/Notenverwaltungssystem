@@ -7,7 +7,43 @@
     bodyClass: 'page-teacher',
     hideHeader: true,
     hideFooter: true,
-    content: function () { %>
+    content: function () {
+      const categoryClass = (value) =>
+        ({
+          hausubung: "hausaufgabe",
+          hausuebung: "hausaufgabe",
+          "hausa-bung": "hausaufgabe",
+          prasentation: "prasentation",
+          praesentation: "prasentation",
+          "pra-sentation": "prasentation",
+          wunschprufung: "wunschprufung",
+          wunschpruefung: "wunschprufung",
+          "wunschpr-fung": "wunschprufung"
+        })[
+          String(value || "")
+            .replace(/Ã¤/g, "ä")
+            .replace(/Ã¶/g, "ö")
+            .replace(/Ã¼/g, "ü")
+            .replace(/ÃŸ/g, "ß")
+            .replace(/Â/g, "")
+            .normalize("NFD")
+            .replace(/[\u0300-\u036f]/g, "")
+            .toLowerCase()
+            .replace(/[^a-z0-9]+/g, "-")
+            .replace(/^-+|-+$/g, "")
+        ] ||
+        String(value || "")
+          .replace(/Ã¤/g, "ä")
+          .replace(/Ã¶/g, "ö")
+          .replace(/Ã¼/g, "ü")
+          .replace(/ÃŸ/g, "ß")
+          .replace(/Â/g, "")
+          .normalize("NFD")
+          .replace(/[\u0300-\u036f]/g, "")
+          .toLowerCase()
+          .replace(/[^a-z0-9]+/g, "-")
+          .replace(/^-+|-+$/g, "");
+%>
     <div class="app-shell teacher-shell">
       <aside class="teacher-sidebar" aria-label="Lehrer Navigation">
         <div class="sidebar-brand">
@@ -20,9 +56,10 @@
 
         <div class="app-nav">
           <div class="nav-section">
-            <div class="nav-section-title">Navigation</div>
+            <div class="nav-section-title">Menue</div>
             <a href="/teacher/classes">Meine Klassen</a>
             <a href="/teacher/create-class">Klasse erstellen</a>
+            <a href="/teacher/settings">Einstellungen</a>
             <div class="nav-section-title">Klasse: <%= classData.name %> / <%= classData.subject %></div>
             <a href="/teacher/students/<%= classData.id %>">Schüler</a>
             <a href="/teacher/grades/<%= classData.id %>">Noten</a>
@@ -50,7 +87,7 @@
         </header>
 
         <div class="teacher-alert info">
-          Sonderleistungen fließen zusätzlich in die Gesamtnote ein und können über 100% hinaus gewichtet werden.
+          Sonderleistungen nutzen Punkte und fliessen zusaetzlich in die Gesamtnote ein.
         </div>
 
         <div class="teacher-card">
@@ -95,8 +132,8 @@
             <label for="description">Beschreibung</label>
             <textarea id="description" name="description" rows="2" placeholder="Kurzbeschreibung oder Wunsch des Schülers"><%= formData.description || '' %></textarea>
 
-            <label for="weight">Gewichtung (0-100) *</label>
-            <input type="number" id="weight" name="weight" min="0" max="100" step="0.5" required value="<%= formData.weight || '' %>">
+            <label for="weight">Gewichtung (ab 0 <%= weightUnit %>) *</label>
+            <input type="number" id="weight" name="weight" min="0" step="0.5" required value="<%= formData.weight || '' %>">
 
             <label for="grade">Note (1-5) *</label>
             <input type="number" id="grade" name="grade" min="1" max="5" step="0.25" required value="<%= formData.grade || '' %>">
@@ -128,9 +165,9 @@
                 <div class="grade-item">
                   <div class="grade-item-header">
                     <div>
-                      <span class="grade-category-badge <%= assessment.type.toLowerCase() %>"><%= assessment.type %></span>
+                          <span class="grade-category-badge <%= categoryClass(assessment.type) %>"><%= assessment.type %></span>
                       <h4 class="grade-item-title"><%= assessment.name %></h4>
-                      <span class="weight-badge-small"><%= assessment.weight %>%</span>
+                      <span class="weight-badge-small"><%= assessment.weight %> <%= weightUnit %></span>
                       <span class="grade-date"><%= new Date(assessment.created_at).toLocaleDateString('de-DE') %></span>
                       <div class="teacher-muted">Schüler: <%= assessment.student_name %></div>
                     </div>
@@ -214,3 +251,4 @@
 <% } };
 %>
 <%- include('../layout', page) %>
+

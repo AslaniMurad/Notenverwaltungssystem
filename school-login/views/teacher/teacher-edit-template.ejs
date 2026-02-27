@@ -1,14 +1,14 @@
 <%
   const page = {
-    title: 'Lehrer - Pruefung erstellen',
-    headerTitle: 'Lehrerbereich',
-    styles: ['/css/teacher-pages.css'],
-    scripts: ['/js/app.js'],
-    bodyClass: 'page-teacher',
+    title: "Lehrer - Pruefung bearbeiten",
+    headerTitle: "Lehrerbereich",
+    styles: ["/css/teacher-pages.css"],
+    scripts: ["/js/app.js"],
+    bodyClass: "page-teacher",
     hideHeader: true,
     hideFooter: true,
     content: function () {
-      const unitLabel = 'Punkte';
+      const unitLabel = "Punkte";
       const defaultsByCategory = (activeProfile && activeProfile.weights) || {};
 %>
     <div class="app-shell teacher-shell">
@@ -16,7 +16,7 @@
         <div class="sidebar-brand">
           <div>
             <div class="sidebar-title">Teacher Panel</div>
-            <div class="sidebar-meta"><%= email %> · Lehrer</div>
+            <div class="sidebar-meta"><%= email %> - Lehrer</div>
           </div>
           <span class="sidebar-badge">Eingeloggt</span>
         </div>
@@ -44,9 +44,9 @@
       <section class="teacher-main">
         <header class="teacher-main-header">
           <div>
-            <p class="teacher-eyebrow">Pruefung anlegen</p>
+            <p class="teacher-eyebrow">Pruefung bearbeiten</p>
             <h1>Klasse <%= classData.name %></h1>
-            <p class="teacher-muted">Profil: <strong><%= activeProfile.name %></strong> · Modus: Punkte</p>
+            <p class="teacher-muted">Profil: <strong><%= activeProfile.name %></strong> - Modus: Punkte</p>
           </div>
           <div class="teacher-actions-inline">
             <a class="btn btn-secondary" href="/teacher/grade-templates/<%= classData.id %>">Abbrechen</a>
@@ -56,8 +56,8 @@
         <div class="teacher-card">
           <div class="teacher-card-header">
             <div>
-              <p class="teacher-eyebrow">Neue Pruefungsvorlage</p>
-              <h3>Gewichtung wird in Punkten festgelegt</h3>
+              <p class="teacher-eyebrow">Pruefungsvorlage</p>
+              <h3>Details bearbeiten</h3>
             </div>
           </div>
 
@@ -65,11 +65,7 @@
             <div class="teacher-alert error"><%= error %></div>
           <% } %>
 
-          <div class="teacher-alert info">
-            Du kannst den vorgeschlagenen Punktewert aus dem Profil uebernehmen oder manuell anpassen.
-          </div>
-
-          <form class="teacher-form" method="POST" action="/teacher/create-template/<%= classData.id %>">
+          <form class="teacher-form" method="POST" action="/teacher/edit-template/<%= classData.id %>/<%= templateId %>">
             <input type="hidden" name="_csrf" value="<%= csrfToken %>">
 
             <label for="name">Name der Pruefung *</label>
@@ -85,10 +81,10 @@
             <label for="category">Kategorie *</label>
             <select id="category" name="category" required>
               <option value="">-- Kategorie waehlen --</option>
-              <% categoryDefinitions.forEach(category => { %>
+              <% categoryDefinitions.forEach((category) => { %>
                 <option
                   value="<%= category.key %>"
-                  <%= formData && String(formData.category) === String(category.key) ? 'selected' : '' %>
+                  <%= formData && String(formData.category) === String(category.key) ? "selected" : "" %>
                 >
                   <%= category.label %>
                 </option>
@@ -102,7 +98,7 @@
               name="weight"
               min="0"
               step="0.5"
-              placeholder="Wert leer lassen fuer Profil-Vorschlag"
+              required
               value="<%= formData && formData.weight !== '' ? formData.weight : '' %>"
             >
             <small class="form-hint" id="weight-hint">Profil-Vorschlag wird automatisch gesetzt.</small>
@@ -117,7 +113,6 @@
               placeholder="z.B. 50"
               value="<%= formData && formData.max_points !== '' ? formData.max_points : '' %>"
             >
-            <small class="form-hint">Wenn gesetzt, wird bei der Benotung nur noch "Erreichte Punkte" abgefragt.</small>
 
             <label for="date">Datum (optional)</label>
             <input type="date" id="date" name="date" value="<%= formData && formData.date ? formData.date : '' %>">
@@ -131,7 +126,7 @@
             ><%= formData && formData.description ? formData.description : '' %></textarea>
 
             <div class="teacher-form-actions">
-              <button class="btn btn-primary" type="submit">Pruefung anlegen</button>
+              <button class="btn btn-primary" type="submit">Aenderungen speichern</button>
               <a class="btn btn-secondary" href="/teacher/grade-templates/<%= classData.id %>">Zurueck</a>
             </div>
           </form>
@@ -142,40 +137,42 @@
     <script>
       (function() {
         const defaultsByCategory = <%- JSON.stringify(defaultsByCategory || {}).replace(/</g, "\\u003c") %>;
-        const categorySelect = document.getElementById('category');
-        const weightInput = document.getElementById('weight');
-        const weightHint = document.getElementById('weight-hint');
-        const unitLabel = document.getElementById('weight-unit-label');
+        const categorySelect = document.getElementById("category");
+        const weightInput = document.getElementById("weight");
+        const weightHint = document.getElementById("weight-hint");
+        const unitLabel = document.getElementById("weight-unit-label");
 
         function formatWeight(value) {
           const numeric = Number(value);
-          if (!Number.isFinite(numeric)) return '';
+          if (!Number.isFinite(numeric)) return "";
           return String(Number(numeric.toFixed(2)));
         }
 
         function updateWeightSuggestion() {
-          const selectedCategory = categorySelect ? categorySelect.value : '';
+          const selectedCategory = categorySelect ? categorySelect.value : "";
           const suggestion = defaultsByCategory ? defaultsByCategory[selectedCategory] : null;
-          const hasManualValue = String(weightInput.value || '').trim() !== '';
-          if (unitLabel) unitLabel.textContent = 'Punkte';
+          if (unitLabel) unitLabel.textContent = "Punkte";
 
           if (!selectedCategory) {
-            if (weightHint) weightHint.textContent = 'Waehle zuerst eine Kategorie.';
+            if (weightHint) weightHint.textContent = "Waehle zuerst eine Kategorie.";
             return;
           }
 
           if (Number.isFinite(Number(suggestion))) {
-            if (weightHint) weightHint.textContent = 'Vorschlag aus Profil: ' + formatWeight(suggestion) + ' Punkte.';
-            if (!hasManualValue) weightInput.value = formatWeight(suggestion);
+            if (weightHint) {
+              weightHint.textContent =
+                "Vorschlag aus Profil: " + formatWeight(suggestion) + " Punkte.";
+            }
           } else if (weightHint) {
-            weightHint.textContent = 'Keine Profil-Gewichtung fuer diese Kategorie gefunden.';
+            weightHint.textContent =
+              "Keine Profil-Gewichtung fuer diese Kategorie gefunden.";
           }
         }
 
-        if (categorySelect) categorySelect.addEventListener('change', updateWeightSuggestion);
+        if (categorySelect) categorySelect.addEventListener("change", updateWeightSuggestion);
         updateWeightSuggestion();
       })();
     </script>
 <% } };
 %>
-<%- include('../layout', page) %>
+<%- include("../layout", page) %>
