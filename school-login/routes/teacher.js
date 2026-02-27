@@ -917,15 +917,63 @@ async function buildSettingsPageData(teacherId, selectedProfileId, formOverride 
 
 router.get("/classes", async (req, res, next) => {
   try {
-    const classes = await allAsync(
-      "SELECT id, name, subject FROM classes WHERE teacher_id = ? ORDER BY created_at DESC",
+    const qRaw = String(req.query.q || "").trim();
+    const q = qRaw.slice(0, 120);
+    const qFolded = foldText(q);
+    const sortOptions = new Set([
+      "newest",
+      "oldest",
+      "name_asc",
+      "name_desc",
+      "subject_asc",
+      "subject_desc"
+    ]);
+    const sort = sortOptions.has(String(req.query.sort || ""))
+      ? String(req.query.sort)
+      : "newest";
+
+    const classesAll = await allAsync(
+      "SELECT id, name, subject, created_at FROM classes WHERE teacher_id = ?",
       [req.session.user.id]
     );
+    let classes = classesAll.filter((entry) => {
+      if (!qFolded) return true;
+      const haystack = foldText(`${entry.name || ""} ${entry.subject || ""}`);
+      return haystack.includes(qFolded);
+    });
+
+    const compareText = (a, b) => String(a || "").localeCompare(String(b || ""), "de", { sensitivity: "base" });
+    const compareTime = (a, b) => {
+      const ta = a ? new Date(a).getTime() : 0;
+      const tb = b ? new Date(b).getTime() : 0;
+      return ta - tb;
+    };
+
+    classes.sort((a, b) => {
+      switch (sort) {
+        case "oldest":
+          return compareTime(a.created_at, b.created_at);
+        case "name_asc":
+          return compareText(a.name, b.name);
+        case "name_desc":
+          return compareText(b.name, a.name);
+        case "subject_asc":
+          return compareText(a.subject, b.subject) || compareText(a.name, b.name);
+        case "subject_desc":
+          return compareText(b.subject, a.subject) || compareText(a.name, b.name);
+        case "newest":
+        default:
+          return compareTime(b.created_at, a.created_at);
+      }
+    });
+
     const activeProfile = await loadActiveTeacherProfile(req.session.user.id);
 
     res.render("teacher/teacher-classes", {
       email: req.session.user.email,
       classes,
+      totalClassCount: classesAll.length,
+      search: { q, sort },
       setupComplete: Boolean(activeProfile),
       activeProfile,
       csrfToken: req.csrfToken()
@@ -1358,11 +1406,42 @@ router.get("/students/:classId", async (req, res, next) => {
       return renderError(res, req, "Klasse nicht gefunden.", 404, "/teacher/classes");
     }
 
-    const students = await loadStudents(classId);
+    const qRaw = String(req.query.q || "").trim();
+    const q = qRaw.slice(0, 120);
+    const qFolded = foldText(q);
+    const sortOptions = new Set(["name_asc", "name_desc", "email_asc", "email_desc"]);
+    const sort = sortOptions.has(String(req.query.sort || ""))
+      ? String(req.query.sort)
+      : "name_asc";
+
+    const studentsAll = await loadStudents(classId);
+    let students = studentsAll.filter((entry) => {
+      if (!qFolded) return true;
+      const haystack = foldText(`${entry.name || ""} ${entry.email || ""}`);
+      return haystack.includes(qFolded);
+    });
+
+    const compareText = (a, b) => String(a || "").localeCompare(String(b || ""), "de", { sensitivity: "base" });
+    students.sort((a, b) => {
+      switch (sort) {
+        case "name_desc":
+          return compareText(b.name, a.name);
+        case "email_asc":
+          return compareText(a.email, b.email);
+        case "email_desc":
+          return compareText(b.email, a.email);
+        case "name_asc":
+        default:
+          return compareText(a.name, b.name);
+      }
+    });
+
     res.render("teacher/teacher-students", {
       email: req.session.user.email,
       classData,
       students,
+      totalStudentCount: studentsAll.length,
+      search: { q, sort },
       csrfToken: req.csrfToken()
     });
   } catch (err) {
@@ -1473,7 +1552,31 @@ router.get("/grades/:classId", async (req, res, next) => {
       return renderError(res, req, "Klasse nicht gefunden.", 404, "/teacher/classes");
     }
 
-    const students = await loadStudents(classId);
+    const qRaw = String(req.query.q || "").trim();
+    const q = qRaw.slice(0, 120);
+    const qFolded = foldText(q);
+    const statusOptions = new Set(["all", "with_grades", "no_grades", "incomplete"]);
+    const status = statusOptions.has(String(req.query.status || ""))
+      ? String(req.query.status)
+      : "all";
+    const sortOptions = new Set([
+      "name_asc",
+      "name_desc",
+      "avg_best",
+      "avg_worst",
+      "grade_count_desc",
+      "points_desc"
+    ]);
+    const sort = sortOptions.has(String(req.query.sort || ""))
+      ? String(req.query.sort)
+      : "name_asc";
+
+    const studentsAll = await loadStudents(classId);
+    const studentsBase = studentsAll.filter((entry) => {
+      if (!qFolded) return true;
+      const haystack = foldText(`${entry.name || ""} ${entry.email || ""}`);
+      return haystack.includes(qFolded);
+    });
     const templates = await loadTemplates(classId);
     const activeProfile = await loadActiveTeacherProfile(req.session.user.id);
     const participation = normalizeParticipationConfig(
@@ -1482,7 +1585,7 @@ router.get("/grades/:classId", async (req, res, next) => {
     const absenceMode = normalizeAbsenceMode(activeProfile?.absence_mode);
     const possibleCount = templates.length;
     const studentsWithGrades = await Promise.all(
-      students.map(async (student) => {
+      studentsBase.map(async (student) => {
         const grades = await loadStudentGrades(student.id);
         const participationMarks = await loadParticipationMarks(classId, student.id);
         const average = computeWeightedAverage([
@@ -1514,14 +1617,56 @@ router.get("/grades/:classId", async (req, res, next) => {
       })
     );
 
+    const compareText = (a, b) => String(a || "").localeCompare(String(b || ""), "de", { sensitivity: "base" });
+    const compareNullableNumberAsc = (a, b) => {
+      const va = Number(a);
+      const vb = Number(b);
+      const aValid = Number.isFinite(va);
+      const bValid = Number.isFinite(vb);
+      if (!aValid && !bValid) return 0;
+      if (!aValid) return 1;
+      if (!bValid) return -1;
+      return va - vb;
+    };
+    const compareNullableNumberDesc = (a, b) => -compareNullableNumberAsc(a, b);
+
+    let studentsFiltered = studentsWithGrades.filter((student) => {
+      const gradeCount = Number(student.grade_count || 0);
+      const maCount = Number(student.ma_count || 0);
+      if (status === "with_grades") return gradeCount > 0 || maCount > 0;
+      if (status === "no_grades") return gradeCount === 0 && maCount === 0;
+      if (status === "incomplete") return possibleCount > 0 && gradeCount < possibleCount;
+      return true;
+    });
+
+    studentsFiltered.sort((a, b) => {
+      switch (sort) {
+        case "name_desc":
+          return compareText(b.name, a.name);
+        case "avg_best":
+          return compareNullableNumberAsc(a.average_grade, b.average_grade) || compareText(a.name, b.name);
+        case "avg_worst":
+          return compareNullableNumberDesc(a.average_grade, b.average_grade) || compareText(a.name, b.name);
+        case "grade_count_desc":
+          return compareNullableNumberDesc(a.grade_count, b.grade_count) || compareText(a.name, b.name);
+        case "points_desc":
+          return compareNullableNumberDesc(a.points_percent, b.points_percent) || compareText(a.name, b.name);
+        case "name_asc":
+        default:
+          return compareText(a.name, b.name);
+      }
+    });
+
     res.render("teacher/teacher-grades", {
       email: req.session.user.email,
       classData,
-      students: studentsWithGrades,
+      students: studentsFiltered,
+      totalStudentCount: studentsAll.length,
       possibleCount,
       activeProfile,
       participationEnabled: participation.ma_enabled,
       participationSymbolOptions: PARTICIPATION_SYMBOL_OPTIONS,
+      search: { q, status, sort },
       message: req.query.ma_saved ? "Mitarbeit eingetragen." : null,
       csrfToken: req.csrfToken()
     });
@@ -2410,25 +2555,116 @@ router.get("/grade-templates/:classId", async (req, res, next) => {
       return renderError(res, req, "Klasse nicht gefunden.", 404, "/teacher/classes");
     }
 
-    const templates = (await loadTemplates(classId)).map((template) => {
+    const qRaw = String(req.query.q || "").trim();
+    const q = qRaw.slice(0, 120);
+    const qFolded = foldText(q);
+    const categoryParam = String(req.query.category || "").trim();
+    const category = normalizeCategoryKey(categoryParam) || "";
+    const pointsFilterOptions = new Set(["all", "with_max", "without_max"]);
+    const pointsFilter = pointsFilterOptions.has(String(req.query.points || ""))
+      ? String(req.query.points)
+      : "all";
+    const sortOptions = new Set([
+      "date_desc",
+      "date_asc",
+      "name_asc",
+      "name_desc",
+      "weight_desc",
+      "weight_asc",
+      "max_desc",
+      "max_asc",
+      "category_asc"
+    ]);
+    const sort = sortOptions.has(String(req.query.sort || ""))
+      ? String(req.query.sort)
+      : "date_desc";
+
+    const templatesAll = (await loadTemplates(classId)).map((template) => {
       const categoryKey = normalizeCategoryKey(template.category);
       const categorySlug = categoryKey
         ? (CATEGORY_BY_KEY.get(categoryKey)?.slug || "")
         : "";
       return {
         ...template,
+        category_key: categoryKey || "",
         category_slug: categorySlug
       };
     });
+
+    let templates = templatesAll.filter((template) => {
+      if (category && template.category_key !== category) return false;
+      const hasMaxPoints = template.max_points != null && Number(template.max_points) > 0;
+      if (pointsFilter === "with_max" && !hasMaxPoints) return false;
+      if (pointsFilter === "without_max" && hasMaxPoints) return false;
+      if (!qFolded) return true;
+      const dateLabel = template.date ? new Date(template.date).toLocaleDateString("de-DE") : "";
+      const haystack = foldText(
+        `${template.name || ""} ${template.category || ""} ${template.description || ""} ${dateLabel}`
+      );
+      return haystack.includes(qFolded);
+    });
+
+    const compareText = (a, b) => String(a || "").localeCompare(String(b || ""), "de", { sensitivity: "base" });
+    const compareNullableNumberAsc = (a, b) => {
+      const va = Number(a);
+      const vb = Number(b);
+      const aValid = Number.isFinite(va);
+      const bValid = Number.isFinite(vb);
+      if (!aValid && !bValid) return 0;
+      if (!aValid) return 1;
+      if (!bValid) return -1;
+      return va - vb;
+    };
+    const compareNullableDateAsc = (a, b) => {
+      const ta = a ? new Date(a).getTime() : NaN;
+      const tb = b ? new Date(b).getTime() : NaN;
+      const aValid = Number.isFinite(ta);
+      const bValid = Number.isFinite(tb);
+      if (!aValid && !bValid) return 0;
+      if (!aValid) return 1;
+      if (!bValid) return -1;
+      return ta - tb;
+    };
+
+    templates.sort((a, b) => {
+      switch (sort) {
+        case "date_asc":
+          return compareNullableDateAsc(a.date, b.date) || compareText(a.name, b.name);
+        case "name_asc":
+          return compareText(a.name, b.name);
+        case "name_desc":
+          return compareText(b.name, a.name);
+        case "weight_desc":
+          return -compareNullableNumberAsc(a.weight, b.weight) || compareText(a.name, b.name);
+        case "weight_asc":
+          return compareNullableNumberAsc(a.weight, b.weight) || compareText(a.name, b.name);
+        case "max_desc":
+          return -compareNullableNumberAsc(a.max_points, b.max_points) || compareText(a.name, b.name);
+        case "max_asc":
+          return compareNullableNumberAsc(a.max_points, b.max_points) || compareText(a.name, b.name);
+        case "category_asc":
+          return compareText(a.category, b.category) || compareText(a.name, b.name);
+        case "date_desc":
+        default:
+          return -compareNullableDateAsc(a.date, b.date) || compareText(a.name, b.name);
+      }
+    });
+
     const activeProfile = await loadActiveTeacherProfile(req.session.user.id);
     const totalPointWeight = Number(
-      templates.reduce((sum, template) => sum + Number(template.weight || 0), 0).toFixed(2)
+      templatesAll.reduce((sum, template) => sum + Number(template.weight || 0), 0).toFixed(2)
     );
 
     res.render("teacher/teacher-grade-templates", {
       email: req.session.user.email,
       classData,
       templates,
+      totalTemplateCount: templatesAll.length,
+      categoryOptions: TEMPLATE_CATEGORY_DEFINITIONS.map((entry) => ({
+        key: entry.key,
+        label: entry.label
+      })),
+      search: { q, category, points: pointsFilter, sort },
       activeProfile,
       totalPointWeight,
       csrfToken: req.csrfToken()

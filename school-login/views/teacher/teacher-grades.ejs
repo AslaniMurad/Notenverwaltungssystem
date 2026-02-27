@@ -62,11 +62,37 @@
           </div>
         <% } %>
 
+        <form class="teacher-search-form" method="GET" action="/teacher/grades/<%= classData.id %>">
+          <input
+            class="form-input teacher-search-input"
+            type="search"
+            name="q"
+            placeholder="Schueler nach Name oder E-Mail suchen"
+            value="<%= (search && search.q) || '' %>"
+          >
+          <select class="form-select teacher-search-select" name="status" aria-label="Filter">
+            <option value="all" <%= (search && search.status) === 'all' ? 'selected' : '' %>>Alle</option>
+            <option value="with_grades" <%= (search && search.status) === 'with_grades' ? 'selected' : '' %>>Mit Bewertungen</option>
+            <option value="no_grades" <%= (search && search.status) === 'no_grades' ? 'selected' : '' %>>Ohne Bewertungen</option>
+            <option value="incomplete" <%= (search && search.status) === 'incomplete' ? 'selected' : '' %>>Unvollstaendig</option>
+          </select>
+          <select class="form-select teacher-search-select" name="sort" aria-label="Sortierung">
+            <option value="name_asc" <%= (search && search.sort) === 'name_asc' ? 'selected' : '' %>>Name A-Z</option>
+            <option value="name_desc" <%= (search && search.sort) === 'name_desc' ? 'selected' : '' %>>Name Z-A</option>
+            <option value="avg_best" <%= (search && search.sort) === 'avg_best' ? 'selected' : '' %>>Schnitt (beste zuerst)</option>
+            <option value="avg_worst" <%= (search && search.sort) === 'avg_worst' ? 'selected' : '' %>>Schnitt (schlechteste zuerst)</option>
+            <option value="grade_count_desc" <%= (search && search.sort) === 'grade_count_desc' ? 'selected' : '' %>>Meiste Bewertungen</option>
+            <option value="points_desc" <%= (search && search.sort) === 'points_desc' ? 'selected' : '' %>>Punkte % absteigend</option>
+          </select>
+          <button class="btn btn-primary" type="submit">Suchen</button>
+          <a class="btn btn-secondary" href="/teacher/grades/<%= classData.id %>">Reset</a>
+        </form>
+
         <div class="teacher-card">
           <div class="teacher-card-header">
             <div>
               <p class="teacher-eyebrow">Schueler und Noten</p>
-              <h3><%= students.length %> Schueler in dieser Klasse</h3>
+              <h3><%= students.length %> / <%= totalStudentCount %> Schueler in dieser Klasse</h3>
             </div>
           </div>
 

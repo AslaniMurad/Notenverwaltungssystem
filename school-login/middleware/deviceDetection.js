@@ -1,28 +1,29 @@
 // middleware/deviceDetection.js
-// Middleware zur Erkennung von mobilen Geräten
+// Middleware to detect mobile devices
 
 function detectDevice(req, res, next) {
   const userAgent = req.headers['user-agent'] || '';
-  
-  // Liste von mobilen Geräte-Identifikatoren
-  const mobileRegex = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini|Mobile|mobile|CriOS/i;
-  
-  // Prüfe ob der User-Agent einen mobilen Identifier enthält
-  const isMobile = mobileRegex.test(userAgent);
-  
-  // Alternativ: Prüfe auch die Bildschirmbreite über einen Query-Parameter (optional)
-  // Dies kann später via JavaScript Client-Side gesetzt werden
-  const isMobileByScreenWidth = req.query.mobile === 'true';
-  
-  // Setze die Information in res.locals, damit sie in allen Views verfügbar ist
+  const mobileHint = req.headers['sec-ch-ua-mobile'];
+
+  // Keep matching strict to avoid desktop false positives.
+  const mobileRegex = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini|Windows Phone/i;
+
+  // Prefer client hint when available, fallback to user-agent matching.
+  const hintedMobile = mobileHint === '?1' ? true : mobileHint === '?0' ? false : null;
+  const isMobileByUserAgent = mobileRegex.test(userAgent);
+  const isMobile = hintedMobile !== null ? hintedMobile : isMobileByUserAgent;
+
+  // Optional query override, e.g. ?mobile=true
+  const mobileQuery = String(req.query.mobile || '').toLowerCase();
+  const isMobileByScreenWidth = mobileQuery === 'true' || mobileQuery === '1';
+
   res.locals.isMobile = isMobile || isMobileByScreenWidth;
   res.locals.deviceType = res.locals.isMobile ? 'mobile' : 'desktop';
-  
-  // Optional: Setze auch in der Session für persistent tracking
+
   if (req.session) {
     req.session.isMobile = res.locals.isMobile;
   }
-  
+
   next();
 }
 

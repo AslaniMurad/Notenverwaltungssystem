@@ -91,13 +91,47 @@
           Gesamtgewichtung: <%= totalPointWeight %> Punkte.
         </div>
 
+        <form class="teacher-search-form" method="GET" action="/teacher/grade-templates/<%= classData.id %>">
+          <input
+            class="form-input teacher-search-input"
+            type="search"
+            name="q"
+            placeholder="Pruefung, Kategorie oder Datum suchen"
+            value="<%= (search && search.q) || '' %>"
+          >
+          <select class="form-select teacher-search-select" name="category" aria-label="Kategorie">
+            <option value="">Alle Kategorien</option>
+            <% (categoryOptions || []).forEach((option) => { %>
+              <option value="<%= option.key %>" <%= (search && search.category) === option.key ? 'selected' : '' %>><%= option.label %></option>
+            <% }) %>
+          </select>
+          <select class="form-select teacher-search-select" name="points" aria-label="Maximalpunkte">
+            <option value="all" <%= (search && search.points) === 'all' ? 'selected' : '' %>>Alle (Max. Punkte)</option>
+            <option value="with_max" <%= (search && search.points) === 'with_max' ? 'selected' : '' %>>Nur mit Max. Punkten</option>
+            <option value="without_max" <%= (search && search.points) === 'without_max' ? 'selected' : '' %>>Nur ohne Max. Punkte</option>
+          </select>
+          <select class="form-select teacher-search-select" name="sort" aria-label="Sortierung">
+            <option value="date_desc" <%= (search && search.sort) === 'date_desc' ? 'selected' : '' %>>Datum (neueste zuerst)</option>
+            <option value="date_asc" <%= (search && search.sort) === 'date_asc' ? 'selected' : '' %>>Datum (aelteste zuerst)</option>
+            <option value="name_asc" <%= (search && search.sort) === 'name_asc' ? 'selected' : '' %>>Name A-Z</option>
+            <option value="name_desc" <%= (search && search.sort) === 'name_desc' ? 'selected' : '' %>>Name Z-A</option>
+            <option value="weight_desc" <%= (search && search.sort) === 'weight_desc' ? 'selected' : '' %>>Gewichtung absteigend</option>
+            <option value="weight_asc" <%= (search && search.sort) === 'weight_asc' ? 'selected' : '' %>>Gewichtung aufsteigend</option>
+            <option value="max_desc" <%= (search && search.sort) === 'max_desc' ? 'selected' : '' %>>Max. Punkte absteigend</option>
+            <option value="max_asc" <%= (search && search.sort) === 'max_asc' ? 'selected' : '' %>>Max. Punkte aufsteigend</option>
+            <option value="category_asc" <%= (search && search.sort) === 'category_asc' ? 'selected' : '' %>>Kategorie A-Z</option>
+          </select>
+          <button class="btn btn-primary" type="submit">Suchen</button>
+          <a class="btn btn-secondary" href="/teacher/grade-templates/<%= classData.id %>">Reset</a>
+        </form>
+
         <div class="teacher-card">
           <div class="teacher-card-header">
             <div>
               <p class="teacher-eyebrow">Pruefungen</p>
               <h3>Verfuegbare Vorlagen</h3>
             </div>
-            <div class="teacher-meta-chip"><%= templates.length %> Eintraege</div>
+            <div class="teacher-meta-chip"><%= templates.length %> / <%= totalTemplateCount %> Eintraege</div>
           </div>
 
           <% if (templates.length === 0) { %>
