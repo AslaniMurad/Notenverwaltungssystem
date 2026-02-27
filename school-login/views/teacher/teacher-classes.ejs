@@ -1,6 +1,6 @@
-﻿<%
+<%
   const page = {
-    title: 'Lehrer â€” KlassenÃ¼bersicht',
+    title: 'Lehrer — Klassenübersicht',
     headerTitle: 'Lehrerbereich',
     styles: ['/css/teacher-pages.css'],
     scripts: ['/js/app.js'],
@@ -9,21 +9,21 @@
     hideFooter: true,
     content: function () { %>
     <% if (locals.isMobile) { %>
-      <button class="mobile-nav-toggle" aria-label="Navigation Ã¶ffnen"></button>
+      <button class="mobile-nav-toggle" aria-label="Navigation öffnen"></button>
     <% } %>
     <div class="app-shell teacher-shell">
       <aside class="teacher-sidebar" aria-label="Lehrer Navigation">
         <div class="sidebar-brand">
           <div>
             <div class="sidebar-title">Teacher Panel</div>
-            <div class="sidebar-meta"><%= email %> Â· Lehrer</div>
+            <div class="sidebar-meta"><%= email %> · Lehrer</div>
           </div>
           <span class="sidebar-badge">Eingeloggt</span>
         </div>
 
         <div class="app-nav">
           <div class="nav-section">
-            <div class="nav-section-title">Navigation</div>
+            <div class="nav-section-title">Menue</div>
             <a class="is-active" href="/teacher/classes">Meine Klassen</a>
             <a href="/teacher/create-class">Klasse erstellen</a>
             <a href="/teacher/settings">Einstellungen</a>
@@ -38,9 +38,9 @@
       <section class="teacher-main">
         <header class="teacher-main-header">
           <div>
-            <p class="teacher-eyebrow">Ãœbersicht</p>
+            <p class="teacher-eyebrow">Übersicht</p>
             <h1>Meine Klassen</h1>
-            <p class="teacher-muted">Rolle: Lehrer Â· <%= email %></p>
+            <p class="teacher-muted">Rolle: Lehrer · <%= email %></p>
           </div>
           <div class="teacher-actions-inline">
             <a class="btn btn-primary" href="/teacher/create-class">+ Neue Klasse</a>
@@ -66,14 +66,14 @@
               <p class="teacher-eyebrow">Klassen</p>
               <h3>Aktive Klassen</h3>
             </div>
-            <div class="teacher-meta-chip"><%= classes.length %> EintrÃ¤ge</div>
+            <div class="teacher-meta-chip"><%= classes.length %> Einträge</div>
           </div>
 
           <div class="teacher-grid">
             <% if (classes.length === 0) { %>
               <div class="teacher-empty">
                 <h4>Noch keine Klassen erstellt</h4>
-                <p>Lege deine erste Klasse an, um SchÃ¼ler zu verwalten.</p>
+                <p>Lege deine erste Klasse an, um Schüler zu verwalten.</p>
                 <a class="btn btn-primary" href="/teacher/create-class">Klasse erstellen</a>
               </div>
             <% } else { %>
@@ -85,10 +85,10 @@
                     <p class="teacher-muted">Klasse: <%= cls.name %></p>
                   </div>
                   <div class="teacher-card-actions">
-                    <a class="btn btn-primary" href="/teacher/students/<%= cls.id %>">SchÃ¼ler verwalten</a>
-                    <form class="inline" method="POST" action="/teacher/delete-class/<%= cls.id %>" onsubmit="return confirm('Klasse wirklich lÃ¶schen? Alle SchÃ¼ler werden entfernt.')">
+                    <a class="btn btn-primary" href="/teacher/students/<%= cls.id %>">Schüler verwalten</a>
+                    <form class="inline" method="POST" action="/teacher/delete-class/<%= cls.id %>" onsubmit="return confirm('Klasse wirklich löschen? Alle Schüler werden entfernt.')">
                       <input type="hidden" name="_csrf" value="<%= csrfToken %>">
-                      <button class="btn btn-danger" type="submit">LÃ¶schen</button>
+                      <button class="btn btn-danger" type="submit">Löschen</button>
                     </form>
                   </div>
                 </div>

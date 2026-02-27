@@ -35,7 +35,7 @@
 
         <div class="app-nav">
           <div class="nav-section">
-            <div class="nav-section-title">Navigation</div>
+            <div class="nav-section-title">Menue</div>
             <a href="/teacher/classes">Meine Klassen</a>
             <a href="/teacher/create-class">Klasse erstellen</a>
             <a class="is-active" href="/teacher/settings">Einstellungen</a>
@@ -333,7 +333,9 @@
               <div class="settings-grid">
                 <% categoryDefinitions.forEach((category) => { %>
                   <div class="settings-weight-item">
-                    <label for="weight_<%= category.slug %>"><%= category.label %></label>
+                    <label for="weight_<%= category.slug %>">
+                      <span class="grade-category-badge <%= category.slug %>"><%= category.label %></span>
+                    </label>
                     <div class="settings-weight-input-row">
                       <input
                         type="number"

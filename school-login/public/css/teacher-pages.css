@@ -177,18 +177,31 @@
   border: 1px solid var(--teacher-border);
   background: #f9fafb;
   font-size: 14px;
+  line-height: 1.45;
+  box-shadow: 0 6px 14px rgba(15, 23, 42, 0.05);
+}
+
+.teacher-alert a {
+  color: inherit;
+  font-weight: 700;
+  text-decoration-thickness: 1.5px;
+}
+
+.teacher-alert strong {
+  font-weight: 700;
 }
 
 .teacher-alert.error {
   border-color: #fca5a5;
-  background: #fef2f2;
+  background: linear-gradient(180deg, #fff5f5 0%, #fef2f2 100%);
   color: #b91c1c;
 }
 
 .teacher-alert.info {
-  border-color: var(--teacher-accent-light);
-  background: #f8fbff;
-  color: var(--teacher-accent);
+  border-color: #bfdbfe;
+  border-left: 4px solid var(--teacher-accent);
+  background: #eff6ff;
+  color: #1d4ed8;
 }
 
 .inline { display: inline; }
@@ -455,8 +468,14 @@
   border-radius: 6px;
   font-size: 12px;
   font-weight: 700;
-  text-transform: uppercase;
   letter-spacing: 0.03em;
+  background: #f3f4f6;
+  color: #374151;
+}
+
+.grade-category-badge.schularbeit {
+  background: #fee2e2;
+  color: #991b1b;
 }
 
 .grade-category-badge.test {
@@ -465,13 +484,8 @@
 }
 
 .grade-category-badge.hausaufgabe {
-  background: #e0e7ff;
-  color: #4338ca;
-}
-
-.grade-category-badge.mündlich {
-  background: #fce7f3;
-  color: #9f1239;
+  background: #fef3c7;
+  color: #92400e;
 }
 
 .grade-category-badge.projekt {
@@ -479,22 +493,35 @@
   color: #065f46;
 }
 
-.grade-category-badge.hausübung {
+.grade-category-badge.hausubung,
+.grade-category-badge.hausuebung {
   background: #fef3c7;
   color: #92400e;
 }
 
-.grade-category-badge.sonstiges {
-  background: #f3f4f6;
-  color: #374151;
+.grade-category-badge.mitarbeit {
+  background: #ede9fe;
+  color: #5b21b6;
 }
 
-.grade-category-badge.präsentation {
+.grade-category-badge.wiederholung {
+  background: #e0f2fe;
+  color: #0c4a6e;
+}
+
+.grade-category-badge.mundlich {
+  background: #fce7f3;
+  color: #9f1239;
+}
+
+.grade-category-badge.prasentation,
+.grade-category-badge.praesentation {
   background: #fee2e2;
   color: #991b1b;
 }
 
-.grade-category-badge.wunschprüfung {
+.grade-category-badge.wunschprufung,
+.grade-category-badge.wunschpruefung {
   background: #e0f2fe;
   color: #0369a1;
 }
@@ -502,6 +529,11 @@
 .grade-category-badge.benutzerdefiniert {
   background: #ede9fe;
   color: #5b21b6;
+}
+
+.grade-category-badge.sonstiges {
+  background: #f3f4f6;
+  color: #374151;
 }
 
 .weight-badge {
@@ -565,6 +597,18 @@
   color: #4b5563;
   margin: 8px 0 0 0;
   line-height: 1.5;
+}
+
+.template-table-main {
+  display: grid;
+  gap: 4px;
+}
+
+.template-table-actions {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  flex-wrap: wrap;
 }
 
 .grade-item-title {

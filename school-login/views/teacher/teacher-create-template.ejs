@@ -23,16 +23,16 @@
 
         <div class="app-nav">
           <div class="nav-section">
-            <div class="nav-section-title">Navigation</div>
+            <div class="nav-section-title">Menue</div>
             <a href="/teacher/classes">Meine Klassen</a>
             <a href="/teacher/create-class">Klasse erstellen</a>
+            <a href="/teacher/settings">Einstellungen</a>
             <div class="nav-section-title">Klasse: <%= classData.name %> / <%= classData.subject %></div>
             <a href="/teacher/students/<%= classData.id %>">Schueler</a>
             <a href="/teacher/grades/<%= classData.id %>">Noten</a>
             <a href="/teacher/special-assessments/<%= classData.id %>">Sonderleistungen</a>
             <a class="is-active" href="/teacher/grade-templates/<%= classData.id %>">Pruefungen</a>
             <a href="/teacher/class-statistics/<%= classData.id %>">Statistiken</a>
-            <a href="/teacher/settings">Einstellungen</a>
             <form class="logout-form" method="POST" action="/logout">
               <input type="hidden" name="_csrf" value="<%= csrfToken %>">
               <button class="app-nav-link" type="submit">Logout</button>
