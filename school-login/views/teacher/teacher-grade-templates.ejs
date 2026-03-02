@@ -171,6 +171,7 @@
                       </td>
                       <td>
                         <div class="template-table-actions">
+                          <a class="btn btn-primary btn-sm" href="/teacher/bulk-grade-template/<%= classData.id %>/<%= template.id %>">Benoten</a>
                           <a class="btn btn-secondary btn-sm" href="/teacher/edit-template/<%= classData.id %>/<%= template.id %>">Bearbeiten</a>
                           <form class="inline delete-template-form" method="POST" action="/teacher/delete-template/<%= classData.id %>/<%= template.id %>" data-template-name="<%= template.name %>">
                             <input type="hidden" name="_csrf" value="<%= csrfToken %>">

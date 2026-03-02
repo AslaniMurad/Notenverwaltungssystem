@@ -790,6 +790,116 @@ async function loadGradedTemplateIdsForStudent(classId, studentId) {
   return rows.map((row) => String(row.grade_template_id));
 }
 
+async function loadTemplateForClass(classId, templateId) {
+  const template = await getAsync(
+    "SELECT id, name, category, weight, weight_mode, max_points, date, description FROM grade_templates WHERE id = ? AND class_id = ?",
+    [templateId, classId]
+  );
+  return template ? enrichWeightData(template) : null;
+}
+
+async function loadExistingGradesForTemplate(classId, templateId) {
+  const rows = await allAsync(
+    `SELECT id, student_id, grade, points_achieved, points_max, note, is_absent
+     FROM grades
+     WHERE class_id = ? AND grade_template_id = ?`,
+    [classId, templateId]
+  );
+  const map = new Map();
+  rows.forEach((row) => {
+    map.set(String(row.student_id), {
+      id: row.id,
+      grade: row.grade,
+      points_achieved: row.points_achieved,
+      points_max: row.points_max,
+      note: row.note,
+      is_absent: Boolean(row.is_absent)
+    });
+  });
+  return map;
+}
+
+function isCheckedInputValue(value) {
+  return (
+    value === true ||
+    value === 1 ||
+    value === "1" ||
+    value === "true" ||
+    value === "on"
+  );
+}
+
+function readBulkFieldValue(formData, fieldName, studentId) {
+  const fieldBucket = formData?.[fieldName];
+  if (fieldBucket && typeof fieldBucket === "object" && !Array.isArray(fieldBucket)) {
+    const nestedValue = fieldBucket[String(studentId)];
+    if (nestedValue != null) {
+      return nestedValue;
+    }
+  }
+
+  // Fallback for flat urlencoded parsing: grade[123], points_achieved[123], ...
+  const flatKey = `${fieldName}[${String(studentId)}]`;
+  const flatValue = formData?.[flatKey];
+  return flatValue == null ? "" : flatValue;
+}
+
+function buildBulkGradeRows(students, existingGradesByStudent, formData = {}) {
+  return (students || []).map((student) => {
+    const key = String(student.id);
+    const existing = existingGradesByStudent.get(key) || null;
+    return {
+      student,
+      existing,
+      form: {
+        grade: String(readBulkFieldValue(formData, "grade", student.id) || "").trim(),
+        points_achieved: String(readBulkFieldValue(formData, "points_achieved", student.id) || "").trim(),
+        note: String(readBulkFieldValue(formData, "note", student.id) || "").trim(),
+        is_absent: isCheckedInputValue(readBulkFieldValue(formData, "is_absent", student.id))
+      }
+    };
+  });
+}
+
+async function renderBulkGradeTemplateForm(req, res, payload = {}) {
+  const {
+    status = 200,
+    classData,
+    template,
+    students = [],
+    existingGradesByStudent = new Map(),
+    activeProfile,
+    formData = {},
+    error = null,
+    validationErrors = [],
+    message = null
+  } = payload;
+
+  const scoringMode = normalizeScoringMode(activeProfile?.scoring_mode);
+  const templateMaxPoints = Number(template?.max_points);
+  const templateHasMaxPoints = Number.isFinite(templateMaxPoints) && templateMaxPoints > 0;
+  const rows = buildBulkGradeRows(students, existingGradesByStudent, formData);
+  const existingCount = rows.filter((row) => Boolean(row.existing)).length;
+
+  return res.status(status).render("teacher/teacher-bulk-grade-template", {
+    email: req.session.user.email,
+    classData,
+    template,
+    rows,
+    existingCount,
+    activeProfile,
+    scoringMode,
+    scoringModeLabel: getScoringModeLabel(scoringMode),
+    absenceMode: normalizeAbsenceMode(activeProfile?.absence_mode),
+    templateHasMaxPoints,
+    templateMaxPoints: templateHasMaxPoints ? templateMaxPoints : null,
+    csrfToken: req.csrfToken(),
+    error,
+    validationErrors: Array.isArray(validationErrors) ? validationErrors : [],
+    message
+  });
+}
+
 async function loadSpecialAssessments(classId) {
   return allAsync(
     `SELECT sa.id, sa.student_id, s.name AS student_name, sa.type, sa.name, sa.description, sa.weight, sa.grade, sa.created_at
@@ -2716,6 +2826,261 @@ router.get("/grade-templates/:classId", async (req, res, next) => {
       totalPointWeight,
       csrfToken: req.csrfToken()
     });
+  } catch (err) {
+    next(err);
+  }
+});
+
+router.get("/bulk-grade-template/:classId/:templateId", async (req, res, next) => {
+  try {
+    const classId = req.params.classId;
+    const templateId = req.params.templateId;
+    const classData = await loadClassForTeacher(classId, req.session.user.id);
+    if (!classData) {
+      return renderError(res, req, "Klasse nicht gefunden.", 404, "/teacher/classes");
+    }
+
+    const template = await loadTemplateForClass(classId, templateId);
+    if (!template) {
+      return renderError(res, req, "Pruefung nicht gefunden.", 404, `/teacher/grade-templates/${classId}`);
+    }
+
+    const activeProfile = await loadActiveTeacherProfile(req.session.user.id);
+    if (!activeProfile) {
+      return res.redirect("/teacher/settings?setup=1");
+    }
+
+    const students = await loadStudents(classId);
+    const existingGradesByStudent = await loadExistingGradesForTemplate(classId, templateId);
+
+    const saved = Number(req.query.saved);
+    const duplicates = Number(req.query.duplicates);
+    const messageParts = [];
+    if (Number.isFinite(saved) && saved > 0) {
+      messageParts.push(`${saved} Bewertung${saved === 1 ? "" : "en"} gespeichert.`);
+    }
+    if (Number.isFinite(duplicates) && duplicates > 0) {
+      messageParts.push(`${duplicates} Eintrag${duplicates === 1 ? "" : "e"} waren bereits vorhanden.`);
+    }
+
+    return renderBulkGradeTemplateForm(req, res, {
+      classData,
+      template,
+      students,
+      existingGradesByStudent,
+      activeProfile,
+      message: messageParts.length ? messageParts.join(" ") : null
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
+router.post("/bulk-grade-template/:classId/:templateId", async (req, res, next) => {
+  try {
+    const classId = req.params.classId;
+    const templateId = req.params.templateId;
+    const classData = await loadClassForTeacher(classId, req.session.user.id);
+    if (!classData) {
+      return renderError(res, req, "Klasse nicht gefunden.", 404, "/teacher/classes");
+    }
+
+    const template = await loadTemplateForClass(classId, templateId);
+    if (!template) {
+      return renderError(res, req, "Pruefung nicht gefunden.", 404, `/teacher/grade-templates/${classId}`);
+    }
+
+    const activeProfile = await loadActiveTeacherProfile(req.session.user.id);
+    if (!activeProfile) {
+      return res.redirect("/teacher/settings?setup=1");
+    }
+
+    const students = await loadStudents(classId);
+    const existingGradesByStudent = await loadExistingGradesForTemplate(classId, templateId);
+    const rows = buildBulkGradeRows(students, existingGradesByStudent, req.body || {});
+
+    const scoringMode = normalizeScoringMode(activeProfile.scoring_mode);
+    const absenceMode = normalizeAbsenceMode(activeProfile.absence_mode);
+    const thresholds = normalizeThresholds(activeProfile.thresholds || activeProfile);
+    const templateMaxPointsRaw = Number(template.max_points);
+    const templateHasMaxPoints =
+      Number.isFinite(templateMaxPointsRaw) && templateMaxPointsRaw > 0;
+
+    const validationErrors = [];
+    const preparedRows = [];
+
+    rows.forEach((row) => {
+      if (row.existing) return;
+
+      const studentId = row.student.id;
+      const studentName = row.student.name || `Schueler ${studentId}`;
+      const noteText = String(row.form.note || "").trim();
+      const gradeInput = parseOptionalNumber(row.form.grade);
+      const pointsInput = parseOptionalNumber(row.form.points_achieved);
+      const hasGrade = gradeInput.provided;
+      const hasPoints = pointsInput.provided;
+      const isAbsent = Boolean(row.form.is_absent);
+      const touched = hasGrade || hasPoints || isAbsent || noteText.length > 0;
+      if (!touched) return;
+
+      if (hasGrade && (!Number.isFinite(gradeInput.value) || gradeInput.value < 1 || gradeInput.value > 5)) {
+        validationErrors.push(`${studentName}: Note muss zwischen 1 und 5 liegen.`);
+        return;
+      }
+
+      if (hasPoints && (!Number.isFinite(pointsInput.value) || pointsInput.value < 0)) {
+        validationErrors.push(`${studentName}: Erreichte Punkte muessen mindestens 0 sein.`);
+        return;
+      }
+
+      if (hasPoints && !templateHasMaxPoints) {
+        validationErrors.push(
+          `${studentName}: Diese Pruefung hat keine maximalen Punkte in der Vorlage.`
+        );
+        return;
+      }
+
+      if (hasPoints && templateHasMaxPoints && pointsInput.value > templateMaxPointsRaw) {
+        validationErrors.push(
+          `${studentName}: Erreichte Punkte duerfen ${templateMaxPointsRaw} nicht uebersteigen.`
+        );
+        return;
+      }
+
+      const hasCompletePoints = hasPoints && templateHasMaxPoints;
+
+      if (!isAbsent) {
+        if (scoringMode === SCORING_MODE_GRADE_ONLY && !hasGrade) {
+          validationErrors.push(`${studentName}: Dieses Profil verlangt eine Note.`);
+          return;
+        }
+        if (scoringMode === SCORING_MODE_POINTS_ONLY && !hasCompletePoints) {
+          validationErrors.push(
+            `${studentName}: Dieses Profil verlangt Punkte${templateHasMaxPoints ? "." : " (Max. Punkte fehlen in der Vorlage)."}` 
+          );
+          return;
+        }
+        if (scoringMode === SCORING_MODE_POINTS_AND_GRADE && (!hasGrade || !hasCompletePoints)) {
+          validationErrors.push(
+            `${studentName}: Dieses Profil verlangt Punkte und Note${templateHasMaxPoints ? "." : " (Max. Punkte fehlen in der Vorlage)."}` 
+          );
+          return;
+        }
+        if (scoringMode === SCORING_MODE_POINTS_OR_GRADE && !hasGrade && !hasCompletePoints) {
+          validationErrors.push(
+            `${studentName}: Bitte mindestens Note oder Punkte angeben${templateHasMaxPoints ? "." : " (oder Max. Punkte in der Vorlage setzen)."}` 
+          );
+          return;
+        }
+      }
+
+      let resolvedPointsAchieved = null;
+      let resolvedPointsMax = null;
+      let resolvedGrade = null;
+
+      if (isAbsent) {
+        if (absenceMode === ABSENCE_MODE_INCLUDE_ZERO) {
+          if (!templateHasMaxPoints) {
+            validationErrors.push(
+              `${studentName}: Fuer Abwesenheit mit 0% braucht die Vorlage maximale Punkte.`
+            );
+            return;
+          }
+          resolvedPointsAchieved = 0;
+          resolvedPointsMax = templateMaxPointsRaw;
+        }
+        resolvedGrade = 5;
+      } else {
+        resolvedPointsAchieved = hasCompletePoints ? Number(pointsInput.value) : null;
+        resolvedPointsMax = hasCompletePoints ? Number(templateMaxPointsRaw) : null;
+        resolvedGrade = hasGrade ? Number(gradeInput.value) : null;
+
+        if (resolvedGrade == null && resolvedPointsAchieved != null && resolvedPointsMax != null) {
+          const percent = (resolvedPointsAchieved / resolvedPointsMax) * 100;
+          resolvedGrade = buildGradeFromPercent(percent, thresholds);
+        }
+      }
+
+      if (!Number.isFinite(resolvedGrade) || resolvedGrade < 1 || resolvedGrade > 5) {
+        validationErrors.push(`${studentName}: Note konnte nicht berechnet werden.`);
+        return;
+      }
+
+      preparedRows.push({
+        studentId,
+        grade: resolvedGrade,
+        pointsAchieved: resolvedPointsAchieved,
+        pointsMax: resolvedPointsMax,
+        note: noteText || null,
+        isAbsent: isAbsent ? 1 : 0
+      });
+    });
+
+    if (validationErrors.length) {
+      return renderBulkGradeTemplateForm(req, res, {
+        status: 400,
+        classData,
+        template,
+        students,
+        existingGradesByStudent,
+        activeProfile,
+        formData: req.body || {},
+        error: "Einige Eingaben sind ungueltig. Bitte pruefen.",
+        validationErrors
+      });
+    }
+
+    if (!preparedRows.length) {
+      return renderBulkGradeTemplateForm(req, res, {
+        classData,
+        template,
+        students,
+        existingGradesByStudent,
+        activeProfile,
+        formData: req.body || {},
+        message: "Keine neuen Bewertungen zum Speichern gefunden."
+      });
+    }
+
+    let saved = 0;
+    let duplicates = 0;
+
+    for (const row of preparedRows) {
+      try {
+        await runAsync(
+          "INSERT INTO grades (student_id, class_id, grade_template_id, grade, points_achieved, points_max, note, external_link, is_absent) VALUES (?,?,?,?,?,?,?,?,?)",
+          [
+            row.studentId,
+            classId,
+            template.id,
+            row.grade,
+            row.pointsAchieved,
+            row.pointsMax,
+            row.note,
+            null,
+            row.isAbsent
+          ]
+        );
+        await runAsync("INSERT INTO grade_notifications (student_id, message, type) VALUES (?,?,?)", [
+          row.studentId,
+          "Neue Note eingetragen.",
+          "grade"
+        ]);
+        saved += 1;
+      } catch (err) {
+        if (String(err).includes("UNIQUE")) {
+          duplicates += 1;
+          continue;
+        }
+        throw err;
+      }
+    }
+
+    const query = new URLSearchParams({
+      saved: String(saved),
+      duplicates: String(duplicates)
+    });
+    res.redirect(`/teacher/bulk-grade-template/${classId}/${template.id}?${query.toString()}`);
   } catch (err) {
     next(err);
   }
