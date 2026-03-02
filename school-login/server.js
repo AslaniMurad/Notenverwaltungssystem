@@ -17,6 +17,7 @@ const teacherRouter = require("./routes/teacher");
 
 const app = express();
 const isProduction = process.env.NODE_ENV === "production";
+const assetVersion = process.env.ASSET_VERSION || (isProduction ? "1" : Date.now().toString(36));
 
 if (isProduction) {
   app.set("trust proxy", 1);
@@ -100,7 +101,19 @@ app.use(async (req, res, next) => {
 // set view engine & static
 app.set("views", path.join(__dirname, "views"));
 app.set("view engine", "ejs");
-app.use(express.static(path.join(__dirname, "public")));
+app.use(
+  express.static(path.join(__dirname, "public"), {
+    etag: true,
+    lastModified: true,
+    maxAge: isProduction ? "7d" : 0
+  })
+);
+
+app.locals.assetVersion = assetVersion;
+app.use((req, res, next) => {
+  res.locals.assetVersion = assetVersion;
+  next();
+});
 
 function renderLogin(res, req, options = {}) {
   const {

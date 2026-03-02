@@ -1,0 +1,459 @@
+<%
+  const page = {
+    title: "Lehrer - Einstellungen",
+    headerTitle: "Lehrerbereich",
+    styles: ["/css/teacher-pages.css"],
+    scripts: ["/js/app.js"],
+    bodyClass: "page-teacher",
+    hideHeader: true,
+    hideFooter: true,
+    content: function () {
+      const activeUnit = "Punkte";
+      const scoringLabelByValue = {};
+      const absenceLabelByValue = {};
+      const symbolLabelByValue = {};
+      (scoringModeOptions || []).forEach((option) => {
+        scoringLabelByValue[option.value] = option.label;
+      });
+      (absenceModeOptions || []).forEach((option) => {
+        absenceLabelByValue[option.value] = option.label;
+      });
+      (participationSymbolOptions || []).forEach((option) => {
+        symbolLabelByValue[option.value] = option.label;
+      });
+      const participation = (formData && formData.participation) || {};
+%>
+    <div class="app-shell teacher-shell">
+      <aside class="teacher-sidebar" aria-label="Lehrer Navigation">
+        <div class="sidebar-brand">
+          <div>
+            <div class="sidebar-title">Teacher Panel</div>
+            <div class="sidebar-meta"><%= email %> - Lehrer</div>
+          </div>
+          <span class="sidebar-badge">Eingeloggt</span>
+        </div>
+
+        <div class="app-nav">
+          <div class="nav-section">
+            <div class="nav-section-title">Menue</div>
+            <a href="/teacher/classes">Meine Klassen</a>
+            <a href="/teacher/create-class">Klasse erstellen</a>
+            <a class="is-active" href="/teacher/settings">Einstellungen</a>
+            <form class="logout-form" method="POST" action="/logout">
+              <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+              <button class="app-nav-link" type="submit">Logout</button>
+            </form>
+          </div>
+        </div>
+      </aside>
+
+      <section class="teacher-main">
+        <header class="teacher-main-header">
+          <div>
+            <p class="teacher-eyebrow">Persoenliches Schema</p>
+            <h1>Bewertungseinstellungen</h1>
+            <p class="teacher-muted">Gewichtung erfolgt nur in Punkten.</p>
+          </div>
+          <div class="teacher-actions-inline">
+            <a class="btn btn-secondary" href="/teacher/classes">Zurueck</a>
+          </div>
+        </header>
+
+        <% if (!setupComplete || showSetupFlow) { %>
+          <div class="teacher-alert info">
+            Erste Konfiguration: Erstelle ein Profil. Dieses Profil wird automatisch fuer neue Pruefungen verwendet.
+          </div>
+        <% } %>
+
+        <% if (message) { %>
+          <div class="teacher-alert info"><%= message %></div>
+        <% } %>
+        <% if (error) { %>
+          <div class="teacher-alert error"><%= error %></div>
+        <% } %>
+
+        <div class="teacher-card">
+          <div class="teacher-card-header">
+            <div>
+              <p class="teacher-eyebrow">Profile</p>
+              <h3><%= profiles.length %> gespeicherte Profile</h3>
+            </div>
+            <a class="btn btn-secondary btn-sm" href="/teacher/settings?new=1">Neues Profil</a>
+          </div>
+
+          <% if (profiles.length === 0) { %>
+            <div class="teacher-empty">
+              <h4>Noch kein Profil vorhanden</h4>
+              <p>Starte mit einem Standardprofil und passe danach die Punkte an.</p>
+            </div>
+          <% } else { %>
+            <div class="settings-profiles">
+              <% profiles.forEach((profile) => { %>
+                <div class="settings-profile-item <%= profile.is_active ? "is-active" : "" %>">
+                  <div>
+                    <h4><%= profile.name %></h4>
+                    <p class="teacher-muted">
+                      Modus: Punkte - Eingabe: <%= scoringLabelByValue[profile.scoring_mode] || profile.scoring_mode %> - Abwesenheit: <%= absenceLabelByValue[profile.absence_mode] || profile.absence_mode || "Mit 0% werten (schlechteste Leistung)" %>
+                    </p>
+                  </div>
+                  <div class="settings-profile-actions">
+                    <a class="btn btn-secondary btn-sm" href="/teacher/settings?profile_id=<%= profile.id %>&edit=1">Bearbeiten</a>
+                    <% if (!profile.is_active) { %>
+                      <form class="inline" method="POST" action="/teacher/settings/activate-profile/<%= profile.id %>">
+                        <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+                        <button class="btn btn-primary btn-sm" type="submit">Aktivieren</button>
+                      </form>
+                    <% } else { %>
+                      <span class="teacher-meta-chip">Aktiv</span>
+                    <% } %>
+                    <form class="inline delete-profile-form" method="POST" action="/teacher/settings/delete-profile/<%= profile.id %>" data-profile-name="<%= profile.name %>">
+                      <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+                      <button class="btn btn-danger btn-sm" type="button">Loeschen</button>
+                    </form>
+                  </div>
+                </div>
+              <% }) %>
+            </div>
+          <% } %>
+        </div>
+
+        <% if (!showConfigForm) { %>
+          <div class="teacher-card">
+            <div class="teacher-empty">
+              <h4>Profil auswaehlen</h4>
+              <p>Waehle bei einem Profil "Bearbeiten" oder erstelle ein neues Profil.</p>
+            </div>
+          </div>
+        <% } %>
+
+        <% if (showConfigForm) { %>
+          <div class="teacher-card">
+            <div class="teacher-card-header">
+              <div>
+                <p class="teacher-eyebrow">Konfiguration</p>
+                <h3><%= formData.profile_id ? "Profil bearbeiten" : "Profil erstellen" %></h3>
+              </div>
+              <div class="teacher-meta-chip">
+                Summe: <span id="profile-total"><%= selectedTotal %></span>
+                <span id="profile-total-unit"><%= activeUnit %></span>
+              </div>
+            </div>
+
+            <form class="teacher-form" method="POST" action="/teacher/settings/save-profile" id="settings-profile-form">
+              <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+              <input type="hidden" name="profile_id" id="profile_id" value="<%= formData.profile_id || "" %>">
+              <input type="hidden" name="weight_mode" value="points">
+
+              <label for="profile_name">Profilname *</label>
+              <input
+                type="text"
+                id="profile_name"
+                name="profile_name"
+                required
+                placeholder="z.B. Informatik Standard"
+                value="<%= formData.profile_name || "" %>"
+              >
+              <small class="form-hint">Lehrer legen nur Punkte je Kategorie fest.</small>
+
+              <label for="scoring_mode">Bewertungseingabe *</label>
+              <select id="scoring_mode" name="scoring_mode" required>
+                <% (scoringModeOptions || []).forEach((option) => { %>
+                  <option
+                    value="<%= option.value %>"
+                    <%= String(formData.scoring_mode || "") === String(option.value) ? "selected" : "" %>
+                  >
+                    <%= option.label %>
+                  </option>
+                <% }) %>
+              </select>
+              <small class="form-hint">Legt fest, ob bei neuen Bewertungen Noten, Punkte oder beides eingegeben wird.</small>
+
+              <label for="absence_mode">Bei "nicht da" *</label>
+              <select id="absence_mode" name="absence_mode" required>
+                <% (absenceModeOptions || []).forEach((option) => { %>
+                  <option
+                    value="<%= option.value %>"
+                    <%= String(formData.absence_mode || "") === String(option.value) ? "selected" : "" %>
+                  >
+                    <%= option.label %>
+                  </option>
+                <% }) %>
+              </select>
+              <small class="form-hint">Legt fest, ob Abwesenheiten den Schnitt verschlechtern oder neutral bleiben.</small>
+
+              <div class="settings-grid">
+                <div class="settings-weight-item">
+                  <label for="grade1_min_percent">Ab Prozent Note 1</label>
+                  <input
+                    type="number"
+                    id="grade1_min_percent"
+                    name="grade1_min_percent"
+                    min="0"
+                    max="100"
+                    step="0.1"
+                    required
+                    value="<%= formData.thresholds && formData.thresholds.grade1_min_percent != null ? formData.thresholds.grade1_min_percent : "" %>"
+                  >
+                </div>
+                <div class="settings-weight-item">
+                  <label for="grade2_min_percent">Ab Prozent Note 2</label>
+                  <input
+                    type="number"
+                    id="grade2_min_percent"
+                    name="grade2_min_percent"
+                    min="0"
+                    max="100"
+                    step="0.1"
+                    required
+                    value="<%= formData.thresholds && formData.thresholds.grade2_min_percent != null ? formData.thresholds.grade2_min_percent : "" %>"
+                  >
+                </div>
+                <div class="settings-weight-item">
+                  <label for="grade3_min_percent">Ab Prozent Note 3</label>
+                  <input
+                    type="number"
+                    id="grade3_min_percent"
+                    name="grade3_min_percent"
+                    min="0"
+                    max="100"
+                    step="0.1"
+                    required
+                    value="<%= formData.thresholds && formData.thresholds.grade3_min_percent != null ? formData.thresholds.grade3_min_percent : "" %>"
+                  >
+                </div>
+                <div class="settings-weight-item">
+                  <label for="grade4_min_percent">Ab Prozent Note 4</label>
+                  <input
+                    type="number"
+                    id="grade4_min_percent"
+                    name="grade4_min_percent"
+                    min="0"
+                    max="100"
+                    step="0.1"
+                    required
+                    value="<%= formData.thresholds && formData.thresholds.grade4_min_percent != null ? formData.thresholds.grade4_min_percent : "" %>"
+                  >
+                </div>
+              </div>
+              <small class="form-hint">Nur relevant, wenn Punkte erfasst werden und die Note automatisch berechnet wird.</small>
+
+              <label class="checkbox-line" for="ma_enabled">
+                <input type="checkbox" id="ma_enabled" name="ma_enabled" value="1" <%= participation.ma_enabled ? "checked" : "" %>>
+                Mitarbeit aktivieren (MA)
+              </label>
+
+              <div id="ma-config-fields">
+                <div class="settings-grid">
+                  <div class="settings-weight-item">
+                    <label for="ma_weight">MA Gewichtung (Punkte)</label>
+                    <input
+                      type="number"
+                      id="ma_weight"
+                      name="ma_weight"
+                      min="0"
+                      step="0.5"
+                      required
+                      value="<%= participation.ma_weight != null ? participation.ma_weight : "" %>"
+                    >
+                  </div>
+                  <div class="settings-weight-item">
+                    <label for="ma_grade_plus"><%= symbolLabelByValue.plus || "+" %> als Note</label>
+                    <input
+                      type="number"
+                      id="ma_grade_plus"
+                      name="ma_grade_plus"
+                      min="1"
+                      max="5"
+                      step="0.1"
+                      required
+                      value="<%= participation.ma_grade_plus != null ? participation.ma_grade_plus : "" %>"
+                    >
+                  </div>
+                  <div class="settings-weight-item">
+                    <label for="ma_grade_plus_tilde"><%= symbolLabelByValue.plus_tilde || "+~" %> als Note</label>
+                    <input
+                      type="number"
+                      id="ma_grade_plus_tilde"
+                      name="ma_grade_plus_tilde"
+                      min="1"
+                      max="5"
+                      step="0.1"
+                      required
+                      value="<%= participation.ma_grade_plus_tilde != null ? participation.ma_grade_plus_tilde : "" %>"
+                    >
+                  </div>
+                  <div class="settings-weight-item">
+                    <label for="ma_grade_neutral"><%= symbolLabelByValue.neutral || "~" %> als Note</label>
+                    <input
+                      type="number"
+                      id="ma_grade_neutral"
+                      name="ma_grade_neutral"
+                      min="1"
+                      max="5"
+                      step="0.1"
+                      required
+                      value="<%= participation.ma_grade_neutral != null ? participation.ma_grade_neutral : "" %>"
+                    >
+                  </div>
+                  <div class="settings-weight-item">
+                    <label for="ma_grade_minus_tilde"><%= symbolLabelByValue.minus_tilde || "-~" %> als Note</label>
+                    <input
+                      type="number"
+                      id="ma_grade_minus_tilde"
+                      name="ma_grade_minus_tilde"
+                      min="1"
+                      max="5"
+                      step="0.1"
+                      required
+                      value="<%= participation.ma_grade_minus_tilde != null ? participation.ma_grade_minus_tilde : "" %>"
+                    >
+                  </div>
+                  <div class="settings-weight-item">
+                    <label for="ma_grade_minus"><%= symbolLabelByValue.minus || "-" %> als Note</label>
+                    <input
+                      type="number"
+                      id="ma_grade_minus"
+                      name="ma_grade_minus"
+                      min="1"
+                      max="5"
+                      step="0.1"
+                      required
+                      value="<%= participation.ma_grade_minus != null ? participation.ma_grade_minus : "" %>"
+                    >
+                  </div>
+                </div>
+                <small class="form-hint">Reihenfolge muss aufsteigend sein: + &lt; +~ &lt; ~ &lt; -~ &lt; -.</small>
+              </div>
+
+              <label class="checkbox-line" for="set_active">
+                <input type="checkbox" id="set_active" name="set_active" value="1" <%= formData.set_active ? "checked" : "" %>>
+                Dieses Profil nach dem Speichern aktivieren
+              </label>
+
+              <div class="settings-grid">
+                <% categoryDefinitions.forEach((category) => { %>
+                  <div class="settings-weight-item">
+                    <label for="weight_<%= category.slug %>">
+                      <span class="grade-category-badge <%= category.slug %>"><%= category.label %></span>
+                    </label>
+                    <div class="settings-weight-input-row">
+                      <input
+                        type="number"
+                        id="weight_<%= category.slug %>"
+                        name="weight_<%= category.slug %>"
+                        min="0"
+                        step="0.5"
+                        required
+                        value="<%= formData.weights && formData.weights[category.key] != null ? formData.weights[category.key] : "" %>"
+                        data-weight-field
+                      >
+                      <span class="settings-weight-unit"><%= activeUnit %></span>
+                    </div>
+                  </div>
+                <% }) %>
+              </div>
+
+              <div class="teacher-form-actions">
+                <button class="btn btn-primary" type="submit">Schema speichern</button>
+                <a class="btn btn-secondary" href="/teacher/settings">Abbrechen</a>
+              </div>
+            </form>
+          </div>
+        <% } %>
+      </section>
+    </div>
+
+    <div id="deleteProfileModal" class="modal-overlay">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h3>Profil loeschen</h3>
+        </div>
+        <div class="modal-body">
+          <p>Moechtest du das Profil <strong id="deleteProfileName"></strong> wirklich loeschen?</p>
+          <p class="teacher-muted">Wenn es aktiv ist, wird automatisch ein anderes Profil aktiv gesetzt.</p>
+        </div>
+        <div class="modal-footer">
+          <button class="btn btn-secondary" id="cancelDeleteProfile" type="button">Abbrechen</button>
+          <button class="btn btn-danger" id="confirmDeleteProfile" type="button">Loeschen</button>
+        </div>
+      </div>
+    </div>
+
+    <script>
+      (function() {
+        const totalEl = document.getElementById("profile-total");
+        const weightFields = Array.from(document.querySelectorAll("[data-weight-field]"));
+        const maToggle = document.getElementById("ma_enabled");
+        const maFields = document.getElementById("ma-config-fields");
+        const deleteProfileModal = document.getElementById("deleteProfileModal");
+        const deleteProfileName = document.getElementById("deleteProfileName");
+        const cancelDeleteProfile = document.getElementById("cancelDeleteProfile");
+        const confirmDeleteProfile = document.getElementById("confirmDeleteProfile");
+        let currentDeleteForm = null;
+
+        function sumWeights() {
+          return weightFields.reduce((sum, input) => {
+            const value = Number(String(input.value || "").replace(",", "."));
+            return Number.isFinite(value) ? sum + value : sum;
+          }, 0);
+        }
+
+        function updateTotal() {
+          if (!totalEl) return;
+          const total = Number(sumWeights().toFixed(2));
+          totalEl.textContent = String(total);
+        }
+
+        function updateMaVisibility() {
+          if (!maToggle || !maFields) return;
+          maFields.style.display = maToggle.checked ? "" : "none";
+        }
+
+        weightFields.forEach((field) => {
+          field.addEventListener("input", updateTotal);
+        });
+        updateTotal();
+
+        if (maToggle) {
+          maToggle.addEventListener("change", updateMaVisibility);
+          updateMaVisibility();
+        }
+
+        document.querySelectorAll(".delete-profile-form button[type='button']").forEach((button) => {
+          button.addEventListener("click", (event) => {
+            event.preventDefault();
+            currentDeleteForm = button.closest("form");
+            if (deleteProfileName) {
+              deleteProfileName.textContent = currentDeleteForm?.dataset?.profileName || "";
+            }
+            deleteProfileModal?.classList.add("active");
+          });
+        });
+
+        cancelDeleteProfile?.addEventListener("click", () => {
+          deleteProfileModal?.classList.remove("active");
+          currentDeleteForm = null;
+        });
+
+        confirmDeleteProfile?.addEventListener("click", () => {
+          if (currentDeleteForm) currentDeleteForm.submit();
+        });
+
+        deleteProfileModal?.addEventListener("click", (event) => {
+          if (event.target === deleteProfileModal) {
+            deleteProfileModal.classList.remove("active");
+            currentDeleteForm = null;
+          }
+        });
+
+        document.addEventListener("keydown", (event) => {
+          if (event.key === "Escape" && deleteProfileModal?.classList.contains("active")) {
+            deleteProfileModal.classList.remove("active");
+            currentDeleteForm = null;
+          }
+        });
+      })();
+    </script>
+<% } };
+%>
+<%- include("../layout", page) %>

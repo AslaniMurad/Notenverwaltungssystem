@@ -32,6 +32,9 @@ const getAsync = (sql, params = []) =>
 router.use(requireAuth, requireRole("student"));
 
 const GRADE_ATTACHMENT_DIR = path.join(__dirname, "..", "uploads", "grade-attachments");
+const ABSENCE_MODE_INCLUDE_ZERO = "include_zero";
+const ABSENCE_MODE_EXCLUDE = "exclude";
+const DEFAULT_ABSENCE_MODE = ABSENCE_MODE_INCLUDE_ZERO;
 
 function sanitizeFilename(name) {
   return String(name || "datei")
@@ -53,15 +56,44 @@ async function loadClassInfo(classId) {
   );
 }
 
+function normalizeAbsenceMode(mode) {
+  const normalized = String(mode || "").trim().toLowerCase();
+  if (normalized === ABSENCE_MODE_EXCLUDE) return ABSENCE_MODE_EXCLUDE;
+  return DEFAULT_ABSENCE_MODE;
+}
+
+function isValidGradeValue(value) {
+  const numeric = Number(value);
+  return Number.isFinite(numeric) && numeric >= 1 && numeric <= 5;
+}
+
+function isValidWeightValue(value) {
+  const numeric = Number(value);
+  return Number.isFinite(numeric) && numeric >= 0;
+}
+
+async function loadClassAbsenceMode(classId) {
+  const row = await getAsync(
+    `SELECT gp.absence_mode
+     FROM classes c
+     LEFT JOIN teacher_grading_profiles gp ON gp.teacher_id = c.teacher_id AND gp.is_active = ?
+     WHERE c.id = ?
+     ORDER BY gp.created_at ASC, gp.id ASC
+     LIMIT 1`,
+    [true, classId]
+  );
+  return normalizeAbsenceMode(row?.absence_mode);
+}
+
 async function loadStudentGrades(studentId) {
   return allAsync(
-    `SELECT g.id, g.grade, g.note, g.created_at, gt.id as template_id, gt.name, gt.category, gt.weight, gt.date, gt.description, c.subject as class_subject, g.attachment_path, g.attachment_original_name, g.attachment_mime, g.attachment_size, g.external_link, 0 as is_special
+    `SELECT g.id, g.grade, g.note, g.created_at, g.is_absent, gt.id as template_id, gt.name, gt.category, gt.weight, gt.date, gt.description, c.subject as class_subject, g.attachment_path, g.attachment_original_name, g.attachment_mime, g.attachment_size, g.external_link, 0 as is_special
      FROM grades g
      JOIN grade_templates gt ON gt.id = g.grade_template_id
      JOIN classes c ON c.id = g.class_id
      WHERE g.student_id = ?
      UNION ALL
-     SELECT sa.id, sa.grade, sa.description as note, sa.created_at, NULL as template_id, sa.name, sa.type as category, sa.weight, sa.created_at as date, sa.description, c.subject as class_subject, NULL as attachment_path, NULL as attachment_original_name, NULL as attachment_mime, NULL as attachment_size, NULL as external_link, 1 as is_special
+     SELECT sa.id, sa.grade, sa.description as note, sa.created_at, false as is_absent, NULL as template_id, sa.name, sa.type as category, sa.weight, sa.created_at as date, sa.description, c.subject as class_subject, NULL as attachment_path, NULL as attachment_original_name, NULL as attachment_mime, NULL as attachment_size, NULL as external_link, 1 as is_special
      FROM special_assessments sa
      JOIN classes c ON c.id = sa.class_id
      WHERE sa.student_id = ?
@@ -79,13 +111,13 @@ async function loadTemplates(classId) {
 
 async function loadClassGradeRows(classId) {
   return allAsync(
-    `SELECT gt.name as subject, g.grade as value, gt.weight
+    `SELECT gt.name as subject, g.grade as value, gt.weight, g.is_absent
      FROM grades g
      JOIN students s ON s.id = g.student_id
      JOIN grade_templates gt ON gt.id = g.grade_template_id
      WHERE s.class_id = ?
      UNION ALL
-     SELECT sa.name as subject, sa.grade as value, sa.weight
+     SELECT sa.name as subject, sa.grade as value, sa.weight, false as is_absent
      FROM special_assessments sa
      WHERE sa.class_id = ?`,
     [classId, classId]
@@ -123,8 +155,9 @@ function mapGradeRow(row, classInfo) {
   }
   return {
     id: row.id,
-    value: Number(row.grade),
-    weight: Number(row.weight || 1),
+    value: row.grade == null ? null : Number(row.grade),
+    weight: row.weight == null ? 1 : Number(row.weight),
+    is_absent: Boolean(row.is_absent),
     subject,
     teacher: classInfo?.teacher_email || null,
     comment,
@@ -173,19 +206,22 @@ function mapReturnRow(row, classInfo, messagesByGrade = new Map()) {
   };
 }
 
-function computeAverages(grades) {
+function computeAverages(grades, options = {}) {
+  const absenceMode = normalizeAbsenceMode(options.absenceMode);
   const subjectMap = new Map();
   let weightedSum = 0;
   let weightTotal = 0;
 
   grades.forEach((grade) => {
-    const weight = Number(grade.weight || 1);
-    if (Number.isNaN(grade.value) || Number.isNaN(weight)) return;
-    weightedSum += grade.value * weight;
+    if (grade?.is_absent && absenceMode === ABSENCE_MODE_EXCLUDE) return;
+    const value = Number(grade?.value);
+    const weight = grade?.weight == null ? 1 : Number(grade.weight);
+    if (!isValidGradeValue(value) || !isValidWeightValue(weight)) return;
+    weightedSum += value * weight;
     weightTotal += weight;
 
     const bucket = subjectMap.get(grade.subject) || { weightedSum: 0, weightTotal: 0 };
-    bucket.weightedSum += grade.value * weight;
+    bucket.weightedSum += value * weight;
     bucket.weightTotal += weight;
     subjectMap.set(grade.subject, bucket);
   });
@@ -201,19 +237,24 @@ function computeAverages(grades) {
   };
 }
 
-function computeClassAverages(rows) {
+function computeClassAverages(rows, options = {}) {
+  const absenceMode = normalizeAbsenceMode(options.absenceMode);
   const bucket = new Map();
   rows.forEach((row) => {
+    if (row?.is_absent && absenceMode === ABSENCE_MODE_EXCLUDE) return;
+    const value = Number(row?.value);
+    const weight = row?.weight == null ? 1 : Number(row.weight);
+    if (!isValidGradeValue(value) || !isValidWeightValue(weight)) return;
     const key = row.subject || "Fach";
-    const entry = bucket.get(key) || { sum: 0, count: 0 };
-    entry.sum += Number(row.value);
-    entry.count += 1;
+    const entry = bucket.get(key) || { weightedSum: 0, weightTotal: 0 };
+    entry.weightedSum += value * weight;
+    entry.weightTotal += weight;
     bucket.set(key, entry);
   });
 
   return Array.from(bucket.entries()).map(([subject, info]) => ({
     subject,
-    average: info.count ? Number((info.sum / info.count).toFixed(2)) : null
+    average: info.weightTotal ? Number((info.weightedSum / info.weightTotal).toFixed(2)) : null
   }));
 }
 
@@ -282,7 +323,8 @@ async function getStudentContext(req) {
   const student = await loadStudentProfile(req.session.user.email);
   if (!student) return null;
   const classInfo = await loadClassInfo(student.class_id);
-  return { student, classInfo };
+  const classAbsenceMode = await loadClassAbsenceMode(student.class_id);
+  return { student, classInfo, classAbsenceMode };
 }
 
 router.get("/", async (req, res, next) => {
@@ -297,14 +339,14 @@ router.get("/", async (req, res, next) => {
       });
     }
 
-    const { student, classInfo } = context;
+    const { student, classInfo, classAbsenceMode } = context;
     const gradeRows = await loadStudentGrades(student.id);
     const grades = gradeRows.map((row) => mapGradeRow(row, classInfo));
     const subjectSet = new Set(grades.map((grade) => grade.subject));
     if (classInfo?.subject) subjectSet.add(classInfo.subject);
     if (student.class_subject) subjectSet.add(student.class_subject);
     const subjects = Array.from(subjectSet).filter(Boolean);
-    const averages = computeAverages(grades);
+    const averages = computeAverages(grades, { absenceMode: classAbsenceMode });
     const templates = await loadTemplates(student.class_id);
     const gradeByTemplate = new Map(
       gradeRows
@@ -332,7 +374,7 @@ router.get("/", async (req, res, next) => {
       .map((row) => mapReturnRow(row, classInfo, messagesByGrade))
       .sort((a, b) => new Date(b.graded_at) - new Date(a.graded_at));
     const classRows = await loadClassGradeRows(student.class_id);
-    const classAverages = computeClassAverages(classRows);
+    const classAverages = computeClassAverages(classRows, { absenceMode: classAbsenceMode });
     const notifications = await loadNotifications(student.id);
     const csrfToken = req.csrfToken();
 
@@ -580,7 +622,7 @@ router.get("/class-averages", async (req, res, next) => {
     }
 
     const classRows = await loadClassGradeRows(context.student.class_id);
-    res.json({ subjects: computeClassAverages(classRows) });
+    res.json({ subjects: computeClassAverages(classRows, { absenceMode: context.classAbsenceMode }) });
   } catch (err) {
     next(err);
   }

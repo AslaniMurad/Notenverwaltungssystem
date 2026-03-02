@@ -7,7 +7,43 @@
     bodyClass: 'page-teacher',
     hideHeader: true,
     hideFooter: true,
-    content: function () { %>
+    content: function () {
+      const categoryClass = (value) =>
+        ({
+          hausubung: "hausaufgabe",
+          hausuebung: "hausaufgabe",
+          "hausa-bung": "hausaufgabe",
+          prasentation: "prasentation",
+          praesentation: "prasentation",
+          "pra-sentation": "prasentation",
+          wunschprufung: "wunschprufung",
+          wunschpruefung: "wunschprufung",
+          "wunschpr-fung": "wunschprufung"
+        })[
+          String(value || "")
+            .replace(/Ã¤/g, "ä")
+            .replace(/Ã¶/g, "ö")
+            .replace(/Ã¼/g, "ü")
+            .replace(/ÃŸ/g, "ß")
+            .replace(/Â/g, "")
+            .normalize("NFD")
+            .replace(/[\u0300-\u036f]/g, "")
+            .toLowerCase()
+            .replace(/[^a-z0-9]+/g, "-")
+            .replace(/^-+|-+$/g, "")
+        ] ||
+        String(value || "")
+          .replace(/Ã¤/g, "ä")
+          .replace(/Ã¶/g, "ö")
+          .replace(/Ã¼/g, "ü")
+          .replace(/ÃŸ/g, "ß")
+          .replace(/Â/g, "")
+          .normalize("NFD")
+          .replace(/[\u0300-\u036f]/g, "")
+          .toLowerCase()
+          .replace(/[^a-z0-9]+/g, "-")
+          .replace(/^-+|-+$/g, "");
+%>
     <div class="app-shell teacher-shell">
       <aside class="teacher-sidebar" aria-label="Lehrer Navigation">
         <div class="sidebar-brand">
@@ -20,9 +56,10 @@
 
         <div class="app-nav">
           <div class="nav-section">
-            <div class="nav-section-title">Navigation</div>
+            <div class="nav-section-title">Menue</div>
             <a href="/teacher/classes">Meine Klassen</a>
             <a href="/teacher/create-class">Klasse erstellen</a>
+            <a href="/teacher/settings">Einstellungen</a>
             <div class="nav-section-title">Klasse: <%= classData.name %> / <%= classData.subject %></div>
             <a href="/teacher/students/<%= classData.id %>">Schüler</a>
             <a href="/teacher/grades/<%= classData.id %>">Noten</a>
@@ -94,9 +131,9 @@
                 <div class="statistics-item">
                   <div class="statistics-item-header">
                     <div class="statistics-item-title-row">
-                      <span class="grade-category-badge <%= stat.category.toLowerCase() %>"><%= stat.category %></span>
+                      <span class="grade-category-badge <%= categoryClass(stat.category) %>"><%= stat.category %></span>
                       <h4 class="statistics-item-title"><%= stat.name %></h4>
-                      <span class="weight-badge-small"><%= stat.weight %>%</span>
+                      <span class="weight-badge-small"><%= stat.weight_label || stat.weight %></span>
                       <% if (stat.date) { %>
                         <span class="grade-date"><%= new Date(stat.date).toLocaleDateString('de-DE') %></span>
                       <% } %>
@@ -171,3 +208,4 @@
 <% } };
 %>
 <%- include('../layout', page) %>
+

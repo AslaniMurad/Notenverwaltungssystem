@@ -225,6 +225,10 @@ body {
   color: var(--accent);
 }
 
+.mobile-nav-toggle {
+  display: none;
+}
+
 .link-back {
   color: var(--accent);
   text-decoration: none;
