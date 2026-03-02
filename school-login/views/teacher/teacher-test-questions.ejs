@@ -115,7 +115,7 @@
                   data-student-name="<%= thread.student_name || '' %>"
                   data-latest-ts="<%= thread.latest_at ? new Date(thread.latest_at).getTime() : 0 %>"
                 >
-                  <details class="teacher-collapsible" <%= hasOpenMessages ? 'open' : '' %>>
+                  <details class="teacher-collapsible">
                     <summary class="teacher-collapsible-summary">
                       <div class="teacher-thread-summary-left">
                         <div class="teacher-thread-summary-title">
