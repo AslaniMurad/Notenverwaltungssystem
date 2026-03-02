@@ -8,9 +8,7 @@
     hideHeader: true,
     hideFooter: true,
     content: function () { %>
-    <% if (locals.isMobile) { %>
-      <button class="mobile-nav-toggle" aria-label="Navigation öffnen"></button>
-    <% } %>
+    <button class="mobile-nav-toggle" aria-label="Navigation öffnen"></button>
     <div class="app-shell app-shell-wide">
       <aside class="app-sidebar" aria-label="Schülernavigation">
         <div class="sidebar-brand">
@@ -122,7 +120,7 @@
                     <section id="returns" class="tab-content">
             <div class="card">
               <h3>R&uuml;ckgaben</h3>
-              <form id="return-filter" class="filter-grid" aria-label="Rueckgaben filtern">
+              <form id="return-filter" class="filter-grid" aria-label="R?ckgaben filtern">
                 <label>Fach
                   <select name="subject" id="return-filter-subject">
                     <option value="">Alle</option>

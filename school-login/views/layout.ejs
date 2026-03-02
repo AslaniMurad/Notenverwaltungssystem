@@ -1,4 +1,4 @@
-﻿<!doctype html>
+<!doctype html>
 <html lang="de" class="css-loading" data-theme="light">
 <head>
   <meta charset="utf-8">
@@ -93,7 +93,7 @@
   </script>
 </head>
 <body class="<%= ['app-shell-body', bodyClass, locals.isMobile ? 'mobile-view' : 'desktop-view'].filter(Boolean).join(' ') %>">
-  <button id="themeToggle" type="button" aria-label="Dark Mode umschalten" title="Dark Mode umschalten">🌙</button>
+  <button id="themeToggle" type="button" aria-label="Dark Mode umschalten" title="Dark Mode umschalten">Theme</button>
 
   <% if (!hideHeader) { %>
     <%- include('partials/site-header', { headerTitle: headerTitle || title, headerActions: headerActions || [], isMobile: locals.isMobile }) %>
@@ -119,4 +119,3 @@
   <% }) %>
 </body>
 </html>
-

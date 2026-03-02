@@ -1057,12 +1057,88 @@
   .template-picker-sort { min-width: 100%; }
 }
 
-@media (max-width: 700px) {
+@media (max-width: 900px) {
+  .page-teacher .teacher-search-form .teacher-search-input,
+  .page-teacher .teacher-search-form .teacher-search-select {
+    width: 100% !important;
+    min-width: 0 !important;
+    flex: 1 1 100% !important;
+  }
+
   .teacher-search-form input[type="search"],
   .teacher-search-form select,
   .teacher-search-form .btn {
     width: 100%;
     min-width: 0;
     flex: 1 1 100%;
+  }
+
+  #settings-profile-form,
+  #settings-profile-form .settings-grid,
+  #settings-profile-form .settings-weight-item,
+  #settings-profile-form .settings-weight-input-row {
+    min-width: 0;
+    max-width: 100%;
+  }
+
+  #settings-profile-form .settings-grid {
+    grid-template-columns: 1fr !important;
+  }
+
+  #settings-profile-form input,
+  #settings-profile-form select,
+  #settings-profile-form textarea {
+    width: 100% !important;
+    max-width: 100% !important;
+    min-width: 0 !important;
+    box-sizing: border-box;
+  }
+
+  .settings-profile-item {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .settings-profile-actions {
+    width: 100%;
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 8px;
+  }
+
+  .settings-profile-actions .btn,
+  .settings-profile-actions form,
+  .settings-profile-actions form .btn {
+    width: 100%;
+  }
+
+  .settings-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .settings-weight-input-row {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 6px;
+  }
+
+  .settings-weight-unit {
+    min-width: 0;
+  }
+
+  .modal-content {
+    width: calc(100vw - 20px);
+    max-width: calc(100vw - 20px);
+    max-height: calc(100vh - 20px);
+  }
+
+  .modal-footer {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .modal-footer .btn {
+    width: 100%;
   }
 }

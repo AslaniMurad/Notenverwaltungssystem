@@ -330,3 +330,131 @@ header.dashboard-hero {
 .notification { padding: 10px; border: 1px solid var(--border); border-radius: 10px; background: var(--surface-2); }
 .notification.unread { border-color: #93c5fd; background: #eef2ff; }
 .notification small { color: #6b7280; }
+
+@media (max-width: 900px) {
+  .page-student .page-shell {
+    padding: 0;
+    gap: 0;
+  }
+
+  .page-student .app-shell {
+    padding: 0;
+  }
+
+  .page-student .app-main {
+    padding: 14px;
+  }
+
+  header.dashboard-hero {
+    margin-top: 4px;
+    padding: 14px;
+    border-radius: 10px;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 12px;
+  }
+
+  .header-left {
+    width: 100%;
+    align-items: flex-start;
+  }
+
+  .header-left > div {
+    min-width: 0;
+    width: 100%;
+  }
+
+  .header-left h1 {
+    font-size: 18px;
+    line-height: 1.25;
+    overflow-wrap: anywhere;
+    word-break: break-word;
+  }
+
+  .header-right {
+    width: 100%;
+    text-align: left;
+    align-items: flex-start;
+  }
+
+  .logout-form .logout-button {
+    width: 100%;
+    min-height: 44px;
+  }
+
+  .tabs {
+    position: static;
+    display: flex;
+    flex-wrap: wrap;
+    overflow-x: visible;
+    gap: 8px;
+    padding: 10px;
+    border-radius: 10px;
+    margin-bottom: 12px;
+  }
+
+  .tab {
+    white-space: normal;
+    text-align: center;
+    flex: 1 1 calc(50% - 8px);
+  }
+
+  .card {
+    padding: 14px;
+    border-radius: 10px;
+  }
+
+  .filter-grid,
+  .info-grid,
+  .student-meta,
+  .grid-two {
+    grid-template-columns: 1fr;
+  }
+
+  .filter-grid label {
+    min-width: 0;
+  }
+
+  .filter-grid input,
+  .filter-grid select {
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
+    box-sizing: border-box;
+  }
+
+  .button-row,
+  .return-actions {
+    width: 100%;
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 8px;
+  }
+
+  .button-row .btn,
+  .return-actions .btn {
+    width: 100%;
+  }
+
+  .task-row,
+  .return-row {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 8px;
+  }
+
+  .task-status,
+  .return-grade {
+    width: 100%;
+    min-width: 0;
+    text-align: left;
+    align-items: flex-start;
+  }
+
+  .grade-row {
+    grid-template-columns: 1fr;
+    gap: 8px;
+    align-items: flex-start;
+  }
+}
