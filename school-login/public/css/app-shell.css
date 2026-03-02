@@ -129,6 +129,14 @@
   color: var(--shell-accent);
 }
 
+.app-nav a.is-alert,
+.app-nav button.nav-trigger.is-alert,
+.app-nav .app-nav-link.is-alert {
+  border-color: #dc2626;
+  background: linear-gradient(135deg, #fee2e2, #fff);
+  color: #b91c1c;
+}
+
 .nav-trigger {
   text-align: left;
   gap: 10px;
