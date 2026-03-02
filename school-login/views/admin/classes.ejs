@@ -53,7 +53,7 @@
                 <div class="admin-row wrap">
                   <a class="btn btn-primary" href="/admin/classes/<%= cls.id %>/students">Schüler</a>
                   <a class="btn btn-secondary" href="/admin/classes/<%= cls.id %>/edit">Bearbeiten</a>
-                  <form method="POST" action="/admin/classes/<%= cls.id %>/delete" onsubmit="return confirm('Klasse und Schüler löschen?');">
+                  <form method="POST" action="/admin/classes/<%= cls.id %>/delete" onsubmit="return confirm('Klasse und Schüler l&ouml;schen?');">
                     <input type="hidden" name="_csrf" value="<%= csrfToken %>">
                     <button class="btn btn-danger" type="submit">Löschen</button>
                   </form>

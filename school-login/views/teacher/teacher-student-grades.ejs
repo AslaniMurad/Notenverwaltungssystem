@@ -56,15 +56,15 @@
 
         <div class="app-nav">
           <div class="nav-section">
-            <div class="nav-section-title">Menue</div>
+            <div class="nav-section-title">Menü</div>
             <a href="/teacher/classes">Meine Klassen</a>
             <a href="/teacher/create-class">Klasse erstellen</a>
             <a href="/teacher/settings">Einstellungen</a>
             <div class="nav-section-title">Klasse: <%= classData.name %> / <%= classData.subject %></div>
-            <a href="/teacher/students/<%= classData.id %>">Schueler</a>
+            <a href="/teacher/students/<%= classData.id %>">Schüler</a>
             <a href="/teacher/grades/<%= classData.id %>">Noten</a>
             <a href="/teacher/special-assessments/<%= classData.id %>">Sonderleistungen</a>
-            <a href="/teacher/grade-templates/<%= classData.id %>">Pruefungen</a>
+            <a href="/teacher/grade-templates/<%= classData.id %>">Prüfungen</a>
             <a href="/teacher/class-statistics/<%= classData.id %>">Statistiken</a>
             <form class="logout-form" method="POST" action="/logout">
               <input type="hidden" name="_csrf" value="<%= csrfToken %>">
@@ -77,14 +77,14 @@
       <section class="teacher-main">
         <header class="teacher-main-header">
           <div>
-            <p class="teacher-eyebrow">Schueler: <%= student.name %></p>
+            <p class="teacher-eyebrow">Schüler: <%= student.name %></p>
             <h1>Notendetails</h1>
             <p class="teacher-muted">Klasse: <%= classData.name %> (<%= classData.subject %>)</p>
           </div>
           <div class="teacher-actions-inline">
-            <a class="btn btn-primary" href="/teacher/add-grade/<%= classData.id %>/<%= student.id %>">+ Bewertung hinzufuegen</a>
+            <a class="btn btn-primary" href="/teacher/add-grade/<%= classData.id %>/<%= student.id %>">+ Bewertung hinzufügen</a>
             <a class="btn btn-secondary" href="/teacher/student-grades/<%= classData.id %>/<%= student.id %>/details">Details</a>
-            <a class="btn btn-secondary" href="/teacher/grades/<%= classData.id %>">Zurueck</a>
+            <a class="btn btn-secondary" href="/teacher/grades/<%= classData.id %>">Zurück</a>
           </div>
         </header>
 
@@ -122,7 +122,7 @@
           <div class="teacher-card-header">
             <div>
               <p class="teacher-eyebrow">Wunschnote</p>
-              <h3>Welche Note wuerde helfen?</h3>
+              <h3>Welche Note würde helfen?</h3>
             </div>
             <button
               class="btn btn-secondary"
@@ -130,13 +130,13 @@
               id="openWishGradeModal"
               <%= (wishGradeRows || []).length === 0 ? "disabled" : "" %>
             >
-              Rechner oeffnen
+              Rechner öffnen
             </button>
           </div>
           <% if ((wishGradeRows || []).length === 0) { %>
-            <p class="teacher-muted">Noch keine gewichteten Eintraege vorhanden.</p>
+            <p class="teacher-muted">Noch keine gewichteten Einträge vorhanden.</p>
           <% } else { %>
-            <p class="teacher-muted">Der Rechner beruecksichtigt Noten und Mitarbeit aus der Gesamtnote.</p>
+            <p class="teacher-muted">Der Rechner berücksichtigt Noten und Mitarbeit aus der Gesamtnote.</p>
           <% } %>
         </div>
 
@@ -147,7 +147,7 @@
               <h3>MA-Verlauf</h3>
             </div>
             <% if (participationEnabled) { %>
-              <div class="teacher-meta-chip"><%= (participationEntries || []).length %> Eintraege</div>
+              <div class="teacher-meta-chip"><%= (participationEntries || []).length %> Einträge</div>
             <% } %>
           </div>
 
@@ -159,7 +159,7 @@
           <% } else if ((participationEntries || []).length === 0) { %>
             <div class="teacher-empty">
               <h4>Noch keine Mitarbeit</h4>
-              <p>In der Notenuebersicht kannst du mit dem MA-Button Eintraege erfassen.</p>
+              <p>In der Notenübersicht kannst du mit dem MA-Button Einträge erfassen.</p>
             </div>
           <% } else { %>
             <div class="grades-table-wrapper">
@@ -204,15 +204,15 @@
               <p class="teacher-eyebrow">Alle Noten</p>
               <h3>Notenliste</h3>
             </div>
-            <div class="teacher-meta-chip"><%= grades.length %> Eintraege</div>
+            <div class="teacher-meta-chip"><%= grades.length %> Einträge</div>
           </div>
 
           <div class="grades-list">
             <% if (grades.length === 0) { %>
               <div class="teacher-empty">
                 <h4>Noch keine Noten</h4>
-                <p>Fuege die erste Note fuer diesen Schueler hinzu.</p>
-                <a class="btn btn-primary" href="/teacher/add-grade/<%= classData.id %>/<%= student.id %>">Bewertung hinzufuegen</a>
+                <p>Füge die erste Note für diesen Schüler hinzu.</p>
+                <a class="btn btn-primary" href="/teacher/add-grade/<%= classData.id %>/<%= student.id %>">Bewertung hinzufügen</a>
               </div>
             <% } else { %>
               <% grades.forEach((grade) => { %>
@@ -233,7 +233,7 @@
                       <span class="grade-badge grade-<%= Math.round(grade.grade) %>"><%= grade.grade %></span>
                       <form class="inline delete-grade-form" method="POST" action="<%= grade.delete_action %>" data-grade-info="<%= grade.template_name %> (<%= grade.grade %>)">
                         <input type="hidden" name="_csrf" value="<%= csrfToken %>">
-                        <button class="btn btn-danger btn-sm" type="button">Loeschen</button>
+                        <button class="btn btn-danger btn-sm" type="button">Löschen</button>
                       </form>
                     </div>
                   </div>
@@ -256,7 +256,7 @@
                       <span class="teacher-muted">Anhang: <%= grade.attachment_name || "Datei" %></span>
                       <form class="inline delete-attachment-form" method="POST" action="<%= grade.attachment_delete_action %>">
                         <input type="hidden" name="_csrf" value="<%= csrfToken %>">
-                        <button class="btn btn-secondary btn-sm" type="submit">Anhang loeschen</button>
+                        <button class="btn btn-secondary btn-sm" type="submit">Anhang löschen</button>
                       </form>
                     </div>
                   <% } %>
@@ -271,7 +271,7 @@
     <div id="wishGradeModal" class="modal-overlay wish-grade-modal">
       <div class="modal-content modal-content-wide">
         <div class="modal-header">
-          <h3>Welche Note wuerde helfen?</h3>
+          <h3>Welche Note würde helfen?</h3>
         </div>
         <div class="modal-body">
           <form class="teacher-form" onsubmit="return false;">
@@ -286,7 +286,7 @@
               value="<%= average != null ? average : '' %>"
               placeholder="z.B. 2.0"
             >
-            <small class="form-hint">Berechnung fuer eine zusaetzliche Leistung mit frei waehlbarer Gewichtung.</small>
+            <small class="form-hint">Berechnung für eine zusätzliche Leistung mit frei wählbarer Gewichtung.</small>
           </form>
 
           <p class="teacher-muted" id="wish-grade-info"></p>
@@ -296,7 +296,7 @@
               <thead>
                 <tr>
                   <th>Gewichtung (Punkte)</th>
-                  <th>Benoetigte Note</th>
+                  <th>Benötigte Note</th>
                   <th>Hinweis</th>
                 </tr>
               </thead>
@@ -313,15 +313,15 @@
     <div id="deleteGradeModal" class="modal-overlay">
       <div class="modal-content">
         <div class="modal-header">
-          <h3>Note loeschen</h3>
+          <h3>Note löschen</h3>
         </div>
         <div class="modal-body">
-          <p>Moechtest du die Note <strong id="deleteGradeInfo"></strong> wirklich loeschen?</p>
-          <p class="teacher-muted">Diese Aktion kann nicht rueckgaengig gemacht werden.</p>
+          <p>Möchtest du die Note <strong id="deleteGradeInfo"></strong> wirklich löschen?</p>
+          <p class="teacher-muted">Diese Aktion kann nicht rückgängig gemacht werden.</p>
         </div>
         <div class="modal-footer">
           <button class="btn btn-secondary" id="cancelDeleteGrade" type="button">Abbrechen</button>
-          <button class="btn btn-danger" id="confirmDeleteGrade" type="button">Loeschen</button>
+          <button class="btn btn-danger" id="confirmDeleteGrade" type="button">Löschen</button>
         </div>
       </div>
     </div>
@@ -364,27 +364,27 @@
 
         function formatRequiredGrade(required, currentAverage, targetGrade) {
           if (!Number.isFinite(required)) {
-            return { display: "-", hint: "Keine Berechnung moeglich", badgeClass: null };
+            return { display: "-", hint: "Keine Berechnung möglich", badgeClass: null };
           }
           if (required < 1) {
             return {
               display: "Nicht erreichbar",
-              hint: "Mit nur einer zusaetzlichen Bewertung dieses Gewichts reicht selbst Note 1 nicht.",
+              hint: "Mit nur einer zusätzlichen Bewertung dieses Gewichts reicht selbst Note 1 nicht.",
               badgeClass: null
             };
           }
           if (required > 5) {
             const alreadyReached = Number.isFinite(currentAverage) && currentAverage <= targetGrade;
             return {
-              display: "Bis 5.00 moeglich",
-              hint: alreadyReached ? "Ziel ist bereits erreicht." : "Auch eine schwache zusaetzliche Note waere ausreichend.",
+              display: "Bis 5.00 möglich",
+              hint: alreadyReached ? "Ziel ist bereits erreicht." : "Auch eine schwache zusätzliche Note wäre ausreichend.",
               badgeClass: null
             };
           }
           const roundedClass = Math.min(5, Math.max(1, Math.round(required)));
           return {
             display: required.toFixed(2),
-            hint: "Benoetigte Note fuer genau diese Wunschnote.",
+            hint: "Benötigte Note für genau diese Wunschnote.",
             badgeClass: `grade-${roundedClass}`
           };
         }
@@ -394,7 +394,7 @@
 
           const baseline = computeWishGradeBaseline();
           if (!baseline.weightTotal) {
-            wishGradeInfo.textContent = "Noch keine gewichteten Noten oder MA-Eintraege vorhanden.";
+            wishGradeInfo.textContent = "Noch keine gewichteten Noten oder MA-Einträge vorhanden.";
             wishGradeTable.innerHTML = "";
             return;
           }

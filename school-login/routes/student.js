@@ -629,8 +629,8 @@ router.get("/grades.pdf", async (req, res, next) => {
     const grades = gradeRows.map((row) => mapGradeRow(row, classInfo));
 
     const lines = [
-      "Notenuebersicht",
-      `Schueler: ${student.name}`,
+      "Notenübersicht",
+      `Schüler: ${student.name}`,
       `Klasse: ${student.class_name || classInfo?.name || ""}`,
       `Fach: ${student.class_subject || classInfo?.subject || ""}`,
       "",

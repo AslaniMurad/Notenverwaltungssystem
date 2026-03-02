@@ -1,4 +1,4 @@
-﻿const express = require("express");
+const express = require("express");
 const router = express.Router();
 const path = require("path");
 const fs = require("fs");
@@ -55,7 +55,7 @@ const MAGIC_BYTES = new Map([
 
 fs.mkdirSync(GRADE_ATTACHMENT_DIR, { recursive: true });
 
-const SPECIAL_ASSESSMENT_TYPES = ["PrÃ¤sentation", "WunschprÃ¼fung", "Benutzerdefiniert"];
+const SPECIAL_ASSESSMENT_TYPES = ["Präsentation", "Wunschprüfung", "Benutzerdefiniert"];
 const WEIGHT_MODE_POINTS = "points";
 const SCORING_MODE_GRADE_ONLY = "grade_only";
 const SCORING_MODE_POINTS_ONLY = "points_only";
@@ -120,7 +120,7 @@ const TEMPLATE_CATEGORY_DEFINITIONS = [
     key: "Haus\u00fcbung",
     slug: "hausaufgabe",
     label: "Hausaufgabe",
-    aliases: ["hausaufgabe", "hausuebung", "hausubung", "haus\u00fcbung", "hausÃ¼bung"]
+    aliases: ["hausaufgabe", "hausuebung", "hausubung", "haus\u00fcbung", "hausübung"]
   },
   {
     key: "Mitarbeit",
@@ -554,7 +554,7 @@ function normalizeExternalLink(raw) {
   try {
     url = new URL(trimmed);
   } catch {
-    return { error: "UngÃ¼ltiger Link." };
+    return { error: "Ungültiger Link." };
   }
   if (!["http:", "https:"].includes(url.protocol)) {
     return { error: "Der Link muss mit http:// oder https:// beginnen." };
@@ -710,13 +710,13 @@ function handleUpload(req, res, next) {
       const students = await loadStudents(classId);
       const student = students.find((entry) => String(entry.id) === String(studentId));
       if (!student) {
-        return renderError(res, req, "SchÃ¼ler nicht gefunden.", 404, `/teacher/students/${classId}`);
+        return renderError(res, req, "Schüler nicht gefunden.", 404, `/teacher/students/${classId}`);
       }
       const templates = await loadTemplates(classId);
       const gradedTemplateIds = await loadGradedTemplateIdsForStudent(classId, student.id);
       const errorMessage =
         uploadErr.code === "LIMIT_FILE_SIZE"
-          ? `Datei ist zu groÃŸ. Maximal ${MAX_GRADE_FILE_MB} MB erlaubt.`
+          ? `Datei ist zu groß. Maximal ${MAX_GRADE_FILE_MB} MB erlaubt.`
           : uploadErr.code === "UNSUPPORTED_FILE_TYPE"
           ? "Nur PDF-, JPG- oder PNG-Dateien sind erlaubt."
           : uploadErr.code === "INVALID_FILE_SIGNATURE"
@@ -1054,7 +1054,7 @@ router.post("/create-class", async (req, res, next) => {
   try {
     const { name, subject } = req.body || {};
     if (!name || !subject) {
-      return renderError(res, req, "Bitte alle Pflichtfelder ausfÃ¼llen.", 400, "/teacher/create-class");
+      return renderError(res, req, "Bitte alle Pflichtfelder ausfüllen.", 400, "/teacher/create-class");
     }
 
     await runAsync("INSERT INTO classes (name, subject, teacher_id) VALUES (?,?,?)", [
@@ -1787,7 +1787,7 @@ router.post("/delete-participation/:classId/:studentId/:markId", async (req, res
     const students = await loadStudents(classId);
     const student = students.find((entry) => String(entry.id) === String(studentId));
     if (!student) {
-      return renderError(res, req, "Schueler nicht gefunden.", 404, `/teacher/students/${classId}`);
+      return renderError(res, req, "Schüler nicht gefunden.", 404, `/teacher/students/${classId}`);
     }
 
     const participationMarks = await loadParticipationMarks(classId, student.id);
@@ -1824,7 +1824,7 @@ router.get("/student-grades/:classId/:studentId", async (req, res, next) => {
     const students = await loadStudents(classId);
     const student = students.find((entry) => String(entry.id) === String(studentId));
     if (!student) {
-      return renderError(res, req, "SchÃ¼ler nicht gefunden.", 404, `/teacher/students/${classId}`);
+      return renderError(res, req, "Schüler nicht gefunden.", 404, `/teacher/students/${classId}`);
     }
 
     const gradeRows = await loadStudentGrades(student.id);
@@ -1955,7 +1955,7 @@ router.get("/student-grades/:classId/:studentId/details", async (req, res, next)
     const students = await loadStudents(classId);
     const student = students.find((entry) => String(entry.id) === String(studentId));
     if (!student) {
-      return renderError(res, req, "Schueler nicht gefunden.", 404, `/teacher/students/${classId}`);
+      return renderError(res, req, "Schüler nicht gefunden.", 404, `/teacher/students/${classId}`);
     }
 
     const gradeRows = await loadStudentGrades(student.id);
@@ -1994,14 +1994,14 @@ router.get("/student-grades/:classId/:studentId/details", async (req, res, next)
       if (skippedForAbsence) {
         includeReason = "Nicht gewichtet (Abwesenheit laut Profil).";
       } else if (!hasValidGrade) {
-        includeReason = "Nicht gewichtet (ungueltige Note).";
+        includeReason = "Nicht gewichtet (ungültige Note).";
       } else if (!hasValidWeight) {
-        includeReason = "Nicht gewichtet (ungueltige Gewichtung).";
+        includeReason = "Nicht gewichtet (ungültige Gewichtung).";
       }
 
       detailRows.push({
-        source_type: Boolean(row.is_special) ? "Sonderleistung" : "Pruefung",
-        source_name: row.name || (Boolean(row.is_special) ? "Sonderleistung" : "Pruefung"),
+        source_type: Boolean(row.is_special) ? "Sonderleistung" : "Prüfung",
+        source_name: row.name || (Boolean(row.is_special) ? "Sonderleistung" : "Prüfung"),
         category: row.category || "-",
         created_at: row.created_at || null,
         exam_date: row.date || null,
@@ -2048,7 +2048,7 @@ router.get("/student-grades/:classId/:studentId/details", async (req, res, next)
       } else if (!hasValidGrade) {
         includeReason = "Nicht gewichtet (Symbol nicht im MA-Schema).";
       } else if (!hasValidWeight) {
-        includeReason = "Nicht gewichtet (ungueltige MA-Gewichtung).";
+        includeReason = "Nicht gewichtet (ungültige MA-Gewichtung).";
       }
 
       detailRows.push({
@@ -2166,7 +2166,7 @@ router.get("/student-grades/:classId/:studentId/details", async (req, res, next)
 
       pushCsv(["Sektion", "Schluessel", "Wert"]);
       pushCsv(["Meta", "Klasse", classData.name || ""]);
-      pushCsv(["Meta", "Schueler", student.name || ""]);
+      pushCsv(["Meta", "Schüler", student.name || ""]);
       pushCsv(["Meta", "Fach", classData.subject || ""]);
       csvLines.push("");
 
@@ -2178,7 +2178,7 @@ router.get("/student-grades/:classId/:studentId/details", async (req, res, next)
           "Bezeichnung",
           "Kategorie",
           "Erfasst am",
-          "Pruefungsdatum",
+          "Prüfungsdatum",
           "Note",
           "Gewicht roh",
           "Gewicht effektiv",
@@ -2352,7 +2352,7 @@ router.get("/add-grade/:classId/:studentId", async (req, res, next) => {
     const students = await loadStudents(classId);
     const student = students.find((entry) => String(entry.id) === String(studentId));
     if (!student) {
-      return renderError(res, req, "SchÃ¼ler nicht gefunden.", 404, `/teacher/students/${classId}`);
+      return renderError(res, req, "Schüler nicht gefunden.", 404, `/teacher/students/${classId}`);
     }
 
     const templates = await loadTemplates(classId);
@@ -2391,7 +2391,7 @@ router.post("/add-grade/:classId/:studentId", handleUpload, async (req, res, nex
     const student = students.find((entry) => String(entry.id) === String(studentId));
     if (!student) {
       await removeUploadedFile(req.file);
-      return renderError(res, req, "SchÃ¼ler nicht gefunden.", 404, `/teacher/students/${classId}`);
+      return renderError(res, req, "Schüler nicht gefunden.", 404, `/teacher/students/${classId}`);
     }
 
     const templates = await loadTemplates(classId);
@@ -2431,7 +2431,7 @@ router.post("/add-grade/:classId/:studentId", handleUpload, async (req, res, nex
     };
 
     if (!grade_template_id) {
-      return renderValidationError(400, "Bitte eine Pruefung auswaehlen.");
+      return renderValidationError(400, "Bitte eine Prüfung auswählen.");
     }
 
     if (hasGrade && (!Number.isFinite(gradeInput.value) || gradeInput.value < 1 || gradeInput.value > 5)) {
@@ -2447,7 +2447,7 @@ router.post("/add-grade/:classId/:studentId", handleUpload, async (req, res, nex
       [grade_template_id, classId]
     );
     if (!templateRow) {
-      return renderValidationError(400, "Pruefungsvorlage nicht gefunden.");
+      return renderValidationError(400, "Prüfungsvorlage nicht gefunden.");
     }
     const templateMaxPointsRaw = Number(templateRow.max_points);
     const templateHasMaxPoints =
@@ -2456,7 +2456,7 @@ router.post("/add-grade/:classId/:studentId", handleUpload, async (req, res, nex
     if (hasPoints && !templateHasMaxPoints) {
       return renderValidationError(
         400,
-        "Diese Pruefung hat keine maximalen Punkte. Bitte in der Pruefungsvorlage setzen."
+        "Diese Prüfung hat keine maximalen Punkte. Bitte in der Prüfungsvorlage setzen."
       );
     }
 
@@ -2478,7 +2478,7 @@ router.post("/add-grade/:classId/:studentId", handleUpload, async (req, res, nex
           400,
           templateHasMaxPoints
             ? "Dieses Profil verlangt Punkte."
-            : "Dieses Profil verlangt Punkte. Bitte zuerst maximale Punkte in der Pruefungsvorlage setzen."
+            : "Dieses Profil verlangt Punkte. Bitte zuerst maximale Punkte in der Prüfungsvorlage setzen."
         );
       }
       if (scoringMode === SCORING_MODE_POINTS_AND_GRADE && (!hasGrade || !hasCompletePoints)) {
@@ -2486,7 +2486,7 @@ router.post("/add-grade/:classId/:studentId", handleUpload, async (req, res, nex
           400,
           templateHasMaxPoints
             ? "Dieses Profil verlangt Punkte und Note."
-            : "Dieses Profil verlangt Punkte und Note. Bitte zuerst maximale Punkte in der Pruefungsvorlage setzen."
+            : "Dieses Profil verlangt Punkte und Note. Bitte zuerst maximale Punkte in der Prüfungsvorlage setzen."
         );
       }
       if (scoringMode === SCORING_MODE_POINTS_OR_GRADE && !hasGrade && !hasCompletePoints) {
@@ -2494,7 +2494,7 @@ router.post("/add-grade/:classId/:studentId", handleUpload, async (req, res, nex
           400,
           templateHasMaxPoints
             ? "Bitte mindestens Note oder Punkte angeben."
-            : "Bitte mindestens eine Note angeben oder maximale Punkte in der Pruefungsvorlage setzen."
+            : "Bitte mindestens eine Note angeben oder maximale Punkte in der Prüfungsvorlage setzen."
         );
       }
     }
@@ -2520,7 +2520,7 @@ router.post("/add-grade/:classId/:studentId", handleUpload, async (req, res, nex
         if (!templateHasMaxPoints) {
           return renderValidationError(
             400,
-            "Fuer 'Mit 0% werten' braucht die Pruefung maximale Punkte in der Vorlage."
+            "Fuer 'Mit 0% werten' braucht die Prüfung maximale Punkte in der Vorlage."
           );
         }
         resolvedPointsAchieved = 0;
@@ -2581,7 +2581,7 @@ router.post("/add-grade/:classId/:studentId", handleUpload, async (req, res, nex
           templates,
           gradedTemplateIds,
           formData,
-          error: "Diese Pruefung wurde bereits benotet."
+          error: "Diese Prüfung wurde bereits benotet."
         });
       }
       throw err;
@@ -2793,7 +2793,7 @@ router.post("/create-template/:classId", async (req, res, next) => {
         categoryDefinitions: TEMPLATE_CATEGORY_DEFINITIONS,
         formData,
         csrfToken: req.csrfToken(),
-        error: "Bitte alle Pflichtfelder ausfÃ¼llen."
+        error: "Bitte alle Pflichtfelder ausfüllen."
       });
     }
     if (weightValue < 0) {
@@ -2856,7 +2856,7 @@ router.get("/edit-template/:classId/:templateId", async (req, res, next) => {
       [templateId, classId]
     );
     if (!template) {
-      return renderError(res, req, "Pruefung nicht gefunden.", 404, `/teacher/grade-templates/${classId}`);
+      return renderError(res, req, "Prüfung nicht gefunden.", 404, `/teacher/grade-templates/${classId}`);
     }
 
     const dateValue =
@@ -2905,7 +2905,7 @@ router.post("/edit-template/:classId/:templateId", async (req, res, next) => {
       [templateId, classId]
     );
     if (!existingTemplate) {
-      return renderError(res, req, "Pruefung nicht gefunden.", 404, `/teacher/grade-templates/${classId}`);
+      return renderError(res, req, "Prüfung nicht gefunden.", 404, `/teacher/grade-templates/${classId}`);
     }
 
     const normalizedCategory = normalizeCategoryKey(category);
@@ -2931,7 +2931,7 @@ router.post("/edit-template/:classId/:templateId", async (req, res, next) => {
         templateId,
         formData,
         csrfToken: req.csrfToken(),
-        error: "Bitte alle Pflichtfelder ausfuellen."
+        error: "Bitte alle Pflichtfelder ausfüllen."
       });
     }
     if (rawWeightValue < 0) {
@@ -2993,7 +2993,7 @@ router.post("/delete-template/:classId/:templateId", async (req, res, next) => {
       [templateId, classId]
     );
     if (!templateRow) {
-      return renderError(res, req, "PrÃ¼fung nicht gefunden.", 404, `/teacher/grade-templates/${classId}`);
+      return renderError(res, req, "Prüfung nicht gefunden.", 404, `/teacher/grade-templates/${classId}`);
     }
 
     await runAsync("DELETE FROM grade_templates WHERE id = ? AND class_id = ?", [templateId, classId]);
@@ -3084,7 +3084,7 @@ router.post("/special-assessments/:classId", async (req, res, next) => {
           weight,
           grade
         },
-        error: "Bitte alle Pflichtfelder korrekt ausfÃ¼llen.",
+        error: "Bitte alle Pflichtfelder korrekt ausfüllen.",
         csrfToken: req.csrfToken()
       });
     }
@@ -3108,7 +3108,7 @@ router.post("/special-assessments/:classId", async (req, res, next) => {
           weight,
           grade
         },
-        error: "Bitte eine Bezeichnung fÃ¼r die benutzerdefinierte Sonderleistung angeben.",
+        error: "Bitte eine Bezeichnung für die benutzerdefinierte Sonderleistung angeben.",
         csrfToken: req.csrfToken()
       });
     }
