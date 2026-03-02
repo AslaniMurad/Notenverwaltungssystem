@@ -38,8 +38,8 @@
         </div>
       </aside>
 
-      <section class="teacher-main">
-        <header class="teacher-main-header">
+      <section class="teacher-main teacher-test-questions-page">
+        <header class="teacher-main-header teacher-main-header-compact">
           <div>
             <p class="teacher-eyebrow">Rueckgaben</p>
             <h1>Fragen zu Tests</h1>
@@ -56,7 +56,10 @@
               <p class="teacher-eyebrow">Konversationen</p>
               <h3>Nachrichtenverlauf</h3>
             </div>
-            <div class="teacher-meta-chip"><%= openMessageCount %> offen</div>
+            <div class="teacher-thread-overview">
+              <div class="teacher-meta-chip"><%= openMessageCount %> offen</div>
+              <div class="teacher-meta-chip teacher-meta-chip-neutral"><%= messageThreads.length %> Konversationen</div>
+            </div>
           </div>
 
           <% if (!messageThreads || messageThreads.length === 0) { %>
@@ -65,38 +68,95 @@
               <p>Schuelerfragen zu Rueckgaben erscheinen hier.</p>
             </div>
           <% } else { %>
-            <div class="teacher-list">
+            <form class="teacher-search-form teacher-thread-controls" id="thread-filter-form" role="search" aria-label="Nachrichten filtern" onsubmit="return false;">
+              <div class="teacher-thread-filter-field is-search">
+                <label class="teacher-filter-label" for="thread-search">Suche</label>
+                <input
+                  class="form-input teacher-search-input"
+                  type="search"
+                  id="thread-search"
+                  placeholder="Schueler, E-Mail, Test oder Nachricht suchen"
+                >
+              </div>
+              <div class="teacher-thread-filter-field">
+                <label class="teacher-filter-label" for="thread-status-filter">Status</label>
+                <select class="form-select teacher-search-select" id="thread-status-filter" aria-label="Statusfilter">
+                  <option value="all">Alle</option>
+                  <option value="open">Nur offen</option>
+                  <option value="closed">Nur beantwortet</option>
+                </select>
+              </div>
+              <div class="teacher-thread-filter-field">
+                <label class="teacher-filter-label" for="thread-sort-filter">Sortierung</label>
+                <select class="form-select teacher-search-select" id="thread-sort-filter" aria-label="Sortierung">
+                  <option value="latest_desc">Neueste zuerst</option>
+                  <option value="latest_asc">Aelteste zuerst</option>
+                  <option value="open_first">Offene zuerst</option>
+                  <option value="student_asc">Name A-Z</option>
+                  <option value="student_desc">Name Z-A</option>
+                </select>
+              </div>
+              <button class="btn btn-secondary" type="button" id="thread-filter-reset">Reset</button>
+            </form>
+
+            <div class="teacher-thread-filter-stats" aria-live="polite">
+              <p class="teacher-muted" id="thread-filter-summary"></p>
+            </div>
+
+            <div class="teacher-list" data-thread-list>
               <% messageThreads.forEach(thread => { %>
-                <% const hasOpenMessages = (thread.messages || []).some(message => !message.teacher_reply); %>
-                <div class="teacher-message-item">
+                <% const openMessages = (thread.messages || []).filter(message => !message.teacher_reply).length; %>
+                <% const hasOpenMessages = openMessages > 0; %>
+                <div
+                  class="teacher-message-item teacher-thread-card"
+                  data-thread-item
+                  data-status="<%= hasOpenMessages ? 'open' : 'closed' %>"
+                  data-open-count="<%= openMessages %>"
+                  data-student-name="<%= thread.student_name || '' %>"
+                  data-latest-ts="<%= thread.latest_at ? new Date(thread.latest_at).getTime() : 0 %>"
+                >
                   <details class="teacher-collapsible" <%= hasOpenMessages ? 'open' : '' %>>
                     <summary class="teacher-collapsible-summary">
-                      <div>
-                        <strong><%= thread.student_name %></strong>
-                        <span class="teacher-muted"><%= thread.student_email %></span>
+                      <div class="teacher-thread-summary-left">
+                        <div class="teacher-thread-summary-title">
+                          <strong><%= thread.student_name %></strong>
+                          <span class="teacher-muted"><%= thread.student_email %></span>
+                        </div>
                         <p class="teacher-message-context">
                           Test: <strong><%= thread.test_name || 'Unbekannter Test' %></strong>
                           <% if (thread.grade_value != null) { %>
                             - Note: <strong><%= thread.grade_value %></strong>
                           <% } %>
                         </p>
+                        <div class="teacher-thread-meta">
+                          <span><%= thread.messages.length %> Nachricht<%= thread.messages.length === 1 ? '' : 'en' %></span>
+                          <span>Letzte Aktivitaet: <%= new Date(thread.latest_at).toLocaleString('de-DE') %></span>
+                        </div>
                       </div>
-                      <div class="teacher-meta-chip"><%= hasOpenMessages ? 'offen' : 'geschlossen' %></div>
+                      <div class="teacher-thread-summary-right">
+                        <% if (hasOpenMessages) { %>
+                          <span class="teacher-meta-chip teacher-meta-chip-status-open"><%= openMessages %> offen</span>
+                        <% } else { %>
+                          <span class="teacher-meta-chip teacher-meta-chip-status-closed">beantwortet</span>
+                        <% } %>
+                      </div>
                     </summary>
 
                     <div class="teacher-collapsible-body">
-                      <small class="teacher-muted"><%= new Date(thread.latest_at).toLocaleString('de-DE') %></small>
-                      <div class="teacher-form-actions">
+                      <div class="teacher-thread-body-header">
+                        <small class="teacher-muted">Letzte Aktivitaet: <%= new Date(thread.latest_at).toLocaleString('de-DE') %></small>
                         <a class="btn btn-secondary btn-sm" href="/teacher/student-grades/<%= classData.id %>/<%= thread.student_id %>">Zum Schueler-Detail</a>
                       </div>
                       <% thread.messages.forEach(message => { %>
                         <div class="teacher-message-bubble student">
+                          <p class="teacher-message-author">Schueler</p>
                           <p><%= message.student_message %></p>
                           <small class="teacher-muted"><%= new Date(message.created_at).toLocaleString('de-DE') %></small>
                         </div>
 
                         <% if (message.teacher_reply) { %>
                           <div class="teacher-message-bubble teacher">
+                            <p class="teacher-message-author">Lehrkraft</p>
                             <p><%= message.teacher_reply %></p>
                             <small class="teacher-muted">
                               Beantwortet: <%= message.replied_at ? new Date(message.replied_at).toLocaleString('de-DE') : '-' %>
@@ -118,19 +178,109 @@
                 </div>
               <% }) %>
             </div>
+            <div class="teacher-empty teacher-filter-empty" id="thread-filter-empty" hidden>
+              <h4>Keine Treffer</h4>
+              <p>Mit den aktuellen Such- und Filterwerten wurde keine Anfrage gefunden.</p>
+            </div>
           <% } %>
         </div>
       </section>
     </div>
     <script>
-      document.querySelectorAll('.teacher-collapsible-summary').forEach((summary) => {
-        summary.addEventListener('click', (event) => {
-          event.preventDefault();
-          const details = summary.closest('details');
-          if (!details) return;
-          details.open = !details.open;
+      (function () {
+        const normalize = (value) => String(value || '')
+          .toLocaleLowerCase('de-DE')
+          .normalize('NFD')
+          .replace(/[\u0300-\u036f]/g, '')
+          .trim();
+
+        document.querySelectorAll('.teacher-collapsible-summary').forEach((summary) => {
+          summary.addEventListener('click', (event) => {
+            event.preventDefault();
+            const details = summary.closest('details');
+            if (!details) return;
+            details.open = !details.open;
+          });
         });
-      });
+
+        const threadList = document.querySelector('[data-thread-list]');
+        if (!threadList) return;
+
+        const searchInput = document.getElementById('thread-search');
+        const statusFilter = document.getElementById('thread-status-filter');
+        const sortFilter = document.getElementById('thread-sort-filter');
+        const resetButton = document.getElementById('thread-filter-reset');
+        const filterSummary = document.getElementById('thread-filter-summary');
+        const filterEmpty = document.getElementById('thread-filter-empty');
+
+        const threadEntries = Array.from(threadList.querySelectorAll('[data-thread-item]')).map((item, index) => {
+          const parsedLatestTs = Number(item.dataset.latestTs || 0);
+          return {
+            item,
+            index,
+            status: item.dataset.status || 'closed',
+            openCount: Number(item.dataset.openCount || 0),
+            studentName: normalize(item.dataset.studentName || ''),
+            latestTs: Number.isFinite(parsedLatestTs) ? parsedLatestTs : 0,
+            searchText: normalize(item.textContent)
+          };
+        });
+
+        const sorters = {
+          latest_desc: (a, b) => (b.latestTs - a.latestTs) || (a.index - b.index),
+          latest_asc: (a, b) => (a.latestTs - b.latestTs) || (a.index - b.index),
+          open_first: (a, b) => {
+            if (a.status !== b.status) return a.status === 'open' ? -1 : 1;
+            return (b.latestTs - a.latestTs) || (a.index - b.index);
+          },
+          student_asc: (a, b) => a.studentName.localeCompare(b.studentName, 'de', { sensitivity: 'base' }) || (b.latestTs - a.latestTs),
+          student_desc: (a, b) => b.studentName.localeCompare(a.studentName, 'de', { sensitivity: 'base' }) || (b.latestTs - a.latestTs)
+        };
+
+        function applyFilters() {
+          const query = normalize(searchInput?.value || '');
+          const selectedStatus = statusFilter?.value || 'all';
+          const selectedSort = sortFilter?.value || 'latest_desc';
+          const sorter = sorters[selectedSort] || sorters.latest_desc;
+
+          threadEntries.sort(sorter).forEach(({ item }) => threadList.appendChild(item));
+
+          let visibleCount = 0;
+          let visibleOpenCount = 0;
+
+          threadEntries.forEach((entry) => {
+            const statusMatches = selectedStatus === 'all' || entry.status === selectedStatus;
+            const queryMatches = !query || entry.searchText.includes(query);
+            const isVisible = statusMatches && queryMatches;
+            entry.item.hidden = !isVisible;
+
+            if (isVisible) {
+              visibleCount += 1;
+              visibleOpenCount += entry.openCount;
+            }
+          });
+
+          if (filterSummary) {
+            filterSummary.textContent = `${visibleCount} von ${threadEntries.length} Konversationen sichtbar - ${visibleOpenCount} offene Anfrage(n).`;
+          }
+
+          if (filterEmpty) {
+            filterEmpty.hidden = visibleCount !== 0;
+          }
+        }
+
+        searchInput?.addEventListener('input', applyFilters);
+        statusFilter?.addEventListener('change', applyFilters);
+        sortFilter?.addEventListener('change', applyFilters);
+        resetButton?.addEventListener('click', () => {
+          if (searchInput) searchInput.value = '';
+          if (statusFilter) statusFilter.value = 'all';
+          if (sortFilter) sortFilter.value = 'latest_desc';
+          applyFilters();
+        });
+
+        applyFilters();
+      })();
     </script>
 <% } };
 %>
