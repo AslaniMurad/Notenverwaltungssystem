@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="de" class="css-loading">
+<html lang="de">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -14,15 +14,6 @@
       return `${assetPath}${separator}v=${encodeURIComponent(assetVersion)}`;
     };
   %>
-  <style>
-    html.css-loading body { visibility: hidden; }
-    html.css-ready body { visibility: visible; }
-  </style>
-  <noscript>
-    <style>
-      html.css-loading body { visibility: visible; }
-    </style>
-  </noscript>
   <!-- Inter font for improved typography -->
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -32,52 +23,9 @@
   <% (styles || []).forEach(function(href){ %>
     <link rel="stylesheet" href="<%= withAssetVersion(href) %>">
   <% }) %>
-  <% if (locals.isMobile) { %>
-    <link rel="stylesheet" href="<%= withAssetVersion('/css/mobile.css') %>">
-    <link rel="stylesheet" href="<%= withAssetVersion('/css/mobile-sidebar.css') %>">
-    <link rel="stylesheet" href="<%= withAssetVersion('/css/mobile-login.css') %>">
-  <% } %>
-  <script>
-    (function () {
-      const root = document.documentElement;
-      const styleLinks = Array.from(document.querySelectorAll('link[rel="stylesheet"]'))
-        .filter((link) => String(link.getAttribute("href") || "").startsWith("/css/"));
-      let revealed = false;
-      const reveal = () => {
-        if (revealed) return;
-        revealed = true;
-        root.classList.remove("css-loading");
-        root.classList.add("css-ready");
-      };
-
-      if (!styleLinks.length) {
-        reveal();
-        return;
-      }
-
-      let pending = 0;
-      const done = () => {
-        pending -= 1;
-        if (pending <= 0) {
-          requestAnimationFrame(reveal);
-        }
-      };
-
-      styleLinks.forEach((link) => {
-        if (link.sheet) return;
-        pending += 1;
-        link.addEventListener("load", done, { once: true });
-        link.addEventListener("error", done, { once: true });
-      });
-
-      if (pending === 0) {
-        reveal();
-      } else {
-        window.addEventListener("pageshow", reveal, { once: true });
-        window.setTimeout(reveal, 1800);
-      }
-    })();
-  </script>
+  <link rel="stylesheet" href="<%= withAssetVersion('/css/mobile.css') %>" media="screen and (max-width: 900px)">
+  <link rel="stylesheet" href="<%= withAssetVersion('/css/mobile-sidebar.css') %>" media="screen and (max-width: 900px)">
+  <link rel="stylesheet" href="<%= withAssetVersion('/css/mobile-login.css') %>" media="screen and (max-width: 900px)">
 </head>
 <body class="<%= ['app-shell-body', bodyClass, locals.isMobile ? 'mobile-view' : 'desktop-view'].filter(Boolean).join(' ') %>">
   <% if (!hideHeader) { %>
@@ -94,10 +42,8 @@
     <%- include('partials/site-footer') %>
   <% } %>
 
-  <% if (locals.isMobile) { %>
-    <script src="<%= withAssetVersion('/js/mobile-nav.js') %>"></script>
-    <script src="<%= withAssetVersion('/js/mobile-login.js') %>"></script>
-  <% } %>
+  <script src="<%= withAssetVersion('/js/mobile-nav.js') %>"></script>
+  <script src="<%= withAssetVersion('/js/mobile-login.js') %>"></script>
   <% (scripts || []).forEach(function(src){ %>
     <script src="<%= withAssetVersion(src) %>"></script>
   <% }) %>
