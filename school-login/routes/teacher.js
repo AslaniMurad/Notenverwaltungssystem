@@ -317,6 +317,12 @@ function groupClassMessageThreads(rows) {
   return { messageThreads, openMessageCount };
 }
 
+async function loadClassOpenMessageCount(classId) {
+  const messages = await loadClassGradeMessages(classId);
+  const { openMessageCount } = groupClassMessageThreads(messages);
+  return openMessageCount;
+}
+
 async function loadMessageForTeacher(classId, messageId, teacherId) {
   return getAsync(
     `SELECT gm.id, gm.student_id
@@ -411,11 +417,32 @@ router.get("/students/:classId", async (req, res, next) => {
 
     const students = await loadStudents(classId);
     const messages = await loadClassGradeMessages(classId);
-    const { messageThreads, openMessageCount } = groupClassMessageThreads(messages);
+    const { openMessageCount } = groupClassMessageThreads(messages);
     res.render("teacher/teacher-students", {
       email: req.session.user.email,
       classData,
       students,
+      openMessageCount,
+      csrfToken: req.csrfToken()
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
+router.get("/test-questions/:classId", async (req, res, next) => {
+  try {
+    const classId = req.params.classId;
+    const classData = await loadClassForTeacher(classId, req.session.user.id);
+    if (!classData) {
+      return renderError(res, req, "Klasse nicht gefunden.", 404, "/teacher/classes");
+    }
+
+    const messages = await loadClassGradeMessages(classId);
+    const { messageThreads, openMessageCount } = groupClassMessageThreads(messages);
+    res.render("teacher/teacher-test-questions", {
+      email: req.session.user.email,
+      classData,
       messageThreads,
       openMessageCount,
       csrfToken: req.csrfToken()
@@ -434,31 +461,31 @@ router.post("/students/:classId/messages/:messageId/reply", async (req, res, nex
       return renderError(res, req, "Klasse nicht gefunden.", 404, "/teacher/classes");
     }
     if (!messageId) {
-      return renderError(res, req, "Ungültige Nachrichten-ID.", 400, `/teacher/students/${classId}`);
+      return renderError(res, req, "Ungültige Nachrichten-ID.", 400, `/teacher/test-questions/${classId}`);
     }
 
     const messageRow = await loadMessageForTeacher(classId, messageId, req.session.user.id);
     if (!messageRow) {
-      return renderError(res, req, "Nachricht nicht gefunden.", 404, `/teacher/students/${classId}`);
+      return renderError(res, req, "Nachricht nicht gefunden.", 404, `/teacher/test-questions/${classId}`);
     }
 
     const reply = String(req.body?.reply || "").trim();
     if (!reply) {
-      return renderError(res, req, "Bitte eine Antwort eingeben.", 400, `/teacher/students/${classId}`);
+      return renderError(res, req, "Bitte eine Antwort eingeben.", 400, `/teacher/test-questions/${classId}`);
     }
     if (reply.length > 1000) {
-      return renderError(res, req, "Antwort darf maximal 1000 Zeichen lang sein.", 400, `/teacher/students/${classId}`);
+      return renderError(res, req, "Antwort darf maximal 1000 Zeichen lang sein.", 400, `/teacher/test-questions/${classId}`);
     }
 
     await runAsync(
-      "UPDATE grade_messages SET teacher_reply = ?, replied_at = current_timestamp WHERE id = ?",
+      "UPDATE grade_messages SET teacher_reply = ?, replied_at = current_timestamp, teacher_reply_seen_at = NULL WHERE id = ?",
       [reply, messageId]
     );
     await runAsync(
       "INSERT INTO grade_notifications (student_id, message, type) VALUES (?,?,?)",
       [messageRow.student_id, "Lehrkraft hat auf deine Rückgabe-Nachricht geantwortet.", "info"]
     );
-    res.redirect(`/teacher/students/${classId}`);
+    res.redirect(`/teacher/test-questions/${classId}`);
   } catch (err) {
     next(err);
   }
@@ -472,9 +499,11 @@ router.get("/add-student/:classId", async (req, res, next) => {
       return renderError(res, req, "Klasse nicht gefunden.", 404, "/teacher/classes");
     }
 
+    const openMessageCount = await loadClassOpenMessageCount(classId);
     res.render("teacher/teacher-add-student", {
       email: req.session.user.email,
       classData,
+      openMessageCount,
       csrfToken: req.csrfToken(),
       error: null
     });
@@ -569,6 +598,7 @@ router.get("/grades/:classId", async (req, res, next) => {
 
     const students = await loadStudents(classId);
     const templates = await loadTemplates(classId);
+    const openMessageCount = await loadClassOpenMessageCount(classId);
     const possibleCount = templates.length;
     const studentsWithGrades = await Promise.all(
       students.map(async (student) => {
@@ -587,6 +617,7 @@ router.get("/grades/:classId", async (req, res, next) => {
       classData,
       students: studentsWithGrades,
       possibleCount,
+      openMessageCount,
       csrfToken: req.csrfToken()
     });
   } catch (err) {
@@ -610,6 +641,7 @@ router.get("/student-grades/:classId/:studentId", async (req, res, next) => {
     }
 
     const gradeRows = await loadStudentGrades(student.id);
+    const openMessageCount = await loadClassOpenMessageCount(classId);
     const gradeMessages = await loadStudentGradeMessages(classId, student.id);
     const messagesByGrade = new Map();
     gradeMessages.forEach((message) => {
@@ -656,6 +688,7 @@ router.get("/student-grades/:classId/:studentId", async (req, res, next) => {
       student,
       grades,
       average,
+      openMessageCount,
       csrfToken: req.csrfToken()
     });
   } catch (err) {
@@ -731,11 +764,13 @@ router.get("/add-grade/:classId/:studentId", async (req, res, next) => {
     }
 
     const templates = await loadTemplates(classId);
+    const openMessageCount = await loadClassOpenMessageCount(classId);
     res.render("teacher/teacher-add-grade", {
       email: req.session.user.email,
       classData,
       student,
       templates,
+      openMessageCount,
       csrfToken: req.csrfToken(),
       error: null,
       maxFileSizeMb: MAX_GRADE_FILE_MB
@@ -893,6 +928,7 @@ router.get("/grade-templates/:classId", async (req, res, next) => {
     }
 
     const templates = await loadTemplates(classId);
+    const openMessageCount = await loadClassOpenMessageCount(classId);
     const totalWeight = Number(
       templates.reduce((sum, template) => sum + Number(template.weight || 0), 0).toFixed(2)
     );
@@ -902,6 +938,7 @@ router.get("/grade-templates/:classId", async (req, res, next) => {
       classData,
       templates,
       totalWeight,
+      openMessageCount,
       csrfToken: req.csrfToken()
     });
   } catch (err) {
@@ -917,9 +954,11 @@ router.get("/create-template/:classId", async (req, res, next) => {
       return renderError(res, req, "Klasse nicht gefunden.", 404, "/teacher/classes");
     }
 
+    const openMessageCount = await loadClassOpenMessageCount(classId);
     res.render("teacher/teacher-create-template", {
       email: req.session.user.email,
       classData,
+      openMessageCount,
       csrfToken: req.csrfToken(),
       error: null
     });
@@ -999,6 +1038,7 @@ router.get("/special-assessments/:classId", async (req, res, next) => {
 
     const students = await loadStudents(classId);
     const assessments = await loadSpecialAssessments(classId);
+    const openMessageCount = await loadClassOpenMessageCount(classId);
     const selectedStudent = req.query.student_id ? String(req.query.student_id) : "";
 
     res.render("teacher/teacher-special-assessments", {
@@ -1006,6 +1046,7 @@ router.get("/special-assessments/:classId", async (req, res, next) => {
       classData,
       students,
       assessments,
+      openMessageCount,
       specialTypes: SPECIAL_ASSESSMENT_TYPES,
       formData: {
         student_id: selectedStudent,
@@ -1187,6 +1228,7 @@ router.get("/class-statistics/:classId", async (req, res, next) => {
 
     const students = await loadStudents(classId);
     const templates = await loadTemplates(classId);
+    const openMessageCount = await loadClassOpenMessageCount(classId);
     const studentMap = new Map(students.map((student) => [String(student.id), student]));
     const gradesByStudent = new Map();
 
@@ -1275,6 +1317,7 @@ router.get("/class-statistics/:classId", async (req, res, next) => {
       overallWeightedAverage,
       overallAverage,
       templateStats,
+      openMessageCount,
       csrfToken: req.csrfToken()
     });
   } catch (err) {

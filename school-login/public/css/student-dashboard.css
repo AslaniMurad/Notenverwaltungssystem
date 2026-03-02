@@ -275,7 +275,7 @@ header.dashboard-hero {
 .task-row,
 .return-row {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   justify-content: space-between;
   gap: 16px;
   padding: 12px 0;
@@ -314,7 +314,7 @@ header.dashboard-hero {
 .status-pill.open { background: #fff7e6; color: #9a6400; }
 .status-pill.overdue { background: #fdecec; color: #a11919; }
 .status-pill.graded { background: #e5f7ef; color: #0c6b3c; }
-.return-grade { min-width: 140px; text-align: right; }
+.return-grade { min-width: 140px; text-align: right; align-self: flex-start; }
 .return-actions {
   margin-top: 8px;
   display: flex;
@@ -328,6 +328,21 @@ header.dashboard-hero {
   display: grid;
   gap: 8px;
 }
+.return-message-details {
+  margin-top: 10px;
+}
+.return-message-summary {
+  cursor: pointer;
+  list-style: none;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-weight: 600;
+  color: #1f2937;
+}
+.return-message-summary::-webkit-details-marker {
+  display: none;
+}
 .return-message-row {
   border: 1px solid var(--border);
   border-radius: 10px;
@@ -340,6 +355,10 @@ header.dashboard-hero {
 .return-message-row.teacher {
   border-left: 3px solid #059669;
   background: #f0fdf4;
+}
+.return-message-row.teacher.unseen {
+  border-color: #86efac;
+  box-shadow: 0 0 0 2px rgba(34, 197, 94, 0.1);
 }
 .return-message-row.pending {
   background: #fffbeb;
@@ -377,6 +396,19 @@ header.dashboard-hero {
 .return-message-feedback {
   color: #6b7280;
   font-size: 12px;
+}
+.return-unread-badge {
+  background: #dcfce7;
+  color: #166534;
+}
+.return-reply-new {
+  margin-left: 8px;
+  font-size: 11px;
+  font-weight: 700;
+  color: #b91c1c;
+  background: #fee2e2;
+  border-radius: 999px;
+  padding: 2px 8px;
 }
 
 .empty-state { color: #6b7280; font-size: 14px; padding: 10px 0; }

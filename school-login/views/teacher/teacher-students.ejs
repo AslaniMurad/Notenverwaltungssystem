@@ -25,6 +25,7 @@
             <a href="/teacher/create-class">Klasse erstellen</a>
             <div class="nav-section-title">Klasse: <%= classData.name %> / <%= classData.subject %></div>
             <a class="is-active" href="/teacher/students/<%= classData.id %>">Schueler</a>
+            <a class="<%= (typeof openMessageCount !== 'undefined' && openMessageCount > 0) ? 'is-alert' : '' %>" href="/teacher/test-questions/<%= classData.id %>">Fragen zu Tests</a>
             <a href="/teacher/grades/<%= classData.id %>">Noten</a>
             <a href="/teacher/special-assessments/<%= classData.id %>">Sonderleistungen</a>
             <a href="/teacher/grade-templates/<%= classData.id %>">Pruefungen</a>
@@ -85,70 +86,6 @@
           </div>
         </div>
 
-        <div class="teacher-card">
-          <details class="teacher-collapsible" <%= openMessageCount > 0 ? 'open' : '' %>>
-            <summary class="teacher-collapsible-summary">
-              <div>
-                <p class="teacher-eyebrow">Rueckgaben</p>
-                <h3>Fragen zu Tests</h3>
-              </div>
-              <div class="teacher-meta-chip"><%= openMessageCount %> offen</div>
-            </summary>
-
-            <div class="teacher-collapsible-body">
-              <% if (!messageThreads || messageThreads.length === 0) { %>
-                <div class="teacher-empty">
-                  <h4>Keine Fragen vorhanden</h4>
-                  <p>Schuelerfragen zu Rueckgaben erscheinen hier.</p>
-                </div>
-              <% } else { %>
-                <div class="teacher-list">
-                  <% messageThreads.forEach(thread => { %>
-                    <div class="teacher-message-item">
-                      <div class="teacher-message-head">
-                        <div>
-                          <strong><%= thread.student_name %></strong>
-                          <span class="teacher-muted"><%= thread.student_email %></span>
-                        </div>
-                        <small class="teacher-muted"><%= new Date(thread.latest_at).toLocaleString('de-DE') %></small>
-                      </div>
-                      <p class="teacher-message-context">
-                        Test: <strong><%= thread.test_name || 'Unbekannter Test' %></strong>
-                        <% if (thread.grade_value != null) { %>
-                          - Note: <strong><%= thread.grade_value %></strong>
-                        <% } %>
-                      </p>
-                      <% thread.messages.forEach(message => { %>
-                        <div class="teacher-message-bubble student">
-                          <p><%= message.student_message %></p>
-                          <small class="teacher-muted"><%= new Date(message.created_at).toLocaleString('de-DE') %></small>
-                        </div>
-
-                        <% if (message.teacher_reply) { %>
-                          <div class="teacher-message-bubble teacher">
-                            <p><%= message.teacher_reply %></p>
-                            <small class="teacher-muted">
-                              Beantwortet: <%= message.replied_at ? new Date(message.replied_at).toLocaleString('de-DE') : '-' %>
-                            </small>
-                          </div>
-                        <% } else { %>
-                          <form class="teacher-form teacher-reply-form" method="POST" action="/teacher/students/<%= classData.id %>/messages/<%= message.id %>/reply">
-                            <input type="hidden" name="_csrf" value="<%= csrfToken %>">
-                            <label for="reply-<%= message.id %>">Antwort</label>
-                            <textarea id="reply-<%= message.id %>" name="reply" rows="3" maxlength="1000" required placeholder="Antwort an den Schueler..."></textarea>
-                            <div class="teacher-form-actions">
-                              <button class="btn btn-primary" type="submit">Antwort senden</button>
-                            </div>
-                          </form>
-                        <% } %>
-                      <% }) %>
-                    </div>
-                  <% }) %>
-                </div>
-              <% } %>
-            </div>
-          </details>
-        </div>
       </section>
     </div>
 
@@ -208,6 +145,7 @@
           currentForm = null;
         }
       });
+
     </script>
 <% } };
 %>

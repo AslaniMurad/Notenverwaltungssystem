@@ -25,6 +25,7 @@
             <a href="/teacher/create-class">Klasse erstellen</a>
             <div class="nav-section-title">Klasse: <%= classData.name %> / <%= classData.subject %></div>
             <a href="/teacher/students/<%= classData.id %>">Schüler</a>
+            <a class="<%= (typeof openMessageCount !== 'undefined' && openMessageCount > 0) ? 'is-alert' : '' %>" href="/teacher/test-questions/<%= classData.id %>">Fragen zu Tests</a>
             <a href="/teacher/grades/<%= classData.id %>">Noten</a>
             <a class="is-active" href="/teacher/special-assessments/<%= classData.id %>">Sonderleistungen</a>
             <a href="/teacher/grade-templates/<%= classData.id %>">Prüfungen</a>
