@@ -630,6 +630,7 @@ async function renderAddGradeForm(req, res, payload) {
   const scoringMode = normalizeScoringMode(activeProfile?.scoring_mode);
   const absenceMode = normalizeAbsenceMode(activeProfile?.absence_mode);
   const thresholds = normalizeThresholds(activeProfile?.thresholds || activeProfile || {});
+  const openMessageCount = classData?.id ? await loadClassOpenMessageCount(classData.id) : 0;
 
   return res.status(status).render("teacher/teacher-add-grade", {
     email: req.session.user.email,
@@ -642,6 +643,7 @@ async function renderAddGradeForm(req, res, payload) {
     scoringModeLabel: getScoringModeLabel(scoringMode),
     absenceMode,
     thresholds,
+    openMessageCount,
     formData: buildDefaultAddGradeFormData(formData),
     csrfToken: req.csrfToken(),
     error,
@@ -862,6 +864,12 @@ function groupClassMessageThreads(rows) {
   );
 
   return { messageThreads, openMessageCount };
+}
+
+async function loadClassOpenMessageCount(classId) {
+  const messages = await loadClassGradeMessages(classId);
+  const { openMessageCount } = groupClassMessageThreads(messages);
+  return openMessageCount;
 }
 
 async function loadMessageForTeacher(classId, messageId, teacherId) {
@@ -1568,17 +1576,36 @@ router.get("/students/:classId", async (req, res, next) => {
           return compareText(a.name, b.name);
       }
     });
-    const messages = await loadClassGradeMessages(classId);
-    const { messageThreads, openMessageCount } = groupClassMessageThreads(messages);
-
+    const openMessageCount = await loadClassOpenMessageCount(classId);
     res.render("teacher/teacher-students", {
       email: req.session.user.email,
       classData,
       students,
-      messageThreads,
       openMessageCount,
       totalStudentCount: studentsAll.length,
       search: { q, sort },
+      csrfToken: req.csrfToken()
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
+router.get("/test-questions/:classId", async (req, res, next) => {
+  try {
+    const classId = req.params.classId;
+    const classData = await loadClassForTeacher(classId, req.session.user.id);
+    if (!classData) {
+      return renderError(res, req, "Klasse nicht gefunden.", 404, "/teacher/classes");
+    }
+
+    const messages = await loadClassGradeMessages(classId);
+    const { messageThreads, openMessageCount } = groupClassMessageThreads(messages);
+    res.render("teacher/teacher-test-questions", {
+      email: req.session.user.email,
+      classData,
+      messageThreads,
+      openMessageCount,
       csrfToken: req.csrfToken()
     });
   } catch (err) {
@@ -1595,31 +1622,31 @@ router.post("/students/:classId/messages/:messageId/reply", async (req, res, nex
       return renderError(res, req, "Klasse nicht gefunden.", 404, "/teacher/classes");
     }
     if (!messageId) {
-      return renderError(res, req, "Ungültige Nachrichten-ID.", 400, `/teacher/students/${classId}`);
+      return renderError(res, req, "Ungültige Nachrichten-ID.", 400, `/teacher/test-questions/${classId}`);
     }
 
     const messageRow = await loadMessageForTeacher(classId, messageId, req.session.user.id);
     if (!messageRow) {
-      return renderError(res, req, "Nachricht nicht gefunden.", 404, `/teacher/students/${classId}`);
+      return renderError(res, req, "Nachricht nicht gefunden.", 404, `/teacher/test-questions/${classId}`);
     }
 
     const reply = String(req.body?.reply || "").trim();
     if (!reply) {
-      return renderError(res, req, "Bitte eine Antwort eingeben.", 400, `/teacher/students/${classId}`);
+      return renderError(res, req, "Bitte eine Antwort eingeben.", 400, `/teacher/test-questions/${classId}`);
     }
     if (reply.length > 1000) {
-      return renderError(res, req, "Antwort darf maximal 1000 Zeichen lang sein.", 400, `/teacher/students/${classId}`);
+      return renderError(res, req, "Antwort darf maximal 1000 Zeichen lang sein.", 400, `/teacher/test-questions/${classId}`);
     }
 
     await runAsync(
-      "UPDATE grade_messages SET teacher_reply = ?, replied_at = current_timestamp WHERE id = ?",
+      "UPDATE grade_messages SET teacher_reply = ?, replied_at = current_timestamp, teacher_reply_seen_at = NULL WHERE id = ?",
       [reply, messageId]
     );
     await runAsync(
       "INSERT INTO grade_notifications (student_id, message, type) VALUES (?,?,?)",
       [messageRow.student_id, "Lehrkraft hat auf deine Rückgabe-Nachricht geantwortet.", "info"]
     );
-    res.redirect(`/teacher/students/${classId}`);
+    res.redirect(`/teacher/test-questions/${classId}`);
   } catch (err) {
     next(err);
   }
@@ -1633,9 +1660,11 @@ router.get("/add-student/:classId", async (req, res, next) => {
       return renderError(res, req, "Klasse nicht gefunden.", 404, "/teacher/classes");
     }
 
+    const openMessageCount = await loadClassOpenMessageCount(classId);
     res.render("teacher/teacher-add-student", {
       email: req.session.user.email,
       classData,
+      openMessageCount,
       csrfToken: req.csrfToken(),
       error: null
     });
@@ -1760,6 +1789,7 @@ router.get("/grades/:classId", async (req, res, next) => {
     );
     const absenceMode = normalizeAbsenceMode(activeProfile?.absence_mode);
     const thresholds = normalizeThresholds(activeProfile?.thresholds || activeProfile || {});
+    const openMessageCount = await loadClassOpenMessageCount(classId);
     const possibleCount = templates.length;
     const studentsWithGrades = await Promise.all(
       studentsBase.map(async (student) => {
@@ -1838,6 +1868,7 @@ router.get("/grades/:classId", async (req, res, next) => {
       participationSymbolOptions: PARTICIPATION_SYMBOL_OPTIONS,
       search: { q, status, sort },
       message: req.query.ma_saved ? "Mitarbeit eingetragen." : null,
+      openMessageCount,
       csrfToken: req.csrfToken()
     });
   } catch (err) {
@@ -1944,6 +1975,7 @@ router.get("/student-grades/:classId/:studentId", async (req, res, next) => {
     }
 
     const gradeRows = await loadStudentGrades(student.id);
+    const openMessageCount = await loadClassOpenMessageCount(classId);
     const gradeMessages = await loadStudentGradeMessages(classId, student.id);
     const messagesByGrade = new Map();
     gradeMessages.forEach((message) => {
@@ -2069,6 +2101,7 @@ router.get("/student-grades/:classId/:studentId", async (req, res, next) => {
       average,
       pointsSummary,
       activeWeightMode: fallbackMode,
+      openMessageCount,
       csrfToken: req.csrfToken()
     });
   } catch (err) {
@@ -2830,6 +2863,7 @@ router.get("/grade-templates/:classId", async (req, res, next) => {
       }
     });
 
+    const openMessageCount = await loadClassOpenMessageCount(classId);
     const activeProfile = await loadActiveTeacherProfile(req.session.user.id);
     const totalPointWeight = Number(
       templatesAll.reduce((sum, template) => sum + Number(template.weight || 0), 0).toFixed(2)
@@ -2847,6 +2881,7 @@ router.get("/grade-templates/:classId", async (req, res, next) => {
       search: { q, category, points: pointsFilter, sort },
       activeProfile,
       totalPointWeight,
+      openMessageCount,
       csrfToken: req.csrfToken()
     });
   } catch (err) {
@@ -2866,6 +2901,7 @@ router.get("/create-template/:classId", async (req, res, next) => {
       return res.redirect("/teacher/settings?setup=1");
     }
 
+    const openMessageCount = await loadClassOpenMessageCount(classId);
     res.render("teacher/teacher-create-template", {
       email: req.session.user.email,
       classData,
@@ -2879,6 +2915,7 @@ router.get("/create-template/:classId", async (req, res, next) => {
         date: "",
         description: ""
       },
+      openMessageCount,
       csrfToken: req.csrfToken(),
       error: null
     });
@@ -3148,6 +3185,7 @@ router.get("/special-assessments/:classId", async (req, res, next) => {
     const assessments = await loadSpecialAssessments(classId);
     const activeProfile = await loadActiveTeacherProfile(req.session.user.id);
     const weightMode = resolveWeightMode(activeProfile?.weight_mode);
+    const openMessageCount = await loadClassOpenMessageCount(classId);
     const selectedStudent = req.query.student_id ? String(req.query.student_id) : "";
 
     res.render("teacher/teacher-special-assessments", {
@@ -3158,6 +3196,7 @@ router.get("/special-assessments/:classId", async (req, res, next) => {
       activeProfile,
       weightMode,
       weightUnit: getWeightUnit(weightMode),
+      openMessageCount,
       specialTypes: SPECIAL_ASSESSMENT_TYPES,
       formData: {
         student_id: selectedStudent,
@@ -3358,6 +3397,7 @@ router.get("/class-statistics/:classId", async (req, res, next) => {
       activeProfile?.participation || activeProfile || {}
     );
     const absenceMode = normalizeAbsenceMode(activeProfile?.absence_mode);
+    const openMessageCount = await loadClassOpenMessageCount(classId);
     const studentMap = new Map(students.map((student) => [String(student.id), student]));
     const gradesByStudent = new Map();
 
@@ -3453,6 +3493,7 @@ router.get("/class-statistics/:classId", async (req, res, next) => {
       overallWeightedAverage,
       overallAverage,
       templateStats,
+      openMessageCount,
       csrfToken: req.csrfToken()
     });
   } catch (err) {

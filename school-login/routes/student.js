@@ -133,7 +133,7 @@ async function loadNotifications(studentId) {
 
 async function loadGradeMessages(studentId) {
   return allAsync(
-    `SELECT gm.id, gm.grade_id, gm.student_message, gm.teacher_reply, gm.created_at, gm.replied_at
+    `SELECT gm.id, gm.grade_id, gm.student_message, gm.teacher_reply, gm.teacher_reply_seen_at, gm.created_at, gm.replied_at
      FROM grade_messages gm
      JOIN grades g ON g.id = gm.grade_id
      WHERE gm.student_id = ? AND g.student_id = ?
@@ -365,6 +365,7 @@ router.get("/", async (req, res, next) => {
         id: message.id,
         student_message: message.student_message,
         teacher_reply: message.teacher_reply || null,
+        teacher_reply_seen_at: message.teacher_reply_seen_at || null,
         created_at: message.created_at,
         replied_at: message.replied_at || null
       });
@@ -518,6 +519,7 @@ router.get("/returns", async (req, res, next) => {
         id: message.id,
         student_message: message.student_message,
         teacher_reply: message.teacher_reply || null,
+        teacher_reply_seen_at: message.teacher_reply_seen_at || null,
         created_at: message.created_at,
         replied_at: message.replied_at || null
       });
@@ -566,6 +568,38 @@ router.post("/returns/:gradeId/message", async (req, res, next) => {
     await runAsync(
       "INSERT INTO grade_messages (grade_id, student_id, student_message) VALUES (?,?,?)",
       [gradeId, context.student.id, message]
+    );
+    res.json({ ok: true });
+  } catch (err) {
+    next(err);
+  }
+});
+
+router.post("/returns/:gradeId/messages/seen", async (req, res, next) => {
+  try {
+    const context = await getStudentContext(req);
+    if (!context) {
+      return res.status(404).json({ error: "Student nicht gefunden." });
+    }
+
+    const gradeId = Number(req.params.gradeId);
+    if (!gradeId) {
+      return res.status(400).json({ error: "Ungültige Rückgabe-ID." });
+    }
+
+    const grade = await getAsync(
+      "SELECT id FROM grades WHERE id = ? AND student_id = ?",
+      [gradeId, context.student.id]
+    );
+    if (!grade) {
+      return res.status(404).json({ error: "Rückgabe nicht gefunden." });
+    }
+
+    await runAsync(
+      `UPDATE grade_messages
+       SET teacher_reply_seen_at = current_timestamp
+       WHERE grade_id = ? AND student_id = ? AND teacher_reply IS NOT NULL AND teacher_reply_seen_at IS NULL`,
+      [gradeId, context.student.id]
     );
     res.json({ ok: true });
   } catch (err) {
