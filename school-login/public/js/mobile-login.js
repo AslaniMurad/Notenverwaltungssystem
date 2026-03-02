@@ -1,22 +1,15 @@
-// public/js/mobile-login.js - Mobile Login Enhancements
+(function () {
+  document.addEventListener("DOMContentLoaded", () => {
+    if (window.innerWidth > 900) return;
 
-document.addEventListener('DOMContentLoaded', function() {
-  // Nur auf Mobile ausführen
-  if (!document.body.classList.contains('mobile-view')) {
-    return;
-  }
+    const loginForm = document.querySelector('form[action="/login"]');
+    const loginButton = document.querySelector(".btn-login-submit");
 
-  const loginButton = document.querySelector('.btn-login-submit');
-  const loginForm = document.querySelector('form[action="/login"]');
+    if (!loginForm || !loginButton) return;
 
-  // Loading State beim Submit
-  if (loginForm && loginButton) {
-    loginForm.addEventListener('submit', function(e) {
-      loginButton.classList.add('loading');
-      loginButton.innerHTML = 'Wird geladen...';
+    loginForm.addEventListener("submit", () => {
       loginButton.disabled = true;
+      loginButton.textContent = "Wird geladen...";
     });
-  }
-
-  console.log('📱 Mobile Login loaded');
-});
+  });
+})();
