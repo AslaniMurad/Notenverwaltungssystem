@@ -22,13 +22,13 @@ body.page-student {
   margin: 0;
   background: var(--bg);
   font-family: Inter, sans-serif;
-  color: #1a1a1a;
+  color: var(--text);
 }
 
 header.dashboard-hero {
   background: linear-gradient(135deg, #124f9c, #1b6dd1);
   padding: 18px 20px;
-  color: #fff;
+  color: var(--text-inverse);
   display: flex;
   justify-content: space-between;
   align-items: center;
@@ -40,7 +40,7 @@ header.dashboard-hero {
 .tabs {
   display: flex;
   gap: 10px;
-  background: #fff;
+  background: var(--surface);
   padding: 14px 20px;
   border: 1px solid var(--border);
   border-radius: 12px;
@@ -63,7 +63,7 @@ header.dashboard-hero {
 
 .tab.active {
   background: var(--blue);
-  color: #fff;
+  color: var(--text-inverse);
 }
 
 .student-main {
@@ -75,7 +75,7 @@ header.dashboard-hero {
 .tab-content.active { display: block; }
 
 .card {
-  background: #fff;
+  background: var(--surface);
   padding: 18px 20px;
   border-radius: var(--radius);
   border: 1px solid var(--border);
@@ -116,7 +116,7 @@ header.dashboard-hero {
   padding: 10px;
   border-radius: var(--radius);
   border: 1px dashed var(--border);
-  background: #fafafa;
+  background: var(--surface-2);
   cursor: pointer;
   font-size: 13px;
 }
@@ -133,7 +133,7 @@ header.dashboard-hero {
   border-radius: 8px;
   margin-right: 12px;
   vertical-align: middle;
-  background: white;
+  background: var(--surface-alt);
   padding: 4px;
 }
 
@@ -239,10 +239,10 @@ header.dashboard-hero {
   border: 1px solid transparent;
   cursor: pointer;
   background: var(--blue);
-  color: #fff;
+  color: var(--text-inverse);
   font-weight: 600;
 }
-.btn.secondary { background: #fff; color: var(--blue); border-color: var(--blue); }
+.btn.secondary { background: var(--surface); color: var(--blue); border-color: var(--blue); }
 .btn.small { padding: 6px 10px; font-size: 13px; }
 
 .info-grid {
@@ -251,8 +251,8 @@ header.dashboard-hero {
   gap: 12px;
 }
 
-.stat-tile { background: #f9fbff; border: 1px solid var(--border); padding: 12px; border-radius: 10px; }
-.stat-tile h4 { margin: 0 0 4px; font-size: 14px; color: #4b5563; }
+.stat-tile { background: var(--surface-alt); border: 1px solid var(--border); padding: 12px; border-radius: 10px; }
+.stat-tile h4 { margin: 0 0 4px; font-size: 14px; color: var(--text-muted); }
 .stat-tile strong { font-size: 20px; }
 
 .chart-row { display: grid; grid-template-columns: 1fr; gap: 10px; }
@@ -327,7 +327,7 @@ header.dashboard-hero {
 .empty-state { color: #6b7280; font-size: 14px; padding: 10px 0; }
 .badge-inline { display: inline-flex; gap: 6px; align-items: center; padding: 4px 8px; border-radius: 8px; background: #eef2ff; color: #4338ca; font-weight: 600; font-size: 12px; }
 .notifications { display: grid; gap: 10px; }
-.notification { padding: 10px; border: 1px solid var(--border); border-radius: 10px; background: #f8fafc; }
+.notification { padding: 10px; border: 1px solid var(--border); border-radius: 10px; background: var(--surface-2); }
 .notification.unread { border-color: #93c5fd; background: #eef2ff; }
 .notification small { color: #6b7280; }
 
