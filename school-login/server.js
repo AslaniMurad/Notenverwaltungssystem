@@ -162,7 +162,7 @@ app.use((req, res, next) => {
     const allowed = multipartAllowList.some((entry) => entry.test(req.path));
     if (!allowed) {
       return res.status(415).render("error", {
-        message: "Multipart ist fuer diese Route nicht erlaubt.",
+        message: "Multipart ist für diese Route nicht erlaubt.",
         status: 415,
         backUrl: "/"
       });
@@ -260,7 +260,7 @@ app.post("/login", (req, res, next) => {
     return renderLogin(res, req, {
       status: 429,
       errorType: "invalid",
-      errorMessage: "Zu viele Versuche. Bitte spaeter erneut versuchen.",
+      errorMessage: "Zu viele Versuche. Bitte später erneut versuchen.",
       email
     });
   }
@@ -360,7 +360,7 @@ app.use((err, req, res, next) => {
   if (isDbConnectionError(err)) {
     console.error("Database connection error:", err);
     return res.status(503).render("error", {
-      message: "Datenbank nicht erreichbar. Bitte spaeter erneut versuchen.",
+      message: "Datenbank nicht erreichbar. Bitte später erneut versuchen.",
       status: 503,
       backUrl: req.get("referer") || "/login"
     });

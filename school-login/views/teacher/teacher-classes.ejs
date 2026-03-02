@@ -21,7 +21,7 @@
 
         <div class="app-nav">
           <div class="nav-section">
-            <div class="nav-section-title">Menue</div>
+            <div class="nav-section-title">Menü</div>
             <a class="is-active" href="/teacher/classes">Meine Klassen</a>
             <a href="/teacher/create-class">Klasse erstellen</a>
             <a href="/teacher/settings">Einstellungen</a>
@@ -56,7 +56,7 @@
           >
           <select class="form-select teacher-search-select" name="sort" aria-label="Sortierung">
             <option value="newest" <%= (search && search.sort) === 'newest' ? 'selected' : '' %>>Neueste zuerst</option>
-            <option value="oldest" <%= (search && search.sort) === 'oldest' ? 'selected' : '' %>>Aelteste zuerst</option>
+            <option value="oldest" <%= (search && search.sort) === 'oldest' ? 'selected' : '' %>>Älteste zuerst</option>
             <option value="name_asc" <%= (search && search.sort) === 'name_asc' ? 'selected' : '' %>>Name A-Z</option>
             <option value="name_desc" <%= (search && search.sort) === 'name_desc' ? 'selected' : '' %>>Name Z-A</option>
             <option value="subject_asc" <%= (search && search.sort) === 'subject_asc' ? 'selected' : '' %>>Fach A-Z</option>
@@ -69,7 +69,7 @@
         <% if (!setupComplete) { %>
           <div class="teacher-alert error">
             Bitte richte zuerst dein Bewertungsschema ein:
-            <a href="/teacher/settings?setup=1">Jetzt Einstellungen oeffnen</a>
+            <a href="/teacher/settings?setup=1">Jetzt Einstellungen öffnen</a>
           </div>
         <% } else if (activeProfile) { %>
           <div class="teacher-alert info">
@@ -84,7 +84,7 @@
               <p class="teacher-eyebrow">Klassen</p>
               <h3>Aktive Klassen</h3>
             </div>
-            <div class="teacher-meta-chip"><%= classes.length %> / <%= totalClassCount %> Eintraege</div>
+            <div class="teacher-meta-chip"><%= classes.length %> / <%= totalClassCount %> Einträge</div>
           </div>
 
           <div class="teacher-grid">

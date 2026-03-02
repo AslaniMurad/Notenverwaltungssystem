@@ -29,14 +29,14 @@
           <div class="admin-topbar">
             <div>
               <p class="admin-eyebrow">Suche</p>
-              <h3>Schueler filtern</h3>
+              <h3>Schüler filtern</h3>
             </div>
           </div>
           <form class="admin-form" method="GET" action="/admin/classes/<%= classData.id %>/students">
             <input type="text" name="name" placeholder="Name" value="<%= search.name || '' %>">
             <input type="text" name="email" placeholder="E-Mail" value="<%= search.email || '' %>">
             <button class="btn btn-secondary" type="submit">Suchen</button>
-            <a class="btn" href="/admin/classes/<%= classData.id %>/students">Zuruecksetzen</a>
+            <a class="btn" href="/admin/classes/<%= classData.id %>/students">Zurücksetzen</a>
           </form>
         </div>
 
