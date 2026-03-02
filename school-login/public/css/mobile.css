@@ -44,8 +44,8 @@ html {
   padding: 20px;
   border-radius: 12px;
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
-  background: white;
-  border: 2px solid #e5e7eb;
+  background: var(--surface);
+  border: 2px solid var(--border);
 }
 
 .mobile-view .card-title {
@@ -122,7 +122,7 @@ html {
 
 .mobile-view .btn-primary {
   background: linear-gradient(135deg, #003DA5 0%, #0052CC 100%);
-  color: white;
+  color: var(--text-inverse);
   box-shadow: 0 4px 12px rgba(0, 61, 165, 0.3);
 }
 
@@ -139,17 +139,17 @@ html {
 
 .mobile-view .btn-success {
   background: #10b981;
-  color: white;
+  color: var(--text-inverse);
 }
 
 .mobile-view .btn-danger {
   background: #dc2626;
-  color: white;
+  color: var(--text-inverse);
 }
 
 .mobile-view .btn-warning {
   background: #f59e0b;
-  color: white;
+  color: var(--text-inverse);
 }
 
 /* Button Group */
@@ -184,7 +184,7 @@ html {
   border: 2px solid #e5e7eb;
   border-radius: 12px;
   padding: 15px;
-  background: white;
+  background: var(--surface);
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
 }
 
@@ -260,9 +260,9 @@ html {
   font-size: 16px; /* Verhindert iOS Zoom */
   margin-bottom: 15px;
   box-sizing: border-box;
-  border: 2px solid #e5e7eb;
+  border: 2px solid var(--border);
   border-radius: 10px;
-  background: #f9fafb;
+  background: var(--surface-2);
   transition: all 0.2s;
   -webkit-appearance: none;
   appearance: none;
@@ -273,7 +273,7 @@ html {
 .mobile-view select:focus,
 .mobile-view textarea:focus {
   border-color: #003DA5;
-  background: white;
+  background: var(--surface-alt);
   outline: none;
   box-shadow: 0 0 0 4px rgba(0, 61, 165, 0.1);
 }
@@ -307,8 +307,8 @@ html {
 .mobile-view .student-item,
 .mobile-view .grade-item {
   padding: 18px;
-  background: white;
-  border: 2px solid #e5e7eb;
+  background: var(--surface);
+  border: 2px solid var(--border);
   border-radius: 12px;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
   display: flex;
@@ -356,27 +356,27 @@ html {
 
 .mobile-view .grade-1 {
   background: #10b981;
-  color: white;
+  color: var(--text-inverse);
 }
 
 .mobile-view .grade-2 {
   background: #3b82f6;
-  color: white;
+  color: var(--text-inverse);
 }
 
 .mobile-view .grade-3 {
   background: #f59e0b;
-  color: white;
+  color: var(--text-inverse);
 }
 
 .mobile-view .grade-4 {
   background: #ef4444;
-  color: white;
+  color: var(--text-inverse);
 }
 
 .mobile-view .grade-5 {
   background: #dc2626;
-  color: white;
+  color: var(--text-inverse);
 }
 
 /* === ALERTS & MESSAGES === */
@@ -425,15 +425,15 @@ html {
   min-width: 44px;
   padding: 10px 16px;
   border-radius: 10px;
-  border: 2px solid #e5e7eb;
-  background: white;
+  border: 2px solid var(--border);
+  background: var(--surface);
   color: #1F2937;
   font-weight: 700;
 }
 
 .mobile-view .pagination-btn.active {
   background: #003DA5;
-  color: white;
+  color: var(--text-inverse);
   border-color: #003DA5;
 }
 
@@ -453,7 +453,7 @@ html {
 }
 
 .mobile-view .modal-content {
-  background: white;
+  background: var(--surface);
   border-radius: 16px;
   padding: 25px;
   max-width: 500px;

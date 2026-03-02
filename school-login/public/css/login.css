@@ -1,18 +1,18 @@
 :root {
-  --login-bg: #F3F4F6;
-  --login-card: #FFFFFF;
-  --login-card-soft: #F9FAFB;
+  --login-bg: var(--bg);
+  --login-card: var(--surface);
+  --login-card-soft: var(--surface-2);
   --login-accent: #003DA5;
   --login-accent-light: #0052CC;
-  --login-text: #1F2937;
-  --login-muted: #6B7280;
+  --login-text: var(--text);
+  --login-muted: var(--text-muted);
   --login-radius-xl: 12px;
   --login-shadow: 0 12px 30px rgba(0, 61, 165, 0.12);
 }
 
 body.page-login {
   min-height: 100vh;
-  background: linear-gradient(135deg, #f8fafc 0%, #eff6ff 50%, #e0e7ff 100%);
+  background: var(--bg);
   color: var(--login-text);
   display: flex;
   align-items: center;
@@ -23,7 +23,7 @@ body.page-login {
 
 body.page-force-password {
   min-height: 100vh;
-  background: linear-gradient(135deg, #eef2ff 0%, #dbeafe 50%, #eff6ff 100%);
+  background: var(--bg);
   color: var(--login-text);
   display: flex;
   align-items: center;
@@ -47,7 +47,7 @@ body.page-force-password {
   background: var(--login-card);
   border-radius: var(--login-radius-xl);
   padding: 32px 28px;
-  border: 1px solid #e0e7ff;
+  border: 1px solid var(--border);
   box-shadow: var(--login-shadow);
   position: relative;
 }
@@ -69,6 +69,21 @@ body.page-force-password {
   align-items: center;
   gap: 14px;
   margin-bottom: 20px;
+  text-align: center;
+}
+
+.login-separator {
+  border: none;
+  border-top: 2px solid var(--login-accent);
+  margin: 20px auto;
+  width: 60px;
+}
+
+.login-welcome-title {
+  font-size: 28px;
+  font-weight: 800;
+  color: var(--login-accent);
+  margin-bottom: 8px;
   text-align: center;
 }
 
@@ -103,9 +118,9 @@ body.page-force-password {
   margin: -6px 0 18px;
   padding: 10px 12px;
   border-radius: 10px;
-  border: 1px solid #e5e7eb;
-  background: #f8fafc;
-  color: #4b5563;
+  border: 1px solid var(--border);
+  background: var(--surface-2);
+  color: var(--text-muted);
   font-size: 12px;
   line-height: 1.45;
   text-align: center;
@@ -158,7 +173,6 @@ body.page-force-password {
 }
 
 .login-roles {
-.login-roles {
   color: var(--login-accent);
   font-weight: 600;
 }
@@ -176,7 +190,7 @@ body.page-force-password {
   border-radius: 10px;
   border: none;
   background: linear-gradient(180deg, #003DA5 0%, #0052CC 50%, #003DA5 100%);
-  color: white;
+  color: var(--primary-contrast);
   font-size: 20px;
   font-weight: 800;
   letter-spacing: 0.5px;
@@ -254,12 +268,11 @@ body.page-force-password {
 }
 
 .btn-login-back:hover {
-  background: white;
+  background: var(--surface);
   border-color: var(--login-accent);
   color: var(--login-accent);
   box-shadow: 0 4px 12px rgba(0, 61, 165, 0.15);
   transform: translateY(-1px);
-}
 }
 
 .login-foot {

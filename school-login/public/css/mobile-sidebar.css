@@ -14,7 +14,7 @@
   width: 280px;
   max-width: 80vw;
   z-index: 1000;
-  background: #fff;
+  background: var(--surface-alt);
   box-shadow: 2px 0 10px rgba(0,0,0,0.1);
   transition: left 0.3s ease;
   overflow-y: auto;
@@ -51,8 +51,8 @@
   top: 15px;
   left: 15px;
   z-index: 1001;
-  background: #007bff;
-  color: white;
+  background: var(--primary);
+  color: var(--primary-contrast);
   border: none;
   border-radius: 8px;
   width: 50px;

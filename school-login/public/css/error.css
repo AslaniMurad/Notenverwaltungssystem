@@ -56,7 +56,7 @@ body.page-error {
 
 .error-actions .btn-primary {
   background: linear-gradient(135deg, #2563eb, #3b82f6);
-  color: white;
+  color: var(--primary-contrast);
   box-shadow: 0 6px 16px rgba(37, 99, 235, 0.3);
 }
 
@@ -73,6 +73,6 @@ body.page-error {
 
 .error-actions .btn-secondary:hover {
   background: #2563eb;
-  color: white;
+  color: var(--text-inverse);
   border-color: #2563eb;
 }

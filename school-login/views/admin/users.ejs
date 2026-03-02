@@ -66,11 +66,11 @@
                   <td><%= u.must_change_password ? 'Ja' : 'Nein' %></td>
                   <td><%= u.created_at || '-' %></td>
                   <td class="admin-actions">
-                    <a class="btn btn-secondary" href="/admin/users/<%= u.id %>/edit">Bearbeiten</a>
+                    <a class="btn btn-primary" href="/admin/users/<%= u.id %>/edit">Bearbeiten</a>
                     <form method="POST" action="/admin/users/<%= u.id %>/reset">
                       <input type="hidden" name="_csrf" value="<%= csrfToken %>">
                       <input type="hidden" name="useInitial" value="1">
-                      <button class="btn" type="submit">Passwort reset</button>
+                      <button class="btn btn-secondary" type="submit">Passwort reset</button>
                     </form>
                     <form method="POST" action="/admin/users/<%= u.id %>/delete" onsubmit="return confirm('Nutzer wirklich löschen (soft-delete)?');">
                       <input type="hidden" name="_csrf" value="<%= csrfToken %>">

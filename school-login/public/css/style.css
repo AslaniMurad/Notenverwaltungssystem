@@ -1,0 +1,740 @@
+:root {
+  color-scheme: light;
+  --bg: #f4f6f9;
+  --surface: #ffffff;
+  --surface-2: #f1f5f9;
+  --surface-alt: var(--surface-2);
+  --border: #e2e8f0;
+  --text: #0f172a;
+  --text-muted: #475569;
+  --primary: #4f6fdc;
+  --danger: #e11d48;
+
+  --text-inverse: #ffffff;
+  --primary-hover: #3d5ec9;
+  --primary-contrast: #ffffff;
+  --danger-hover: #be123c;
+  --danger-contrast: #ffffff;
+  --placeholder: var(--text-muted);
+  --link: var(--primary);
+  --link-hover: #3b57b2;
+  --focus-color: #7f9cfb;
+
+  --surface-1: var(--surface);
+  --surface-3: #e8edf5;
+  --background: var(--bg);
+
+  --nav-item-bg: var(--surface);
+  --nav-item-hover-bg: var(--surface-alt);
+  --nav-item-active-bg: var(--surface-3);
+  --nav-item-text: var(--text);
+  --nav-item-active-text: var(--text);
+
+  --table-header-bg: var(--surface-alt);
+  --table-row-bg: var(--surface);
+  --table-row-alt-bg: var(--surface-alt);
+  --table-row-hover-bg: var(--surface-alt);
+  --table-row-hover-text: var(--text);
+
+  --input-bg: var(--surface-alt);
+  --input-bg-alt: var(--surface-alt);
+
+  --sidebar-bg: var(--surface-alt);
+  --card-bg: var(--surface);
+  --card-shadow: 0 14px 34px rgba(15, 23, 42, 0.08);
+  --shell-accent-muted: rgba(79, 111, 220, 0.16);
+
+  /* compatibility aliases for older styles */
+  --muted-text: var(--text-muted);
+  --placeholder-text: var(--placeholder);
+  --button-bg: var(--surface-3);
+  --button-text: var(--text);
+  --button-text-on-accent: var(--primary-contrast);
+
+  --accent: var(--primary);
+  --accent-light: #6884e3;
+  --accent-lighter: #8aa0ea;
+  --muted: var(--text-muted);
+  --text-light: var(--text-muted);
+  --bg-white: var(--surface);
+  --bg-gray: var(--surface-alt);
+  --bg-blue-light: var(--surface-3);
+
+  --shell-bg: var(--bg);
+  --shell-surface: var(--surface);
+  --shell-border: var(--border);
+  --shell-accent: var(--primary);
+  --shell-muted: var(--text-muted);
+  --shell-text: var(--text);
+
+  --login-bg: var(--bg);
+  --login-card: var(--surface);
+  --login-card-soft: var(--surface-alt);
+  --login-accent: var(--primary);
+  --login-accent-light: #6884e3;
+  --login-text: var(--text);
+  --login-muted: var(--text-muted);
+  --login-shadow: var(--card-shadow);
+}
+
+html[data-theme="dark"] {
+  color-scheme: dark;
+  --bg: #0b1220;
+  --surface: #162033;
+  --surface-2: #1e2a40;
+  --surface-alt: var(--surface-2);
+  --border: #2a3a55;
+  --text: #e6edf7;
+  --text-muted: #94a3b8;
+  --primary: #6f8fff;
+  --danger: #fb7185;
+
+  --text-inverse: #ffffff;
+  --primary-hover: #8ca5ff;
+  --primary-contrast: #0b1220;
+  --danger-hover: #fda4af;
+  --danger-contrast: #210e14;
+  --placeholder: var(--text-muted);
+  --link: #a8bcff;
+  --link-hover: #c5d2ff;
+  --focus-color: #8aa3ff;
+
+  --surface-1: var(--surface);
+  --surface-3: #25344f;
+  --background: var(--bg);
+
+  --nav-item-bg: var(--surface);
+  --nav-item-hover-bg: var(--surface-alt);
+  --nav-item-active-bg: var(--surface-3);
+  --nav-item-text: var(--text);
+  --nav-item-active-text: var(--text);
+
+  --table-header-bg: var(--surface-alt);
+  --table-row-bg: var(--surface);
+  --table-row-alt-bg: var(--surface-alt);
+  --table-row-hover-bg: #25344f;
+  --table-row-hover-text: var(--text);
+
+  --input-bg: var(--surface-alt);
+  --input-bg-alt: var(--surface-alt);
+
+  --sidebar-bg: var(--surface-alt);
+  --card-bg: var(--surface);
+  --card-shadow: 0 20px 40px rgba(3, 8, 19, 0.52);
+  --shell-accent-muted: rgba(111, 143, 255, 0.24);
+
+  --shell-surface: var(--surface);
+  --login-card: var(--surface);
+  --login-card-soft: var(--surface-alt);
+}
+
+html,
+body {
+  background: var(--bg);
+  color: var(--text);
+}
+
+body {
+  min-height: 100vh;
+  line-height: 1.5;
+}
+
+body.app-shell-body,
+body.page-admin,
+body.page-admin-edit {
+  background: var(--bg);
+  color: var(--text);
+}
+
+body.page-login,
+body.page-force-password {
+  background: linear-gradient(160deg, var(--bg) 0%, var(--surface-2) 55%, var(--surface-3) 100%);
+  color: var(--text);
+}
+
+a {
+  color: var(--link);
+}
+
+a:hover {
+  color: var(--link-hover);
+}
+
+small,
+.text-muted,
+.muted,
+.brand-meta,
+.sidebar-meta,
+.admin-muted {
+  color: var(--text-muted);
+}
+
+:where(button, a, input, textarea, select, [tabindex]):focus-visible {
+  outline: 2px solid var(--focus-color);
+  outline-offset: 2px;
+}
+
+#themeToggle {
+  position: fixed;
+  top: 16px;
+  right: 16px;
+  z-index: 2147483647;
+  width: 20px;
+  height: 20px;
+  min-width: 20px;
+  min-height: 20px;
+  max-width: 20px;
+  max-height: 20px;
+  margin: 0;
+  padding: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface-1);
+  color: var(--text);
+  font-size: 12px;
+  line-height: 1;
+  cursor: pointer;
+  appearance: none;
+  box-shadow: 0 2px 8px rgba(15, 23, 42, 0.2);
+  transition: background-color 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease,
+    transform 0.2s ease;
+}
+
+#themeToggle:hover {
+  background: var(--surface-2);
+  border-color: var(--focus-color);
+  box-shadow: 0 4px 12px rgba(15, 23, 42, 0.24);
+}
+
+#themeToggle:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 2px var(--focus-color), 0 4px 12px rgba(15, 23, 42, 0.24);
+}
+
+#themeToggle:active {
+  transform: translateY(1px);
+}
+
+.card,
+.app-main,
+.app-sidebar,
+.site-header,
+.site-footer,
+.admin-card,
+.admin-card-narrow,
+.modal-content,
+.form-card,
+.panel,
+.widget,
+.stat-tile {
+  background: var(--card-bg);
+  border-color: var(--border);
+  color: var(--text);
+  box-shadow: var(--card-shadow);
+}
+
+.content,
+.box {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  color: var(--text);
+}
+
+:is(
+  .card,
+  .panel,
+  .content,
+  .container,
+  .box,
+  .wrapper,
+  .section,
+  .tile,
+  .app-main,
+  .app-sidebar,
+  .teacher-card,
+  .teacher-main-header,
+  .teacher-class-card,
+  .teacher-student-card,
+  .teacher-search-form,
+  .template-item,
+  .grade-item,
+  .statistics-item,
+  .statistics-box,
+  .settings-weight-item,
+  .dashboard-shell,
+  .login-card,
+  .admin-card,
+  .admin-card-narrow,
+  .admin-class-card,
+  .admin-student-row,
+  .admin-quick,
+  .modal-content
+) {
+  background: var(--surface);
+  color: var(--text);
+  border: 1px solid var(--border);
+}
+
+.site-header {
+  border-bottom-color: var(--primary);
+}
+
+.site-footer {
+  background: var(--surface-2);
+  border-top-color: var(--border);
+}
+
+hr,
+.admin-separator {
+  border-color: var(--border);
+}
+
+input,
+textarea,
+select,
+.form-input,
+.form-select,
+.admin-form input,
+.admin-form select,
+.admin-form textarea,
+.admin-edit-form input,
+.admin-edit-form select {
+  background: var(--input-bg-alt);
+  color: var(--text);
+  border: 1px solid var(--border);
+  caret-color: var(--text);
+}
+
+label {
+  color: var(--text-muted);
+}
+
+input::placeholder,
+textarea::placeholder,
+.form-input::placeholder {
+  color: var(--placeholder);
+  opacity: 1;
+}
+
+input:focus,
+textarea:focus,
+select:focus,
+.form-input:focus,
+.form-select:focus,
+.admin-form input:focus,
+.admin-form select:focus,
+.admin-form textarea:focus,
+.admin-edit-form input:focus,
+.admin-edit-form select:focus {
+  background: var(--input-bg);
+  border-color: var(--primary);
+  box-shadow: 0 0 0 3px rgba(31, 91, 216, 0.22);
+}
+
+.btn {
+  background: var(--surface-3);
+  color: var(--text);
+  border: 1px solid var(--border);
+}
+
+.btn:hover {
+  background: var(--surface-2);
+  border-color: var(--primary);
+  color: var(--text);
+}
+
+.btn-primary {
+  background: var(--primary);
+  color: var(--primary-contrast);
+  border-color: transparent;
+  box-shadow: none;
+}
+
+.btn-primary:hover {
+  background: var(--primary-hover);
+  color: var(--primary-contrast);
+}
+
+.btn-danger {
+  background: var(--danger);
+  color: var(--danger-contrast);
+  border-color: transparent;
+  box-shadow: none;
+}
+
+.btn-danger:hover {
+  background: var(--danger-hover);
+  color: var(--danger-contrast);
+}
+
+.btn-secondary {
+  background: var(--surface-2);
+  color: var(--text);
+  border-color: var(--border);
+}
+
+.btn-secondary:hover {
+  background: var(--surface-3);
+  border-color: var(--primary);
+  color: var(--text);
+}
+
+.app-sidebar {
+  background: var(--sidebar-bg);
+}
+
+.sidebar,
+.teacher-sidebar {
+  background: var(--sidebar-bg);
+}
+
+.sidebar-brand {
+  border-bottom-color: var(--border);
+}
+
+.sidebar-title {
+  color: var(--text);
+}
+
+.sidebar-badge {
+  background: var(--nav-item-active-bg);
+  color: var(--nav-item-active-text);
+}
+
+.nav-section-title {
+  color: var(--text-muted);
+}
+
+.app-nav a,
+.app-nav button.nav-trigger,
+.app-nav .app-nav-link,
+.nav-panel a {
+  background: var(--nav-item-bg) !important;
+  color: var(--nav-item-text) !important;
+  border: 1px solid var(--border);
+  box-shadow: none;
+}
+
+.app-nav a:hover,
+.app-nav button.nav-trigger:hover,
+.app-nav .app-nav-link:hover,
+.nav-panel a:hover {
+  background: var(--nav-item-hover-bg) !important;
+  color: var(--nav-item-text) !important;
+  border-color: var(--primary);
+  box-shadow: none;
+}
+
+.app-nav a.is-active,
+.app-nav button.nav-trigger.is-active,
+.app-nav .app-nav-link.is-active {
+  background: var(--nav-item-active-bg) !important;
+  color: var(--nav-item-active-text) !important;
+  border-color: var(--primary);
+}
+
+.admin-badge {
+  background: var(--surface-3);
+  color: var(--primary);
+  border: 1px solid var(--border);
+}
+
+.admin-quick,
+.admin-class-card,
+.admin-student-row {
+  background: var(--surface-2);
+  border-color: var(--border);
+  color: var(--text);
+}
+
+.admin-empty,
+.admin-alert.muted {
+  background: var(--surface-2);
+  border-color: var(--border);
+  color: var(--text-muted);
+}
+
+.admin-table {
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  overflow: hidden;
+  background: var(--surface-1);
+}
+
+.admin-table thead th {
+  background: var(--table-header-bg);
+  color: var(--text-muted);
+  border-bottom: 1px solid var(--border);
+}
+
+.admin-table tbody tr {
+  background: var(--table-row-bg);
+}
+
+.admin-table tbody tr:nth-child(even) {
+  background: var(--table-row-alt-bg);
+}
+
+.admin-table th,
+.admin-table td {
+  border-bottom: 1px solid var(--border);
+  color: var(--text);
+}
+
+.admin-table tbody tr:hover {
+  background: var(--table-row-hover-bg);
+}
+
+.admin-table tbody tr:hover td,
+.admin-table tbody tr:hover a {
+  color: var(--table-row-hover-text);
+}
+
+.admin-link {
+  color: var(--link);
+}
+
+.admin-link:hover {
+  color: var(--link-hover);
+}
+
+table {
+  background: var(--surface-1);
+  border: 1px solid var(--border);
+}
+
+thead th {
+  background: var(--table-header-bg);
+  color: var(--text-muted);
+}
+
+tbody tr {
+  background: var(--table-row-bg);
+}
+
+tbody tr:nth-child(even) {
+  background: var(--table-row-alt-bg);
+}
+
+tbody tr:hover {
+  background: var(--table-row-hover-bg);
+  color: var(--table-row-hover-text);
+}
+
+.login-card {
+  background: var(--login-card);
+  border-color: var(--border);
+  box-shadow: var(--card-shadow);
+}
+
+.login-separator {
+  border: none;
+  border-top: 2px solid var(--primary);
+  width: 60px;
+  margin: 20px auto;
+}
+
+.login-welcome-title {
+  font-size: 28px;
+  font-weight: 800;
+  color: var(--text);
+  margin-bottom: 8px;
+  text-align: center;
+}
+
+.login-subtitle,
+.login-notice,
+.login-foot-item,
+.login-helper {
+  color: var(--text-muted);
+}
+
+.login-notice {
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+}
+
+.login-label,
+.login-title-inline {
+  color: var(--text);
+}
+
+.login-input,
+.login-form input[type="password"] {
+  background: var(--input-bg-alt);
+  border-color: var(--border);
+  color: var(--text);
+}
+
+.login-input:focus,
+.login-form input[type="password"]:focus {
+  background: var(--input-bg);
+  border-color: var(--primary);
+  box-shadow: 0 0 0 3px rgba(31, 91, 216, 0.22);
+}
+
+.login-input::placeholder {
+  color: var(--placeholder);
+}
+
+.btn-login-submit,
+.login-button {
+  background: var(--primary);
+  color: var(--primary-contrast);
+  border: 1px solid transparent;
+  box-shadow: 0 10px 26px rgba(31, 91, 216, 0.35);
+}
+
+.btn-login-submit:hover,
+.login-button:hover {
+  background: var(--primary-hover);
+  color: var(--primary-contrast);
+}
+
+.btn-login-back {
+  background: var(--surface-2);
+  color: var(--text);
+  border-color: var(--border);
+}
+
+.btn-login-back:hover {
+  background: var(--surface-3);
+  color: var(--text);
+  border-color: var(--primary);
+}
+
+.login-alert-panel {
+  background: rgba(198, 63, 63, 0.12);
+  border-color: rgba(198, 63, 63, 0.5);
+  box-shadow: none;
+}
+
+html[data-theme="dark"] .login-alert-panel {
+  background: rgba(240, 107, 107, 0.18);
+  border-color: rgba(240, 107, 107, 0.45);
+}
+
+.login-alert-icon {
+  background: var(--danger);
+  color: var(--danger-contrast);
+}
+
+.login-alert-title,
+.login-alert-text,
+.login-alert-contact {
+  color: var(--danger);
+}
+
+.login-modal {
+  background: var(--surface-2);
+  border-color: var(--border);
+  color: var(--text);
+}
+
+body.mobile-view.page-login {
+  background: linear-gradient(160deg, var(--bg) 0%, var(--surface-2) 55%, var(--surface-3) 100%) !important;
+}
+
+.mobile-view .login-card,
+.mobile-view.page-login .login-card,
+.mobile-view .card.login-card {
+  background: var(--login-card) !important;
+  border: 1px solid var(--border) !important;
+  box-shadow: var(--card-shadow) !important;
+}
+
+.mobile-view .login-mark {
+  background: var(--surface-3) !important;
+}
+
+.mobile-view .login-eyebrow,
+.mobile-view .login-title-inline,
+.mobile-view .login-card h1 {
+  color: var(--text) !important;
+}
+
+.mobile-view .login-subtitle,
+.mobile-view .login-foot-item {
+  color: var(--text-muted) !important;
+}
+
+.mobile-view .login-notice {
+  background: var(--surface-2) !important;
+  border-color: var(--border) !important;
+  color: var(--text-muted) !important;
+}
+
+.mobile-view .login-label {
+  color: var(--text) !important;
+}
+
+.mobile-view .login-input {
+  background: var(--input-bg-alt) !important;
+  border-color: var(--border) !important;
+  color: var(--text) !important;
+}
+
+.mobile-view .login-input:focus {
+  background: var(--input-bg) !important;
+  border-color: var(--primary) !important;
+  box-shadow: 0 0 0 4px rgba(31, 91, 216, 0.22) !important;
+}
+
+.mobile-view .login-input::placeholder {
+  color: var(--placeholder) !important;
+}
+
+.mobile-view .btn-login-submit {
+  background: var(--primary) !important;
+  color: var(--primary-contrast) !important;
+  box-shadow: 0 10px 26px rgba(31, 91, 216, 0.35) !important;
+}
+
+.mobile-view .app-sidebar,
+.mobile-view .teacher-sidebar {
+  background: var(--sidebar-bg) !important;
+  border-right: 1px solid var(--border);
+  box-shadow: 10px 0 28px rgba(10, 20, 38, 0.32);
+}
+
+.mobile-view .sidebar-brand {
+  border-bottom-color: var(--border);
+}
+
+.mobile-view .dashboard-card,
+.mobile-view .stat-card,
+.mobile-view .info-card,
+.mobile-view .card,
+.mobile-view .list-item,
+.mobile-view .class-item,
+.mobile-view .student-item,
+.mobile-view .grade-item,
+.mobile-view .modal-content,
+.mobile-view .pagination-btn {
+  background: var(--surface-1);
+  border-color: var(--border);
+  color: var(--text);
+}
+
+.mobile-view .btn-secondary {
+  background: var(--surface-2);
+  color: var(--text);
+  border-color: var(--border);
+}
+
+.mobile-view table tr {
+  background: var(--table-row-bg);
+  border-color: var(--border);
+}
+
+.mobile-view table td {
+  border-bottom-color: var(--border);
+  color: var(--text);
+}
+
+.mobile-view table td:before {
+  color: var(--text-muted);
+}

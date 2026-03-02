@@ -52,7 +52,7 @@ body.mobile-view.page-login {
   border-radius: 18px !important;
   border: none !important;
   box-shadow: 0 10px 40px rgba(0, 0, 0, 0.3) !important;
-  background: #ffffff !important;
+  background: var(--surface) !important;
   position: relative;
   z-index: 10;
   display: block !important;
@@ -72,7 +72,7 @@ body.mobile-view.page-login {
   height: 70px;
   border-radius: 14px;
   box-shadow: 0 8px 20px rgba(0, 61, 165, 0.3);
-  background: white;
+  background: var(--surface-alt);
   padding: 10px;
 }
 
@@ -137,9 +137,9 @@ body.mobile-view.page-login {
   width: 100%;
   padding: 14px 16px;
   border-radius: 10px;
-  border: 2px solid #e5e7eb;
-  background: #f9fafb;
-  color: #1F2937;
+  border: 2px solid var(--border);
+  background: var(--surface-2);
+  color: var(--text);
   font-size: 16px;
   transition: all 0.2s ease;
   box-sizing: border-box;
@@ -151,7 +151,7 @@ body.mobile-view.page-login {
 .mobile-view .login-input:focus {
   outline: none;
   border-color: #003DA5;
-  background: #ffffff;
+  background: var(--surface-alt);
   box-shadow: 0 0 0 4px rgba(0, 61, 165, 0.1);
 }
 
@@ -168,7 +168,7 @@ body.mobile-view.page-login {
   border-radius: 12px;
   border: none;
   background: linear-gradient(135deg, #003DA5 0%, #0052CC 100%);
-  color: white;
+  color: var(--primary-contrast);
   font-size: 16px;
   font-weight: 800;
   letter-spacing: 0.5px;
@@ -209,7 +209,7 @@ body.mobile-view.page-login {
   height: 50px;
   border-radius: 12px;
   background: #dc2626;
-  color: white;
+  color: var(--danger-contrast);
   font-size: 26px;
   flex-shrink: 0;
   display: flex;
