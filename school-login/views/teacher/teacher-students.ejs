@@ -20,7 +20,7 @@
 
         <div class="app-nav">
           <div class="nav-section">
-            <div class="nav-section-title">Menue</div>
+            <div class="nav-section-title">Menü</div>
             <a href="/teacher/classes">Meine Klassen</a>
             <a href="/teacher/create-class">Klasse erstellen</a>
             <a href="/teacher/settings">Einstellungen</a>
@@ -57,7 +57,7 @@
             class="form-input teacher-search-input"
             type="search"
             name="q"
-            placeholder="Schueler nach Name oder E-Mail suchen"
+            placeholder="Schüler nach Name oder E-Mail suchen"
             value="<%= (search && search.q) || '' %>"
           >
           <select class="form-select teacher-search-select" name="sort" aria-label="Sortierung">
@@ -75,6 +75,8 @@
             <div>
               <p class="teacher-eyebrow">Schueler</p>
               <h3><%= students.length %> / <%= totalStudentCount %> Schueler in dieser Klasse</h3>
+              <p class="teacher-eyebrow">Schüler</p>
+              <h3><%= students.length %> / <%= totalStudentCount %> Schüler in dieser Klasse</h3>
             </div>
           </div>
 

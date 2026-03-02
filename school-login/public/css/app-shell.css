@@ -1,17 +1,17 @@
 :root {
-  --shell-bg: #f4f6fb;
-  --shell-surface: #ffffff;
-  --shell-border: #e5e7eb;
-  --shell-accent: #003da5;
+  --shell-bg: var(--bg);
+  --shell-surface: var(--surface);
+  --shell-border: var(--border);
+  --shell-accent: var(--primary);
   --shell-accent-muted: rgba(0, 61, 165, 0.08);
-  --shell-muted: #6b7280;
-  --shell-text: #111827;
+  --shell-muted: var(--text-muted);
+  --shell-text: var(--text);
   --shell-radius: 14px;
   --shell-shadow: 0 12px 30px rgba(0, 61, 165, 0.08);
 }
 
 .app-shell-body {
-  background: linear-gradient(135deg, #f8fafc 0%, #eef2ff 50%, #e0e7ff 100%);
+  background: var(--bg);
 }
 
 .app-shell {
@@ -97,7 +97,7 @@
   padding: 12px 14px;
   border-radius: 12px;
   border: 1px solid var(--shell-border);
-  background: #f9fafb;
+  background: var(--surface-2);
   color: var(--shell-text);
   text-decoration: none;
   font-weight: 600;
@@ -118,14 +118,14 @@
 .app-nav .app-nav-link:hover {
   border-color: var(--shell-accent);
   box-shadow: 0 10px 20px rgba(0, 61, 165, 0.08);
-  background: linear-gradient(135deg, rgba(0,61,165,0.08), #fff);
+  background: var(--surface-2);
 }
 
 .app-nav a.is-active,
 .app-nav button.nav-trigger.is-active,
 .app-nav .app-nav-link.is-active {
   border-color: var(--shell-accent);
-  background: linear-gradient(135deg, rgba(0,61,165,0.12), #fff);
+  background: var(--surface-2);
   color: var(--shell-accent);
 }
 
@@ -161,7 +161,7 @@
 }
 
 .nav-panel a {
-  background: #fff;
+  background: var(--surface);
   font-weight: 500;
 }
 

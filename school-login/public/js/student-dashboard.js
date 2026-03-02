@@ -306,7 +306,7 @@
         .slice(0, 3);
 
       if (!recent.length) {
-        recentEl.innerHTML = '<p class="empty-state">Noch keine Rueckgaben vorhanden.</p>';
+        recentEl.innerHTML = '<p class="empty-state">Noch keine Rückgaben vorhanden.</p>';
       } else {
         recentEl.innerHTML = recent
           .map((entry) => {
@@ -578,7 +578,7 @@
     const container = document.getElementById("return-list");
     if (!container) return;
     if (!state.returns.length) {
-      container.innerHTML = '<p class="empty-state">Keine Rueckgaben vorhanden.</p>';
+      container.innerHTML = '<p class="empty-state">Keine Rückgaben vorhanden.</p>';
       return;
     }
 
@@ -588,7 +588,7 @@
       (entry) => matchesSubject(entry, subject) && matchesQuery(entry, query, ["title", "note"])
     );
     if (!filtered.length) {
-      container.innerHTML = '<p class="empty-state">Keine Rueckgaben gefunden.</p>';
+      container.innerHTML = '<p class="empty-state">Keine Rückgaben gefunden.</p>';
       return;
     }
 
@@ -623,7 +623,7 @@
                 ${hasUnreadTeacherReplies(entry) ? '<span class="badge-inline return-unread-badge">Neue Antwort</span>' : ""}
               </div>
               <div class="task-meta">
-                <span>Rueckgabe: ${returnText}</span>
+                <span>Rückgabe: ${returnText}</span>
                 <span>Gewichtung: ${weightText}</span>
               </div>
               ${entry.note ? `<div class="nav-note">${escapeHtml(entry.note)}</div>` : ""}
@@ -688,7 +688,7 @@
       renderReturns();
       renderOverview();
     } catch (err) {
-      console.error("Konnte Rueckgaben nicht laden:", err);
+      console.error("Konnte Rückgaben nicht laden:", err);
     }
   }
 

@@ -31,7 +31,7 @@
 
         <div class="app-nav">
           <div class="nav-section">
-            <div class="nav-section-title">Menue</div>
+            <div class="nav-section-title">Menü</div>
             <a href="/teacher/classes">Meine Klassen</a>
             <a href="/teacher/create-class">Klasse erstellen</a>
             <a href="/teacher/settings">Einstellungen</a>
@@ -86,19 +86,19 @@
                 Bewertungsmodus dieses Profils: <strong><%= scoringModeLabel || 'Punkte oder Noten' %></strong>
               </div>
 
-              <label for="template_search">Pruefung *</label>
+              <label for="template_search">Prüfung *</label>
               <div class="template-picker" id="templatePicker">
                 <div class="template-picker-toolbar">
                   <input
                     type="search"
                     id="template_search"
                     class="template-picker-search"
-                    placeholder="Pruefung suchen (Name, Kategorie, Datum)"
+                    placeholder="Prüfung suchen (Name, Kategorie, Datum)"
                     autocomplete="off"
                   >
                   <select id="template_sort" class="template-picker-sort" aria-label="Sortierung">
                     <option value="date_desc">Datum: Neueste zuerst</option>
-                    <option value="date_asc">Datum: Aelteste zuerst</option>
+                    <option value="date_asc">Datum: Älteste zuerst</option>
                   </select>
                 </div>
 
@@ -151,7 +151,7 @@
                               <%= selected && !isGraded ? 'checked' : '' %>
                               <%= isGraded ? 'disabled' : '' %>
                               required
-                              aria-label="Pruefung <%= template.name %> auswaehlen"
+                              aria-label="Prüfung <%= template.name %> auswählen"
                             >
                           </td>
                           <td><strong><%= template.name %></strong></td>
@@ -169,7 +169,7 @@
                         </tr>
                       <% }) %>
                       <tr id="templateNoResults" class="template-empty-row" hidden>
-                        <td colspan="7">Keine passenden Pruefungen gefunden.</td>
+                        <td colspan="7">Keine passenden Prüfungen gefunden.</td>
                       </tr>
                     </tbody>
                   </table>
@@ -177,7 +177,7 @@
 
                 <p id="templateSelectionInfo" class="template-picker-selection"></p>
               </div>
-              <small class="form-hint">Standardmaessig werden die neuesten 3 Pruefungen gezeigt. Mit Suche oder Sortierung siehst du alle.</small>
+              <small class="form-hint">Standardmässig werden die neuesten 3 Prüfungen gezeigt. Mit Suche oder Sortierung siehst du alle.</small>
 
               <label class="checkbox-line" for="is_absent">
                 <input
@@ -187,7 +187,7 @@
                   value="1"
                   <%= formData.is_absent ? 'checked' : '' %>
                 >
-                Schueler war bei dieser Pruefung nicht da
+                Schüler war bei dieser Prüfung nicht da
               </label>
               <small class="form-hint">Aktuelle Regel aus Einstellungen: <%= absenceModeLabel %>.</small>
 
@@ -291,11 +291,11 @@
               const date = cells[5] ? cells[5].innerText.trim() : "";
               selectedMaxPoints = row.dataset.templateMaxPoints || "-";
               selectedLabel = date && date !== "-"
-                ? "Ausgewaehlt: " + name + " (" + date + ")"
-                : "Ausgewaehlt: " + name;
+                ? "Ausgewählt: " + name + " (" + date + ")"
+                : "Ausgewählt: " + name;
             }
           });
-          selectionInfo.textContent = selectedLabel || "Noch keine Pruefung ausgewaehlt.";
+          selectionInfo.textContent = selectedLabel || "Noch keine Prüfung ausgewählt.";
           if (templateMaxPointsInfo) {
             templateMaxPointsInfo.textContent = "Maximale Punkte aus Vorlage: " + selectedMaxPoints;
           }

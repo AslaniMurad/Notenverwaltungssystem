@@ -1,4 +1,4 @@
-﻿const express = require("express");
+const express = require("express");
 const router = express.Router();
 const { db, hashPassword } = require("../db");
 const { requireAuth, requireRole } = require("../middleware/auth");
@@ -126,7 +126,7 @@ router.post("/users", async (req, res, next) => {
   }
   if (role === "teacher" && wantsInitial) {
     return res.status(400).render("error", {
-      message: "FÃ¼r Lehrer darf kein Initial-Passwort vergeben werden.",
+      message: "Für Lehrer darf kein Initial-Passwort vergeben werden.",
       status: 400,
       backUrl: "/admin/users/new",
       csrfToken: req.csrfToken()
@@ -207,7 +207,7 @@ router.post("/users", async (req, res, next) => {
     console.error("DB error inserting user:", err);
     if (String(err).includes("UNIQUE")) {
       return res.status(409).render("error", {
-        message: "Eâ€‘Mail existiert bereits.",
+        message: "E-Mail existiert bereits.",
         status: 409,
         backUrl: "/admin/users/new",
         csrfToken: req.csrfToken()
@@ -223,7 +223,7 @@ router.post("/users/bulk", async (req, res, next) => {
 
   if (!bulkRole) {
     return res.status(400).render("error", {
-      message: "Bitte wÃ¤hle eine Rolle fÃ¼r neue Nutzer.",
+      message: "Bitte wähle eine Rolle für neue Nutzer.",
       status: 400,
       backUrl: "/admin/users/new",
       csrfToken: req.csrfToken()
@@ -231,7 +231,7 @@ router.post("/users/bulk", async (req, res, next) => {
   }
   if (wantsInitial && bulkRole === "teacher") {
     return res.status(400).render("error", {
-      message: "Lehrer dÃ¼rfen kein Initial-Passwort erhalten.",
+      message: "Lehrer dürfen kein Initial-Passwort erhalten.",
       status: 400,
       backUrl: "/admin/users/new",
       csrfToken: req.csrfToken()
@@ -411,7 +411,7 @@ router.post("/users/:id", async (req, res, next) => {
     console.error("DB error updating user:", err);
     if (String(err).includes("UNIQUE")) {
       return res.status(409).render("error", {
-        message: "Eâ€‘Mail existiert bereits.",
+        message: "E-Mail existiert bereits.",
         status: 409,
         backUrl: `/admin/users/${id}/edit`,
         csrfToken: req.csrfToken()
@@ -512,7 +512,7 @@ router.post("/classes", async (req, res, next) => {
   const { name, subject, teacher_id } = req.body || {};
   if (!name || !subject || !teacher_id) {
     return res.status(400).render("error", {
-      message: "Bitte alle Pflichtfelder ausfÃ¼llen.",
+      message: "Bitte alle Pflichtfelder ausfüllen.",
       status: 400,
       backUrl: "/admin/classes/new",
       csrfToken: req.csrfToken()
@@ -570,7 +570,7 @@ router.post("/classes/:id", async (req, res, next) => {
   const { name, subject, teacher_id } = req.body || {};
   if (!name || !subject || !teacher_id) {
     return res.status(400).render("error", {
-      message: "Bitte alle Pflichtfelder ausfÃ¼llen.",
+      message: "Bitte alle Pflichtfelder ausfüllen.",
       status: 400,
       backUrl: `/admin/classes/${classId}/edit`,
       csrfToken: req.csrfToken()
@@ -828,7 +828,7 @@ router.post("/classes/:id/students/add-bulk", async (req, res, next) => {
       if (duplicate) {
         bulkResult.failed.push({
           email,
-          reason: "Schueler ist bereits in der Klasse."
+          reason: "Schüler ist bereits in der Klasse."
         });
         continue;
       }

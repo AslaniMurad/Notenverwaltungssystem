@@ -1,6 +1,6 @@
-﻿<%
+<%
   const page = {
-    title: 'Admin â€” SchÃ¼ler hinzufÃ¼gen',
+    title: 'Admin — Schüler hinzufügen',
     headerTitle: 'Adminbereich',
     styles: ['/css/admin.css'],
     scripts: ['/js/app.js'],
@@ -15,10 +15,10 @@
         <div class="app-main-header">
           <div>
             <p class="app-main-subtitle">Klasse <%= classData.name %></p>
-            <h1>SchÃ¼ler hinzufÃ¼gen</h1>
-            <p class="admin-muted">Nur registrierte SchÃ¼ler kÃ¶nnen zugeordnet werden.</p>
+            <h1>Schüler hinzufügen</h1>
+            <p class="admin-muted">Nur registrierte Schüler können zugeordnet werden.</p>
           </div>
-          <a class="btn btn-secondary" href="/admin/classes/<%= classData.id %>/students">ZurÃ¼ck</a>
+          <a class="btn btn-secondary" href="/admin/classes/<%= classData.id %>/students">Zurück</a>
         </div>
 
         <div class="admin-card-narrow">
@@ -27,7 +27,7 @@
           <% } %>
           <% if (bulkResult) { %>
             <div class="admin-alert">
-              Bulk Ergebnis: <%= bulkResult.success.length %> hinzugefuegt, <%= bulkResult.failed.length %> fehlgeschlagen.
+              Bulk Ergebnis: <%= bulkResult.success.length %> hinzugef&uuml;gt, <%= bulkResult.failed.length %> fehlgeschlagen.
             </div>
             <% if (bulkResult.failed.length) { %>
               <div class="admin-alert">
@@ -50,12 +50,12 @@
             <label for="email">E-Mail</label>
             <input id="email" name="email" type="email" required data-student-email>
 
-            <button class="btn btn-primary" type="submit">HinzufÃ¼gen</button>
+            <button class="btn btn-primary" type="submit">Hinzufügen</button>
           </form>
         </div>
 
         <div class="admin-card-narrow">
-          <h3>Bulk Schueler hinzufuegen</h3>
+          <h3>Bulk Schüler hinzufügen</h3>
           <p class="admin-muted">Eine E-Mail pro Zeile. Name wird aus vorname.nachname@xy abgeleitet.</p>
           <form class="admin-edit-form" method="POST" action="/admin/classes/<%= classData.id %>/students/add-bulk">
             <input type="hidden" name="_csrf" value="<%= csrfToken %>">
@@ -63,7 +63,7 @@
             <label for="bulkEmails">E-Mails (eine pro Zeile)</label>
             <textarea id="bulkEmails" name="bulkEmails" rows="6" required></textarea>
 
-            <button class="btn btn-primary" type="submit">Bulk hinzufuegen</button>
+            <button class="btn btn-primary" type="submit">Bulk hinzufügen</button>
           </form>
         </div>
       </section>

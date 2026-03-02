@@ -23,15 +23,15 @@
 
         <div class="app-nav">
           <div class="nav-section">
-            <div class="nav-section-title">Menue</div>
+            <div class="nav-section-title">Menü</div>
             <a href="/teacher/classes">Meine Klassen</a>
             <a href="/teacher/create-class">Klasse erstellen</a>
             <a href="/teacher/settings">Einstellungen</a>
             <div class="nav-section-title">Klasse: <%= classData.name %> / <%= classData.subject %></div>
-            <a href="/teacher/students/<%= classData.id %>">Schueler</a>
+            <a href="/teacher/students/<%= classData.id %>">Schüler</a>
             <a href="/teacher/grades/<%= classData.id %>">Noten</a>
             <a href="/teacher/special-assessments/<%= classData.id %>">Sonderleistungen</a>
-            <a href="/teacher/grade-templates/<%= classData.id %>">Pruefungen</a>
+            <a href="/teacher/grade-templates/<%= classData.id %>">Prüfungen</a>
             <a href="/teacher/class-statistics/<%= classData.id %>">Statistiken</a>
             <form class="logout-form" method="POST" action="/logout">
               <input type="hidden" name="_csrf" value="<%= csrfToken %>">
@@ -56,7 +56,7 @@
             </p>
           </div>
           <div class="teacher-actions-inline">
-            <a class="btn btn-secondary" href="/teacher/student-grades/<%= classData.id %>/<%= student.id %>">Zurueck zu Notendetails</a>
+            <a class="btn btn-secondary" href="/teacher/student-grades/<%= classData.id %>/<%= student.id %>">Zurück zu Notendetails</a>
           </div>
         </header>
 
@@ -77,12 +77,12 @@
             </div>
           <% } %>
           <p class="teacher-muted">
-            Einbezogene Eintraege: <strong><%= summary.included_count %></strong> |
-            Ausgeschlossene Eintraege: <strong><%= summary.excluded_count %></strong> |
+            Einbezogene Einträge: <strong><%= summary.included_count %></strong> |
+            Ausgeschlossene Einträge: <strong><%= summary.excluded_count %></strong> |
             Referenzschnitt (System): <strong><%= summary.reference_average != null ? summary.reference_average : "-" %></strong>
           </p>
           <p class="teacher-muted">
-            Punkte (aktuell moeglich):
+            Punkte (aktuell möglich):
             <strong>
               <%= summary.points_achieved_total != null ? summary.points_achieved_total : "-" %>/<%= summary.points_max_total != null ? summary.points_max_total : "-" %>
             </strong>
@@ -176,7 +176,7 @@
           <div class="teacher-card-header">
             <div>
               <p class="teacher-eyebrow">Rohdaten</p>
-              <h3>Alle bewerteten Eintraege mit Berechnungsdaten</h3>
+              <h3>Alle bewerteten Einträge mit Berechnungsdaten</h3>
             </div>
             <div class="teacher-actions-inline">
               <a class="btn btn-secondary btn-sm" href="/teacher/student-grades/<%= classData.id %>/<%= student.id %>/details?format=csv_raw">.csv</a>
@@ -192,7 +192,7 @@
                   <th>Bezeichnung</th>
                   <th>Kategorie</th>
                   <th>Erfasst</th>
-                  <th>Pruefungsdatum</th>
+                  <th>Prüfungsdatum</th>
                   <th>Note</th>
                   <th>Gewicht roh</th>
                   <th>Gewicht effektiv</th>
@@ -299,7 +299,7 @@
           <div class="teacher-card-header">
             <div>
               <p class="teacher-eyebrow">Offene Vorlagen</p>
-              <h3>Noch nicht benotete Pruefungen</h3>
+              <h3>Noch nicht benotete Prüfungen</h3>
             </div>
             <div class="teacher-meta-chip"><%= openTemplates.length %> offen</div>
           </div>

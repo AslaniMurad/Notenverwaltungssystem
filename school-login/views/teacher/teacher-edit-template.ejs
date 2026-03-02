@@ -1,6 +1,6 @@
 <%
   const page = {
-    title: "Lehrer - Pruefung bearbeiten",
+    title: "Lehrer - Prüfung bearbeiten",
     headerTitle: "Lehrerbereich",
     styles: ["/css/teacher-pages.css"],
     scripts: ["/js/app.js"],
@@ -23,15 +23,15 @@
 
         <div class="app-nav">
           <div class="nav-section">
-            <div class="nav-section-title">Menue</div>
+            <div class="nav-section-title">Menü</div>
             <a href="/teacher/classes">Meine Klassen</a>
             <a href="/teacher/create-class">Klasse erstellen</a>
             <a href="/teacher/settings">Einstellungen</a>
             <div class="nav-section-title">Klasse: <%= classData.name %> / <%= classData.subject %></div>
-            <a href="/teacher/students/<%= classData.id %>">Schueler</a>
+            <a href="/teacher/students/<%= classData.id %>">Schüler</a>
             <a href="/teacher/grades/<%= classData.id %>">Noten</a>
             <a href="/teacher/special-assessments/<%= classData.id %>">Sonderleistungen</a>
-            <a class="is-active" href="/teacher/grade-templates/<%= classData.id %>">Pruefungen</a>
+            <a class="is-active" href="/teacher/grade-templates/<%= classData.id %>">Prüfungen</a>
             <a href="/teacher/class-statistics/<%= classData.id %>">Statistiken</a>
             <form class="logout-form" method="POST" action="/logout">
               <input type="hidden" name="_csrf" value="<%= csrfToken %>">
@@ -44,7 +44,7 @@
       <section class="teacher-main">
         <header class="teacher-main-header">
           <div>
-            <p class="teacher-eyebrow">Pruefung bearbeiten</p>
+            <p class="teacher-eyebrow">Prüfung bearbeiten</p>
             <h1>Klasse <%= classData.name %></h1>
             <p class="teacher-muted">Profil: <strong><%= activeProfile.name %></strong> - Modus: Punkte</p>
           </div>
@@ -56,7 +56,7 @@
         <div class="teacher-card">
           <div class="teacher-card-header">
             <div>
-              <p class="teacher-eyebrow">Pruefungsvorlage</p>
+              <p class="teacher-eyebrow">Prüfungsvorlage</p>
               <h3>Details bearbeiten</h3>
             </div>
           </div>
@@ -68,7 +68,7 @@
           <form class="teacher-form" method="POST" action="/teacher/edit-template/<%= classData.id %>/<%= templateId %>">
             <input type="hidden" name="_csrf" value="<%= csrfToken %>">
 
-            <label for="name">Name der Pruefung *</label>
+            <label for="name">Name der Prüfung *</label>
             <input
               type="text"
               id="name"
@@ -80,7 +80,7 @@
 
             <label for="category">Kategorie *</label>
             <select id="category" name="category" required>
-              <option value="">-- Kategorie waehlen --</option>
+              <option value="">-- Kategorie wählen --</option>
               <% categoryDefinitions.forEach((category) => { %>
                 <option
                   value="<%= category.key %>"
@@ -126,8 +126,8 @@
             ><%= formData && formData.description ? formData.description : '' %></textarea>
 
             <div class="teacher-form-actions">
-              <button class="btn btn-primary" type="submit">Aenderungen speichern</button>
-              <a class="btn btn-secondary" href="/teacher/grade-templates/<%= classData.id %>">Zurueck</a>
+              <button class="btn btn-primary" type="submit">Änderungen speichern</button>
+              <a class="btn btn-secondary" href="/teacher/grade-templates/<%= classData.id %>">Zurück</a>
             </div>
           </form>
         </div>
@@ -154,7 +154,7 @@
           if (unitLabel) unitLabel.textContent = "Punkte";
 
           if (!selectedCategory) {
-            if (weightHint) weightHint.textContent = "Waehle zuerst eine Kategorie.";
+            if (weightHint) weightHint.textContent = "Wähle zuerst eine Kategorie.";
             return;
           }
 
@@ -165,7 +165,7 @@
             }
           } else if (weightHint) {
             weightHint.textContent =
-              "Keine Profil-Gewichtung fuer diese Kategorie gefunden.";
+              "Keine Profil-Gewichtung für diese Kategorie gefunden.";
           }
         }
 
