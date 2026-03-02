@@ -153,7 +153,7 @@
   border: 1px solid var(--teacher-border);
   border-radius: 12px;
   padding: 14px;
-  background: #ffffff;
+  background: var(--surface);
   display: grid;
   gap: 10px;
 }
@@ -169,7 +169,7 @@
 .teacher-message-context {
   margin: 0;
   font-size: 14px;
-  color: #374151;
+  color: var(--text);
 }
 
 .teacher-message-bubble {
@@ -179,12 +179,12 @@
 }
 
 .teacher-message-bubble.student {
-  background: #f8fafc;
+  background: rgba(37, 99, 235, 0.08);
   border-left: 3px solid #2563eb;
 }
 
 .teacher-message-bubble.teacher {
-  background: #f0fdf4;
+  background: rgba(5, 150, 105, 0.12);
   border-left: 3px solid #059669;
 }
 
@@ -222,8 +222,8 @@
 }
 
 .teacher-meta-chip-neutral {
-  background: #f3f4f6;
-  color: #475569;
+  background: var(--surface-2);
+  color: var(--text-muted);
 }
 
 .teacher-thread-controls {
@@ -320,7 +320,7 @@
   margin-top: 0;
   padding: 12px 16px 16px;
   border-top: 1px dashed var(--teacher-border);
-  background: linear-gradient(180deg, #f8fbff 0%, #ffffff 100%);
+  background: linear-gradient(180deg, var(--surface-2) 0%, var(--surface) 100%);
 }
 
 .teacher-thread-body-header {
@@ -341,12 +341,12 @@
 
 .teacher-test-questions-page .teacher-message-bubble.student {
   border-left-width: 4px;
-  background: #f8fbff;
+  background: rgba(37, 99, 235, 0.1);
 }
 
 .teacher-test-questions-page .teacher-message-bubble.teacher {
   border-left-width: 4px;
-  background: #f2fbf6;
+  background: rgba(5, 150, 105, 0.14);
   margin-left: 18px;
 }
 
@@ -356,7 +356,7 @@
   font-weight: 700;
   letter-spacing: 0.04em;
   text-transform: uppercase;
-  color: #334155;
+  color: var(--text-muted);
 }
 
 .teacher-test-questions-page .teacher-reply-form {
@@ -364,7 +364,7 @@
   padding: 12px;
   border: 1px solid var(--teacher-border);
   border-radius: 12px;
-  background: #ffffff;
+  background: var(--surface);
 }
 
 .teacher-test-questions-page .teacher-reply-form textarea {
