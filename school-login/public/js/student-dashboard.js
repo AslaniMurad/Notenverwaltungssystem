@@ -67,35 +67,16 @@
     openReturnDetails: new Set()
   };
 
-  document.querySelectorAll(".tab").forEach((tab) => {
-    tab.addEventListener("click", () => {
-      setActiveTab(tab.dataset.tab);
-    });
-  });
-
-  document.querySelectorAll("[data-tab-target]").forEach((link) => {
-    link.addEventListener("click", (event) => {
-      const target = link.getAttribute("data-tab-target");
-      if (target) {
-        event.preventDefault();
-        setActiveTab(target);
-        document.getElementById(target)?.scrollIntoView({ behavior: "smooth", block: "start" });
-      }
-    });
-  });
-
-  function setActiveTab(name) {
-    document.querySelectorAll(".tab").forEach((tab) => {
-      tab.classList.toggle("active", tab.dataset.tab === name);
-    });
-    document.querySelectorAll(".tab-content").forEach((content) => {
-      content.classList.toggle("active", content.id === name);
-    });
-    document.querySelectorAll("[data-tab-target]").forEach((link) => {
-      const isActive = link.getAttribute("data-tab-target") === name;
-      link.classList.toggle("is-active", isActive);
-    });
-  }
+  const needsOverview = Boolean(
+    document.getElementById("overview-average") ||
+    document.getElementById("overview-upcoming") ||
+    document.getElementById("overview-recent-returns")
+  );
+  const needsTasks = Boolean(document.getElementById("task-list"));
+  const needsReturns = Boolean(document.getElementById("return-list"));
+  const needsGrades = Boolean(document.getElementById("grade-list"));
+  const needsClassAverages = Boolean(document.getElementById("class-average"));
+  const needsNotifications = Boolean(document.getElementById("notification-list"));
 
   document.querySelectorAll(".accordion").forEach((accordion) => {
     accordion.addEventListener("click", () => {
@@ -719,17 +700,33 @@
     .getElementById("return-filter")
     ?.addEventListener("change", () => renderReturns());
 
-  renderGrades();
-  renderAverages();
-  renderClassAverage();
-  renderNotifications();
-  renderTasks();
-  renderReturns();
-  renderOverview();
+  if (needsGrades || needsOverview) {
+    renderGrades();
+    renderAverages();
+    refreshGrades();
+  }
 
-  refreshGrades();
-  loadClassComparison();
-  loadTasksFromServer();
-  loadReturnsFromServer();
-  loadNotificationsFromServer();
+  if (needsTasks || needsOverview) {
+    renderTasks();
+    loadTasksFromServer();
+  }
+
+  if (needsReturns || needsOverview) {
+    renderReturns();
+    loadReturnsFromServer();
+  }
+
+  if (needsClassAverages || needsGrades) {
+    renderClassAverage();
+    loadClassComparison();
+  }
+
+  if (needsNotifications || needsGrades) {
+    renderNotifications();
+    loadNotificationsFromServer();
+  }
+
+  if (needsOverview) {
+    renderOverview();
+  }
 })();
