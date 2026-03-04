@@ -327,7 +327,7 @@ async function getStudentContext(req) {
   return { student, classInfo, classAbsenceMode };
 }
 
-const STUDENT_PAGE_KEYS = new Set(["overview", "tasks", "returns", "grades"]);
+const STUDENT_PAGE_KEYS = new Set(["overview", "tasks", "returns", "requests", "grades"]);
 
 function normalizeStudentPage(value) {
   const key = String(value || "").trim().toLowerCase();
@@ -447,6 +447,10 @@ router.get("/rueckgaben", async (req, res) => {
 
 router.get("/noten", async (req, res) => {
   res.redirect("/student/grades");
+});
+
+router.get("/anfragen", async (req, res) => {
+  res.redirect("/student/requests");
 });
 
 router.get("/profile", async (req, res, next) => {
@@ -583,6 +587,10 @@ router.get("/returns", async (req, res, next) => {
   } catch (err) {
     next(err);
   }
+});
+
+router.get("/requests", async (req, res, next) => {
+  await renderStudentDashboard(req, res, next, "requests");
 });
 
 router.post("/returns/:gradeId/message", async (req, res, next) => {

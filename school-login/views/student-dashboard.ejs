@@ -3,6 +3,7 @@
     overview: { title: "Schueler - Uebersicht", heading: "Uebersicht" },
     tasks: { title: "Schueler - Aufgaben", heading: "Aufgaben" },
     returns: { title: "Schueler - Rueckgaben", heading: "Rueckgaben" },
+    requests: { title: "Schueler - Anfragen", heading: "Anfragen" },
     grades: { title: "Schueler - Noten", heading: "Noten" }
   };
   const currentPage = pageMeta[activePage] ? activePage : "overview";
@@ -34,6 +35,7 @@
             <a class="<%= currentPage === 'overview' ? 'is-active' : '' %>" href="/student">Uebersicht</a>
             <a class="<%= currentPage === 'tasks' ? 'is-active' : '' %>" href="/student/tasks">Aufgaben</a>
             <a class="<%= currentPage === 'returns' ? 'is-active' : '' %>" href="/student/returns">Rueckgaben</a>
+            <a class="<%= currentPage === 'requests' ? 'is-active' : '' %>" href="/student/requests">Anfragen</a>
             <a class="<%= currentPage === 'grades' ? 'is-active' : '' %>" href="/student/grades">Noten</a>
             <form class="logout-form" method="POST" action="/logout">
               <% if (typeof csrfToken !== "undefined") { %>
@@ -142,6 +144,25 @@
                   </label>
                 </form>
                 <div id="return-list"></div>
+              </div>
+            </section>
+          <% } %>
+
+          <% if (currentPage === "requests") { %>
+            <section id="requests">
+              <div class="card">
+                <h3>Anfragen</h3>
+                <form id="request-filter" class="filter-grid" aria-label="Anfragen filtern">
+                  <label>Rueckgabe
+                    <select name="gradeId" id="request-filter-grade">
+                      <option value="">Alle Rueckgaben</option>
+                    </select>
+                  </label>
+                  <label>Suche
+                    <input type="search" name="query" id="request-filter-query" placeholder="Titel, Notiz oder Nachricht">
+                  </label>
+                </form>
+                <div id="request-list"></div>
               </div>
             </section>
           <% } %>
