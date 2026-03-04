@@ -498,11 +498,11 @@
   }
 
   function decorateReturnRows(ordered, container) {
-    const rows = container.querySelectorAll(".return-row");
+    const rows = container.querySelectorAll(".request-card, .return-row");
     rows.forEach((row, index) => {
       const entry = ordered[index];
       if (!entry) return;
-      const body = row.firstElementChild;
+      const body = row.querySelector(".request-card-body") || row.firstElementChild;
       if (!body) return;
 
       const details = document.createElement("details");
@@ -515,7 +515,7 @@
       }
 
       const summary = document.createElement("summary");
-      summary.className = "return-message-summary";
+      summary.className = "return-message-summary request-ticket-summary";
       const summaryLastActivity = stats.lastActivityAt
         ? `Letzte Aktivitaet: ${formatDate(stats.lastActivityAt, true)}`
         : "Noch keine Aktivitaet";
@@ -533,7 +533,7 @@
       details.appendChild(summary);
 
       const thread = document.createElement("div");
-      thread.className = "return-message-thread";
+      thread.className = "return-message-thread request-ticket-thread";
       thread.innerHTML = entry.messages.length
         ? entry.messages
           .map((message) => {
@@ -542,6 +542,7 @@
                 <article class="return-message-row teacher ${message.teacher_reply_seen_at ? "" : "unseen"}">
                   <div class="return-message-head">
                     <strong>Lehrkraft</strong>
+                    <span class="ticket-tag teacher">Antwort</span>
                     <small>${formatDate(message.replied_at, true)}</small>
                   </div>
                   ${message.teacher_reply_seen_at ? "" : '<span class="return-reply-new">Neu</span>'}
@@ -553,6 +554,7 @@
               <article class="return-message-row student">
                 <div class="return-message-head">
                   <strong>Du</strong>
+                  <span class="ticket-tag student">Anfrage</span>
                   <small>${formatDate(message.created_at, true)}</small>
                 </div>
                 <p>${escapeHtml(message.student_message)}</p>
@@ -746,6 +748,7 @@
   function renderRequests() {
     const container = document.getElementById("request-list");
     if (!container) return;
+    container.classList.add("request-list");
 
     const sourceEntries = state.returns.filter(
       (entry) => entry.can_message || (Array.isArray(entry.messages) && entry.messages.length > 0)
@@ -805,27 +808,32 @@
         const weightText = Number.isFinite(entry.weight) && entry.weight ? `${entry.weight}%` : "-";
 
         return `
-          <div class="return-row request-row" data-grade-id="${String(entry.id)}">
-            <div>
-              <div class="task-title">
-                <strong>${escapeHtml(entry.title)}</strong>
-                ${entry.category ? `<span class="pill">${escapeHtml(entry.category)}</span>` : ""}
-              </div>
-              <div class="task-meta">
-                <span>Rueckgabe: ${returnText}</span>
-                <span>Gewichtung: ${weightText}</span>
-              </div>
+          <article class="request-card request-row" data-grade-id="${String(entry.id)}">
+            <div class="request-card-body">
+              <header class="request-card-header">
+                <div>
+                  <div class="task-title">
+                    <strong>${escapeHtml(entry.title)}</strong>
+                    ${entry.category ? `<span class="pill">${escapeHtml(entry.category)}</span>` : ""}
+                  </div>
+                  <div class="task-meta">
+                    <span>Rueckgabe: ${returnText}</span>
+                    <span>Gewichtung: ${weightText}</span>
+                  </div>
+                </div>
+                <div class="return-grade">
+                  <span class="grade-pill ${gradeColor(entry.grade)}">Note ${gradeText}</span>
+                </div>
+              </header>
+
               <div class="return-insights">
                 <span class="return-status-pill ${status.className}">${status.label}</span>
                 <span>${stats.totalCount} Nachricht${stats.totalCount === 1 ? "" : "en"}</span>
                 <span>Letzte Aktivitaet: ${activityText}</span>
               </div>
-              ${entry.note ? `<div class="nav-note">${escapeHtml(entry.note)}</div>` : ""}
+              ${entry.note ? `<div class="nav-note request-note">${escapeHtml(entry.note)}</div>` : ""}
             </div>
-            <div class="return-grade">
-              <span class="grade-pill ${gradeColor(entry.grade)}">Note ${gradeText}</span>
-            </div>
-          </div>
+          </article>
         `;
       })
       .join("");
