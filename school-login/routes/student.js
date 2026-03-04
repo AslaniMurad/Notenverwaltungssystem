@@ -334,6 +334,13 @@ function normalizeStudentPage(value) {
   return STUDENT_PAGE_KEYS.has(key) ? key : "overview";
 }
 
+function requestPrefersJson(req) {
+  const format = String(req.query?.format || "").trim().toLowerCase();
+  if (format === "json") return true;
+  if (format === "html") return false;
+  return req.accepts(["json", "html"]) === "json";
+}
+
 async function buildStudentDashboardPayload(context, csrfToken) {
   const { student, classInfo, classAbsenceMode } = context;
   const gradeRows = await loadStudentGrades(student.id);
@@ -430,16 +437,16 @@ router.get("/overview", async (req, res, next) => {
   await renderStudentDashboard(req, res, next, "overview");
 });
 
-router.get("/aufgaben", async (req, res, next) => {
-  await renderStudentDashboard(req, res, next, "tasks");
+router.get("/aufgaben", async (req, res) => {
+  res.redirect("/student/tasks");
 });
 
-router.get("/rueckgaben", async (req, res, next) => {
-  await renderStudentDashboard(req, res, next, "returns");
+router.get("/rueckgaben", async (req, res) => {
+  res.redirect("/student/returns");
 });
 
-router.get("/noten", async (req, res, next) => {
-  await renderStudentDashboard(req, res, next, "grades");
+router.get("/noten", async (req, res) => {
+  res.redirect("/student/grades");
 });
 
 router.get("/profile", async (req, res, next) => {
@@ -464,6 +471,10 @@ router.get("/profile", async (req, res, next) => {
 
 router.get("/grades", async (req, res, next) => {
   try {
+    if (!requestPrefersJson(req)) {
+      return await renderStudentDashboard(req, res, next, "grades");
+    }
+
     const context = await getStudentContext(req);
     if (!context) {
       return res.status(404).json({ error: "Student nicht gefunden." });
@@ -512,6 +523,10 @@ router.get("/grades", async (req, res, next) => {
 
 router.get("/tasks", async (req, res, next) => {
   try {
+    if (!requestPrefersJson(req)) {
+      return await renderStudentDashboard(req, res, next, "tasks");
+    }
+
     const context = await getStudentContext(req);
     if (!context) {
       return res.status(404).json({ error: "Student nicht gefunden." });
@@ -536,6 +551,10 @@ router.get("/tasks", async (req, res, next) => {
 
 router.get("/returns", async (req, res, next) => {
   try {
+    if (!requestPrefersJson(req)) {
+      return await renderStudentDashboard(req, res, next, "returns");
+    }
+
     const context = await getStudentContext(req);
     if (!context) {
       return res.status(404).json({ error: "Student nicht gefunden." });

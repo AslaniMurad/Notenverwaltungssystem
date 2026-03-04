@@ -32,9 +32,9 @@
           <div class="nav-section">
             <div class="nav-section-title">Menue</div>
             <a class="<%= currentPage === 'overview' ? 'is-active' : '' %>" href="/student">Uebersicht</a>
-            <a class="<%= currentPage === 'tasks' ? 'is-active' : '' %>" href="/student/aufgaben">Aufgaben</a>
-            <a class="<%= currentPage === 'returns' ? 'is-active' : '' %>" href="/student/rueckgaben">Rueckgaben</a>
-            <a class="<%= currentPage === 'grades' ? 'is-active' : '' %>" href="/student/noten">Noten</a>
+            <a class="<%= currentPage === 'tasks' ? 'is-active' : '' %>" href="/student/tasks">Aufgaben</a>
+            <a class="<%= currentPage === 'returns' ? 'is-active' : '' %>" href="/student/returns">Rueckgaben</a>
+            <a class="<%= currentPage === 'grades' ? 'is-active' : '' %>" href="/student/grades">Noten</a>
             <form class="logout-form" method="POST" action="/logout">
               <% if (typeof csrfToken !== "undefined") { %>
                 <input type="hidden" name="_csrf" value="<%= csrfToken %>">
