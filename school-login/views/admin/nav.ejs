@@ -25,6 +25,11 @@
       <a class="<%= activePath.includes('/users/new') ? 'is-active' : '' %>" href="/admin/users/new">Nutzer anlegen</a>
     </div>
 
+    <div class="nav-section">
+      <div class="nav-section-title">Logs</div>
+      <a class="<%= activePath.startsWith('/admin/audit-logs') ? 'is-active' : '' %>" href="/admin/audit-logs">Logs</a>
+    </div>
+
     <form class="logout-form" method="POST" action="/logout">
       <input type="hidden" name="_csrf" value="<%= csrfToken %>">
       <button type="submit" class="app-nav-link">Logout</button>

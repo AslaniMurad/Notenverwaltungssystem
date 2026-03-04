@@ -2,6 +2,7 @@ const express = require("express");
 const router = express.Router();
 const { db, hashPassword } = require("../db");
 const { requireAuth, requireRole } = require("../middleware/auth");
+const { createAuditLogMiddleware } = require("../middleware/audit");
 const { getPasswordValidationError } = require("../utils/password");
 const { deriveNameFromEmail } = require("../utils/studentName");
 
@@ -31,7 +32,65 @@ const getAsync = (sql, params = []) =>
     });
   });
 
+function parseAuditFilters(req) {
+  const actor = String(req.query.actor || "").trim();
+  const action = String(req.query.action || "").trim();
+  const entity = String(req.query.entity || "").trim();
+  return { actor, action, entity };
+}
+
+function buildAuditWhereClause(filters = {}) {
+  const where = [];
+  const params = [];
+
+  if (filters.actor) {
+    where.push("LOWER(actor_email) LIKE LOWER(?)");
+    params.push(`%${filters.actor}%`);
+  }
+  if (filters.action) {
+    where.push("LOWER(action) LIKE LOWER(?)");
+    params.push(`%${filters.action}%`);
+  }
+  if (filters.entity) {
+    where.push("LOWER(entity_type) = LOWER(?)");
+    params.push(filters.entity);
+  }
+
+  return {
+    whereClause: where.length ? `WHERE ${where.join(" AND ")}` : "",
+    params
+  };
+}
+
+async function fetchAuditLogsPage({ filters, beforeId = null, afterId = null, limit = 100 }) {
+  const { whereClause, params } = buildAuditWhereClause(filters);
+  const clauses = whereClause ? [whereClause.slice(6)] : [];
+  const queryParams = [...params];
+
+  if (beforeId != null) {
+    clauses.push("id < ?");
+    queryParams.push(Number(beforeId));
+  }
+  if (afterId != null) {
+    clauses.push("id > ?");
+    queryParams.push(Number(afterId));
+  }
+
+  const combinedWhere = clauses.length ? `WHERE ${clauses.join(" AND ")}` : "";
+  const rows = await allAsync(
+    `SELECT id, actor_email, actor_role, action, entity_type, entity_id, http_method, route_path, status_code, created_at
+     FROM audit_logs
+     ${combinedWhere}
+     ORDER BY id DESC
+     LIMIT ?`,
+    [...queryParams, Number(limit)]
+  );
+
+  return rows;
+}
+
 router.use(requireAuth, requireRole("admin"));
+router.use(createAuditLogMiddleware());
 
 router.get("/", async (req, res, next) => {
   try {
@@ -851,6 +910,55 @@ router.post("/classes/:id/students/add-bulk", async (req, res, next) => {
     });
   } catch (err) {
     console.error("DB error adding students in bulk:", err);
+    next(err);
+  }
+});
+
+router.get("/audit-logs", async (req, res, next) => {
+  try {
+    const filters = parseAuditFilters(req);
+    const logs = await fetchAuditLogsPage({ filters, limit: 100 });
+
+    res.render("admin/audit-logs", {
+      logs,
+      query: filters,
+      csrfToken: req.csrfToken(),
+      currentUser: req.session.user,
+      activePath: req.originalUrl
+    });
+  } catch (err) {
+    console.error("DB error loading audit logs:", err);
+    next(err);
+  }
+});
+
+router.get("/audit-logs/data", async (req, res, next) => {
+  try {
+    const filters = parseAuditFilters(req);
+    const rawBeforeId = req.query.beforeId ? Number(req.query.beforeId) : null;
+    const rawAfterId = req.query.afterId ? Number(req.query.afterId) : null;
+    const beforeId = Number.isFinite(rawBeforeId) ? rawBeforeId : null;
+    const afterId = Number.isFinite(rawAfterId) ? rawAfterId : null;
+    const requestedLimit = Number(req.query.limit);
+    const limit = Number.isFinite(requestedLimit)
+      ? Math.max(1, Math.min(200, requestedLimit))
+      : 100;
+
+    let logs = await fetchAuditLogsPage({ filters, beforeId, afterId, limit });
+    if (afterId != null) {
+      logs = logs.slice().sort((a, b) => Number(a.id) - Number(b.id));
+    }
+
+    const oldestId = logs.length ? Number(logs[logs.length - 1].id) : null;
+    const hasMore = beforeId != null ? logs.length === limit : true;
+
+    return res.json({
+      logs,
+      hasMore,
+      oldestId
+    });
+  } catch (err) {
+    console.error("DB error loading audit logs data:", err);
     next(err);
   }
 });

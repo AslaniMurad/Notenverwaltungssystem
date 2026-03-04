@@ -4,6 +4,7 @@ const path = require("path");
 const fs = require("fs");
 const { db } = require("../db");
 const { requireAuth, requireRole } = require("../middleware/auth");
+const { createAuditLogMiddleware } = require("../middleware/audit");
 
 const runAsync = (sql, params = []) =>
   new Promise((resolve, reject) => {
@@ -30,6 +31,7 @@ const getAsync = (sql, params = []) =>
   });
 
 router.use(requireAuth, requireRole("student"));
+router.use(createAuditLogMiddleware());
 
 const GRADE_ATTACHMENT_DIR = path.join(__dirname, "..", "uploads", "grade-attachments");
 const ABSENCE_MODE_INCLUDE_ZERO = "include_zero";

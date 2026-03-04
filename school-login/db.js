@@ -55,6 +55,7 @@ function createFakeDb() {
   const grades = [];
   const specialAssessments = [];
   const notifications = [];
+  const auditLogs = [];
   const participationMarks = [];
   const teacherGradingProfiles = [];
   const teacherGradingProfileItems = [];
@@ -65,6 +66,7 @@ function createFakeDb() {
   let gradeId = 1;
   let specialAssessmentId = 1;
   let notificationId = 1;
+  let auditLogId = 1;
   let participationMarkId = 1;
   let gradingProfileId = 1;
   let gradingProfileItemId = 1;
@@ -569,6 +571,39 @@ function createFakeDb() {
         };
         notifications.push(notification);
         lastID = notification.id;
+      } else if (/INSERT INTO audit_logs/i.test(sql)) {
+        const [
+          actor_user_id,
+          actor_email,
+          actor_role,
+          action,
+          entity_type,
+          entity_id,
+          http_method,
+          route_path,
+          status_code,
+          ip_address,
+          user_agent,
+          payload
+        ] = params;
+        const auditEntry = {
+          id: auditLogId++,
+          actor_user_id: actor_user_id == null ? null : Number(actor_user_id),
+          actor_email: actor_email || null,
+          actor_role: actor_role || null,
+          action,
+          entity_type: entity_type || null,
+          entity_id: entity_id || null,
+          http_method: http_method || null,
+          route_path: route_path || null,
+          status_code: status_code == null ? null : Number(status_code),
+          ip_address: ip_address || null,
+          user_agent: user_agent || null,
+          payload: payload || null,
+          created_at: new Date().toISOString()
+        };
+        auditLogs.push(auditEntry);
+        lastID = auditEntry.id;
       } else if (/UPDATE grade_notifications SET read_at = current_timestamp WHERE id = \? AND student_id = \?/i.test(sql)) {
         const [id, student_id] = params.map(Number);
         const note = notifications.find((n) => n.id === id && n.student_id === student_id);
@@ -986,6 +1021,40 @@ function createFakeDb() {
           .filter((n) => n.student_id === Number(student_id))
           .sort((a, b) => new Date(b.created_at) - new Date(a.created_at))
           .map((n) => ({ ...n }));
+      } else if (/FROM audit_logs/i.test(sql)) {
+        const hasActorFilter = /LOWER\(actor_email\) LIKE LOWER\(\?\)/i.test(sql);
+        const hasActionFilter = /LOWER\(action\) LIKE LOWER\(\?\)/i.test(sql);
+        const hasEntityFilter = /LOWER\(entity_type\) = LOWER\(\?\)/i.test(sql);
+        const hasBeforeIdFilter = /id < \?/i.test(sql);
+        const hasAfterIdFilter = /id > \?/i.test(sql);
+        const hasLimit = /LIMIT \?/i.test(sql);
+        let index = 0;
+        const actorNeedle = hasActorFilter
+          ? String(params[index++] || "").replace(/%/g, "").toLowerCase()
+          : null;
+        const actionNeedle = hasActionFilter
+          ? String(params[index++] || "").replace(/%/g, "").toLowerCase()
+          : null;
+        const entityNeedle = hasEntityFilter ? String(params[index++] || "").toLowerCase() : null;
+        const beforeId = hasBeforeIdFilter ? Number(params[index++]) : null;
+        const afterId = hasAfterIdFilter ? Number(params[index++]) : null;
+        const limit = hasLimit ? Number(params[index++]) : 300;
+
+        rows = auditLogs
+          .filter((entry) =>
+            !actorNeedle ? true : String(entry.actor_email || "").toLowerCase().includes(actorNeedle)
+          )
+          .filter((entry) =>
+            !actionNeedle ? true : String(entry.action || "").toLowerCase().includes(actionNeedle)
+          )
+          .filter((entry) =>
+            !entityNeedle ? true : String(entry.entity_type || "").toLowerCase() === entityNeedle
+          )
+          .filter((entry) => (!Number.isFinite(beforeId) ? true : Number(entry.id) < beforeId))
+          .filter((entry) => (!Number.isFinite(afterId) ? true : Number(entry.id) > afterId))
+          .sort((a, b) => Number(b.id) - Number(a.id))
+          .slice(0, Number.isFinite(limit) ? Math.max(1, limit) : 300)
+          .map((entry) => ({ ...entry }));
       } else if (/SELECT id, name, subject, teacher_id FROM classes WHERE id = \?/i.test(sql)) {
         const [id] = params;
         const cls = classes.find((c) => c.id === Number(id));
@@ -1865,6 +1934,31 @@ async function initializeDatabase() {
       read_at TIMESTAMPTZ
     )
   `);
+
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS audit_logs (
+      id SERIAL PRIMARY KEY,
+      actor_user_id INTEGER REFERENCES users(id),
+      actor_email TEXT,
+      actor_role TEXT,
+      action TEXT NOT NULL,
+      entity_type TEXT,
+      entity_id TEXT,
+      http_method TEXT NOT NULL,
+      route_path TEXT NOT NULL,
+      status_code INTEGER,
+      ip_address TEXT,
+      user_agent TEXT,
+      payload TEXT,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    )
+  `);
+  await pool.query(
+    "CREATE INDEX IF NOT EXISTS audit_logs_created_at_idx ON audit_logs (created_at DESC)"
+  );
+  await pool.query(
+    "CREATE INDEX IF NOT EXISTS audit_logs_actor_idx ON audit_logs (actor_email, created_at DESC)"
+  );
 
   await pool.query(`
     CREATE TABLE IF NOT EXISTS sessions (
