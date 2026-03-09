@@ -7,6 +7,7 @@ const multer = require("multer");
 const csrf = require("csurf");
 const { db } = require("../db");
 const { requireAuth, requireRole } = require("../middleware/auth");
+const { createAuditLogMiddleware } = require("../middleware/audit");
 const { deriveNameFromEmail } = require("../utils/studentName");
 
 const runAsync = (sql, params = []) =>
@@ -34,6 +35,7 @@ const getAsync = (sql, params = []) =>
   });
 
 router.use(requireAuth, requireRole("teacher"));
+router.use(createAuditLogMiddleware());
 
 const csrfProtection = csrf({
   value: (req) =>
