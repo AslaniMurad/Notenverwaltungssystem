@@ -1,0 +1,270 @@
+<%
+  const previewRows = preview?.classes || [];
+  const schoolYearRows = schoolYears || [];
+  const dateFormatter = new Intl.DateTimeFormat('de-DE', {
+    day: '2-digit',
+    month: '2-digit',
+    year: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit'
+  });
+  const formatLogTimestamp = (value) => {
+    if (!value) return '-';
+    const parsed = new Date(value);
+    return Number.isNaN(parsed.getTime()) ? String(value) : dateFormatter.format(parsed);
+  };
+  const getLogStatusMeta = (value) => {
+    const normalized = String(value || '').trim().toLowerCase();
+    if (normalized === 'success') return { label: 'Erfolgreich', tone: 'success' };
+    if (normalized === 'failed') return { label: 'Fehlgeschlagen', tone: 'failed' };
+    if (normalized === 'test') return { label: 'Test', tone: 'test' };
+    return { label: normalized || '-', tone: 'neutral' };
+  };
+  const getBackupFilename = (value) => {
+    const fullPath = String(value || '').trim();
+    if (!fullPath) return '';
+    const segments = fullPath.split(/[\\/]+/).filter(Boolean);
+    return segments.length ? segments[segments.length - 1] : fullPath;
+  };
+  const logRows = (logs || []).map((logRow) => {
+    const statusMeta = getLogStatusMeta(logRow.status);
+    return {
+      ...logRow,
+      executed_at_compact: formatLogTimestamp(logRow.executed_at),
+      backup_filename: getBackupFilename(logRow.backup_path),
+      status_label: statusMeta.label,
+      status_tone: statusMeta.tone
+    };
+  });
+  const page = {
+    title: 'Admin - School Year Management',
+    headerTitle: 'Adminbereich',
+    styles: ['/css/admin.css'],
+    scripts: ['/js/app.js'],
+    bodyClass: 'page-admin',
+    hideHeader: true,
+    hideFooter: true,
+    content: function () { %>
+    <div class="app-shell">
+      <%- include('./nav-school-year', { csrfToken, currentUser, activePath, activeSchoolYear }) %>
+
+      <section class="app-main">
+        <div class="app-main-header">
+          <div>
+            <p class="app-main-subtitle">School Year Management</p>
+            <h1>Schuljahreswechsel</h1>
+            <p class="admin-muted">
+              Aktives Schuljahr:
+              <strong><%= preview?.activeSchoolYear?.name || activeSchoolYear?.name || 'Nicht gesetzt' %></strong>
+            </p>
+          </div>
+          <div class="admin-actions-row">
+            <a class="btn" href="/archive">Archiv</a>
+            <form method="POST" action="/admin/rollover/test">
+              <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+              <button class="btn btn-secondary" type="submit">Test Rollover</button>
+            </form>
+          </div>
+        </div>
+
+        <% if (message) { %>
+          <div class="teacher-alert info"><%= message %></div>
+        <% } %>
+        <% if (error) { %>
+          <div class="teacher-alert error"><%= error %></div>
+        <% } %>
+
+        <% if (!preview) { %>
+          <div class="admin-card">
+            <div class="admin-empty">Kein aktives Schuljahr vorhanden.</div>
+          </div>
+        <% } else { %>
+          <div class="admin-grid">
+            <div class="admin-card">
+              <p class="admin-eyebrow">Aktuell</p>
+              <h3><%= preview.activeSchoolYear.name %></h3>
+              <p class="admin-muted"><%= preview.activeSchoolYear.start_date %> bis <%= preview.activeSchoolYear.end_date %></p>
+            </div>
+            <div class="admin-card">
+              <p class="admin-eyebrow">Naechstes Schuljahr</p>
+              <h3><%= preview.nextSchoolYear.name %></h3>
+              <p class="admin-muted"><%= preview.nextSchoolYear.startDate %> bis <%= preview.nextSchoolYear.endDate %></p>
+            </div>
+            <div class="admin-card">
+              <p class="admin-eyebrow">Preview</p>
+              <h3><%= preview.assignmentsCopied %> Zuordnungen</h3>
+              <p class="admin-muted"><%= preview.teachersAffected %> Lehrer betroffen</p>
+            </div>
+          </div>
+
+          <div class="admin-grid">
+            <div class="admin-card">
+              <div class="admin-topbar">
+                <div>
+                  <p class="admin-eyebrow">Test Mode</p>
+                  <h3>Preview</h3>
+                </div>
+                <span class="admin-badge"><%= testMode ? 'Simulation aktiv' : 'Noch nicht ausgefuehrt' %></span>
+              </div>
+              <p class="admin-muted">
+                Klassen werden hochgestuft, Zuordnungen werden uebernommen, Noten bleiben im alten Schuljahr archiviert.
+              </p>
+              <div class="admin-row wrap">
+                <div><strong>Klassen:</strong> <%= preview.classCount %></div>
+                <div><strong>Zuordnungen:</strong> <%= preview.assignmentsCopied %></div>
+                <div><strong>Lehrer:</strong> <%= preview.teachersAffected %></div>
+                <div><strong>Archivierte Noten:</strong> <%= preview.gradeCount %></div>
+              </div>
+            </div>
+
+            <div class="admin-card">
+              <div class="admin-topbar">
+                <div>
+                  <p class="admin-eyebrow">Sicherheit</p>
+                  <h3>Execute</h3>
+                </div>
+              </div>
+              <p class="admin-muted">
+                Vor dem Wechsel wird ein Backup geschrieben und der Lauf in <code>rollover_logs</code> protokolliert.
+              </p>
+              <form class="admin-form vertical" method="POST" action="/admin/rollover/execute" onsubmit="return confirm('Schuljahreswechsel wirklich ausfuehren?');">
+                <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+                <label for="confirmation_text">Bestaetigung</label>
+                <input
+                  id="confirmation_text"
+                  name="confirmation_text"
+                  type="text"
+                  placeholder="<%= preview.nextSchoolYear.name %>"
+                  autocomplete="off"
+                  required
+                >
+                <small class="admin-muted">Gib exakt <strong><%= preview.nextSchoolYear.name %></strong> ein.</small>
+                <button class="btn btn-primary" type="submit" <%= preview.nextSchoolYearExists ? 'disabled' : '' %>>
+                  Execute School Year Change
+                </button>
+              </form>
+              <% if (preview.nextSchoolYearExists) { %>
+                <p class="admin-muted">Das Zielschuljahr existiert bereits. Ein erneuter Lauf ist gesperrt.</p>
+              <% } %>
+            </div>
+          </div>
+
+          <div class="admin-card">
+            <div class="admin-topbar">
+              <div>
+                <p class="admin-eyebrow">Klassenvorschau</p>
+                <h3>Promotion Map</h3>
+              </div>
+              <span class="admin-badge"><%= previewRows.length %> Klassen</span>
+            </div>
+            <% if (!previewRows.length) { %>
+              <div class="admin-empty">Keine Klassen im aktiven Schuljahr vorhanden.</div>
+            <% } else { %>
+              <div class="grades-table-wrapper">
+                <table class="grades-table">
+                  <thead>
+                    <tr>
+                      <th>Aktuell</th>
+                      <th>Neu</th>
+                      <th>Fach</th>
+                      <th>Status</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <% previewRows.forEach((row) => { %>
+                      <tr>
+                        <td><%= row.current_name %></td>
+                        <td><%= row.next_name %></td>
+                        <td><%= row.subject %></td>
+                        <td><%= row.changed ? 'Wird kopiert' : 'Unveraendert kopiert' %></td>
+                      </tr>
+                    <% }) %>
+                  </tbody>
+                </table>
+              </div>
+            <% } %>
+          </div>
+        <% } %>
+
+        <div class="admin-grid">
+          <div class="admin-card">
+            <div class="admin-topbar">
+              <div>
+                <p class="admin-eyebrow">Schuljahre</p>
+                <h3>Verfuegbare Jahre</h3>
+              </div>
+            </div>
+            <div class="admin-list">
+              <% schoolYearRows.forEach((schoolYear) => { %>
+                <div class="admin-student-row">
+                  <div>
+                    <strong><%= schoolYear.name %></strong>
+                    <p class="admin-muted"><%= schoolYear.start_date %> bis <%= schoolYear.end_date %></p>
+                  </div>
+                  <span class="admin-badge"><%= schoolYear.is_active ? 'Aktiv' : 'Archiv' %></span>
+                </div>
+              <% }) %>
+            </div>
+          </div>
+
+          <div class="admin-card">
+            <div class="admin-topbar">
+              <div>
+                <p class="admin-eyebrow">Rollover Logs</p>
+                <h3>Letzte Laeufe</h3>
+              </div>
+            </div>
+            <% if (!logRows.length) { %>
+              <div class="admin-empty">Noch keine Rollover-Logs vorhanden.</div>
+            <% } else { %>
+              <div class="table-responsive rollover-log-table-responsive">
+                <table class="table rollover-log-table">
+                  <thead>
+                    <tr>
+                      <th scope="col" class="rollover-log-col-time">Zeitpunkt</th>
+                      <th scope="col" class="rollover-log-col-year">Von</th>
+                      <th scope="col" class="rollover-log-col-year">Nach</th>
+                      <th scope="col" class="rollover-log-col-status">Status</th>
+                      <th scope="col" class="rollover-log-col-backup">Backup</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <% logRows.forEach((logRow) => { %>
+                      <tr>
+                        <td>
+                          <time class="rollover-log-time" datetime="<%= logRow.executed_at || '' %>">
+                            <%= logRow.executed_at_compact %>
+                          </time>
+                        </td>
+                        <td>
+                          <span class="rollover-log-school-year"><%= logRow.old_school_year || '-' %></span>
+                        </td>
+                        <td>
+                          <span class="rollover-log-school-year"><%= logRow.new_school_year || '-' %></span>
+                        </td>
+                        <td>
+                          <span class="rollover-log-status rollover-log-status-<%= logRow.status_tone %>">
+                            <%= logRow.status_label %>
+                          </span>
+                        </td>
+                        <td>
+                          <% if (logRow.backup_filename) { %>
+                            <code class="rollover-log-backup" title="<%= logRow.backup_path %>">
+                              <%= logRow.backup_filename %>
+                            </code>
+                          <% } else { %>
+                            <span class="rollover-log-backup-empty">-</span>
+                          <% } %>
+                        </td>
+                      </tr>
+                    <% }) %>
+                  </tbody>
+                </table>
+              </div>
+            <% } %>
+          </div>
+        </div>
+      </section>
+    </div>
+<% } }; %>
+<%- include('../layout', page) %>

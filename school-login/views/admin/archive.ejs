@@ -1,0 +1,192 @@
+<%
+  const page = {
+    title: 'Admin - Archiv',
+    headerTitle: 'Adminbereich',
+    styles: ['/css/admin.css'],
+    scripts: ['/js/app.js'],
+    bodyClass: 'page-admin',
+    hideHeader: true,
+    hideFooter: true,
+    content: function () { %>
+    <div class="app-shell">
+      <%- include('./nav-school-year', { csrfToken, currentUser, activePath, activeSchoolYear }) %>
+
+      <section class="app-main">
+        <div class="app-main-header">
+          <div>
+            <p class="app-main-subtitle">Archiv</p>
+            <h1>Historische Schuljahre</h1>
+            <p class="admin-muted">Alle Daten sind read-only und nach Schuljahr filterbar.</p>
+          </div>
+          <div class="admin-actions-row">
+            <a class="btn btn-secondary" href="/admin/rollover">School Year Management</a>
+          </div>
+        </div>
+
+        <div class="admin-card">
+          <div class="admin-topbar">
+            <div>
+              <p class="admin-eyebrow">Filter</p>
+              <h3>Schuljahr waehlen</h3>
+            </div>
+            <span class="admin-badge"><%= selectedSchoolYear?.name || 'Kein Schuljahr' %></span>
+          </div>
+          <form class="admin-form" method="GET" action="/archive">
+            <select name="school_year_id" required>
+              <% schoolYears.forEach((schoolYear) => { %>
+                <option value="<%= schoolYear.id %>" <%= Number(selectedSchoolYear?.id) === Number(schoolYear.id) ? 'selected' : '' %>>
+                  <%= schoolYear.name %><%= schoolYear.is_active ? ' (aktiv)' : '' %>
+                </option>
+              <% }) %>
+            </select>
+            <button class="btn btn-secondary" type="submit">Filtern</button>
+          </form>
+        </div>
+
+        <div class="admin-grid">
+          <div class="admin-card">
+            <p class="admin-eyebrow">Klassen</p>
+            <h3><%= classes.length %></h3>
+          </div>
+          <div class="admin-card">
+            <p class="admin-eyebrow">Zuordnungen</p>
+            <h3><%= assignments.length %></h3>
+          </div>
+          <div class="admin-card">
+            <p class="admin-eyebrow">Noten</p>
+            <h3><%= grades.length %></h3>
+          </div>
+        </div>
+
+        <div class="admin-card">
+          <div class="admin-topbar">
+            <div>
+              <p class="admin-eyebrow">Archivstatus</p>
+              <h3>Archivierte Bereiche</h3>
+            </div>
+          </div>
+          <% if (!archiveEntries.length) { %>
+            <div class="admin-empty">Fuer dieses Schuljahr wurden noch keine Archiv-Eintraege protokolliert.</div>
+          <% } else { %>
+            <div class="admin-list">
+              <% archiveEntries.forEach((entry) => { %>
+                <div class="admin-student-row">
+                  <div>
+                    <strong><%= entry.archive_type %></strong>
+                    <p class="admin-muted">Eintraege: <%= entry.entity_count %></p>
+                  </div>
+                  <span class="admin-badge"><%= entry.created_at %></span>
+                </div>
+              <% }) %>
+            </div>
+          <% } %>
+        </div>
+
+        <div class="admin-card">
+          <div class="admin-topbar">
+            <div>
+              <p class="admin-eyebrow">Read-only</p>
+              <h3>Klassen</h3>
+            </div>
+          </div>
+          <% if (!classes.length) { %>
+            <div class="admin-empty">Keine Klassen fuer dieses Schuljahr gefunden.</div>
+          <% } else { %>
+            <div class="grades-table-wrapper">
+              <table class="grades-table">
+                <thead>
+                  <tr>
+                    <th>Klasse</th>
+                    <th>Fach</th>
+                    <th>Erstellt</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <% classes.forEach((row) => { %>
+                    <tr>
+                      <td><%= row.name %></td>
+                      <td><%= row.subject %></td>
+                      <td><%= row.created_at %></td>
+                    </tr>
+                  <% }) %>
+                </tbody>
+              </table>
+            </div>
+          <% } %>
+        </div>
+
+        <div class="admin-card">
+          <div class="admin-topbar">
+            <div>
+              <p class="admin-eyebrow">Read-only</p>
+              <h3>Lehrerzuordnungen</h3>
+            </div>
+          </div>
+          <% if (!assignments.length) { %>
+            <div class="admin-empty">Keine Zuordnungen fuer dieses Schuljahr gefunden.</div>
+          <% } else { %>
+            <div class="grades-table-wrapper">
+              <table class="grades-table">
+                <thead>
+                  <tr>
+                    <th>Klasse</th>
+                    <th>Fach</th>
+                    <th>Lehrer</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <% assignments.forEach((row) => { %>
+                    <tr>
+                      <td><%= row.class_name %></td>
+                      <td><%= row.subject_name %></td>
+                      <td><%= row.teacher_names %></td>
+                    </tr>
+                  <% }) %>
+                </tbody>
+              </table>
+            </div>
+          <% } %>
+        </div>
+
+        <div class="admin-card">
+          <div class="admin-topbar">
+            <div>
+              <p class="admin-eyebrow">Read-only</p>
+              <h3>Noten</h3>
+            </div>
+          </div>
+          <% if (!grades.length) { %>
+            <div class="admin-empty">Keine Noten fuer dieses Schuljahr gefunden.</div>
+          <% } else { %>
+            <div class="grades-table-wrapper">
+              <table class="grades-table">
+                <thead>
+                  <tr>
+                    <th>Klasse</th>
+                    <th>Schueler</th>
+                    <th>Fach</th>
+                    <th>Note</th>
+                    <th>Kommentar</th>
+                    <th>Zeitpunkt</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <% grades.forEach((row) => { %>
+                    <tr>
+                      <td><%= row.class_name %></td>
+                      <td><%= row.student_name %></td>
+                      <td><%= row.subject %></td>
+                      <td><%= row.grade %></td>
+                      <td><%= row.note || '-' %></td>
+                      <td><%= row.created_at %></td>
+                    </tr>
+                  <% }) %>
+                </tbody>
+              </table>
+            </div>
+          <% } %>
+        </div>
+      </section>
+    </div>
+<% } }; %>
+<%- include('../layout', page) %>

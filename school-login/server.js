@@ -13,6 +13,8 @@ const { getPasswordValidationError } = require("./utils/password");
 
 const adminRouter = require("./routes/admin");
 const assignmentRouter = require("./routes/assignmentRoutes");
+const archiveRouter = require("./routes/archiveRoutes");
+const rolloverRouter = require("./routes/rolloverRoutes");
 const studentRouter = require("./routes/student");
 const teacherRouter = require("./routes/teacher");
 
@@ -358,8 +360,10 @@ app.post("/logout", (req, res) => {
 // --- Router Mounts ---
 app.use("/admin", adminRouter);
 app.use("/admin", assignmentRouter);
+app.use("/admin", rolloverRouter);
 app.use("/teacher", teacherRouter);
 app.use("/student", studentRouter);
+app.use("/", archiveRouter);
 
 app.use((req, res) => {
   res.status(404).render("error", {

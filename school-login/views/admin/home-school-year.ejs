@@ -1,0 +1,82 @@
+<%
+  const page = {
+    title: 'Admin - Home',
+    headerTitle: 'Adminbereich',
+    styles: ['/css/admin.css'],
+    scripts: ['/js/app.js'],
+    bodyClass: 'page-admin',
+    hideHeader: true,
+    hideFooter: true,
+    content: function () { %>
+    <div class="app-shell">
+      <%- include('./nav-school-year', { csrfToken, currentUser, activePath, activeSchoolYear }) %>
+
+      <section class="app-main">
+        <div class="app-main-header">
+          <div>
+            <p class="app-main-subtitle">Uebersicht</p>
+            <h1>Willkommen im Adminbereich</h1>
+            <p class="admin-muted">
+              Aktives Schuljahr:
+              <strong><%= activeSchoolYear?.name || 'Nicht gesetzt' %></strong>
+            </p>
+          </div>
+          <div class="admin-actions-row">
+            <a class="btn btn-primary" href="/admin/rollover">School Year Management</a>
+            <a class="btn btn-secondary" href="/archive">Archiv</a>
+          </div>
+        </div>
+
+        <div class="admin-grid">
+          <div class="admin-card">
+            <p class="admin-eyebrow">Nutzer</p>
+            <h3><%= stats.users %> Accounts</h3>
+            <a class="admin-link" href="/admin/users">Zur Nutzerliste -></a>
+          </div>
+          <div class="admin-card">
+            <p class="admin-eyebrow">Klassen</p>
+            <h3><%= stats.classes %> Klassen</h3>
+            <a class="admin-link" href="/admin/classes">Klassen oeffnen -></a>
+          </div>
+          <div class="admin-card">
+            <p class="admin-eyebrow">Schueler</p>
+            <h3><%= stats.students %> Eintraege</h3>
+            <a class="admin-link" href="/admin/classes">Schueler ansehen -></a>
+          </div>
+        </div>
+
+        <div class="admin-grid">
+          <div class="admin-card">
+            <div class="admin-topbar">
+              <div>
+                <p class="admin-eyebrow">Schuljahreswechsel</p>
+                <h3>Naechstes Jahr vorbereiten</h3>
+              </div>
+            </div>
+            <p class="admin-muted">
+              Teste den Rollover zuerst, pruefe die Vorschau und fuehre den Wechsel danach mit Backup und Protokoll aus.
+            </p>
+            <div class="admin-row wrap">
+              <a class="btn btn-primary" href="/admin/rollover">Verwaltung oeffnen</a>
+            </div>
+          </div>
+
+          <div class="admin-card">
+            <div class="admin-topbar">
+              <div>
+                <p class="admin-eyebrow">Archiv</p>
+                <h3>Historische Jahre lesen</h3>
+              </div>
+            </div>
+            <p class="admin-muted">
+              Alte Klassen, Noten und Lehrerzuordnungen bleiben erhalten und koennen im Read-only-Archiv gefiltert werden.
+            </p>
+            <div class="admin-row wrap">
+              <a class="btn btn-secondary" href="/archive">Archiv oeffnen</a>
+            </div>
+          </div>
+        </div>
+      </section>
+    </div>
+<% } }; %>
+<%- include('../layout', page) %>
