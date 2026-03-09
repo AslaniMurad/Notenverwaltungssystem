@@ -4,7 +4,8 @@
     tasks: { title: "Schueler - Aufgaben", heading: "Aufgaben" },
     returns: { title: "Schueler - Rueckgaben", heading: "Rueckgaben" },
     requests: { title: "Schueler - Anfragen", heading: "Anfragen" },
-    grades: { title: "Schueler - Noten", heading: "Noten" }
+    grades: { title: "Schueler - Noten", heading: "Noten" },
+    archive: { title: "Schueler - Archiv", heading: "Archiv" }
   };
   const currentPage = pageMeta[activePage] ? activePage : "overview";
   const currentMeta = pageMeta[currentPage];
@@ -37,6 +38,7 @@
             <a class="<%= currentPage === 'returns' ? 'is-active' : '' %>" href="/student/returns">Rueckgaben</a>
             <a class="<%= currentPage === 'requests' ? 'is-active' : '' %>" href="/student/requests">Anfragen</a>
             <a class="<%= currentPage === 'grades' ? 'is-active' : '' %>" href="/student/grades">Noten</a>
+            <a class="<%= currentPage === 'archive' ? 'is-active' : '' %>" href="/student/archive">Archiv</a>
             <form class="logout-form" method="POST" action="/logout">
               <% if (typeof csrfToken !== "undefined") { %>
                 <input type="hidden" name="_csrf" value="<%= csrfToken %>">
@@ -226,6 +228,28 @@
               <div class="card">
                 <h3>Benachrichtigungen</h3>
                 <div id="notification-list" class="notifications"></div>
+              </div>
+            </section>
+          <% } %>
+
+          <% if (currentPage === "archive") { %>
+            <section id="archive">
+              <div class="card">
+                <h3>Archivierte Pruefungen</h3>
+                <form id="archive-filter" class="filter-grid" aria-label="Archiv filtern">
+                  <label>Fach
+                    <select name="subject" id="archive-filter-subject">
+                      <option value="">Alle</option>
+                      <% safeSubjects.forEach(function(sub){ %>
+                        <option value="<%= sub %>"><%= sub %></option>
+                      <% }) %>
+                    </select>
+                  </label>
+                  <label>Suche
+                    <input type="search" name="query" id="archive-filter-query" placeholder="Titel oder Beschreibung">
+                  </label>
+                </form>
+                <div id="archive-list"></div>
               </div>
             </section>
           <% } %>
