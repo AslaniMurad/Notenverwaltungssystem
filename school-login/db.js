@@ -1410,6 +1410,78 @@ async function initializeDatabase() {
       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
     )
   `);
+  await pool.query(
+    "ALTER TABLE classes ADD COLUMN IF NOT EXISTS teacher_id INTEGER"
+  );
+  await pool.query(
+    "CREATE INDEX IF NOT EXISTS classes_teacher_id_idx ON classes (teacher_id)"
+  );
+
+  const legacyClassTeacherTable = await pool.query(`
+    SELECT EXISTS (
+      SELECT 1
+      FROM information_schema.tables
+      WHERE table_schema = 'public' AND table_name = 'class_subject_teacher'
+    ) AS exists
+  `);
+
+  if (legacyClassTeacherTable.rows[0]?.exists) {
+    const ambiguousTeacherAssignments = await pool.query(`
+      SELECT class_id
+      FROM class_subject_teacher
+      GROUP BY class_id
+      HAVING COUNT(DISTINCT teacher_id) > 1
+      LIMIT 1
+    `);
+
+    if (ambiguousTeacherAssignments.rowCount > 0) {
+      throw new Error(
+        `Legacy migration blocked: class_subject_teacher contains multiple teachers for class ${ambiguousTeacherAssignments.rows[0].class_id}.`
+      );
+    }
+
+    await pool.query(`
+      UPDATE classes c
+      SET teacher_id = legacy.teacher_id
+      FROM (
+        SELECT class_id, MIN(teacher_id) AS teacher_id
+        FROM class_subject_teacher
+        GROUP BY class_id
+      ) AS legacy
+      WHERE c.id = legacy.class_id AND c.teacher_id IS NULL
+    `);
+  }
+
+  const missingTeacherIds = await pool.query(
+    "SELECT id FROM classes WHERE teacher_id IS NULL LIMIT 1"
+  );
+  if (missingTeacherIds.rowCount > 0) {
+    throw new Error(
+      `Legacy migration blocked: classes.teacher_id is still NULL for class ${missingTeacherIds.rows[0].id}.`
+    );
+  }
+
+  await pool.query(`
+    DO $$
+    BEGIN
+      IF NOT EXISTS (
+        SELECT 1
+        FROM pg_constraint c
+        JOIN pg_class t ON t.oid = c.conrelid
+        JOIN pg_attribute a ON a.attrelid = t.oid AND a.attnum = ANY(c.conkey)
+        WHERE t.relname = 'classes'
+          AND c.contype = 'f'
+          AND a.attname = 'teacher_id'
+      ) THEN
+        ALTER TABLE classes
+        ADD CONSTRAINT classes_teacher_id_fkey
+        FOREIGN KEY (teacher_id) REFERENCES users(id);
+      END IF;
+    END $$;
+  `);
+  await pool.query(
+    "ALTER TABLE classes ALTER COLUMN teacher_id SET NOT NULL"
+  );
 
   await pool.query(`
     CREATE TABLE IF NOT EXISTS students (
