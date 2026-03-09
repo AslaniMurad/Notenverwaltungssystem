@@ -12,6 +12,7 @@ const { buildSessionStore } = require("./sessionStore");
 const { getPasswordValidationError } = require("./utils/password");
 
 const adminRouter = require("./routes/admin");
+const assignmentRouter = require("./routes/assignmentRoutes");
 const studentRouter = require("./routes/student");
 const teacherRouter = require("./routes/teacher");
 
@@ -188,7 +189,7 @@ app.use((req, res, next) => {
 function getRedirectForRole(role) {
   const redirectMap = {
     admin: "/admin",
-    teacher: "/teacher/classes",
+    teacher: "/teacher",
     student: "/student"
   };
   return redirectMap[role] || "/";
@@ -304,27 +305,47 @@ app.post("/login", (req, res, next) => {
         });
       }
 
-      req.session.regenerate((regenErr) => {
-        if (regenErr) return next(regenErr);
+      const completeLogin = () => {
+        req.session.regenerate((regenErr) => {
+          if (regenErr) return next(regenErr);
 
-        req.session.user = {
-          id: user.id,
-          email: user.email,
-          role: user.role,
-          status: user.status,
-          must_change_password: Boolean(user.must_change_password)
-        };
+          req.session.user = {
+            id: user.id,
+            email: user.email,
+            role: user.role,
+            status: user.status,
+            must_change_password: Boolean(user.must_change_password)
+          };
 
-        resetLoginAttempts(loginKey);
-        db.run("UPDATE users SET last_login = current_timestamp WHERE id = ?", [user.id], () => {});
-        const redirectTarget = user.must_change_password
-          ? "/force-password-change"
-          : getRedirectForRole(user.role);
-        req.session.save((saveErr) => {
-          if (saveErr) return next(saveErr);
-          res.redirect(redirectTarget);
+          resetLoginAttempts(loginKey);
+          db.run("UPDATE users SET last_login = current_timestamp WHERE id = ?", [user.id], () => {});
+          const redirectTarget = user.must_change_password
+            ? "/force-password-change"
+            : getRedirectForRole(user.role);
+          req.session.save((saveErr) => {
+            if (saveErr) return next(saveErr);
+            res.redirect(redirectTarget);
+          });
         });
-      });
+      };
+
+      if (user.role === "teacher") {
+        return db.get(
+          "SELECT COUNT(*) AS count FROM class_subject_teacher WHERE teacher_id = ?",
+          [user.id],
+          (assignmentErr, assignmentRow) => {
+            if (assignmentErr) {
+              console.error("Assignment count check failed:", assignmentErr);
+              console.log("Assignments found: 0");
+            } else {
+              console.log(`Assignments found: ${Number(assignmentRow?.count || 0)}`);
+            }
+            completeLogin();
+          }
+        );
+      }
+
+      completeLogin();
     }
   );
 });
@@ -336,6 +357,7 @@ app.post("/logout", (req, res) => {
 
 // --- Router Mounts ---
 app.use("/admin", adminRouter);
+app.use("/admin", assignmentRouter);
 app.use("/teacher", teacherRouter);
 app.use("/student", studentRouter);
 

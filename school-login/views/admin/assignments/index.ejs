@@ -1,0 +1,80 @@
+<%
+  const page = {
+    title: 'Admin - Unterrichtszuordnungen',
+    headerTitle: 'Adminbereich',
+    styles: ['/css/admin.css'],
+    scripts: ['/js/app.js'],
+    bodyClass: 'page-admin',
+    hideHeader: true,
+    hideFooter: true,
+    content: function () { %>
+    <div class="app-shell">
+      <%- include('../nav', { csrfToken, currentUser, activePath }) %>
+
+      <section class="app-main">
+        <div class="app-main-header">
+          <div>
+            <p class="app-main-subtitle">Unterrichtszuordnungen</p>
+            <h1>Lehrer nach Klasse und Fach</h1>
+            <p class="admin-muted">Die Zuordnungen werden zentral ueber `class_subject_teacher` verwaltet.</p>
+          </div>
+          <a class="btn btn-primary" href="/admin/assignments/new">Lehrer zuordnen</a>
+        </div>
+
+        <% if (message) { %>
+          <div class="teacher-alert info"><%= message %></div>
+        <% } %>
+        <% if (error) { %>
+          <div class="teacher-alert error"><%= error %></div>
+        <% } %>
+
+        <div class="admin-card">
+          <div class="admin-topbar">
+            <div>
+              <p class="admin-eyebrow">Uebersicht</p>
+              <h3>Aktive Zuordnungen</h3>
+            </div>
+            <span class="admin-badge"><%= assignments.length %> Gruppen</span>
+          </div>
+
+          <% if (!assignments.length) { %>
+            <div class="admin-empty">Noch keine Zuordnungen vorhanden.</div>
+          <% } else { %>
+            <div class="grades-table-wrapper">
+              <table class="grades-table">
+                <thead>
+                  <tr>
+                    <th>Klasse</th>
+                    <th>Fach</th>
+                    <th>Lehrer</th>
+                    <th>Aktionen</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <% assignments.forEach((assignmentGroup) => { %>
+                    <tr>
+                      <td><%= assignmentGroup.class_name %></td>
+                      <td><%= assignmentGroup.subject_name %></td>
+                      <td><%= assignmentGroup.teacher_names %></td>
+                      <td>
+                        <div class="admin-row wrap">
+                          <% assignmentGroup.rows.forEach((row) => { %>
+                            <form method="POST" action="/admin/assignments/delete" onsubmit="return confirm('Zuordnung entfernen?');">
+                              <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+                              <input type="hidden" name="assignment_id" value="<%= row.id %>">
+                              <button class="btn btn-danger btn-sm" type="submit"><%= row.teacher_email %> entfernen</button>
+                            </form>
+                          <% }) %>
+                        </div>
+                      </td>
+                    </tr>
+                  <% }) %>
+                </tbody>
+              </table>
+            </div>
+          <% } %>
+        </div>
+      </section>
+    </div>
+<% } }; %>
+<%- include('../../layout', page) %>

@@ -90,8 +90,8 @@
           <div class="teacher-grid">
             <% if (classes.length === 0) { %>
               <div class="teacher-empty">
-                <h4>Noch keine Klassen erstellt</h4>
-                <p>Lege deine erste Klasse an, um Schüler zu verwalten.</p>
+                <h4>Noch keine Klassenzuweisungen</h4>
+                <p><%= emptyStateMessage || 'No class assignments yet.' %></p>
                 <a class="btn btn-primary" href="/teacher/create-class">Klasse erstellen</a>
               </div>
             <% } else { %>

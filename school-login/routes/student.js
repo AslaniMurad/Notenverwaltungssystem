@@ -51,7 +51,15 @@ async function loadStudentProfile(email) {
 
 async function loadClassInfo(classId) {
   return getAsync(
-    "SELECT c.id, c.name, c.subject, u.email AS teacher_email FROM classes c LEFT JOIN users u ON c.teacher_id = u.id WHERE c.id = ?",
+    `SELECT c.id, c.name, c.subject,
+            COALESCE((
+              SELECT STRING_AGG(u.email, ', ' ORDER BY u.email)
+              FROM class_subject_teacher cst
+              JOIN users u ON u.id = cst.teacher_id
+              WHERE cst.class_id = c.id AND cst.subject_id = c.subject_id
+            ), '') AS teacher_email
+     FROM classes c
+     WHERE c.id = ?`,
     [classId]
   );
 }
@@ -75,10 +83,11 @@ function isValidWeightValue(value) {
 async function loadClassAbsenceMode(classId) {
   const row = await getAsync(
     `SELECT gp.absence_mode
-     FROM classes c
-     LEFT JOIN teacher_grading_profiles gp ON gp.teacher_id = c.teacher_id AND gp.is_active = ?
-     WHERE c.id = ?
-     ORDER BY gp.created_at ASC, gp.id ASC
+     FROM class_subject_teacher cst
+     JOIN classes c ON c.id = cst.class_id
+     JOIN teacher_grading_profiles gp ON gp.teacher_id = cst.teacher_id AND gp.is_active = ?
+     WHERE c.id = ? AND cst.subject_id = c.subject_id
+     ORDER BY cst.id ASC, gp.created_at ASC, gp.id ASC
      LIMIT 1`,
     [true, classId]
   );

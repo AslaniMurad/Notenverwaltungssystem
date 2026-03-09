@@ -30,7 +30,7 @@
           <% let startHref = "/"; %>
           <% if (role === "admin") { startHref = "/admin"; } %>
           <% if (role === "student") { startHref = "/student"; } %>
-          <% if (role === "teacher") { startHref = "/teacher/classes"; } %>
+          <% if (role === "teacher") { startHref = "/teacher"; } %>
           <a class="dashboard-link" href="<%= startHref %>">Startseite</a>
         </div>
         <form class="logout-form" method="POST" action="/logout">

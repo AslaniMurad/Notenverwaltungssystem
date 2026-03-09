@@ -1,0 +1,14 @@
+const express = require("express");
+const { requireAuth, requireRole } = require("../middleware/auth");
+const assignmentController = require("../controllers/assignmentController");
+
+const router = express.Router();
+
+router.use(requireAuth, requireRole("admin"));
+
+router.get("/assignments", assignmentController.renderAssignmentList);
+router.get("/assignments/new", assignmentController.renderNewAssignmentForm);
+router.post("/assignments", assignmentController.createAssignment);
+router.post("/assignments/delete", assignmentController.deleteAssignment);
+
+module.exports = router;
