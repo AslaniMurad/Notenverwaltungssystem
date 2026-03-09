@@ -67,35 +67,18 @@
     openReturnDetails: new Set()
   };
 
-  document.querySelectorAll(".tab").forEach((tab) => {
-    tab.addEventListener("click", () => {
-      setActiveTab(tab.dataset.tab);
-    });
-  });
-
-  document.querySelectorAll("[data-tab-target]").forEach((link) => {
-    link.addEventListener("click", (event) => {
-      const target = link.getAttribute("data-tab-target");
-      if (target) {
-        event.preventDefault();
-        setActiveTab(target);
-        document.getElementById(target)?.scrollIntoView({ behavior: "smooth", block: "start" });
-      }
-    });
-  });
-
-  function setActiveTab(name) {
-    document.querySelectorAll(".tab").forEach((tab) => {
-      tab.classList.toggle("active", tab.dataset.tab === name);
-    });
-    document.querySelectorAll(".tab-content").forEach((content) => {
-      content.classList.toggle("active", content.id === name);
-    });
-    document.querySelectorAll("[data-tab-target]").forEach((link) => {
-      const isActive = link.getAttribute("data-tab-target") === name;
-      link.classList.toggle("is-active", isActive);
-    });
-  }
+  const needsOverview = Boolean(
+    document.getElementById("overview-average") ||
+    document.getElementById("overview-upcoming") ||
+    document.getElementById("overview-recent-returns")
+  );
+  const needsTasks = Boolean(document.getElementById("task-list"));
+  const needsReturns = Boolean(document.getElementById("return-list"));
+  const needsRequests = Boolean(document.getElementById("request-list"));
+  const needsGrades = Boolean(document.getElementById("grade-list"));
+  const needsClassAverages = Boolean(document.getElementById("class-average"));
+  const needsNotifications = Boolean(document.getElementById("notification-list"));
+  let requestFocusGradeId = new URLSearchParams(window.location.search).get("gradeId");
 
   document.querySelectorAll(".accordion").forEach((accordion) => {
     accordion.addEventListener("click", () => {
@@ -144,6 +127,44 @@
     return (entry.messages || []).some(
       (message) => message.teacher_reply && !message.teacher_reply_seen_at
     );
+  }
+
+  function getReturnMessageStats(entry) {
+    const messages = Array.isArray(entry?.messages) ? entry.messages : [];
+    let unansweredCount = 0;
+    let unreadReplyCount = 0;
+    let lastActivityTs = 0;
+
+    messages.forEach((message) => {
+      const studentTs = dateSortValue(message.created_at, 0);
+      const replyTs = dateSortValue(message.replied_at, 0);
+      lastActivityTs = Math.max(lastActivityTs, studentTs, replyTs);
+      if (!message.teacher_reply) {
+        unansweredCount += 1;
+      } else if (!message.teacher_reply_seen_at) {
+        unreadReplyCount += 1;
+      }
+    });
+
+    return {
+      totalCount: messages.length,
+      unansweredCount,
+      unreadReplyCount,
+      lastActivityAt: lastActivityTs ? new Date(lastActivityTs).toISOString() : null
+    };
+  }
+
+  function getReturnStatus(stats) {
+    if (stats.unreadReplyCount > 0) {
+      return { label: "Neue Antwort", className: "new" };
+    }
+    if (stats.unansweredCount > 0) {
+      return { label: "Antwort ausstehend", className: "pending" };
+    }
+    if (stats.totalCount > 0) {
+      return { label: "Beantwortet", className: "answered" };
+    }
+    return { label: "Noch keine Rueckfrage", className: "idle" };
   }
 
   function getTaskStatus(task) {
@@ -448,58 +469,101 @@
     await fetch(`/student/returns/${gradeId}/messages/seen`, { method: "POST", headers });
   }
 
+  function syncRequestGradeFilterOptions(entries) {
+    const select = document.getElementById("request-filter-grade");
+    if (!select) return "";
+
+    const previousValue = String(select.value || "");
+    const ordered = [...entries].sort((a, b) => {
+      const aTime = dateSortValue(a.graded_at, 0);
+      const bTime = dateSortValue(b.graded_at, 0);
+      return bTime - aTime;
+    });
+
+    const options = ['<option value="">Alle Rueckgaben</option>'];
+    ordered.forEach((entry) => {
+      options.push(`<option value="${String(entry.id)}">${escapeHtml(entry.title)}</option>`);
+    });
+    select.innerHTML = options.join("");
+
+    let nextValue = previousValue;
+    if (requestFocusGradeId && ordered.some((entry) => String(entry.id) === String(requestFocusGradeId))) {
+      nextValue = String(requestFocusGradeId);
+    }
+    if (nextValue && !ordered.some((entry) => String(entry.id) === String(nextValue))) {
+      nextValue = "";
+    }
+    select.value = nextValue;
+    return select.value || "";
+  }
+
   function decorateReturnRows(ordered, container) {
-    const rows = container.querySelectorAll(".return-row");
+    const rows = container.querySelectorAll(".request-card, .return-row");
     rows.forEach((row, index) => {
       const entry = ordered[index];
       if (!entry) return;
-      const body = row.firstElementChild;
+      const body = row.querySelector(".request-card-body") || row.firstElementChild;
       if (!body) return;
 
       const details = document.createElement("details");
       details.className = "return-message-details";
       const entryKey = String(entry.id);
-      if (state.openReturnDetails.has(entryKey)) {
+      const stats = getReturnMessageStats(entry);
+      const status = getReturnStatus(stats);
+      if (state.openReturnDetails.has(entryKey) || stats.unreadReplyCount > 0) {
         details.open = true;
       }
-      const unreadCount = entry.messages.filter(
-        (message) => message.teacher_reply && !message.teacher_reply_seen_at
-      ).length;
 
       const summary = document.createElement("summary");
-      summary.className = "return-message-summary";
+      summary.className = "return-message-summary request-ticket-summary";
+      const summaryLastActivity = stats.lastActivityAt
+        ? `Letzte Aktivitaet: ${formatDate(stats.lastActivityAt, true)}`
+        : "Noch keine Aktivitaet";
       summary.innerHTML = `
-        <span>Fragen (${entry.messages.length})</span>
-        ${unreadCount ? `<span class="badge-inline return-unread-badge">${unreadCount} neu</span>` : ""}
+        <div class="return-summary-main">
+          <span>Rueckfragen</span>
+          <span class="return-status-pill ${status.className}">${status.label}</span>
+        </div>
+        <div class="return-summary-meta">
+          <span>${stats.totalCount} Nachricht${stats.totalCount === 1 ? "" : "en"}</span>
+          <span>${summaryLastActivity}</span>
+          ${stats.unreadReplyCount ? `<span class="badge-inline return-unread-badge">${stats.unreadReplyCount} neu</span>` : ""}
+        </div>
       `;
       details.appendChild(summary);
 
       const thread = document.createElement("div");
-      thread.className = "return-message-thread";
+      thread.className = "return-message-thread request-ticket-thread";
       thread.innerHTML = entry.messages.length
         ? entry.messages
           .map((message) => {
             const teacherPart = message.teacher_reply
               ? `
-                <div class="return-message-row teacher ${message.teacher_reply_seen_at ? "" : "unseen"}">
-                  <strong>Lehrkraft</strong>
+                <article class="return-message-row teacher ${message.teacher_reply_seen_at ? "" : "unseen"}">
+                  <div class="return-message-head">
+                    <strong>Lehrkraft</strong>
+                    <span class="ticket-tag teacher">Antwort</span>
+                    <small>${formatDate(message.replied_at, true)}</small>
+                  </div>
                   ${message.teacher_reply_seen_at ? "" : '<span class="return-reply-new">Neu</span>'}
                   <p>${escapeHtml(message.teacher_reply)}</p>
-                  <small>${formatDate(message.replied_at, true)}</small>
-                </div>
+                </article>
               `
-              : '<div class="return-message-row pending"><small>Noch keine Antwort der Lehrkraft.</small></div>';
+              : '<article class="return-message-row pending"><small>Antwort der Lehrkraft steht noch aus.</small></article>';
             return `
-              <div class="return-message-row student">
-                <strong>Du</strong>
+              <article class="return-message-row student">
+                <div class="return-message-head">
+                  <strong>Du</strong>
+                  <span class="ticket-tag student">Anfrage</span>
+                  <small>${formatDate(message.created_at, true)}</small>
+                </div>
                 <p>${escapeHtml(message.student_message)}</p>
-                <small>${formatDate(message.created_at, true)}</small>
-              </div>
+              </article>
               ${teacherPart}
             `;
           })
           .join("")
-        : '<div class="return-message-row pending"><small>Noch keine Fragen vorhanden.</small></div>';
+        : '<article class="return-message-row pending"><small>Noch keine Rueckfragen vorhanden.</small></article>';
       details.appendChild(thread);
 
       if (entry.can_message) {
@@ -509,20 +573,42 @@
         form.innerHTML = `
           <label for="message-${entry.id}">Frage zur Benotung</label>
           <textarea id="message-${entry.id}" name="message" rows="2" maxlength="1000" placeholder="z.B. Warum wurde Teilaufgabe 3 mit 0 Punkten bewertet?" required></textarea>
+          <div class="return-message-meta-row">
+            <small class="return-message-counter" data-counter>0 / 1000</small>
+          </div>
           <div class="return-message-actions">
-            <button class="btn small" type="submit">Nachricht senden</button>
+            <button class="btn small" type="submit" data-send-button>Nachricht senden</button>
             <small class="return-message-feedback" data-feedback></small>
           </div>
         `;
+        const textarea = form.querySelector("textarea[name='message']");
+        const counterEl = form.querySelector("[data-counter]");
+        const sendButton = form.querySelector("[data-send-button]");
+
+        const updateCounter = () => {
+          if (!counterEl || !textarea) return;
+          const used = textarea.value.trim().length;
+          counterEl.textContent = `${used} / 1000`;
+          counterEl.classList.toggle("is-limit", used > 900);
+        };
+
+        textarea?.addEventListener("input", updateCounter);
+        updateCounter();
+
         form.addEventListener("submit", async (event) => {
           event.preventDefault();
-          const textarea = form.querySelector("textarea[name='message']");
           const feedbackEl = form.querySelector("[data-feedback]");
           const gradeId = form.getAttribute("data-grade-id");
           const message = textarea ? textarea.value.trim() : "";
           if (!message) {
             if (feedbackEl) feedbackEl.textContent = "Bitte Nachricht eingeben.";
             return;
+          }
+
+          if (feedbackEl) feedbackEl.textContent = "";
+          if (sendButton) {
+            sendButton.disabled = true;
+            sendButton.textContent = "Sende...";
           }
 
           const headers = { "Content-Type": "application/json" };
@@ -540,10 +626,17 @@
               return;
             }
             if (textarea) textarea.value = "";
+            updateCounter();
             if (feedbackEl) feedbackEl.textContent = "Nachricht gesendet.";
+            state.openReturnDetails.add(entryKey);
             await loadReturnsFromServer();
           } catch (err) {
             if (feedbackEl) feedbackEl.textContent = "Serverfehler beim Senden.";
+          } finally {
+            if (sendButton) {
+              sendButton.disabled = false;
+              sendButton.textContent = "Nachricht senden";
+            }
           }
         });
         details.appendChild(form);
@@ -564,6 +657,7 @@
               : message
           );
           renderReturns();
+          renderRequests();
           renderOverview();
         } catch (err) {
           console.error("Konnte Antworten nicht als gesehen markieren:", err);
@@ -578,7 +672,7 @@
     const container = document.getElementById("return-list");
     if (!container) return;
     if (!state.returns.length) {
-      container.innerHTML = '<p class="empty-state">Keine Rückgaben vorhanden.</p>';
+      container.innerHTML = '<p class="empty-state">Keine Rueckgaben vorhanden.</p>';
       return;
     }
 
@@ -588,7 +682,7 @@
       (entry) => matchesSubject(entry, subject) && matchesQuery(entry, query, ["title", "note"])
     );
     if (!filtered.length) {
-      container.innerHTML = '<p class="empty-state">Keine Rückgaben gefunden.</p>';
+      container.innerHTML = '<p class="empty-state">Keine Rueckgaben gefunden.</p>';
       return;
     }
 
@@ -600,8 +694,13 @@
 
     container.innerHTML = ordered
       .map((entry) => {
+        const stats = getReturnMessageStats(entry);
+        const status = getReturnStatus(stats);
         const gradeText = Number.isFinite(entry.grade) ? entry.grade.toFixed(2) : "-";
         const returnText = formatDate(entry.graded_at, true);
+        const activityText = stats.lastActivityAt
+          ? formatDate(stats.lastActivityAt, true)
+          : "Noch keine Rueckfragen";
         const weightText =
           Number.isFinite(entry.weight) && entry.weight ? `${entry.weight}%` : "-";
         const downloadUrl = entry.attachment_download_url
@@ -610,9 +709,12 @@
         const externalLink = entry.external_link ? escapeHtml(entry.external_link) : "";
         const attachmentName = entry.attachment_name ? escapeHtml(entry.attachment_name) : "Datei";
         const attachmentHtml = externalLink
-          ? `<div class="return-actions"><a class="btn small secondary" href="${externalLink}" target="_blank" rel="noopener noreferrer">Link öffnen</a></div>`
+          ? `<div class="return-actions"><a class="btn small secondary" href="${externalLink}" target="_blank" rel="noopener noreferrer">Link oeffnen</a></div>`
           : downloadUrl
-          ? `<div class="return-actions"><a class="btn small secondary" href="${downloadUrl}">Datei herunterladen</a><small>${attachmentName}</small></div>`
+            ? `<div class="return-actions"><a class="btn small secondary" href="${downloadUrl}">Datei herunterladen</a><small>${attachmentName}</small></div>`
+            : "";
+        const requestActionHtml = entry.can_message
+          ? `<div class="return-actions"><a class="btn small" href="/student/requests?gradeId=${encodeURIComponent(String(entry.id))}">${stats.totalCount > 0 ? "Anfragen ansehen" : "Anfrage erstellen"}</a></div>`
           : "";
         return `
           <div class="return-row">
@@ -620,14 +722,19 @@
               <div class="task-title">
                 <strong>${escapeHtml(entry.title)}</strong>
                 ${entry.category ? `<span class="pill">${escapeHtml(entry.category)}</span>` : ""}
-                ${hasUnreadTeacherReplies(entry) ? '<span class="badge-inline return-unread-badge">Neue Antwort</span>' : ""}
               </div>
               <div class="task-meta">
-                <span>Rückgabe: ${returnText}</span>
+                <span>Rueckgabe: ${returnText}</span>
                 <span>Gewichtung: ${weightText}</span>
+              </div>
+              <div class="return-insights">
+                <span class="return-status-pill ${status.className}">${status.label}</span>
+                <span>${stats.totalCount} Nachricht${stats.totalCount === 1 ? "" : "en"}</span>
+                <span>Letzte Aktivitaet: ${activityText}</span>
               </div>
               ${entry.note ? `<div class="nav-note">${escapeHtml(entry.note)}</div>` : ""}
               ${attachmentHtml}
+              ${requestActionHtml}
             </div>
             <div class="return-grade">
               <span class="grade-pill ${gradeColor(entry.grade)}">Note ${gradeText}</span>
@@ -636,7 +743,111 @@
         `;
       })
       .join("");
+  }
+
+  function renderRequests() {
+    const container = document.getElementById("request-list");
+    if (!container) return;
+    container.classList.add("request-list");
+
+    const sourceEntries = state.returns.filter(
+      (entry) => entry.can_message || (Array.isArray(entry.messages) && entry.messages.length > 0)
+    );
+    if (!sourceEntries.length) {
+      container.innerHTML = '<p class="empty-state">Noch keine moeglichen Anfragen vorhanden.</p>';
+      return;
+    }
+
+    const selectedGradeId = syncRequestGradeFilterOptions(sourceEntries);
+    const query = document.getElementById("request-filter-query")?.value || "";
+    const filtered = sourceEntries.filter((entry) => {
+      if (selectedGradeId && String(entry.id) !== String(selectedGradeId)) return false;
+      if (!query) return true;
+      const messageText = (entry.messages || [])
+        .map((message) => `${message.student_message || ""} ${message.teacher_reply || ""}`)
+        .join(" ");
+      return matchesQuery({ ...entry, messageText }, query, ["title", "note", "messageText"]);
+    });
+
+    if (!filtered.length) {
+      container.innerHTML = '<p class="empty-state">Keine Anfragen zu den Filtern gefunden.</p>';
+      return;
+    }
+
+    const ordered = [...filtered]
+      .map((entry) => {
+        const stats = getReturnMessageStats(entry);
+        const gradedTs = dateSortValue(entry.graded_at, 0);
+        const activityTs = dateSortValue(stats.lastActivityAt, 0);
+        return {
+          entry,
+          stats,
+          sortTs: Math.max(gradedTs, activityTs)
+        };
+      })
+      .sort((a, b) => {
+        if (a.stats.unreadReplyCount !== b.stats.unreadReplyCount) {
+          return b.stats.unreadReplyCount - a.stats.unreadReplyCount;
+        }
+        if (a.stats.unansweredCount !== b.stats.unansweredCount) {
+          return b.stats.unansweredCount - a.stats.unansweredCount;
+        }
+        return b.sortTs - a.sortTs;
+      })
+      .map((item) => item.entry);
+
+    container.innerHTML = ordered
+      .map((entry) => {
+        const stats = getReturnMessageStats(entry);
+        const status = getReturnStatus(stats);
+        const gradeText = Number.isFinite(entry.grade) ? entry.grade.toFixed(2) : "-";
+        const returnText = formatDate(entry.graded_at, true);
+        const activityText = stats.lastActivityAt
+          ? formatDate(stats.lastActivityAt, true)
+          : "Noch keine Rueckfragen";
+        const weightText = Number.isFinite(entry.weight) && entry.weight ? `${entry.weight}%` : "-";
+
+        return `
+          <article class="request-card request-row" data-grade-id="${String(entry.id)}">
+            <div class="request-card-body">
+              <header class="request-card-header">
+                <div>
+                  <div class="task-title">
+                    <strong>${escapeHtml(entry.title)}</strong>
+                    ${entry.category ? `<span class="pill">${escapeHtml(entry.category)}</span>` : ""}
+                  </div>
+                  <div class="task-meta">
+                    <span>Rueckgabe: ${returnText}</span>
+                    <span>Gewichtung: ${weightText}</span>
+                  </div>
+                </div>
+                <div class="return-grade">
+                  <span class="grade-pill ${gradeColor(entry.grade)}">Note ${gradeText}</span>
+                </div>
+              </header>
+
+              <div class="return-insights">
+                <span class="return-status-pill ${status.className}">${status.label}</span>
+                <span>${stats.totalCount} Nachricht${stats.totalCount === 1 ? "" : "en"}</span>
+                <span>Letzte Aktivitaet: ${activityText}</span>
+              </div>
+              ${entry.note ? `<div class="nav-note request-note">${escapeHtml(entry.note)}</div>` : ""}
+            </div>
+          </article>
+        `;
+      })
+      .join("");
+
     decorateReturnRows(ordered, container);
+
+    if (requestFocusGradeId) {
+      const focusRow = container.querySelector(`[data-grade-id="${String(requestFocusGradeId)}"]`);
+      if (focusRow) {
+        focusRow.classList.add("request-row-focus");
+        focusRow.scrollIntoView({ behavior: "smooth", block: "start" });
+      }
+      requestFocusGradeId = null;
+    }
   }
 
   async function refreshGrades(skipRequest = false) {
@@ -686,6 +897,7 @@
       const data = await response.json();
       state.returns = (data.returns || []).map(normalizeReturn);
       renderReturns();
+      renderRequests();
       renderOverview();
     } catch (err) {
       console.error("Konnte Rückgaben nicht laden:", err);
@@ -718,18 +930,42 @@
   document
     .getElementById("return-filter")
     ?.addEventListener("change", () => renderReturns());
+  document
+    .getElementById("request-filter")
+    ?.addEventListener("input", () => renderRequests());
+  document
+    .getElementById("request-filter")
+    ?.addEventListener("change", () => renderRequests());
 
-  renderGrades();
-  renderAverages();
-  renderClassAverage();
-  renderNotifications();
-  renderTasks();
-  renderReturns();
-  renderOverview();
+  if (needsGrades || needsOverview) {
+    renderGrades();
+    renderAverages();
+    refreshGrades();
+  }
 
-  refreshGrades();
-  loadClassComparison();
-  loadTasksFromServer();
-  loadReturnsFromServer();
-  loadNotificationsFromServer();
+  if (needsTasks || needsOverview) {
+    renderTasks();
+    loadTasksFromServer();
+  }
+
+  if (needsReturns || needsRequests || needsOverview) {
+    renderReturns();
+    renderRequests();
+    loadReturnsFromServer();
+  }
+
+  if (needsClassAverages || needsGrades) {
+    renderClassAverage();
+    loadClassComparison();
+  }
+
+  if (needsNotifications || needsGrades) {
+    renderNotifications();
+    loadNotificationsFromServer();
+  }
+
+  if (needsOverview) {
+    renderOverview();
+  }
 })();
+
