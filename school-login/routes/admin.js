@@ -1,6 +1,7 @@
 const express = require("express");
 const router = express.Router();
 const { db, hashPassword } = require("../db");
+const schoolYearModel = require("../models/schoolYearModel");
 const { requireAuth, requireRole } = require("../middleware/auth");
 const { createAuditLogMiddleware } = require("../middleware/audit");
 const { getPasswordValidationError } = require("../utils/password");
@@ -100,21 +101,41 @@ async function fetchAuditLogsPage({ filters, beforeId = null, afterId = null, li
   return rows;
 }
 
+async function getActiveSchoolYearOrThrow() {
+  const activeSchoolYear = await schoolYearModel.getActiveSchoolYear();
+  if (!activeSchoolYear) {
+    throw new Error("Kein aktives Schuljahr vorhanden.");
+  }
+  return activeSchoolYear;
+}
+
+async function getActiveClassById(classId, columns = "id, name") {
+  const activeSchoolYear = await getActiveSchoolYearOrThrow();
+  return getAsync(
+    `SELECT ${columns}
+     FROM classes
+     WHERE id = ? AND school_year_id = ?`,
+    [classId, activeSchoolYear.id]
+  );
+}
+
 router.use(requireAuth, requireRole("admin"));
 router.use(createAuditLogMiddleware());
 
 router.get("/", async (req, res, next) => {
   try {
-    const [userCount, classCount, studentCount] = await Promise.all([
+    const [userCount, classCount, studentCount, activeSchoolYear] = await Promise.all([
       getAsync("SELECT COUNT(*) AS count FROM users"),
       getAsync("SELECT COUNT(*) AS count FROM classes"),
-      getAsync("SELECT COUNT(*) AS count FROM students")
+      getAsync("SELECT COUNT(*) AS count FROM students"),
+      schoolYearModel.getActiveSchoolYear()
     ]);
 
-    res.render("admin/home", {
+    res.render("admin/home-school-year", {
       csrfToken: req.csrfToken(),
       currentUser: req.session.user,
       activePath: req.originalUrl,
+      activeSchoolYear,
       stats: {
         users: userCount?.count || 0,
         classes: classCount?.count || 0,
@@ -404,15 +425,16 @@ router.get("/users/:id", async (req, res, next) => {
     }
 
     let classes = [];
+    const activeSchoolYear = await schoolYearModel.getActiveSchoolYear();
     if (user.role === "teacher") {
       classes = await allAsync(
         `SELECT cst.id AS assignment_id, c.id, c.name, s.name AS subject
          FROM class_subject_teacher cst
          JOIN classes c ON c.id = cst.class_id
          JOIN subjects s ON s.id = cst.subject_id
-         WHERE cst.teacher_id = ?
+         WHERE cst.teacher_id = ? AND cst.school_year_id = ?
          ORDER BY c.created_at DESC`,
-        [user.id]
+        [user.id, activeSchoolYear?.id || 0]
       );
     } else if (user.role === "student") {
       classes = await allAsync(
@@ -426,9 +448,9 @@ router.get("/users/:id", async (req, res, next) => {
                 ), '') AS teacher_emails
          FROM students s
          JOIN classes c ON c.id = s.class_id
-         WHERE s.email = ?
+         WHERE s.email = ? AND c.school_year_id = ?
          ORDER BY c.name`,
-        [user.email]
+        [user.email, activeSchoolYear?.id || 0]
       );
     }
 
@@ -541,14 +563,17 @@ router.post("/users/:id/delete", async (req, res, next) => {
 
 router.get("/classes", async (req, res, next) => {
   const q = req.query.q;
-  const params = [];
-  let whereClause = "";
+  const activeSchoolYear = await schoolYearModel.getActiveSchoolYear().catch(() => null);
+  const params = [activeSchoolYear?.id || 0];
+  let whereClause = "WHERE c.school_year_id = ?";
   if (q) {
-    whereClause = `WHERE c.name LIKE ? OR c.subject LIKE ? OR EXISTS (
-      SELECT 1
-      FROM class_subject_teacher cst_s
-      JOIN users u_s ON u_s.id = cst_s.teacher_id
-      WHERE cst_s.class_id = c.id AND cst_s.subject_id = c.subject_id AND u_s.email LIKE ?
+    whereClause += ` AND (
+      c.name LIKE ? OR c.subject LIKE ? OR EXISTS (
+        SELECT 1
+        FROM class_subject_teacher cst_s
+        JOIN users u_s ON u_s.id = cst_s.teacher_id
+        WHERE cst_s.class_id = c.id AND cst_s.subject_id = c.subject_id AND u_s.email LIKE ?
+      )
     )`;
     const like = `%${q}%`;
     params.push(like, like, like);
@@ -606,6 +631,7 @@ router.post("/classes", async (req, res, next) => {
     });
   }
   try {
+    const activeSchoolYear = await getActiveSchoolYearOrThrow();
     const subjectId = await ensureSubjectIdByName(subject);
     if (!subjectId) {
       return res.status(400).render("error", {
@@ -616,10 +642,11 @@ router.post("/classes", async (req, res, next) => {
       });
     }
 
-    await runAsync("INSERT INTO classes (name, subject, subject_id) VALUES (?,?,?)", [
+    await runAsync("INSERT INTO classes (name, subject, subject_id, school_year_id) VALUES (?,?,?,?)", [
       name,
       subject,
-      subjectId
+      subjectId,
+      activeSchoolYear.id
     ]);
     res.redirect("/admin/classes");
   } catch (err) {
@@ -631,12 +658,7 @@ router.post("/classes", async (req, res, next) => {
 router.get("/classes/:id/edit", async (req, res, next) => {
   const classId = req.params.id;
   try {
-    const classData = await getAsync(
-      `SELECT c.id, c.name, c.subject, c.subject_id
-       FROM classes c
-       WHERE c.id = ?`,
-      [classId]
-    );
+    const classData = await getActiveClassById(classId, "id, name, subject, subject_id");
 
     if (!classData) {
       return res.status(404).render("error", {
@@ -672,6 +694,16 @@ router.post("/classes/:id", async (req, res, next) => {
   }
 
   try {
+    const classData = await getActiveClassById(classId, "id");
+    if (!classData) {
+      return res.status(404).render("error", {
+        message: "Klasse nicht gefunden.",
+        status: 404,
+        backUrl: "/admin/classes",
+        csrfToken: req.csrfToken()
+      });
+    }
+
     const subjectId = await ensureSubjectIdByName(subject);
     if (!subjectId) {
       return res.status(400).render("error", {
@@ -698,6 +730,15 @@ router.post("/classes/:id", async (req, res, next) => {
 router.post("/classes/:id/delete", async (req, res, next) => {
   const classId = req.params.id;
   try {
+    const classData = await getActiveClassById(classId, "id");
+    if (!classData) {
+      return res.status(404).render("error", {
+        message: "Klasse nicht gefunden.",
+        status: 404,
+        backUrl: "/admin/classes",
+        csrfToken: req.csrfToken()
+      });
+    }
     await runAsync("DELETE FROM students WHERE class_id = ?", [classId]);
     await runAsync("DELETE FROM classes WHERE id = ?", [classId]);
     res.redirect("/admin/classes");
@@ -713,17 +754,18 @@ router.get("/classes/:id/students", async (req, res, next) => {
     const nameQuery = String(req.query.name || "").trim();
     const emailQuery = String(req.query.email || "").trim();
 
+    const activeSchoolYear = await getActiveSchoolYearOrThrow();
     const classData = await getAsync(
       `SELECT c.id, c.name, c.subject,
               COALESCE((
                 SELECT STRING_AGG(u.email, ', ' ORDER BY u.email)
                 FROM class_subject_teacher cst
                 JOIN users u ON u.id = cst.teacher_id
-                WHERE cst.class_id = c.id AND cst.subject_id = c.subject_id
+                WHERE cst.class_id = c.id AND cst.subject_id = c.subject_id AND cst.school_year_id = c.school_year_id
               ), '') AS teacher_emails
        FROM classes c
-       WHERE c.id = ?`,
-      [classId]
+       WHERE c.id = ? AND c.school_year_id = ?`,
+      [classId, activeSchoolYear.id]
     );
 
     if (!classData) {
@@ -771,7 +813,7 @@ router.get("/classes/:id/students", async (req, res, next) => {
 router.post("/classes/:classId/students/:studentId/delete", async (req, res, next) => {
   const { classId, studentId } = req.params;
   try {
-    const classData = await getAsync("SELECT id, name, subject FROM classes WHERE id = ?", [classId]);
+    const classData = await getActiveClassById(classId, "id, name, subject");
     if (!classData) {
       return res.status(404).render("error", {
         message: "Klasse nicht gefunden.",
@@ -793,7 +835,7 @@ router.post("/classes/:classId/students/:studentId/delete", async (req, res, nex
 router.get("/classes/:id/students/add", async (req, res, next) => {
   const classId = req.params.id;
   try {
-    const classData = await getAsync("SELECT id, name FROM classes WHERE id = ?", [classId]);
+    const classData = await getActiveClassById(classId, "id, name");
     if (!classData) {
       return res.status(404).render("error", {
         message: "Klasse nicht gefunden.",
@@ -844,7 +886,10 @@ router.post("/classes/:id/students/add", async (req, res, next) => {
     }
   }
   try {
-    const classData = await getAsync("SELECT id, name FROM classes WHERE id = ?", [classId]);
+    const [classData, activeSchoolYear] = await Promise.all([
+      getActiveClassById(classId, "id, name"),
+      getActiveSchoolYearOrThrow()
+    ]);
     if (!classData) {
       return res.status(404).render("error", {
         message: "Klasse nicht gefunden.",
@@ -878,7 +923,12 @@ router.post("/classes/:id/students/add", async (req, res, next) => {
       });
     }
 
-    await runAsync("INSERT INTO students (name, email, class_id) VALUES (?,?,?)", [resolvedName, resolvedEmail, classId]);
+    await runAsync("INSERT INTO students (name, email, class_id, school_year) VALUES (?,?,?,?)", [
+      resolvedName,
+      resolvedEmail,
+      classId,
+      activeSchoolYear.name
+    ]);
     res.redirect(`/admin/classes/${classId}/students`);
   } catch (err) {
     console.error("DB error adding student:", err);
@@ -895,7 +945,10 @@ router.post("/classes/:id/students/add-bulk", async (req, res, next) => {
     .filter(Boolean);
 
   try {
-    const classData = await getAsync("SELECT id, name FROM classes WHERE id = ?", [classId]);
+    const [classData, activeSchoolYear] = await Promise.all([
+      getActiveClassById(classId, "id, name"),
+      getActiveSchoolYearOrThrow()
+    ]);
     if (!classData) {
       return res.status(404).render("error", {
         message: "Klasse nicht gefunden.",
@@ -948,7 +1001,12 @@ router.post("/classes/:id/students/add-bulk", async (req, res, next) => {
       }
 
       try {
-        await runAsync("INSERT INTO students (name, email, class_id) VALUES (?,?,?)", [derivedName, email, classId]);
+        await runAsync("INSERT INTO students (name, email, class_id, school_year) VALUES (?,?,?,?)", [
+          derivedName,
+          email,
+          classId,
+          activeSchoolYear.name
+        ]);
         bulkResult.success.push(email);
       } catch (err) {
         bulkResult.failed.push({ email, reason: String(err) });

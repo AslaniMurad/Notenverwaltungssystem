@@ -110,7 +110,8 @@ async function createAssignment(req, res, next) {
     const { created, duplicates } = await assignmentModel.createAssignments({
       classId,
       subjectId,
-      teacherIds: validTeacherIds
+      teacherIds: validTeacherIds,
+      schoolYearId: classRow.school_year_id
     });
 
     const message = `${created} Zuordnung(en) erstellt${duplicates ? `, ${duplicates} bereits vorhanden` : ""}.`;

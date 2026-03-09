@@ -6,6 +6,7 @@ const crypto = require("crypto");
 const multer = require("multer");
 const csrf = require("csurf");
 const { db } = require("../db");
+const schoolYearModel = require("../models/schoolYearModel");
 const { requireAuth, requireRole } = require("../middleware/auth");
 const { createAuditLogMiddleware } = require("../middleware/audit");
 const { deriveNameFromEmail } = require("../utils/studentName");
@@ -764,54 +765,62 @@ async function ensureSubjectIdByName(subjectName) {
 }
 
 async function getTeacherAssignments(teacherId) {
+  const activeSchoolYear = await schoolYearModel.getActiveSchoolYear();
+  if (!activeSchoolYear) return [];
   return allAsync(
     `SELECT cst.id, cst.class_id, cst.subject_id, c.name AS class_name, c.created_at, s.name AS subject_name
      FROM class_subject_teacher cst
      JOIN classes c ON c.id = cst.class_id
      JOIN subjects s ON s.id = cst.subject_id
-     WHERE cst.teacher_id = ?
+     WHERE cst.teacher_id = ? AND cst.school_year_id = ?
      ORDER BY c.created_at DESC, c.name ASC, s.name ASC`,
-    [teacherId]
+    [teacherId, activeSchoolYear.id]
   );
 }
 
 async function teacherCanAccessClass(teacherId, classId) {
+  const activeSchoolYear = await schoolYearModel.getActiveSchoolYear();
+  if (!activeSchoolYear) return false;
   const assignment = await getAsync(
     `SELECT 1 AS allowed
      FROM class_subject_teacher
-     WHERE teacher_id = ? AND class_id = ?
+     WHERE teacher_id = ? AND class_id = ? AND school_year_id = ?
      LIMIT 1`,
-    [teacherId, classId]
+    [teacherId, classId, activeSchoolYear.id]
   );
   return Boolean(assignment);
 }
 
 async function teacherCanAccessClassSubject(teacherId, classId, subjectId) {
+  const activeSchoolYear = await schoolYearModel.getActiveSchoolYear();
+  if (!activeSchoolYear) return false;
   const assignment = await getAsync(
     `SELECT 1 AS allowed
      FROM class_subject_teacher
-     WHERE teacher_id = ? AND class_id = ? AND subject_id = ?
+     WHERE teacher_id = ? AND class_id = ? AND subject_id = ? AND school_year_id = ?
      LIMIT 1`,
-    [teacherId, classId, subjectId]
+    [teacherId, classId, subjectId, activeSchoolYear.id]
   );
   return Boolean(assignment);
 }
 
 async function loadClassSubjectsForTeacher(classId, teacherId) {
+  const activeSchoolYear = await schoolYearModel.getActiveSchoolYear();
+  if (!activeSchoolYear) return [];
   return allAsync(
     `SELECT cst.subject_id, COALESCE(s.name, c.subject) AS subject_name
      FROM class_subject_teacher cst
      JOIN classes c ON c.id = cst.class_id
      LEFT JOIN subjects s ON s.id = cst.subject_id
-     WHERE cst.teacher_id = ? AND cst.class_id = ?
+     WHERE cst.teacher_id = ? AND cst.class_id = ? AND cst.school_year_id = ?
      ORDER BY cst.id DESC, subject_name ASC`,
-    [teacherId, classId]
+    [teacherId, classId, activeSchoolYear.id]
   );
 }
 
 async function loadClassForTeacher(classId, teacherId, requestedSubjectId = null) {
   const classRow = await getAsync(
-    "SELECT id, name, subject, subject_id, created_at FROM classes WHERE id = ?",
+    "SELECT id, name, subject, subject_id, school_year_id, created_at FROM classes WHERE id = ?",
     [classId]
   );
   if (!classRow) return null;
@@ -839,6 +848,7 @@ async function loadClassForTeacher(classId, teacherId, requestedSubjectId = null
     id: classRow.id,
     name: classRow.name,
     subject_id: Number(selectedSubject.subject_id),
+    school_year_id: Number(classRow.school_year_id),
     subject: subjectLabel,
     selected_subject: selectedSubject.subject_name || classRow.subject || "",
     subject_names: subjectNames,
@@ -1188,13 +1198,14 @@ async function buildSettingsPageData(teacherId, selectedProfileId, formOverride 
 router.get("/", async (req, res, next) => {
   try {
     const teacherId = req.session.user.id;
+    const activeSchoolYear = await schoolYearModel.getActiveSchoolYear();
     const latestAssignment = await getAsync(
       `SELECT cst.class_id, cst.subject_id
        FROM class_subject_teacher cst
-       WHERE cst.teacher_id = ?
+       WHERE cst.teacher_id = ? AND cst.school_year_id = ?
        ORDER BY cst.created_at DESC
        LIMIT 1`,
-      [teacherId]
+      [teacherId, activeSchoolYear?.id || 0]
     );
     if (!latestAssignment) {
       return res.redirect("/teacher/classes?empty=1");
@@ -1312,16 +1323,23 @@ router.post("/create-class", async (req, res, next) => {
       return renderError(res, req, "Fach konnte nicht verarbeitet werden.", 400, "/teacher/create-class");
     }
 
-    const createdClass = await runAsync("INSERT INTO classes (name, subject, subject_id) VALUES (?,?,?)", [
+    const activeSchoolYear = await schoolYearModel.getActiveSchoolYear();
+    if (!activeSchoolYear) {
+      return renderError(res, req, "Kein aktives Schuljahr vorhanden.", 400, "/teacher/create-class");
+    }
+
+    const createdClass = await runAsync("INSERT INTO classes (name, subject, subject_id, school_year_id) VALUES (?,?,?,?)", [
       name,
       subject,
-      subjectId
+      subjectId,
+      activeSchoolYear.id
     ]);
     if (createdClass?.lastID) {
-      await runAsync("INSERT INTO class_subject_teacher (class_id, subject_id, teacher_id) VALUES (?,?,?)", [
+      await runAsync("INSERT INTO class_subject_teacher (class_id, subject_id, teacher_id, school_year_id) VALUES (?,?,?,?)", [
         createdClass.lastID,
         subjectId,
-        req.session.user.id
+        req.session.user.id,
+        activeSchoolYear.id
       ]);
     }
     res.redirect("/teacher/classes");
@@ -2870,7 +2888,7 @@ router.post("/add-grade/:classId/:studentId", handleUpload, async (req, res, nex
 
     try {
       await runAsync(
-        "INSERT INTO grades (student_id, class_id, grade_template_id, grade, points_achieved, points_max, note, attachment_path, attachment_original_name, attachment_mime, attachment_size, external_link, is_absent) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)",
+        "INSERT INTO grades (student_id, class_id, grade_template_id, grade, points_achieved, points_max, note, attachment_path, attachment_original_name, attachment_mime, attachment_size, external_link, is_absent, school_year_id) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
         [
           studentId,
           classId,
@@ -2884,7 +2902,8 @@ router.post("/add-grade/:classId/:studentId", handleUpload, async (req, res, nex
           attachmentMime,
           attachmentSize,
           linkResult.value,
-          isAbsent ? 1 : 0
+          isAbsent ? 1 : 0,
+          classData.school_year_id
         ]
       );
       await runAsync("INSERT INTO grade_notifications (student_id, message, type) VALUES (?,?,?)", [
