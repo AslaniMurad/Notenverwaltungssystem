@@ -115,7 +115,7 @@ async function loadStudentGrades(studentId) {
 
 async function loadTemplates(classId) {
   return allAsync(
-    "SELECT id, name, category, weight, date, description, created_at FROM grade_templates WHERE class_id = ? ORDER BY date, name",
+    "SELECT id, name, category, weight, date, description, created_at, archived_at FROM grade_templates WHERE class_id = ? ORDER BY date, name",
     [classId]
   );
 }
@@ -185,6 +185,7 @@ function mapTaskRow(template, gradeRow, classInfo) {
     due_at: template.date || template.created_at || null,
     original_due_at: template.date || null,
     created_at: template.created_at || null,
+    archived_at: template.archived_at || null,
     description: template.description || "",
     subject: classInfo?.subject || "",
     graded: Boolean(gradeRow && gradeRow.id),
@@ -335,6 +336,7 @@ function buildPdf(lines) {
 async function getStudentContext(req) {
   const student = await loadStudentProfile(req.session.user.email);
   if (!student) return null;
+  await maintainGradeTemplateArchive(student.class_id);
   const classInfo = await loadClassInfo(student.class_id);
   const classAbsenceMode = await loadClassAbsenceMode(student.class_id);
   return { student, classInfo, classAbsenceMode };
@@ -359,20 +361,44 @@ function getArchiveCutoffDate(now = new Date()) {
   return new Date(year, 6, 1, 0, 0, 0, 0);
 }
 
-function getTaskTime(task) {
-  if (!task?.due_at) return Number.NaN;
-  const time = new Date(task.due_at).getTime();
-  return Number.isNaN(time) ? Number.NaN : time;
+function getArchiveDeleteDate(now = new Date()) {
+  const cutoff = getArchiveCutoffDate(now);
+  cutoff.setFullYear(cutoff.getFullYear() - 10);
+  return cutoff;
 }
 
-function splitTasksByArchive(tasks, now = new Date()) {
-  const cutoffTime = getArchiveCutoffDate(now).getTime();
+async function maintainGradeTemplateArchive(classId = null, now = new Date()) {
+  const archiveCutoff = getArchiveCutoffDate(now).toISOString();
+  const deleteCutoff = getArchiveDeleteDate(now).toISOString();
+
+  if (classId != null) {
+    await runAsync(
+      `UPDATE grade_templates
+       SET archived_at = ?
+       WHERE class_id = ? AND archived_at IS NULL AND COALESCE(date, created_at) < ?`,
+      [archiveCutoff, classId, archiveCutoff]
+    );
+  } else {
+    await runAsync(
+      `UPDATE grade_templates
+       SET archived_at = ?
+       WHERE archived_at IS NULL AND COALESCE(date, created_at) < ?`,
+      [archiveCutoff, archiveCutoff]
+    );
+  }
+
+  await runAsync(
+    "DELETE FROM grade_templates WHERE archived_at IS NOT NULL AND archived_at <= ?",
+    [deleteCutoff]
+  );
+}
+
+function splitTasksByArchive(tasks) {
   const activeTasks = [];
   const archivedTasks = [];
 
   tasks.forEach((task) => {
-    const dueAtTime = getTaskTime(task);
-    if (Number.isFinite(dueAtTime) && dueAtTime < cutoffTime) {
+    if (task?.archived_at) {
       archivedTasks.push(task);
       return;
     }

@@ -564,7 +564,8 @@ function createFakeDb() {
           max_points: max_points != null && max_points !== "" ? Number(max_points) : null,
           date: date || null,
           description: description || null,
-          created_at: new Date().toISOString()
+          created_at: new Date().toISOString(),
+          archived_at: null
         };
         gradeTemplates.push(template);
         lastID = template.id;
@@ -581,6 +582,47 @@ function createFakeDb() {
             max_points != null && max_points !== "" ? Number(max_points) : null;
           template.date = date || null;
           template.description = description || null;
+        }
+      } else if (/UPDATE grade_templates\s+SET archived_at = \?\s+WHERE class_id = \? AND archived_at IS NULL AND COALESCE\(date, created_at\) < \?/i.test(sql)) {
+        const [archivedAt, classId, cutoff] = params;
+        const cutoffTime = new Date(cutoff).getTime();
+        gradeTemplates.forEach((template) => {
+          const effectiveTime = new Date(template.date || template.created_at).getTime();
+          if (
+            template.class_id === Number(classId) &&
+            !template.archived_at &&
+            Number.isFinite(effectiveTime) &&
+            effectiveTime < cutoffTime
+          ) {
+            template.archived_at = archivedAt;
+          }
+        });
+      } else if (/UPDATE grade_templates\s+SET archived_at = \?\s+WHERE archived_at IS NULL AND COALESCE\(date, created_at\) < \?/i.test(sql)) {
+        const [archivedAt, cutoff] = params;
+        const cutoffTime = new Date(cutoff).getTime();
+        gradeTemplates.forEach((template) => {
+          const effectiveTime = new Date(template.date || template.created_at).getTime();
+          if (!template.archived_at && Number.isFinite(effectiveTime) && effectiveTime < cutoffTime) {
+            template.archived_at = archivedAt;
+          }
+        });
+      } else if (/DELETE FROM grade_templates WHERE archived_at IS NOT NULL AND archived_at <= \?/i.test(sql)) {
+        const [cutoff] = params;
+        const cutoffTime = new Date(cutoff).getTime();
+        const deletedTemplateIds = [];
+        for (let i = gradeTemplates.length - 1; i >= 0; i -= 1) {
+          const archivedTime = new Date(gradeTemplates[i].archived_at || "").getTime();
+          if (Number.isFinite(archivedTime) && archivedTime <= cutoffTime) {
+            deletedTemplateIds.push(gradeTemplates[i].id);
+            gradeTemplates.splice(i, 1);
+          }
+        }
+        if (deletedTemplateIds.length) {
+          for (let i = grades.length - 1; i >= 0; i -= 1) {
+            if (deletedTemplateIds.includes(grades[i].grade_template_id)) {
+              grades.splice(i, 1);
+            }
+          }
         }
       } else if (/INSERT INTO grades/i.test(sql)) {
         const student_id = params[0];
@@ -1463,7 +1505,7 @@ function createFakeDb() {
         const [id] = params;
         const cls = classes.find((c) => c.id === Number(id));
         rows = cls ? [{ ...cls }] : [];
-      } else if (/SELECT id, name, category, weight, (weight_mode, )?(max_points, )?date, description FROM grade_templates WHERE class_id = \? ORDER BY date, name/i.test(sql)) {
+      } else if (/SELECT id, name, category, weight, .* FROM grade_templates WHERE class_id = \? ORDER BY date, name/i.test(sql)) {
         const [clsId] = params;
         rows = gradeTemplates
           .filter((t) => t.class_id === Number(clsId))
@@ -2290,6 +2332,9 @@ async function initializeDatabase() {
     "ALTER TABLE grade_templates ADD COLUMN IF NOT EXISTS max_points NUMERIC"
   );
   await pool.query(
+    "ALTER TABLE grade_templates ADD COLUMN IF NOT EXISTS archived_at TIMESTAMPTZ"
+  );
+  await pool.query(
     "UPDATE grade_templates SET weight_mode = 'points' WHERE weight_mode IS NULL"
   );
   await pool.query(
@@ -2317,6 +2362,9 @@ async function initializeDatabase() {
   );
   await pool.query(
     "ALTER TABLE grade_templates ADD CONSTRAINT grade_templates_max_points_check CHECK (max_points IS NULL OR max_points > 0)"
+  );
+  await pool.query(
+    "CREATE INDEX IF NOT EXISTS grade_templates_archived_at_idx ON grade_templates (archived_at)"
   );
 
   await pool.query(`
