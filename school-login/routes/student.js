@@ -115,7 +115,7 @@ async function loadStudentGrades(studentId) {
 
 async function loadTemplates(classId) {
   return allAsync(
-    "SELECT id, name, category, weight, date, description FROM grade_templates WHERE class_id = ? ORDER BY date, name",
+    "SELECT id, name, category, weight, date, description, created_at FROM grade_templates WHERE class_id = ? ORDER BY date, name",
     [classId]
   );
 }
@@ -182,7 +182,9 @@ function mapTaskRow(template, gradeRow, classInfo) {
     title: template.name,
     category: template.category,
     weight: Number(template.weight || 0),
-    due_at: template.date || null,
+    due_at: template.date || template.created_at || null,
+    original_due_at: template.date || null,
+    created_at: template.created_at || null,
     description: template.description || "",
     subject: classInfo?.subject || "",
     graded: Boolean(gradeRow && gradeRow.id),
@@ -338,7 +340,7 @@ async function getStudentContext(req) {
   return { student, classInfo, classAbsenceMode };
 }
 
-const STUDENT_PAGE_KEYS = new Set(["overview", "tasks", "returns", "requests", "grades"]);
+const STUDENT_PAGE_KEYS = new Set(["overview", "tasks", "returns", "requests", "grades", "archive"]);
 
 function normalizeStudentPage(value) {
   const key = String(value || "").trim().toLowerCase();
@@ -350,6 +352,34 @@ function requestPrefersJson(req) {
   if (format === "json") return true;
   if (format === "html") return false;
   return req.accepts(["json", "html"]) === "json";
+}
+
+function getArchiveCutoffDate(now = new Date()) {
+  const year = now.getMonth() >= 6 ? now.getFullYear() : now.getFullYear() - 1;
+  return new Date(year, 6, 1, 0, 0, 0, 0);
+}
+
+function getTaskTime(task) {
+  if (!task?.due_at) return Number.NaN;
+  const time = new Date(task.due_at).getTime();
+  return Number.isNaN(time) ? Number.NaN : time;
+}
+
+function splitTasksByArchive(tasks, now = new Date()) {
+  const cutoffTime = getArchiveCutoffDate(now).getTime();
+  const activeTasks = [];
+  const archivedTasks = [];
+
+  tasks.forEach((task) => {
+    const dueAtTime = getTaskTime(task);
+    if (Number.isFinite(dueAtTime) && dueAtTime < cutoffTime) {
+      archivedTasks.push(task);
+      return;
+    }
+    activeTasks.push(task);
+  });
+
+  return { activeTasks, archivedTasks };
 }
 
 async function buildStudentDashboardPayload(context, csrfToken) {
@@ -370,6 +400,7 @@ async function buildStudentDashboardPayload(context, csrfToken) {
   const tasks = templates.map((template) =>
     mapTaskRow(template, gradeByTemplate.get(String(template.id)), classInfo)
   );
+  const { activeTasks, archivedTasks } = splitTasksByArchive(tasks);
   const returnMessages = await loadGradeMessages(student.id);
   const messagesByGrade = new Map();
   returnMessages.forEach((message) => {
@@ -402,7 +433,8 @@ async function buildStudentDashboardPayload(context, csrfToken) {
     initialData: {
       grades,
       averages,
-      tasks,
+      tasks: activeTasks,
+      archivedTasks,
       returns,
       classAverages,
       notifications,
@@ -462,6 +494,39 @@ router.get("/noten", async (req, res) => {
 
 router.get("/anfragen", async (req, res) => {
   res.redirect("/student/requests");
+});
+
+router.get("/archiv", async (req, res) => {
+  res.redirect("/student/archive");
+});
+
+router.get("/archive", async (req, res, next) => {
+  try {
+    if (!requestPrefersJson(req)) {
+      return await renderStudentDashboard(req, res, next, "archive");
+    }
+
+    const context = await getStudentContext(req);
+    if (!context) {
+      return res.status(404).json({ error: "Student nicht gefunden." });
+    }
+
+    const { student } = context;
+    const templates = await loadTemplates(student.class_id);
+    const gradeRows = await loadStudentGrades(student.id);
+    const gradeByTemplate = new Map(
+      gradeRows
+        .filter((row) => row.template_id != null)
+        .map((row) => [String(row.template_id), row])
+    );
+    const tasks = templates.map((template) =>
+      mapTaskRow(template, gradeByTemplate.get(String(template.id)), context.classInfo)
+    );
+    const { archivedTasks } = splitTasksByArchive(tasks);
+    res.json({ tasks: archivedTasks });
+  } catch (err) {
+    next(err);
+  }
 });
 
 router.get("/profile", async (req, res, next) => {
@@ -558,7 +623,8 @@ router.get("/tasks", async (req, res, next) => {
     const tasks = templates.map((template) =>
       mapTaskRow(template, gradeByTemplate.get(String(template.id)), context.classInfo)
     );
-    res.json({ tasks });
+    const { activeTasks } = splitTasksByArchive(tasks);
+    res.json({ tasks: activeTasks });
   } catch (err) {
     next(err);
   }
