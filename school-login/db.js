@@ -2281,6 +2281,28 @@ async function initializeDatabase() {
   );
 
   await pool.query(`
+    CREATE TABLE IF NOT EXISTS grade_messages (
+      id SERIAL PRIMARY KEY,
+      grade_id INTEGER NOT NULL REFERENCES grades(id) ON DELETE CASCADE,
+      student_id INTEGER NOT NULL REFERENCES students(id) ON DELETE CASCADE,
+      student_message TEXT NOT NULL,
+      teacher_reply TEXT,
+      teacher_reply_seen_at TIMESTAMPTZ,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      replied_at TIMESTAMPTZ
+    )
+  `);
+  await pool.query(
+    "ALTER TABLE grade_messages ADD COLUMN IF NOT EXISTS teacher_reply_seen_at TIMESTAMPTZ"
+  );
+  await pool.query(
+    "CREATE INDEX IF NOT EXISTS grade_messages_student_idx ON grade_messages (student_id)"
+  );
+  await pool.query(
+    "CREATE INDEX IF NOT EXISTS grade_messages_grade_idx ON grade_messages (grade_id)"
+  );
+
+  await pool.query(`
     CREATE TABLE IF NOT EXISTS special_assessments (
       id SERIAL PRIMARY KEY,
       student_id INTEGER NOT NULL REFERENCES students(id) ON DELETE CASCADE,

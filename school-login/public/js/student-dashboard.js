@@ -41,7 +41,18 @@
       grade: Number(entry.grade),
       attachment_download_url: entry.attachment_download_url || null,
       attachment_name: entry.attachment_name || null,
-      external_link: entry.external_link || null
+      external_link: entry.external_link || null,
+      can_message: Boolean(entry.can_message),
+      messages: Array.isArray(entry.messages)
+        ? entry.messages.map((message) => ({
+            id: message.id,
+            student_message: message.student_message || "",
+            teacher_reply: message.teacher_reply || null,
+            teacher_reply_seen_at: message.teacher_reply_seen_at || null,
+            created_at: message.created_at || null,
+            replied_at: message.replied_at || null
+          }))
+        : []
     };
   }
 
@@ -52,7 +63,8 @@
     notifications: initialData.notifications || [],
     trend: initialData.trend || { direction: "steady", change: 0 },
     tasks: (initialData.tasks || []).map(normalizeTask),
-    returns: (initialData.returns || []).map(normalizeReturn)
+    returns: (initialData.returns || []).map(normalizeReturn),
+    openReturnDetails: new Set()
   };
 
   document.querySelectorAll(".tab").forEach((tab) => {
@@ -126,6 +138,12 @@
     if (!query) return true;
     const needle = normalizeText(query);
     return fields.some((field) => normalizeText(item[field]).includes(needle));
+  }
+
+  function hasUnreadTeacherReplies(entry) {
+    return (entry.messages || []).some(
+      (message) => message.teacher_reply && !message.teacher_reply_seen_at
+    );
   }
 
   function getTaskStatus(task) {
@@ -425,6 +443,137 @@
       .join("");
   }
 
+  async function markReturnRepliesSeen(gradeId) {
+    const headers = csrfToken ? { "X-CSRF-Token": csrfToken } : {};
+    await fetch(`/student/returns/${gradeId}/messages/seen`, { method: "POST", headers });
+  }
+
+  function decorateReturnRows(ordered, container) {
+    const rows = container.querySelectorAll(".return-row");
+    rows.forEach((row, index) => {
+      const entry = ordered[index];
+      if (!entry) return;
+      const body = row.firstElementChild;
+      if (!body) return;
+
+      const details = document.createElement("details");
+      details.className = "return-message-details";
+      const entryKey = String(entry.id);
+      if (state.openReturnDetails.has(entryKey)) {
+        details.open = true;
+      }
+      const unreadCount = entry.messages.filter(
+        (message) => message.teacher_reply && !message.teacher_reply_seen_at
+      ).length;
+
+      const summary = document.createElement("summary");
+      summary.className = "return-message-summary";
+      summary.innerHTML = `
+        <span>Fragen (${entry.messages.length})</span>
+        ${unreadCount ? `<span class="badge-inline return-unread-badge">${unreadCount} neu</span>` : ""}
+      `;
+      details.appendChild(summary);
+
+      const thread = document.createElement("div");
+      thread.className = "return-message-thread";
+      thread.innerHTML = entry.messages.length
+        ? entry.messages
+          .map((message) => {
+            const teacherPart = message.teacher_reply
+              ? `
+                <div class="return-message-row teacher ${message.teacher_reply_seen_at ? "" : "unseen"}">
+                  <strong>Lehrkraft</strong>
+                  ${message.teacher_reply_seen_at ? "" : '<span class="return-reply-new">Neu</span>'}
+                  <p>${escapeHtml(message.teacher_reply)}</p>
+                  <small>${formatDate(message.replied_at, true)}</small>
+                </div>
+              `
+              : '<div class="return-message-row pending"><small>Noch keine Antwort der Lehrkraft.</small></div>';
+            return `
+              <div class="return-message-row student">
+                <strong>Du</strong>
+                <p>${escapeHtml(message.student_message)}</p>
+                <small>${formatDate(message.created_at, true)}</small>
+              </div>
+              ${teacherPart}
+            `;
+          })
+          .join("")
+        : '<div class="return-message-row pending"><small>Noch keine Fragen vorhanden.</small></div>';
+      details.appendChild(thread);
+
+      if (entry.can_message) {
+        const form = document.createElement("form");
+        form.className = "return-message-form";
+        form.setAttribute("data-grade-id", String(entry.id));
+        form.innerHTML = `
+          <label for="message-${entry.id}">Frage zur Benotung</label>
+          <textarea id="message-${entry.id}" name="message" rows="2" maxlength="1000" placeholder="z.B. Warum wurde Teilaufgabe 3 mit 0 Punkten bewertet?" required></textarea>
+          <div class="return-message-actions">
+            <button class="btn small" type="submit">Nachricht senden</button>
+            <small class="return-message-feedback" data-feedback></small>
+          </div>
+        `;
+        form.addEventListener("submit", async (event) => {
+          event.preventDefault();
+          const textarea = form.querySelector("textarea[name='message']");
+          const feedbackEl = form.querySelector("[data-feedback]");
+          const gradeId = form.getAttribute("data-grade-id");
+          const message = textarea ? textarea.value.trim() : "";
+          if (!message) {
+            if (feedbackEl) feedbackEl.textContent = "Bitte Nachricht eingeben.";
+            return;
+          }
+
+          const headers = { "Content-Type": "application/json" };
+          if (csrfToken) headers["X-CSRF-Token"] = csrfToken;
+
+          try {
+            const response = await fetch(`/student/returns/${gradeId}/message`, {
+              method: "POST",
+              headers,
+              body: JSON.stringify({ message })
+            });
+            const payload = await response.json().catch(() => ({}));
+            if (!response.ok) {
+              if (feedbackEl) feedbackEl.textContent = payload.error || "Nachricht konnte nicht gesendet werden.";
+              return;
+            }
+            if (textarea) textarea.value = "";
+            if (feedbackEl) feedbackEl.textContent = "Nachricht gesendet.";
+            await loadReturnsFromServer();
+          } catch (err) {
+            if (feedbackEl) feedbackEl.textContent = "Serverfehler beim Senden.";
+          }
+        });
+        details.appendChild(form);
+      }
+
+      details.addEventListener("toggle", async () => {
+        if (details.open) {
+          state.openReturnDetails.add(entryKey);
+        } else {
+          state.openReturnDetails.delete(entryKey);
+        }
+        if (!details.open || !hasUnreadTeacherReplies(entry)) return;
+        try {
+          await markReturnRepliesSeen(entry.id);
+          entry.messages = entry.messages.map((message) =>
+            message.teacher_reply && !message.teacher_reply_seen_at
+              ? { ...message, teacher_reply_seen_at: new Date().toISOString() }
+              : message
+          );
+          renderReturns();
+          renderOverview();
+        } catch (err) {
+          console.error("Konnte Antworten nicht als gesehen markieren:", err);
+        }
+      });
+
+      body.appendChild(details);
+    });
+  }
+
   function renderReturns() {
     const container = document.getElementById("return-list");
     if (!container) return;
@@ -471,6 +620,7 @@
               <div class="task-title">
                 <strong>${escapeHtml(entry.title)}</strong>
                 ${entry.category ? `<span class="pill">${escapeHtml(entry.category)}</span>` : ""}
+                ${hasUnreadTeacherReplies(entry) ? '<span class="badge-inline return-unread-badge">Neue Antwort</span>' : ""}
               </div>
               <div class="task-meta">
                 <span>Rückgabe: ${returnText}</span>
@@ -486,6 +636,7 @@
         `;
       })
       .join("");
+    decorateReturnRows(ordered, container);
   }
 
   async function refreshGrades(skipRequest = false) {

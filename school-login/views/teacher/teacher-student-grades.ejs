@@ -1,4 +1,4 @@
-<%
+﻿<%
   const page = {
     title: `Lehrer - Noten von ${student.name}`,
     headerTitle: "Lehrerbereich",
@@ -61,6 +61,8 @@
             <a href="/teacher/create-class">Klasse erstellen</a>
             <a href="/teacher/settings">Einstellungen</a>
             <div class="nav-section-title">Klasse: <%= classData.name %> / <%= classData.subject %></div>
+            <a href="/teacher/students/<%= classData.id %>">Schueler</a>
+            <a class="<%= (typeof openMessageCount !== 'undefined' && openMessageCount > 0) ? 'is-alert' : '' %>" href="/teacher/test-questions/<%= classData.id %>">Fragen zu Tests<% if (typeof openMessageCount !== 'undefined' && openMessageCount > 0) { %><span class="nav-notification-badge"><%= openMessageCount %></span><% } %></a>
             <a href="/teacher/students/<%= classData.id %>">Schüler</a>
             <a href="/teacher/grades/<%= classData.id %>">Noten</a>
             <a href="/teacher/special-assessments/<%= classData.id %>">Sonderleistungen</a>
@@ -231,6 +233,11 @@
                         <span class="badge-count">Nicht da</span>
                       <% } %>
                       <span class="grade-badge grade-<%= Math.round(grade.grade) %>"><%= grade.grade %></span>
+                      <% if (!grade.is_special) { %>
+                        <button class="btn btn-secondary btn-sm grade-messages-toggle" type="button" data-target-id="grade-messages-<%= grade.id %>">
+                          Fragen (<%= (grade.messages || []).length %>)
+                        </button>
+                      <% } %>
                       <form class="inline delete-grade-form" method="POST" action="<%= grade.delete_action %>" data-grade-info="<%= grade.template_name %> (<%= grade.grade %>)">
                         <input type="hidden" name="_csrf" value="<%= csrfToken %>">
                         <button class="btn btn-danger btn-sm" type="button">Löschen</button>
@@ -258,6 +265,39 @@
                         <input type="hidden" name="_csrf" value="<%= csrfToken %>">
                         <button class="btn btn-secondary btn-sm" type="submit">Anhang löschen</button>
                       </form>
+                    </div>
+                  <% } %>
+                  <% if (!grade.is_special) { %>
+                    <div id="grade-messages-<%= grade.id %>" class="grade-message-panel" hidden>
+                      <% if (!grade.messages || grade.messages.length === 0) { %>
+                        <p class="teacher-muted">Keine Fragen zu dieser Note vorhanden.</p>
+                      <% } else { %>
+                        <div class="teacher-list">
+                          <% grade.messages.forEach(message => { %>
+                            <div class="teacher-message-item">
+                              <div class="teacher-message-bubble student">
+                                <p><%= message.student_message %></p>
+                                <small class="teacher-muted"><%= new Date(message.created_at).toLocaleString('de-DE') %></small>
+                              </div>
+                              <% if (message.teacher_reply) { %>
+                                <div class="teacher-message-bubble teacher">
+                                  <p><%= message.teacher_reply %></p>
+                                  <small class="teacher-muted">Beantwortet: <%= message.replied_at ? new Date(message.replied_at).toLocaleString('de-DE') : '-' %></small>
+                                </div>
+                              <% } else { %>
+                                <form class="teacher-form teacher-reply-form" method="POST" action="/teacher/students/<%= classData.id %>/messages/<%= message.id %>/reply">
+                                  <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+                                  <label for="reply-grade-<%= grade.id %>-<%= message.id %>">Antwort</label>
+                                  <textarea id="reply-grade-<%= grade.id %>-<%= message.id %>" name="reply" rows="3" maxlength="1000" required placeholder="Antwort an den Schueler..."></textarea>
+                                  <div class="teacher-form-actions">
+                                    <button class="btn btn-primary" type="submit">Antwort senden</button>
+                                  </div>
+                                </form>
+                              <% } %>
+                            </div>
+                          <% }) %>
+                        </div>
+                      <% } %>
                     </div>
                   <% } %>
                 </div>
@@ -480,6 +520,20 @@
             deleteGradeModal.classList.remove("active");
             currentGradeForm = null;
           }
+        });
+
+        document.querySelectorAll(".grade-messages-toggle").forEach((button) => {
+          button.addEventListener("click", () => {
+            const targetId = button.dataset.targetId;
+            if (!targetId) return;
+            const panel = document.getElementById(targetId);
+            if (!panel) return;
+            const willShow = panel.hidden;
+            panel.hidden = !willShow;
+            const baseLabel = button.dataset.baseLabel || button.textContent.replace(" Ausblenden", "").trim();
+            button.dataset.baseLabel = baseLabel;
+            button.textContent = willShow ? `${baseLabel} Ausblenden` : baseLabel;
+          });
         });
 
         document.addEventListener("keydown", (event) => {
