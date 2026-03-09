@@ -25,7 +25,7 @@
           </div>
           <div class="admin-actions-row">
             <a class="btn btn-secondary" href="/admin/users/<%= user.id %>/edit">Bearbeiten</a>
-            <a class="btn" href="/admin/users">Zurück</a>
+            <a class="btn" href="/admin/users">ZurÃ¼ck</a>
           </div>
         </div>
 
@@ -73,17 +73,17 @@
         <div class="admin-card">
           <div class="admin-topbar">
             <p class="admin-eyebrow">Klassen</p>
-            <span class="admin-badge"><%= classes.length %> Einträge</span>
+            <span class="admin-badge"><%= classes.length %> EintrÃ¤ge</span>
           </div>
           <div class="admin-list">
             <% if (!classes || classes.length === 0) { %>
               <div class="admin-empty">
                 <% if (isStudent) { %>
-                  Keine Klassen für diesen Schüler gefunden.
+                  Keine Klassen fÃ¼r diesen SchÃ¼ler gefunden.
                 <% } else if (isTeacher) { %>
-                  Keine Klassen für diesen Lehrer gefunden.
+                  Keine Klassen fÃ¼r diesen Lehrer gefunden.
                 <% } else { %>
-                  Keine Klasseninfos für diese Rolle vorhanden.
+                  Keine Klasseninfos fÃ¼r diese Rolle vorhanden.
                 <% } %>
               </div>
             <% } else if (isTeacher) { %>
@@ -94,7 +94,7 @@
                     <p class="admin-muted">Fach: <%= entry.subject %></p>
                   </div>
                   <div class="admin-actions-row">
-                    <a class="btn btn-secondary" href="/admin/classes/<%= entry.id %>/students">Schüler anzeigen</a>
+                    <a class="btn btn-secondary" href="/admin/classes/<%= entry.id %>/students">SchÃ¼ler anzeigen</a>
                   </div>
                 </div>
               <% }) %>
@@ -104,7 +104,7 @@
                   <div>
                     <strong><%= entry.class_name %></strong>
                     <p class="admin-muted">Fach: <%= entry.subject %></p>
-                    <p class="admin-muted">Lehrer: <%= entry.teacher_email || '-' %></p>
+                    <p class="admin-muted">Lehrer: <%= entry.teacher_emails || '-' %></p>
                   </div>
                   <div class="admin-actions-row">
                     <a class="btn btn-secondary" href="/admin/classes/<%= entry.class_id %>/students?email=<%= encodeURIComponent(user.email) %>">Zur Klasse</a>

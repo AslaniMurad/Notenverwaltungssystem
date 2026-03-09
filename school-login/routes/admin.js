@@ -406,16 +406,26 @@ router.get("/users/:id", async (req, res, next) => {
     let classes = [];
     if (user.role === "teacher") {
       classes = await allAsync(
-        "SELECT id, name, subject FROM classes WHERE teacher_id = ? ORDER BY created_at DESC",
+        `SELECT cst.id AS assignment_id, c.id, c.name, s.name AS subject
+         FROM class_subject_teacher cst
+         JOIN classes c ON c.id = cst.class_id
+         JOIN subjects s ON s.id = cst.subject_id
+         WHERE cst.teacher_id = ?
+         ORDER BY c.created_at DESC`,
         [user.id]
       );
     } else if (user.role === "student") {
       classes = await allAsync(
         `SELECT s.id AS student_id, s.name AS student_name, s.email AS student_email, s.school_year,
-                c.id AS class_id, c.name AS class_name, c.subject, u.email AS teacher_email
+                c.id AS class_id, c.name AS class_name, c.subject,
+                COALESCE((
+                  SELECT STRING_AGG(u2.email, ', ' ORDER BY u2.email)
+                  FROM class_subject_teacher cst2
+                  JOIN users u2 ON u2.id = cst2.teacher_id
+                  WHERE cst2.class_id = c.id AND cst2.subject_id = c.subject_id
+                ), '') AS teacher_emails
          FROM students s
          JOIN classes c ON c.id = s.class_id
-         LEFT JOIN users u ON u.id = c.teacher_id
          WHERE s.email = ?
          ORDER BY c.name`,
         [user.email]
@@ -534,16 +544,31 @@ router.get("/classes", async (req, res, next) => {
   const params = [];
   let whereClause = "";
   if (q) {
-    whereClause = "WHERE c.name LIKE ? OR c.subject LIKE ? OR u.email LIKE ?";
+    whereClause = `WHERE c.name LIKE ? OR c.subject LIKE ? OR EXISTS (
+      SELECT 1
+      FROM class_subject_teacher cst_s
+      JOIN users u_s ON u_s.id = cst_s.teacher_id
+      WHERE cst_s.class_id = c.id AND cst_s.subject_id = c.subject_id AND u_s.email LIKE ?
+    )`;
     const like = `%${q}%`;
     params.push(like, like, like);
   }
 
   try {
     const classes = await allAsync(
-      `SELECT c.id, c.name, c.subject, c.created_at, u.email AS teacher_email, u.id AS teacher_id
+      `SELECT c.id, c.name, c.subject, c.created_at,
+              (
+                SELECT STRING_AGG(u2.email, ', ' ORDER BY u2.email)
+                FROM class_subject_teacher cst2
+                JOIN users u2 ON u2.id = cst2.teacher_id
+                WHERE cst2.class_id = c.id AND cst2.subject_id = c.subject_id
+              ) AS teacher_emails,
+              (
+                SELECT COUNT(*)
+                FROM class_subject_teacher cst3
+                WHERE cst3.class_id = c.id AND cst3.subject_id = c.subject_id
+              ) AS teacher_count
        FROM classes c
-       LEFT JOIN users u ON c.teacher_id = u.id
        ${whereClause}
        ORDER BY c.created_at DESC`,
       params
@@ -562,25 +587,17 @@ router.get("/classes", async (req, res, next) => {
   }
 });
 
-router.get("/classes/new", async (req, res, next) => {
-  try {
-    const teachers = await allAsync(
-      "SELECT id, email FROM users WHERE role = 'teacher' AND status = 'active' ORDER BY email ASC"
-    );
-    res.render("admin/create-class", {
-      teachers,
-      csrfToken: req.csrfToken(),
-      currentUser: req.session.user,
-      activePath: req.originalUrl
-    });
-  } catch (err) {
-    next(err);
-  }
+router.get("/classes/new", async (req, res) => {
+  res.render("admin/create-class", {
+    csrfToken: req.csrfToken(),
+    currentUser: req.session.user,
+    activePath: req.originalUrl
+  });
 });
 
 router.post("/classes", async (req, res, next) => {
-  const { name, subject, teacher_id } = req.body || {};
-  if (!name || !subject || !teacher_id) {
+  const { name, subject } = req.body || {};
+  if (!name || !subject) {
     return res.status(400).render("error", {
       message: "Bitte alle Pflichtfelder ausfüllen.",
       status: 400,
@@ -589,7 +606,21 @@ router.post("/classes", async (req, res, next) => {
     });
   }
   try {
-    await runAsync("INSERT INTO classes (name, subject, teacher_id) VALUES (?,?,?)", [name, subject, teacher_id]);
+    const subjectId = await ensureSubjectIdByName(subject);
+    if (!subjectId) {
+      return res.status(400).render("error", {
+        message: "Fach konnte nicht verarbeitet werden.",
+        status: 400,
+        backUrl: "/admin/classes/new",
+        csrfToken: req.csrfToken()
+      });
+    }
+
+    await runAsync("INSERT INTO classes (name, subject, subject_id) VALUES (?,?,?)", [
+      name,
+      subject,
+      subjectId
+    ]);
     res.redirect("/admin/classes");
   } catch (err) {
     console.error("DB error creating class:", err);
@@ -600,18 +631,12 @@ router.post("/classes", async (req, res, next) => {
 router.get("/classes/:id/edit", async (req, res, next) => {
   const classId = req.params.id;
   try {
-    const [classData, teachers] = await Promise.all([
-      getAsync(
-        `SELECT c.id, c.name, c.subject, c.teacher_id, u.email AS teacher_email
-         FROM classes c
-         LEFT JOIN users u ON c.teacher_id = u.id
-         WHERE c.id = ?`,
-        [classId]
-      ),
-      allAsync(
-        "SELECT id, email FROM users WHERE role = 'teacher' AND status = 'active' ORDER BY email ASC"
-      )
-    ]);
+    const classData = await getAsync(
+      `SELECT c.id, c.name, c.subject, c.subject_id
+       FROM classes c
+       WHERE c.id = ?`,
+      [classId]
+    );
 
     if (!classData) {
       return res.status(404).render("error", {
@@ -624,7 +649,6 @@ router.get("/classes/:id/edit", async (req, res, next) => {
 
     res.render("admin/edit-class", {
       classData,
-      teachers,
       csrfToken: req.csrfToken(),
       currentUser: req.session.user,
       activePath: req.originalUrl
@@ -637,8 +661,8 @@ router.get("/classes/:id/edit", async (req, res, next) => {
 
 router.post("/classes/:id", async (req, res, next) => {
   const classId = req.params.id;
-  const { name, subject, teacher_id } = req.body || {};
-  if (!name || !subject || !teacher_id) {
+  const { name, subject } = req.body || {};
+  if (!name || !subject) {
     return res.status(400).render("error", {
       message: "Bitte alle Pflichtfelder ausfüllen.",
       status: 400,
@@ -648,7 +672,22 @@ router.post("/classes/:id", async (req, res, next) => {
   }
 
   try {
-    await runAsync("UPDATE classes SET name = ?, subject = ?, teacher_id = ? WHERE id = ?", [name, subject, teacher_id, classId]);
+    const subjectId = await ensureSubjectIdByName(subject);
+    if (!subjectId) {
+      return res.status(400).render("error", {
+        message: "Fach konnte nicht verarbeitet werden.",
+        status: 400,
+        backUrl: `/admin/classes/${classId}/edit`,
+        csrfToken: req.csrfToken()
+      });
+    }
+
+    await runAsync("UPDATE classes SET name = ?, subject = ?, subject_id = ? WHERE id = ?", [
+      name,
+      subject,
+      subjectId,
+      classId
+    ]);
     res.redirect("/admin/classes");
   } catch (err) {
     console.error("DB error updating class:", err);
@@ -675,9 +714,14 @@ router.get("/classes/:id/students", async (req, res, next) => {
     const emailQuery = String(req.query.email || "").trim();
 
     const classData = await getAsync(
-      `SELECT c.id, c.name, c.subject, u.email AS teacher_email
+      `SELECT c.id, c.name, c.subject,
+              COALESCE((
+                SELECT STRING_AGG(u.email, ', ' ORDER BY u.email)
+                FROM class_subject_teacher cst
+                JOIN users u ON u.id = cst.teacher_id
+                WHERE cst.class_id = c.id AND cst.subject_id = c.subject_id
+              ), '') AS teacher_emails
        FROM classes c
-       LEFT JOIN users u ON c.teacher_id = u.id
        WHERE c.id = ?`,
       [classId]
     );

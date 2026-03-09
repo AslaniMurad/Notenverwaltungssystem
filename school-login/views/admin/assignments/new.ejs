@@ -1,0 +1,98 @@
+<%
+  const selectedClassId = classes.length ? String(classes[0].id) : '';
+  const selectedClass = classes.find((entry) => String(entry.id) === selectedClassId) || null;
+  const selectedSubjectId = selectedClass ? String(selectedClass.subject_id || '') : '';
+  const page = {
+    title: 'Admin - Lehrer zuordnen',
+    headerTitle: 'Adminbereich',
+    styles: ['/css/admin.css'],
+    scripts: ['/js/app.js'],
+    bodyClass: 'page-admin',
+    hideHeader: true,
+    hideFooter: true,
+    content: function () { %>
+    <div class="app-shell">
+      <%- include('../nav', { csrfToken, currentUser, activePath }) %>
+
+      <section class="app-main">
+        <div class="app-main-header">
+          <div>
+            <p class="app-main-subtitle">Unterrichtszuordnungen</p>
+            <h1>Assign Teachers to Class and Subject</h1>
+            <p class="admin-muted">Waehle eine Klasse, das zugehoerige Fach und beliebig viele Lehrer.</p>
+          </div>
+          <a class="btn btn-secondary" href="/admin/assignments">Zur Uebersicht</a>
+        </div>
+
+        <% if (message) { %>
+          <div class="teacher-alert info"><%= message %></div>
+        <% } %>
+        <% if (error) { %>
+          <div class="teacher-alert error"><%= error %></div>
+        <% } %>
+
+        <div class="admin-card">
+          <form class="admin-form vertical" method="POST" action="/admin/assignments">
+            <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+
+            <label for="class_id">Class</label>
+            <select id="class_id" name="class_id" required>
+              <% classes.forEach((cls) => { %>
+                <option value="<%= cls.id %>" data-subject-id="<%= cls.subject_id %>" <%= String(cls.id) === selectedClassId ? 'selected' : '' %>>
+                  <%= cls.name %> - <%= cls.subject %>
+                </option>
+              <% }) %>
+            </select>
+
+            <label for="subject_id">Subject</label>
+            <select id="subject_id" name="subject_id" required>
+              <% subjects.forEach((subject) => { %>
+                <option value="<%= subject.id %>" <%= String(subject.id) === selectedSubjectId ? 'selected' : '' %>>
+                  <%= subject.name %>
+                </option>
+              <% }) %>
+            </select>
+            <small class="admin-muted">Nur das Fach der gewaehlten Klasse kann gespeichert werden.</small>
+
+            <label>Teachers</label>
+            <div class="admin-list">
+              <% teachers.forEach((teacher) => { %>
+                <label class="admin-student-row">
+                  <div>
+                    <strong><%= teacher.email %></strong>
+                  </div>
+                  <input type="checkbox" name="teacher_ids" value="<%= teacher.id %>">
+                </label>
+              <% }) %>
+            </div>
+
+            <div class="admin-row wrap">
+              <button class="btn btn-primary" type="submit">Assign Teachers</button>
+            </div>
+          </form>
+        </div>
+      </section>
+    </div>
+
+    <script>
+      (function syncClassSubject() {
+        const classSelect = document.getElementById('class_id');
+        const subjectSelect = document.getElementById('subject_id');
+        if (!classSelect || !subjectSelect) return;
+
+        function applyClassSubject() {
+          const selectedOption = classSelect.options[classSelect.selectedIndex];
+          const subjectId = selectedOption ? String(selectedOption.getAttribute('data-subject-id') || '') : '';
+          if (!subjectId) return;
+          const target = Array.from(subjectSelect.options).find((option) => String(option.value) === subjectId);
+          if (target) {
+            target.selected = true;
+          }
+        }
+
+        classSelect.addEventListener('change', applyClassSubject);
+        applyClassSubject();
+      })();
+    </script>
+<% } }; %>
+<%- include('../../layout', page) %>

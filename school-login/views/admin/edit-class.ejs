@@ -1,6 +1,6 @@
 <%
   const page = {
-    title: 'Admin — Klasse bearbeiten',
+    title: 'Admin â€” Klasse bearbeiten',
     headerTitle: 'Adminbereich',
     styles: ['/css/admin.css'],
     scripts: ['/js/app.js'],
@@ -16,9 +16,9 @@
           <div>
             <p class="app-main-subtitle">Klassen</p>
             <h1>Klasse bearbeiten</h1>
-            <p class="admin-muted">Passe Name, Fach oder Lehrer an.</p>
+            <p class="admin-muted">Passe Name und Fach an.</p>
           </div>
-          <a class="btn btn-secondary" href="/admin/classes">Zurück</a>
+          <a class="btn btn-secondary" href="/admin/classes">ZurÃ¼ck</a>
         </div>
 
         <div class="admin-card-narrow">
@@ -31,12 +31,7 @@
             <label for="subject">Fach</label>
             <input id="subject" name="subject" value="<%= classData.subject %>" type="text" required>
 
-            <label for="teacher">Lehrer</label>
-            <select id="teacher" name="teacher_id" required>
-              <% teachers.forEach(function(t){ %>
-                <option value="<%= t.id %>" <%= t.id === classData.teacher_id ? 'selected' : '' %>><%= t.email %></option>
-              <% }) %>
-            </select>
+            <p class="admin-muted">Lehrer-Zuordnungen werden separat ueber die Unterrichtszuordnung gepflegt.</p>
 
             <button class="btn btn-primary" type="submit">Speichern</button>
           </form>
