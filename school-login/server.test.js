@@ -13,6 +13,7 @@ process.env.DEMO_STUDENT_PASS = "studentDemo123!";
 process.env.USE_FAKE_DB = "true";
 
 const app = require("./server");
+const { db } = require("./db");
 
 let server;
 let baseUrl;
@@ -24,7 +25,14 @@ function extractCsrfToken(html) {
 
 function buildCookieHeader(cookies) {
   if (!cookies.length) return {};
-  const cookieValue = cookies.map((c) => c.split(";", 1)[0]).join("; ");
+  const latestCookiesByName = new Map();
+  cookies.forEach((cookie) => {
+    const cookiePair = cookie.split(";", 1)[0];
+    const separatorIndex = cookiePair.indexOf("=");
+    const cookieName = separatorIndex >= 0 ? cookiePair.slice(0, separatorIndex) : cookiePair;
+    latestCookiesByName.set(cookieName, cookiePair);
+  });
+  const cookieValue = [...latestCookiesByName.values()].join("; ");
   return { cookie: cookieValue };
 }
 
@@ -49,6 +57,15 @@ async function fetchWithCookies(path, options = {}, cookies = []) {
   const setCookieHeader = response.headers.get("set-cookie");
   const setCookies = response.headers.getSetCookie?.() || (setCookieHeader ? [setCookieHeader] : []);
   return { response, body, cookies: [...cookies, ...setCookies] };
+}
+
+function runDb(sql, params = []) {
+  return new Promise((resolve, reject) => {
+    db.run(sql, params, function (err) {
+      if (err) return reject(err);
+      resolve(this);
+    });
+  });
 }
 
 async function loginAndChangePassword(email, password, newPassword) {
@@ -127,7 +144,7 @@ test("admin can log in with seeded credentials", async () => {
 
   assert.strictEqual(loginResult.redirect, "/admin");
 
-  const dashboard = await fetchWithCookies("/", {}, loginResult.cookies);
+  const dashboard = await fetchWithCookies("/admin", {}, loginResult.cookies);
   assert.strictEqual(dashboard.response.status, 200);
   assert.match(dashboard.body, /admin@test\.local/);
 });
@@ -151,6 +168,98 @@ test("student can view grades and profile after login", async () => {
   assert.strictEqual(profileResponse.response.status, 200);
   const profile = JSON.parse(profileResponse.body);
   assert.strictEqual(profile.class, "3AHWII");
+});
+
+test("student returns include entries from multiple classes for the same email", async () => {
+  await runDb("INSERT INTO classes (name, subject, teacher_id) VALUES (?,?,?)", ["3BHIT", "ITP", 2]);
+  await runDb(
+    "INSERT INTO students (name, email, class_id, school_year) VALUES (?,?,?,?)",
+    ["Max Muster", "student@example.com", 2, "2024/25"]
+  );
+  await runDb(
+    "INSERT INTO grade_templates (class_id, name, category, weight, date, description) VALUES (?,?,?,?,?,?)",
+    [2, "ITP Test", "Test", 20, new Date().toISOString(), "Rueckgabe aus ITP"]
+  );
+  await runDb(
+    "INSERT INTO grades (student_id, class_id, grade_template_id, grade, note) VALUES (?,?,?,?,?)",
+    [2, 2, 4, 1.5, "ITP Rueckgabe"]
+  );
+
+  const loginResult = await loginAndChangePassword(
+    "student@example.com",
+    "NewPass12345",
+    "AnotherPass12345"
+  );
+
+  assert.strictEqual(loginResult.redirect, "/student");
+
+  const returnsResponse = await fetchWithCookies("/student/returns", {}, loginResult.cookies);
+  assert.strictEqual(returnsResponse.response.status, 200);
+
+  const data = JSON.parse(returnsResponse.body);
+  const subjects = new Set((data.returns || []).map((entry) => entry.subject));
+  assert.ok(subjects.has("Informatik"));
+  assert.ok(subjects.has("ITP"));
+  assert.ok((data.returns || []).length >= 4);
+});
+
+test("teacher bulk grading saves entries for numeric student ids", async () => {
+  const loginResult = await loginAndChangePassword(
+    "teacher@example.com",
+    process.env.DEMO_TEACHER_PASS,
+    "TeacherPass12345"
+  );
+
+  assert.strictEqual(loginResult.redirect, "/teacher/classes");
+  await runDb(
+    `INSERT INTO teacher_grading_profiles
+     (teacher_id, name, weight_mode, scoring_mode, absence_mode, grade1_min_percent, grade2_min_percent, grade3_min_percent, grade4_min_percent, ma_enabled, ma_weight, ma_grade_plus, ma_grade_plus_tilde, ma_grade_neutral, ma_grade_minus_tilde, ma_grade_minus, is_active)
+     VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+    [2, "Standardprofil", "points", "points_or_grade", "include_zero", 88.5, 75, 62.5, 50, 0, 5, 1.5, 2.5, 3, 3.5, 4.5, 1]
+  );
+  const templateId = 1;
+
+  const bulkPage = await fetchWithCookies(
+    `/teacher/bulk-grade-template/1/${templateId}`,
+    {},
+    loginResult.cookies
+  );
+  assert.strictEqual(bulkPage.response.status, 200);
+  assert.match(bulkPage.body, /name="grade\[s_1\]"/);
+
+  const csrfToken = extractCsrfToken(bulkPage.body);
+  assert.ok(csrfToken, "CSRF token missing in bulk grading form");
+
+  const params = new URLSearchParams({
+    _csrf: csrfToken,
+    "grade[s_1]": "2.5",
+    "note[s_1]": "Per Test gespeichert"
+  });
+
+  const submitResponse = await fetchWithCookies(
+    `/teacher/bulk-grade-template/1/${templateId}`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/x-www-form-urlencoded" },
+      body: params.toString(),
+      redirect: "manual"
+    },
+    bulkPage.cookies
+  );
+
+  assert.strictEqual(submitResponse.response.status, 302);
+  const location = submitResponse.response.headers.get("location");
+  assert.ok(location, "Bulk grading redirect missing");
+
+  const redirectUrl = new URL(location, baseUrl);
+  assert.strictEqual(redirectUrl.pathname, `/teacher/bulk-grade-template/1/${templateId}`);
+  assert.strictEqual(redirectUrl.searchParams.get("saved"), "0");
+  assert.strictEqual(redirectUrl.searchParams.get("updated"), "1");
+
+  const resultPage = await fetchWithCookies(location, {}, submitResponse.cookies);
+  assert.strictEqual(resultPage.response.status, 200);
+  assert.match(resultPage.body, /1 Bewertung aktualisiert\./);
+  assert.doesNotMatch(resultPage.body, /Keine neuen Bewertungen zum Speichern gefunden\./);
 });
 
 test("student routes redirect when unauthenticated", async () => {

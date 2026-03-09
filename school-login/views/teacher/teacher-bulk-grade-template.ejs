@@ -113,6 +113,7 @@
                 </thead>
                 <tbody>
                   <% rows.forEach((row) => { %>
+                    <% const fieldKey = `s_${row.student.id}`; %>
                     <tr class="<%= row.existing ? 'bulk-grade-row-locked' : '' %>">
                       <td>
                         <strong><%= row.student.name %></strong>
@@ -121,42 +122,35 @@
                       <td>
                         <% if (row.existing) { %>
                           <span class="template-status template-status-graded">
-                            Bereits bewertet (<%= Number(row.existing.grade).toFixed(2) %>)
+                            Bereits bewertet
                           </span>
                         <% } else { %>
                           <span class="template-status template-status-open">Offen</span>
                         <% } %>
                       </td>
                       <td>
-                        <% if (row.existing || !gradeAllowed) { %>
-                          <span class="teacher-muted"><%= row.existing ? Number(row.existing.grade).toFixed(2) : '-' %></span>
+                        <% if (!gradeAllowed) { %>
+                          <span class="teacher-muted">-</span>
                         <% } else { %>
                           <input
                             class="bulk-grade-input"
-                            type="number"
-                            name="grade[<%= row.student.id %>]"
-                            min="1"
-                            max="5"
-                            step="0.25"
+                            type="text"
+                            inputmode="decimal"
+                            name="grade[<%= fieldKey %>]"
                             value="<%= row.form.grade %>"
                             placeholder="z.B. 2.5"
                           >
                         <% } %>
                       </td>
                       <td>
-                        <% if (row.existing || !pointsAllowed) { %>
-                          <% if (row.existing && row.existing.points_achieved != null && row.existing.points_max != null) { %>
-                            <span class="teacher-muted"><%= Number(row.existing.points_achieved) %> / <%= Number(row.existing.points_max) %></span>
-                          <% } else { %>
-                            <span class="teacher-muted">-</span>
-                          <% } %>
+                        <% if (!pointsAllowed) { %>
+                          <span class="teacher-muted">-</span>
                         <% } else { %>
                           <input
                             class="bulk-grade-input bulk-points-input"
-                            type="number"
-                            name="points_achieved[<%= row.student.id %>]"
-                            min="0"
-                            step="0.25"
+                            type="text"
+                            inputmode="decimal"
+                            name="points_achieved[<%= fieldKey %>]"
                             value="<%= row.form.points_achieved %>"
                             <%= templateHasMaxPoints ? '' : 'disabled' %>
                             data-points-enabled="<%= templateHasMaxPoints ? '1' : '0' %>"
@@ -165,34 +159,26 @@
                         <% } %>
                       </td>
                       <td>
-                        <% if (row.existing) { %>
-                          <span class="teacher-muted"><%= row.existing.is_absent ? 'Ja' : 'Nein' %></span>
-                        <% } else { %>
-                          <label class="checkbox-line">
-                            <input
-                              class="bulk-absent-checkbox"
-                              type="checkbox"
-                              name="is_absent[<%= row.student.id %>]"
-                              value="1"
-                              <%= row.form.is_absent ? 'checked' : '' %>
-                            >
-                            <span>Ja</span>
-                          </label>
-                        <% } %>
+                        <label class="checkbox-line">
+                          <input
+                            class="bulk-absent-checkbox"
+                            type="checkbox"
+                            name="is_absent[<%= fieldKey %>]"
+                            value="1"
+                            <%= row.form.is_absent ? 'checked' : '' %>
+                          >
+                          <span>Ja</span>
+                        </label>
                       </td>
                       <td>
-                        <% if (row.existing) { %>
-                          <span class="teacher-muted"><%= row.existing.note || '-' %></span>
-                        <% } else { %>
-                          <input
-                            class="bulk-grade-note"
-                            type="text"
-                            name="note[<%= row.student.id %>]"
-                            value="<%= row.form.note %>"
-                            maxlength="500"
-                            placeholder="Optional"
-                          >
-                        <% } %>
+                        <input
+                          class="bulk-grade-note"
+                          type="text"
+                          name="note[<%= fieldKey %>]"
+                          value="<%= row.form.note %>"
+                          maxlength="500"
+                          placeholder="Optional"
+                        >
                       </td>
                     </tr>
                   <% }) %>
@@ -201,8 +187,11 @@
             </div>
 
             <small class="form-hint">
-              Trage nur bei den Schuelern Werte ein, die noch offen sind. Bereits benotete Eintraege bleiben unveraendert.
+              Bereits vorhandene Bewertungen sind vorausgefuellt und koennen bei Bedarf direkt angepasst werden.
             </small>
+            <p class="form-hint">
+              Tipp: Dezimalwerte koennen mit Punkt oder Komma eingegeben werden.
+            </p>
 
             <div class="teacher-form-actions">
               <button class="btn btn-primary" type="submit">Bewertungen speichern</button>
@@ -233,6 +222,30 @@
         };
         checkbox.addEventListener('change', toggleInputs);
         toggleInputs();
+      });
+
+      const bulkForm = document.querySelector('form.teacher-form');
+      bulkForm?.addEventListener('submit', (event) => {
+        const rows = Array.from(document.querySelectorAll('.bulk-grade-table tbody tr'));
+        const hasAnyValue = rows.some((row) => {
+          const gradeValue = String(row.querySelector('input[name^="grade["]')?.value || '').trim();
+          const pointsValue = String(row.querySelector('input[name^="points_achieved["]')?.value || '').trim();
+          const noteValue = String(row.querySelector('input[name^="note["]')?.value || '').trim();
+          const absentChecked = Boolean(row.querySelector('input[name^="is_absent["]')?.checked);
+          return gradeValue || pointsValue || noteValue || absentChecked;
+        });
+
+        if (!hasAnyValue) {
+          event.preventDefault();
+          window.alert('Bitte mindestens eine Bewertung eintragen (Note, Punkte, Abwesend oder Notiz).');
+          return;
+        }
+
+        const submitButton = bulkForm.querySelector('button[type="submit"]');
+        if (submitButton) {
+          submitButton.disabled = true;
+          submitButton.textContent = 'Speichert...';
+        }
       });
     </script>
 <% } };

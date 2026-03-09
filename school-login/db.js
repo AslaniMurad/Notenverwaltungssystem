@@ -673,7 +673,7 @@ function createFakeDb() {
             })[0];
           row = { absence_mode: activeProfile?.absence_mode || "include_zero" };
         }
-      } else if (/SELECT id, name, category, weight, max_points, date, description FROM grade_templates WHERE id = \? AND class_id = \?/i.test(sql)) {
+      } else if (/SELECT id, name, category, weight, (weight_mode, )?max_points, date, description FROM grade_templates WHERE id = \? AND class_id = \?/i.test(sql)) {
         const [templateId, clsId] = params;
         const template = gradeTemplates.find(
           (entry) => entry.id === Number(templateId) && entry.class_id === Number(clsId)
@@ -684,6 +684,7 @@ function createFakeDb() {
               name: template.name,
               category: template.category,
               weight: template.weight,
+              weight_mode: template.weight_mode || "points",
               max_points: template.max_points ?? null,
               date: template.date || null,
               description: template.description || null
@@ -879,6 +880,23 @@ function createFakeDb() {
               entry.class_id === Number(class_id) && entry.student_id === Number(student_id)
           )
           .map((entry) => ({ grade_template_id: entry.grade_template_id }));
+      } else if (/SELECT id, student_id, grade, points_achieved, points_max, note, is_absent\s+FROM grades\s+WHERE class_id = \? AND grade_template_id = \?/i.test(sql)) {
+        const [class_id, grade_template_id] = params;
+        rows = grades
+          .filter(
+            (entry) =>
+              entry.class_id === Number(class_id) &&
+              entry.grade_template_id === Number(grade_template_id)
+          )
+          .map((entry) => ({
+            id: entry.id,
+            student_id: entry.student_id,
+            grade: entry.grade,
+            points_achieved: entry.points_achieved ?? null,
+            points_max: entry.points_max ?? null,
+            note: entry.note || null,
+            is_absent: entry.is_absent ? 1 : 0
+          }));
       } else if (/FROM grades g[\s\S]*UNION ALL[\s\S]*special_assessments/i.test(sql) && /WHERE g\.student_id = \?/i.test(sql)) {
         const [student_id] = params;
         const baseRows = grades

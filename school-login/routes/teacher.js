@@ -819,6 +819,29 @@ async function loadExistingGradesForTemplate(classId, templateId) {
   return map;
 }
 
+async function loadTemplateGradeStatsForClass(classId) {
+  const studentCountRow = await getAsync(
+    "SELECT COUNT(*) AS total FROM students WHERE class_id = ?",
+    [classId]
+  );
+  const gradeRows = await allAsync(
+    `SELECT g.grade_template_id, COUNT(DISTINCT g.student_id) AS graded_count
+     FROM grades g
+     JOIN students s ON s.id = g.student_id
+     WHERE g.class_id = ? AND s.class_id = ?
+     GROUP BY g.grade_template_id`,
+    [classId, classId]
+  );
+  const gradedCountByTemplate = new Map();
+  gradeRows.forEach((row) => {
+    gradedCountByTemplate.set(String(row.grade_template_id), Number(row.graded_count || 0));
+  });
+  return {
+    studentCount: Number(studentCountRow?.total || 0),
+    gradedCountByTemplate
+  };
+}
+
 function isCheckedInputValue(value) {
   return (
     value === true ||
@@ -830,32 +853,61 @@ function isCheckedInputValue(value) {
 }
 
 function readBulkFieldValue(formData, fieldName, studentId) {
+  const candidateKeys = [`s_${String(studentId)}`, String(studentId)];
   const fieldBucket = formData?.[fieldName];
-  if (fieldBucket && typeof fieldBucket === "object" && !Array.isArray(fieldBucket)) {
-    const nestedValue = fieldBucket[String(studentId)];
-    if (nestedValue != null) {
-      return nestedValue;
+  if (fieldBucket && typeof fieldBucket === "object") {
+    for (const candidateKey of candidateKeys) {
+      const nestedValue = fieldBucket[candidateKey];
+      if (nestedValue != null) {
+        return nestedValue;
+      }
     }
   }
 
-  // Fallback for flat urlencoded parsing: grade[123], points_achieved[123], ...
-  const flatKey = `${fieldName}[${String(studentId)}]`;
-  const flatValue = formData?.[flatKey];
-  return flatValue == null ? "" : flatValue;
+  // Fallback for flat urlencoded parsing: grade[s_123], grade[123], ...
+  for (const candidateKey of candidateKeys) {
+    const flatKey = `${fieldName}[${candidateKey}]`;
+    const flatValue = formData?.[flatKey];
+    if (flatValue != null) {
+      return flatValue;
+    }
+  }
+
+  return "";
 }
 
 function buildBulkGradeRows(students, existingGradesByStudent, formData = {}) {
+  const hasSubmission =
+    formData && typeof formData === "object" && Object.keys(formData).length > 0;
   return (students || []).map((student) => {
     const key = String(student.id);
     const existing = existingGradesByStudent.get(key) || null;
+    const gradeValue = hasSubmission
+      ? readBulkFieldValue(formData, "grade", student.id)
+      : existing?.grade != null
+      ? String(existing.grade)
+      : "";
+    const pointsValue = hasSubmission
+      ? readBulkFieldValue(formData, "points_achieved", student.id)
+      : existing?.points_achieved != null
+      ? String(existing.points_achieved)
+      : "";
+    const noteValue = hasSubmission
+      ? readBulkFieldValue(formData, "note", student.id)
+      : existing?.note || "";
+    const absentValue = hasSubmission
+      ? readBulkFieldValue(formData, "is_absent", student.id)
+      : existing?.is_absent
+      ? "1"
+      : "";
     return {
       student,
       existing,
       form: {
-        grade: String(readBulkFieldValue(formData, "grade", student.id) || "").trim(),
-        points_achieved: String(readBulkFieldValue(formData, "points_achieved", student.id) || "").trim(),
-        note: String(readBulkFieldValue(formData, "note", student.id) || "").trim(),
-        is_absent: isCheckedInputValue(readBulkFieldValue(formData, "is_absent", student.id))
+        grade: String(gradeValue || "").trim(),
+        points_achieved: String(pointsValue || "").trim(),
+        note: String(noteValue || "").trim(),
+        is_absent: isCheckedInputValue(absentValue)
       }
     };
   });
@@ -2736,15 +2788,19 @@ router.get("/grade-templates/:classId", async (req, res, next) => {
       ? String(req.query.sort)
       : "date_desc";
 
+    const { studentCount, gradedCountByTemplate } = await loadTemplateGradeStatsForClass(classId);
     const templatesAll = (await loadTemplates(classId)).map((template) => {
       const categoryKey = normalizeCategoryKey(template.category);
       const categorySlug = categoryKey
         ? (CATEGORY_BY_KEY.get(categoryKey)?.slug || "")
         : "";
+      const gradedCount = Number(gradedCountByTemplate.get(String(template.id)) || 0);
       return {
         ...template,
         category_key: categoryKey || "",
-        category_slug: categorySlug
+        category_slug: categorySlug,
+        graded_count: gradedCount,
+        is_fully_graded: studentCount > 0 && gradedCount >= studentCount
       };
     });
 
@@ -2823,6 +2879,7 @@ router.get("/grade-templates/:classId", async (req, res, next) => {
       })),
       search: { q, category, points: pointsFilter, sort },
       activeProfile,
+      studentCount,
       totalPointWeight,
       csrfToken: req.csrfToken()
     });
@@ -2854,13 +2911,29 @@ router.get("/bulk-grade-template/:classId/:templateId", async (req, res, next) =
     const existingGradesByStudent = await loadExistingGradesForTemplate(classId, templateId);
 
     const saved = Number(req.query.saved);
+    const updated = Number(req.query.updated);
     const duplicates = Number(req.query.duplicates);
+    const invalid = Number(req.query.invalid);
+    const hasResultQuery =
+      req.query.saved != null ||
+      req.query.updated != null ||
+      req.query.duplicates != null ||
+      req.query.invalid != null;
     const messageParts = [];
     if (Number.isFinite(saved) && saved > 0) {
       messageParts.push(`${saved} Bewertung${saved === 1 ? "" : "en"} gespeichert.`);
     }
+    if (Number.isFinite(updated) && updated > 0) {
+      messageParts.push(`${updated} Bewertung${updated === 1 ? "" : "en"} aktualisiert.`);
+    }
     if (Number.isFinite(duplicates) && duplicates > 0) {
       messageParts.push(`${duplicates} Eintrag${duplicates === 1 ? "" : "e"} waren bereits vorhanden.`);
+    }
+    if (Number.isFinite(invalid) && invalid > 0) {
+      messageParts.push(`${invalid} Eingabe${invalid === 1 ? "" : "n"} wurden wegen Validierungsfehlern uebersprungen.`);
+    }
+    if (hasResultQuery && messageParts.length === 0) {
+      messageParts.push("Keine Bewertung gespeichert.");
     }
 
     return renderBulkGradeTemplateForm(req, res, {
@@ -2910,8 +2983,6 @@ router.post("/bulk-grade-template/:classId/:templateId", async (req, res, next) 
     const preparedRows = [];
 
     rows.forEach((row) => {
-      if (row.existing) return;
-
       const studentId = row.student.id;
       const studentName = row.student.name || `Schueler ${studentId}`;
       const noteText = String(row.form.note || "").trim();
@@ -3007,6 +3078,7 @@ router.post("/bulk-grade-template/:classId/:templateId", async (req, res, next) 
       }
 
       preparedRows.push({
+        existingGradeId: row.existing ? row.existing.id : null,
         studentId,
         grade: resolvedGrade,
         pointsAchieved: resolvedPointsAchieved,
@@ -3016,7 +3088,7 @@ router.post("/bulk-grade-template/:classId/:templateId", async (req, res, next) 
       });
     });
 
-    if (validationErrors.length) {
+    if (validationErrors.length && !preparedRows.length) {
       return renderBulkGradeTemplateForm(req, res, {
         status: 400,
         classData,
@@ -3043,30 +3115,50 @@ router.post("/bulk-grade-template/:classId/:templateId", async (req, res, next) 
     }
 
     let saved = 0;
+    let updated = 0;
     let duplicates = 0;
 
     for (const row of preparedRows) {
       try {
-        await runAsync(
-          "INSERT INTO grades (student_id, class_id, grade_template_id, grade, points_achieved, points_max, note, external_link, is_absent) VALUES (?,?,?,?,?,?,?,?,?)",
-          [
+        if (row.existingGradeId) {
+          await runAsync(
+            `UPDATE grades
+             SET grade = ?, points_achieved = ?, points_max = ?, note = ?, is_absent = ?
+             WHERE id = ? AND class_id = ? AND grade_template_id = ?`,
+            [
+              row.grade,
+              row.pointsAchieved,
+              row.pointsMax,
+              row.note,
+              row.isAbsent,
+              row.existingGradeId,
+              classId,
+              template.id
+            ]
+          );
+          updated += 1;
+        } else {
+          await runAsync(
+            "INSERT INTO grades (student_id, class_id, grade_template_id, grade, points_achieved, points_max, note, external_link, is_absent) VALUES (?,?,?,?,?,?,?,?,?)",
+            [
+              row.studentId,
+              classId,
+              template.id,
+              row.grade,
+              row.pointsAchieved,
+              row.pointsMax,
+              row.note,
+              null,
+              row.isAbsent
+            ]
+          );
+          await runAsync("INSERT INTO grade_notifications (student_id, message, type) VALUES (?,?,?)", [
             row.studentId,
-            classId,
-            template.id,
-            row.grade,
-            row.pointsAchieved,
-            row.pointsMax,
-            row.note,
-            null,
-            row.isAbsent
-          ]
-        );
-        await runAsync("INSERT INTO grade_notifications (student_id, message, type) VALUES (?,?,?)", [
-          row.studentId,
-          "Neue Note eingetragen.",
-          "grade"
-        ]);
-        saved += 1;
+            "Neue Note eingetragen.",
+            "grade"
+          ]);
+          saved += 1;
+        }
       } catch (err) {
         if (String(err).includes("UNIQUE")) {
           duplicates += 1;
@@ -3078,7 +3170,9 @@ router.post("/bulk-grade-template/:classId/:templateId", async (req, res, next) 
 
     const query = new URLSearchParams({
       saved: String(saved),
-      duplicates: String(duplicates)
+      updated: String(updated),
+      duplicates: String(duplicates),
+      invalid: String(validationErrors.length)
     });
     res.redirect(`/teacher/bulk-grade-template/${classId}/${template.id}?${query.toString()}`);
   } catch (err) {
