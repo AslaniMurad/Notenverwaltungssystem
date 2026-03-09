@@ -11,6 +11,80 @@ const ENTITY_PATTERNS = [
   { regex: /\/special-assessments(\/|$)/i, entity: "special_assessment" },
   { regex: /\/participation(\/|$)/i, entity: "participation" }
 ];
+const SUMMARY_LABELS = {
+  email: "E-Mail",
+  role: "Rolle",
+  status: "Status",
+  name: "Name",
+  subject: "Fach",
+  teacher_id: "Lehrer",
+  bulkRole: "Rolle",
+  profile_name: "Profil",
+  scoring_mode: "Bewertung",
+  absence_mode: "Abwesenheit",
+  student_id: "Schueler",
+  type: "Typ",
+  category: "Kategorie",
+  weight: "Gewichtung",
+  max_points: "Max. Punkte",
+  date: "Datum",
+  description: "Beschreibung",
+  grade: "Note",
+  points_achieved: "Punkte",
+  external_link: "Link",
+  is_absent: "Abwesend",
+  note: "Kommentar",
+  message: "Nachricht",
+  reply: "Antwort",
+  ma_symbol: "Mitarbeit",
+  ma_note: "Kommentar",
+  grade_template_id: "Vorlage",
+  id: "ID",
+  classId: "Klasse",
+  studentId: "Schueler",
+  profileId: "Profil",
+  gradeId: "Note",
+  templateId: "Vorlage",
+  assessmentId: "Sonderleistung",
+  markId: "Mitarbeit"
+};
+const VALUE_LABELS = {
+  admin: "Admin",
+  teacher: "Lehrer",
+  student: "Schueler",
+  active: "Aktiv",
+  locked: "Gesperrt",
+  deleted: "Geloescht",
+  points_or_grade: "Punkte oder Note",
+  points_and_grade: "Punkte und Note",
+  points_only: "Nur Punkte",
+  grade_only: "Nur Note",
+  include_zero: "Mit 0 bewerten",
+  exclude: "Nicht werten",
+  Schularbeit: "Schularbeit",
+  Test: "Test",
+  Wiederholung: "Wiederholung",
+  Mitarbeit: "Mitarbeit",
+  Projekt: "Projekt",
+  Hausuebung: "Hausuebung",
+  Hausaufgabe: "Hausaufgabe",
+  Praesentation: "Praesentation",
+  Wunschpruefung: "Wunschpruefung",
+  Benutzerdefiniert: "Benutzerdefiniert",
+  plus: "+",
+  plus_tilde: "+/-",
+  neutral: "neutral",
+  minus_tilde: "-/+",
+  minus: "-"
+};
+const SKIPPED_SUMMARY_KEYS = new Set([
+  "_csrf",
+  "password",
+  "useInitial",
+  "bulkUseInitial",
+  "profile_id",
+  "set_active"
+]);
 
 function detectEntityType(routePath) {
   for (const pattern of ENTITY_PATTERNS) {
@@ -63,6 +137,231 @@ function getRoutePath(req) {
   return originalPath || "/";
 }
 
+function formatRole(value) {
+  return VALUE_LABELS[value] || value;
+}
+
+function formatText(value, maxLength = 80) {
+  const text = String(value || "").trim().replace(/\s+/g, " ");
+  if (!text) return "";
+  return text.length > maxLength ? `${text.slice(0, maxLength)}...` : text;
+}
+
+function countLines(value) {
+  return String(value || "")
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter(Boolean).length;
+}
+
+function formatSummaryValue(key, value) {
+  if (value == null || value === "") return null;
+
+  if (Array.isArray(value)) {
+    return value.length ? `${value.length} Eintraege` : null;
+  }
+
+  if (typeof value === "boolean") {
+    return value ? "Ja" : "Nein";
+  }
+
+  const trimmed = formatText(value);
+  if (!trimmed) return null;
+
+  if (key === "bulkEmails") {
+    const amount = countLines(value);
+    return amount ? `${amount} E-Mails` : null;
+  }
+
+  if (key === "is_absent") {
+    return value === "on" || value === true ? "Ja" : "Nein";
+  }
+
+  if (key === "teacher_id" || key === "student_id" || key === "grade_template_id") {
+    return `ID ${trimmed}`;
+  }
+
+  return VALUE_LABELS[trimmed] || trimmed;
+}
+
+function buildSummaryFromSource(source, keys = []) {
+  if (!source || typeof source !== "object") return [];
+
+  return keys
+    .filter((key) => !SKIPPED_SUMMARY_KEYS.has(key) && source[key] != null && source[key] !== "")
+    .map((key) => {
+      const value = formatSummaryValue(key, source[key]);
+      if (!value) return null;
+      return `${SUMMARY_LABELS[key] || key}: ${value}`;
+    })
+    .filter(Boolean);
+}
+
+function buildFallbackSummary(body) {
+  if (!body || typeof body !== "object") return [];
+
+  return Object.keys(body)
+    .filter((key) => !SKIPPED_SUMMARY_KEYS.has(key))
+    .slice(0, 3)
+    .map((key) => {
+      const value = formatSummaryValue(key, body[key]);
+      if (!value) return null;
+      return `${SUMMARY_LABELS[key] || key}: ${value}`;
+    })
+    .filter(Boolean);
+}
+
+function withSummary(text, summaryEntries = []) {
+  if (!summaryEntries.length) return text;
+  return `${text} (${summaryEntries.join(", ")})`;
+}
+
+function buildAuditDescription(req, routePath) {
+  const body = sanitizeValue(req.body || {});
+  const params = sanitizeValue(req.params || {});
+  const hasFile = Boolean(req.file);
+
+  if (/^\/admin\/users$/i.test(routePath)) {
+    return withSummary("Benutzer wurde erstellt", buildSummaryFromSource(body, ["email", "role"]));
+  }
+  if (/^\/admin\/users\/bulk$/i.test(routePath)) {
+    return withSummary(
+      "Benutzer wurden gesammelt erstellt",
+      buildSummaryFromSource(body, ["bulkRole", "bulkEmails"])
+    );
+  }
+  if (/^\/admin\/users\/[^/]+$/i.test(routePath)) {
+    return withSummary("Benutzer wurde bearbeitet", buildSummaryFromSource(body, ["email", "role", "status"]));
+  }
+  if (/^\/admin\/users\/[^/]+\/reset$/i.test(routePath)) {
+    return body.useInitial === "1"
+      ? "Passwort wurde auf Initial-Passwort zurueckgesetzt"
+      : "Passwort wurde geaendert";
+  }
+  if (/^\/admin\/users\/[^/]+\/delete$/i.test(routePath)) {
+    return withSummary("Benutzer wurde geloescht", buildSummaryFromSource(params, ["id"]));
+  }
+  if (/^\/admin\/classes$/i.test(routePath) || /^\/teacher\/create-class$/i.test(routePath)) {
+    return withSummary("Klasse wurde erstellt", buildSummaryFromSource(body, ["name", "subject"]));
+  }
+  if (/^\/admin\/classes\/[^/]+$/i.test(routePath)) {
+    return withSummary(
+      "Klasse wurde bearbeitet",
+      buildSummaryFromSource(body, ["name", "subject", "teacher_id"])
+    );
+  }
+  if (/^\/admin\/classes\/[^/]+\/delete$/i.test(routePath) || /^\/teacher\/delete-class\/[^/]+$/i.test(routePath)) {
+    return withSummary("Klasse wurde geloescht", buildSummaryFromSource(params, ["id"]));
+  }
+  if (/^\/admin\/classes\/[^/]+\/students\/add$/i.test(routePath) || /^\/teacher\/add-student\/[^/]+$/i.test(routePath)) {
+    return withSummary("Schueler wurde hinzugefuegt", buildSummaryFromSource(body, ["name", "email"]));
+  }
+  if (/^\/admin\/classes\/[^/]+\/students\/add-bulk$/i.test(routePath)) {
+    return withSummary(
+      "Schueler wurden gesammelt hinzugefuegt",
+      buildSummaryFromSource(body, ["bulkEmails"])
+    );
+  }
+  if (
+    /^\/admin\/classes\/[^/]+\/students\/[^/]+\/delete$/i.test(routePath) ||
+    /^\/teacher\/delete-student\/[^/]+\/[^/]+$/i.test(routePath)
+  ) {
+    return withSummary(
+      "Schueler wurde entfernt",
+      buildSummaryFromSource(params, ["classId", "studentId"])
+    );
+  }
+  if (/^\/teacher\/settings\/save-profile$/i.test(routePath)) {
+    return withSummary(
+      body.profile_id ? "Benotungsprofil wurde bearbeitet" : "Benotungsprofil wurde erstellt",
+      buildSummaryFromSource(body, ["profile_name", "scoring_mode", "absence_mode"])
+    );
+  }
+  if (/^\/teacher\/settings\/activate-profile\/[^/]+$/i.test(routePath)) {
+    return withSummary("Benotungsprofil wurde aktiviert", buildSummaryFromSource(params, ["profileId"]));
+  }
+  if (/^\/teacher\/settings\/delete-profile\/[^/]+$/i.test(routePath)) {
+    return withSummary("Benotungsprofil wurde geloescht", buildSummaryFromSource(params, ["profileId"]));
+  }
+  if (/^\/teacher\/students\/[^/]+\/messages\/[^/]+\/reply$/i.test(routePath)) {
+    return withSummary("Antwort auf Schuelernachricht wurde gesendet", buildSummaryFromSource(body, ["reply"]));
+  }
+  if (/^\/teacher\/grades\/[^/]+\/participation$/i.test(routePath)) {
+    return withSummary(
+      "Mitarbeitsbewertung wurde eingetragen",
+      buildSummaryFromSource(body, ["student_id", "ma_symbol", "ma_note"])
+    );
+  }
+  if (/^\/teacher\/delete-participation\/[^/]+\/[^/]+\/[^/]+$/i.test(routePath)) {
+    return withSummary(
+      "Mitarbeitsbewertung wurde geloescht",
+      buildSummaryFromSource(params, ["classId", "studentId", "markId"])
+    );
+  }
+  if (/^\/teacher\/delete-grade\/[^/]+\/[^/]+$/i.test(routePath)) {
+    return withSummary("Note wurde geloescht", buildSummaryFromSource(params, ["classId", "gradeId"]));
+  }
+  if (/^\/teacher\/delete-grade-attachment\/[^/]+\/[^/]+$/i.test(routePath)) {
+    return withSummary(
+      "Datei bei Note wurde entfernt",
+      buildSummaryFromSource(params, ["classId", "gradeId"])
+    );
+  }
+  if (/^\/teacher\/add-grade\/[^/]+\/[^/]+$/i.test(routePath)) {
+    const summary = buildSummaryFromSource(body, ["grade", "points_achieved", "is_absent", "note", "external_link"]);
+    if (hasFile) summary.push("Datei: hochgeladen");
+    return withSummary("Note wurde eingetragen", summary);
+  }
+  if (/^\/teacher\/create-template\/[^/]+$/i.test(routePath)) {
+    return withSummary(
+      "Pruefungsvorlage wurde erstellt",
+      buildSummaryFromSource(body, ["name", "category", "weight", "max_points", "date"])
+    );
+  }
+  if (/^\/teacher\/edit-template\/[^/]+\/[^/]+$/i.test(routePath)) {
+    return withSummary(
+      "Pruefungsvorlage wurde bearbeitet",
+      buildSummaryFromSource(body, ["name", "category", "weight", "max_points", "date"])
+    );
+  }
+  if (/^\/teacher\/delete-template\/[^/]+\/[^/]+$/i.test(routePath)) {
+    return withSummary(
+      "Pruefungsvorlage wurde geloescht",
+      buildSummaryFromSource(params, ["classId", "templateId"])
+    );
+  }
+  if (/^\/teacher\/special-assessments\/[^/]+$/i.test(routePath)) {
+    return withSummary(
+      "Sonderleistung wurde erstellt",
+      buildSummaryFromSource(body, ["student_id", "type", "name", "grade", "weight"])
+    );
+  }
+  if (/^\/teacher\/delete-special-assessment\/[^/]+\/[^/]+$/i.test(routePath)) {
+    return withSummary(
+      "Sonderleistung wurde geloescht",
+      buildSummaryFromSource(params, ["classId", "assessmentId"])
+    );
+  }
+  if (/^\/student\/returns\/[^/]+\/message$/i.test(routePath)) {
+    return withSummary("Nachricht zur Rueckgabe wurde gesendet", buildSummaryFromSource(body, ["message"]));
+  }
+  if (/^\/student\/returns\/[^/]+\/messages\/seen$/i.test(routePath)) {
+    return withSummary("Rueckgabe-Nachrichten wurden als gelesen markiert", buildSummaryFromSource(params, ["gradeId"]));
+  }
+  if (/^\/student\/notifications\/[^/]+\/read$/i.test(routePath)) {
+    return withSummary("Benachrichtigung wurde als gelesen markiert", buildSummaryFromSource(params, ["id"]));
+  }
+
+  const fallbackSummary = buildFallbackSummary(body);
+  if (/delete|remove/i.test(routePath)) {
+    return withSummary("Eintrag wurde geloescht", fallbackSummary);
+  }
+  if (/create|add|save/i.test(routePath)) {
+    return withSummary("Eintrag wurde gespeichert", fallbackSummary);
+  }
+  return withSummary("Eintrag wurde geaendert", fallbackSummary);
+}
+
 function createAuditLogMiddleware() {
   return function auditLogMiddleware(req, res, next) {
     if (!ALLOWED_METHODS.has(req.method)) return next();
@@ -84,6 +383,7 @@ function createAuditLogMiddleware() {
 
     res.on("finish", () => {
       if (res.statusCode >= 400) return;
+      const description = buildAuditDescription(req, routePath);
 
       const payload = JSON.stringify(
         sanitizeValue({
@@ -102,7 +402,7 @@ function createAuditLogMiddleware() {
           actor.id || null,
           actor.email || null,
           actor.role || null,
-          `${req.method} ${routePath}`,
+          description,
           entityType,
           entityId,
           req.method,

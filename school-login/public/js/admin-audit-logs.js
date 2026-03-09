@@ -2,31 +2,41 @@
   const tbody = document.getElementById("audit-log-table-body");
   const sentinel = document.getElementById("audit-logs-sentinel");
   const table = document.getElementById("audit-log-table");
+  const countBadge = document.getElementById("audit-log-count");
 
   if (!tbody || !sentinel || !table) return;
 
   const query = new URLSearchParams(window.location.search);
   const knownIds = new Set();
+  let totalCount = Number(countBadge?.dataset.totalCount);
   let newestId = null;
   let oldestId = null;
   let loadingOlder = false;
   let hasMoreOlder = true;
 
+  if (!Number.isFinite(totalCount)) totalCount = 0;
+
   function readExistingRows() {
     const rows = Array.from(tbody.querySelectorAll("tr"));
     rows.forEach((row) => {
-      const idCell = row.children[5];
-      if (!idCell) return;
-      const id = Number(idCell.textContent.trim());
+      const id = Number(row.dataset.logId);
       if (!Number.isFinite(id)) return;
       knownIds.add(id);
       if (newestId == null || id > newestId) newestId = id;
       if (oldestId == null || id < oldestId) oldestId = id;
     });
+    if (!totalCount) totalCount = knownIds.size;
+    updateCountBadge();
   }
 
   function buildDescription(log) {
     return log.action || "-";
+  }
+
+  function updateCountBadge() {
+    if (!countBadge) return;
+    countBadge.dataset.totalCount = String(totalCount);
+    countBadge.textContent = `${totalCount} Eintraege`;
   }
 
   function createCell(text) {
@@ -37,13 +47,10 @@
 
   function createRow(log) {
     const tr = document.createElement("tr");
+    tr.dataset.logId = String(log.id);
     tr.appendChild(createCell(log.created_at));
     tr.appendChild(createCell(log.actor_email));
-    tr.appendChild(createCell(log.actor_role));
     tr.appendChild(createCell(buildDescription(log)));
-    tr.appendChild(createCell(log.entity_type));
-    tr.appendChild(createCell(log.entity_id));
-    tr.appendChild(createCell(log.status_code));
     return tr;
   }
 
@@ -65,7 +72,12 @@
       headers: { Accept: "application/json" }
     });
     if (!response.ok) throw new Error(`HTTP ${response.status}`);
-    return response.json();
+    const data = await response.json();
+    if (Number.isFinite(Number(data.totalCount))) {
+      totalCount = Number(data.totalCount);
+      updateCountBadge();
+    }
+    return data;
   }
 
   function appendOlderLogs(logs) {
@@ -85,6 +97,10 @@
       if (oldestId == null || id < oldestId) oldestId = id;
     });
     tbody.appendChild(fragment);
+    if (knownIds.size > totalCount) {
+      totalCount = knownIds.size;
+      updateCountBadge();
+    }
   }
 
   function prependNewLogs(logs) {
@@ -104,6 +120,10 @@
       if (oldestId == null || id < oldestId) oldestId = id;
     });
     tbody.prepend(fragment);
+    if (knownIds.size > totalCount) {
+      totalCount = knownIds.size;
+      updateCountBadge();
+    }
   }
 
   async function loadOlder() {
@@ -125,9 +145,10 @@
   }
 
   async function pollNewLogs() {
-    if (newestId == null) return;
     try {
-      const data = await fetchLogs({ afterId: newestId, limit: 100 });
+      const data = newestId == null
+        ? await fetchLogs({ limit: 100 })
+        : await fetchLogs({ afterId: newestId, limit: 100 });
       prependNewLogs(data.logs || []);
     } catch (err) {
       console.error("Audit log live polling failed:", err);
@@ -147,5 +168,5 @@
   );
   observer.observe(sentinel);
 
-  window.setInterval(pollNewLogs, 5000);
+  window.setInterval(pollNewLogs, 3000);
 })();

@@ -680,6 +680,31 @@ function createFakeDb() {
         row = { count: classes.length };
       } else if (/SELECT COUNT\(\*\) AS count FROM students/i.test(sql)) {
         row = { count: students.length };
+      } else if (/SELECT COUNT\(\*\) AS count\s+FROM audit_logs/i.test(sql)) {
+        const hasActorFilter = /LOWER\(actor_email\) LIKE LOWER\(\?\)/i.test(sql);
+        const hasActionFilter = /LOWER\(action\) LIKE LOWER\(\?\)/i.test(sql);
+        const hasEntityFilter = /LOWER\(entity_type\) = LOWER\(\?\)/i.test(sql);
+        let index = 0;
+        const actorNeedle = hasActorFilter
+          ? String(params[index++] || "").replace(/%/g, "").toLowerCase()
+          : null;
+        const actionNeedle = hasActionFilter
+          ? String(params[index++] || "").replace(/%/g, "").toLowerCase()
+          : null;
+        const entityNeedle = hasEntityFilter ? String(params[index++] || "").toLowerCase() : null;
+
+        row = {
+          count: auditLogs
+            .filter((entry) =>
+              !actorNeedle ? true : String(entry.actor_email || "").toLowerCase().includes(actorNeedle)
+            )
+            .filter((entry) =>
+              !actionNeedle ? true : String(entry.action || "").toLowerCase().includes(actionNeedle)
+            )
+            .filter((entry) =>
+              !entityNeedle ? true : String(entry.entity_type || "").toLowerCase() === entityNeedle
+            ).length
+        };
       } else if (/SELECT id FROM classes WHERE id = \? AND teacher_id = \?/i.test(sql)) {
         const [id, teacher_id] = params;
         const classRow = classes.find((c) => c.id === Number(id) && c.teacher_id === Number(teacher_id));

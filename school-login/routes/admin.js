@@ -62,6 +62,17 @@ function buildAuditWhereClause(filters = {}) {
   };
 }
 
+async function fetchAuditLogCount(filters) {
+  const { whereClause, params } = buildAuditWhereClause(filters);
+  const row = await getAsync(
+    `SELECT COUNT(*) AS count
+     FROM audit_logs
+     ${whereClause}`,
+    params
+  );
+  return Number(row?.count || 0);
+}
+
 async function fetchAuditLogsPage({ filters, beforeId = null, afterId = null, limit = 100 }) {
   const { whereClause, params } = buildAuditWhereClause(filters);
   const clauses = whereClause ? [whereClause.slice(6)] : [];
@@ -917,10 +928,14 @@ router.post("/classes/:id/students/add-bulk", async (req, res, next) => {
 router.get("/audit-logs", async (req, res, next) => {
   try {
     const filters = parseAuditFilters(req);
-    const logs = await fetchAuditLogsPage({ filters, limit: 100 });
+    const [logs, totalCount] = await Promise.all([
+      fetchAuditLogsPage({ filters, limit: 100 }),
+      fetchAuditLogCount(filters)
+    ]);
 
     res.render("admin/audit-logs", {
       logs,
+      totalCount,
       query: filters,
       csrfToken: req.csrfToken(),
       currentUser: req.session.user,
@@ -944,10 +959,10 @@ router.get("/audit-logs/data", async (req, res, next) => {
       ? Math.max(1, Math.min(200, requestedLimit))
       : 100;
 
-    let logs = await fetchAuditLogsPage({ filters, beforeId, afterId, limit });
-    if (afterId != null) {
-      logs = logs.slice().sort((a, b) => Number(a.id) - Number(b.id));
-    }
+    const [logs, totalCount] = await Promise.all([
+      fetchAuditLogsPage({ filters, beforeId, afterId, limit }),
+      fetchAuditLogCount(filters)
+    ]);
 
     const oldestId = logs.length ? Number(logs[logs.length - 1].id) : null;
     const hasMore = beforeId != null ? logs.length === limit : true;
@@ -955,7 +970,8 @@ router.get("/audit-logs/data", async (req, res, next) => {
     return res.json({
       logs,
       hasMore,
-      oldestId
+      oldestId,
+      totalCount
     });
   } catch (err) {
     console.error("DB error loading audit logs data:", err);

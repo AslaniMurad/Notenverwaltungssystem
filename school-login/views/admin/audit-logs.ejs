@@ -30,7 +30,7 @@
           </div>
           <form class="admin-form" method="GET" action="/admin/audit-logs">
             <input type="text" name="actor" placeholder="Akteur (E-Mail)" value="<%= search.actor || '' %>">
-            <input type="text" name="action" placeholder="Aktion" value="<%= search.action || '' %>">
+            <input type="text" name="action" placeholder="Beschreibung" value="<%= search.action || '' %>">
             <input type="text" name="entity" placeholder="Entitaet (z.B. user, class)" value="<%= search.entity || '' %>">
             <button class="btn btn-secondary" type="submit">Suchen</button>
             <a class="btn" href="/admin/audit-logs">Zuruecksetzen</a>
@@ -40,33 +40,29 @@
         <div class="admin-card">
           <div class="admin-topbar">
             <h3 class="admin-heading-spaced">Letzte Aktionen</h3>
-            <span class="admin-badge"><%= logs.length %> Eintraege</span>
+            <span
+              class="admin-badge"
+              id="audit-log-count"
+              data-total-count="<%= Number(totalCount || 0) %>"
+            ><%= Number(totalCount || 0) %> Eintraege</span>
           </div>
           <table class="admin-table" id="audit-log-table">
             <thead>
               <tr>
                 <th>Zeit</th>
                 <th>Akteur</th>
-                <th>Rolle</th>
                 <th>Beschreibung</th>
-                <th>Entitaet</th>
-                <th>ID</th>
-                <th>Status</th>
               </tr>
             </thead>
             <tbody id="audit-log-table-body">
               <% if (!logs || logs.length === 0) { %>
-                <tr><td colspan="7" class="admin-muted">Keine Audit-Eintraege gefunden.</td></tr>
+                <tr><td colspan="3" class="admin-muted">Keine Audit-Eintraege gefunden.</td></tr>
               <% } %>
               <% logs.forEach(function(entry){ %>
-                <tr>
+                <tr data-log-id="<%= entry.id %>">
                   <td><%= entry.created_at || '-' %></td>
                   <td><%= entry.actor_email || '-' %></td>
-                  <td><%= entry.actor_role || '-' %></td>
                   <td><%= entry.action || '-' %></td>
-                  <td><%= entry.entity_type || '-' %></td>
-                  <td><%= entry.entity_id || '-' %></td>
-                  <td><%= entry.status_code || '-' %></td>
                 </tr>
               <% }) %>
             </tbody>

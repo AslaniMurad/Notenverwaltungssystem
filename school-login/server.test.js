@@ -104,6 +104,34 @@ async function loginAndChangePassword(email, password, newPassword) {
   };
 }
 
+async function fetchCsrfToken(path, cookies) {
+  const page = await fetchWithCookies(path, {}, cookies);
+  assert.strictEqual(page.response.status, 200);
+  const csrfToken = extractCsrfToken(page.body);
+  assert.ok(csrfToken, `CSRF token missing for ${path}`);
+  return csrfToken;
+}
+
+async function loginAdmin() {
+  let loginResult = await loginAndChangePassword(
+    process.env.ADMIN_EMAIL,
+    "NewPass12345",
+    "NewPass12345"
+  );
+
+  if (loginResult.redirect === "/admin") {
+    return loginResult;
+  }
+
+  loginResult = await loginAndChangePassword(
+    process.env.ADMIN_EMAIL,
+    process.env.ADMIN_PASS,
+    "NewPass12345"
+  );
+  assert.strictEqual(loginResult.redirect, "/admin");
+  return loginResult;
+}
+
 test.before(async () => {
   await startServer();
 });
@@ -157,4 +185,99 @@ test("student routes redirect when unauthenticated", async () => {
   const res = await fetchWithCookies("/student/grades", { redirect: "manual" });
   assert.strictEqual(res.response.status, 302);
   assert.strictEqual(res.response.headers.get("location"), "/login");
+});
+
+test("audit logs keep appended changes and return live updates in descending order", async () => {
+  const loginResult = await loginAdmin();
+
+  const firstToken = await fetchCsrfToken("/admin/classes/1/edit", loginResult.cookies);
+  const firstUpdate = new URLSearchParams({
+    _csrf: firstToken,
+    name: "3AHWII",
+    subject: "Informatik Basis",
+    teacher_id: "2"
+  });
+
+  const firstUpdateResponse = await fetchWithCookies(
+    "/admin/classes/1",
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/x-www-form-urlencoded" },
+      body: firstUpdate.toString(),
+      redirect: "manual"
+    },
+    loginResult.cookies
+  );
+
+  assert.strictEqual(firstUpdateResponse.response.status, 302);
+
+  const baselineResponse = await fetchWithCookies(
+    "/admin/audit-logs/data",
+    { headers: { Accept: "application/json" } },
+    loginResult.cookies
+  );
+  assert.strictEqual(baselineResponse.response.status, 200);
+
+  const baselineData = JSON.parse(baselineResponse.body);
+  assert.ok(Array.isArray(baselineData.logs));
+  assert.ok(baselineData.logs.length >= 1);
+  const newestId = Number(baselineData.logs[0].id);
+  assert.ok(Number.isFinite(newestId));
+
+  const secondToken = await fetchCsrfToken("/admin/classes/1/edit", loginResult.cookies);
+  const secondUpdate = new URLSearchParams({
+    _csrf: secondToken,
+    name: "3AHWII",
+    subject: "Informatik Aufbau",
+    teacher_id: "2"
+  });
+
+  const secondUpdateResponse = await fetchWithCookies(
+    "/admin/classes/1",
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/x-www-form-urlencoded" },
+      body: secondUpdate.toString(),
+      redirect: "manual"
+    },
+    loginResult.cookies
+  );
+  assert.strictEqual(secondUpdateResponse.response.status, 302);
+
+  const thirdToken = await fetchCsrfToken("/admin/classes/1/edit", loginResult.cookies);
+  const thirdUpdate = new URLSearchParams({
+    _csrf: thirdToken,
+    name: "3AHWII",
+    subject: "Informatik Live",
+    teacher_id: "2"
+  });
+
+  const thirdUpdateResponse = await fetchWithCookies(
+    "/admin/classes/1",
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/x-www-form-urlencoded" },
+      body: thirdUpdate.toString(),
+      redirect: "manual"
+    },
+    loginResult.cookies
+  );
+  assert.strictEqual(thirdUpdateResponse.response.status, 302);
+
+  const liveResponse = await fetchWithCookies(
+    `/admin/audit-logs/data?afterId=${newestId}`,
+    { headers: { Accept: "application/json" } },
+    loginResult.cookies
+  );
+  assert.strictEqual(liveResponse.response.status, 200);
+
+  const liveData = JSON.parse(liveResponse.body);
+  assert.ok(Array.isArray(liveData.logs));
+  assert.ok(liveData.logs.length >= 2, "Expected multiple appended audit entries");
+  assert.ok(Number(liveData.logs[0].id) > Number(liveData.logs[1].id), "Expected newest logs first");
+  assert.ok(Number(liveData.totalCount) >= baselineData.logs.length + liveData.logs.length);
+  assert.ok(
+    liveData.logs.every((entry) => entry.route_path === "/admin/classes/1"),
+    "Expected class update audit entries"
+  );
 });
