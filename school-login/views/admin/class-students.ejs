@@ -1,7 +1,7 @@
 <%
   const search = query || {};
   const page = {
-    title: `Admin — Schüler (${classData.name})`,
+    title: `Admin â€” SchÃ¼ler (${classData.name})`,
     headerTitle: 'Adminbereich',
     styles: ['/css/admin.css'],
     scripts: ['/js/app.js'],
@@ -16,12 +16,12 @@
         <div class="app-main-header">
           <div>
             <p class="app-main-subtitle">Klasse <%= classData.name %></p>
-            <h1>Schüler verwalten</h1>
-            <p class="admin-muted">Fach: <%= classData.subject %> · Lehrer: <%= classData.teacher_email || '–' %></p>
+            <h1>SchÃ¼ler verwalten</h1>
+            <p class="admin-muted">Fach: <%= classData.subject %> Â· Lehrer: <%= classData.teacher_emails || 'â€“' %></p>
           </div>
           <div class="admin-actions-row">
-            <a class="btn btn-primary" href="/admin/classes/<%= classData.id %>/students/add">+ Schüler hinzufügen</a>
-            <a class="btn btn-secondary" href="/admin/classes">Zurück</a>
+            <a class="btn btn-primary" href="/admin/classes/<%= classData.id %>/students/add">+ SchÃ¼ler hinzufÃ¼gen</a>
+            <a class="btn btn-secondary" href="/admin/classes">ZurÃ¼ck</a>
           </div>
         </div>
 
@@ -29,25 +29,25 @@
           <div class="admin-topbar">
             <div>
               <p class="admin-eyebrow">Suche</p>
-              <h3>Schueler filtern</h3>
+              <h3>SchÃ¼ler filtern</h3>
             </div>
           </div>
           <form class="admin-form" method="GET" action="/admin/classes/<%= classData.id %>/students">
             <input type="text" name="name" placeholder="Name" value="<%= search.name || '' %>">
             <input type="text" name="email" placeholder="E-Mail" value="<%= search.email || '' %>">
             <button class="btn btn-secondary" type="submit">Suchen</button>
-            <a class="btn" href="/admin/classes/<%= classData.id %>/students">Zuruecksetzen</a>
+            <a class="btn" href="/admin/classes/<%= classData.id %>/students">ZurÃ¼cksetzen</a>
           </form>
         </div>
 
         <div class="admin-card">
           <div class="admin-topbar">
-            <p class="admin-eyebrow">Schüler</p>
-            <span class="admin-badge"><%= students.length %> Einträge</span>
+            <p class="admin-eyebrow">SchÃ¼ler</p>
+            <span class="admin-badge"><%= students.length %> EintrÃ¤ge</span>
           </div>
           <div class="admin-list">
             <% if (students.length === 0) { %>
-              <div class="admin-empty">Noch keine Schüler vorhanden.</div>
+              <div class="admin-empty">Noch keine SchÃ¼ler vorhanden.</div>
             <% } else { %>
               <% students.forEach(function(student){ %>
                 <div class="admin-student-row">
@@ -55,7 +55,7 @@
                     <strong><%= student.name %></strong>
                     <p class="admin-muted"><%= student.email %></p>
                   </div>
-                  <form method="POST" action="/admin/classes/<%= classData.id %>/students/<%= student.id %>/delete" onsubmit="return confirm('Schüler wirklich aus der Klasse entfernen?');">
+                  <form method="POST" action="/admin/classes/<%= classData.id %>/students/<%= student.id %>/delete" onsubmit="return confirm('SchÃ¼ler wirklich aus der Klasse entfernen?');">
                     <input type="hidden" name="_csrf" value="<%= csrfToken %>">
                     <button class="btn btn-danger" type="submit">Entfernen</button>
                   </form>

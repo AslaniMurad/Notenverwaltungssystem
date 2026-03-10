@@ -42,27 +42,11 @@ function sanitizeFilename(name) {
     .slice(0, 120);
 }
 
-async function loadStudentProfiles(email) {
-  const rows = await allAsync(
-    `SELECT s.*, c.name as class_name, c.subject as class_subject, c.id as class_id, u.email as teacher_email
-     FROM students s
-     JOIN classes c ON c.id = s.class_id
-     LEFT JOIN users u ON u.id = c.teacher_id
-     WHERE s.email = ?
-     ORDER BY c.name ASC, c.id ASC`,
+async function loadStudentProfile(email) {
+  return getAsync(
+    "SELECT s.*, c.name as class_name, c.subject as class_subject, c.id as class_id FROM students s JOIN classes c ON c.id = s.class_id WHERE s.email = ?",
     [email]
   );
-  return rows.map((row) => ({
-    ...row,
-    id: row.id != null ? row.id : row.student_id,
-    name: row.name || row.student_name || "",
-    email: row.email || row.student_email || email,
-    school_year: row.school_year || null,
-    class_id: row.class_id,
-    class_name: row.class_name || "",
-    class_subject: row.class_subject || row.subject || "",
-    teacher_email: row.teacher_email || null
-  }));
 }
 
 async function loadClassInfo(classId) {
@@ -103,13 +87,13 @@ async function loadClassAbsenceMode(classId) {
 
 async function loadStudentGrades(studentId) {
   return allAsync(
-    `SELECT g.id, g.grade, g.note, g.created_at, g.is_absent, gt.id as template_id, gt.name, gt.category, gt.weight, gt.date, gt.description, c.id as class_id, c.name as class_name, c.subject as class_subject, g.attachment_path, g.attachment_original_name, g.attachment_mime, g.attachment_size, g.external_link, 0 as is_special
+    `SELECT g.id, g.grade, g.note, g.created_at, g.is_absent, gt.id as template_id, gt.name, gt.category, gt.weight, gt.date, gt.description, c.subject as class_subject, g.attachment_path, g.attachment_original_name, g.attachment_mime, g.attachment_size, g.external_link, 0 as is_special
      FROM grades g
      JOIN grade_templates gt ON gt.id = g.grade_template_id
      JOIN classes c ON c.id = g.class_id
      WHERE g.student_id = ?
      UNION ALL
-     SELECT sa.id, sa.grade, sa.description as note, sa.created_at, false as is_absent, NULL as template_id, sa.name, sa.type as category, sa.weight, sa.created_at as date, sa.description, c.id as class_id, c.name as class_name, c.subject as class_subject, NULL as attachment_path, NULL as attachment_original_name, NULL as attachment_mime, NULL as attachment_size, NULL as external_link, 1 as is_special
+     SELECT sa.id, sa.grade, sa.description as note, sa.created_at, false as is_absent, NULL as template_id, sa.name, sa.type as category, sa.weight, sa.created_at as date, sa.description, c.subject as class_subject, NULL as attachment_path, NULL as attachment_original_name, NULL as attachment_mime, NULL as attachment_size, NULL as external_link, 1 as is_special
      FROM special_assessments sa
      JOIN classes c ON c.id = sa.class_id
      WHERE sa.student_id = ?
@@ -163,11 +147,8 @@ function mapGradeRow(row, classInfo) {
     value: row.grade == null ? null : Number(row.grade),
     weight: row.weight == null ? 1 : Number(row.weight),
     is_absent: Boolean(row.is_absent),
-    absence_mode: row.absence_mode || null,
-    class_id: row.class_id != null ? Number(row.class_id) : classInfo?.id || null,
-    class_name: row.class_name || classInfo?.name || "",
     subject,
-    teacher: row.teacher_email || classInfo?.teacher_email || null,
+    teacher: classInfo?.teacher_email || null,
     comment,
     graded_at: gradedAt
   };
@@ -176,14 +157,12 @@ function mapGradeRow(row, classInfo) {
 function mapTaskRow(template, gradeRow, classInfo) {
   return {
     id: template.id,
-    class_id: template.class_id != null ? Number(template.class_id) : classInfo?.id || null,
-    class_name: template.class_name || classInfo?.name || "",
     title: template.name,
     category: template.category,
     weight: Number(template.weight || 0),
     due_at: template.date || null,
     description: template.description || "",
-    subject: template.class_subject || classInfo?.subject || "",
+    subject: classInfo?.subject || "",
     graded: Boolean(gradeRow && gradeRow.id),
     grade: gradeRow ? Number(gradeRow.grade) : null,
     graded_at: gradeRow?.created_at || null,
@@ -198,8 +177,6 @@ function mapReturnRow(row, classInfo) {
   return {
     id: row.id,
     template_id: row.template_id,
-    class_id: row.class_id != null ? Number(row.class_id) : classInfo?.id || null,
-    class_name: row.class_name || classInfo?.name || "",
     title: row.name,
     category: row.category,
     weight: Number(row.weight || 0),
@@ -216,12 +193,12 @@ function mapReturnRow(row, classInfo) {
 }
 
 function computeAverages(grades, options = {}) {
+  const absenceMode = normalizeAbsenceMode(options.absenceMode);
   const subjectMap = new Map();
   let weightedSum = 0;
   let weightTotal = 0;
 
   grades.forEach((grade) => {
-    const absenceMode = normalizeAbsenceMode(grade?.absence_mode || options.absenceMode);
     if (grade?.is_absent && absenceMode === ABSENCE_MODE_EXCLUDE) return;
     const value = Number(grade?.value);
     const weight = grade?.weight == null ? 1 : Number(grade.weight);
@@ -247,9 +224,9 @@ function computeAverages(grades, options = {}) {
 }
 
 function computeClassAverages(rows, options = {}) {
+  const absenceMode = normalizeAbsenceMode(options.absenceMode);
   const bucket = new Map();
   rows.forEach((row) => {
-    const absenceMode = normalizeAbsenceMode(row?.absence_mode || options.absenceMode);
     if (row?.is_absent && absenceMode === ABSENCE_MODE_EXCLUDE) return;
     const value = Number(row?.value);
     const weight = row?.weight == null ? 1 : Number(row.weight);
@@ -329,97 +306,11 @@ function buildPdf(lines) {
 }
 
 async function getStudentContext(req) {
-  const students = await loadStudentProfiles(req.session.user.email);
-  if (!students.length) return null;
-
-  const classIds = [...new Set(students.map((student) => String(student.class_id)))];
-  const classInfos = await Promise.all(classIds.map((classId) => loadClassInfo(classId)));
-  const classInfoById = new Map(
-    classInfos.filter(Boolean).map((classInfo) => [String(classInfo.id), classInfo])
-  );
-  const absenceModeEntries = await Promise.all(
-    classIds.map(async (classId) => [String(classId), await loadClassAbsenceMode(classId)])
-  );
-
-  return {
-    students,
-    student: students[0],
-    classInfo: classInfoById.get(String(students[0].class_id)) || null,
-    classAbsenceMode:
-      new Map(absenceModeEntries).get(String(students[0].class_id)) || DEFAULT_ABSENCE_MODE,
-    classInfoById,
-    absenceModeByClassId: new Map(absenceModeEntries)
-  };
-}
-
-async function loadGradeRowsForStudents(context) {
-  const rows = await Promise.all(
-    (context.students || []).map(async (student) => {
-      const gradeRows = await loadStudentGrades(student.id);
-      return gradeRows.map((row) => ({
-        ...row,
-        student_id: student.id,
-        class_id: row.class_id != null ? Number(row.class_id) : Number(student.class_id),
-        class_name: row.class_name || student.class_name || "",
-        class_subject: row.class_subject || student.class_subject || "",
-        teacher_email: row.teacher_email || student.teacher_email || null,
-        absence_mode:
-          context.absenceModeByClassId.get(
-            String(row.class_id != null ? row.class_id : student.class_id)
-          ) || DEFAULT_ABSENCE_MODE
-      }));
-    })
-  );
-  return rows.flat();
-}
-
-async function loadTemplatesForStudents(context) {
-  const templates = await Promise.all(
-    (context.students || []).map(async (student) => {
-      const rows = await loadTemplates(student.class_id);
-      return rows.map((template) => ({
-        ...template,
-        class_id: Number(student.class_id),
-        class_name: student.class_name || "",
-        class_subject: student.class_subject || ""
-      }));
-    })
-  );
-  return templates.flat();
-}
-
-async function loadClassRowsForStudents(context) {
-  const rows = await Promise.all(
-    [...new Set((context.students || []).map((student) => String(student.class_id)))].map(
-      async (classId) => {
-        const classRows = await loadClassGradeRows(classId);
-        const absenceMode =
-          context.absenceModeByClassId.get(String(classId)) || DEFAULT_ABSENCE_MODE;
-        return classRows.map((row) => ({
-          ...row,
-          class_id: Number(classId),
-          absence_mode: absenceMode
-        }));
-      }
-    )
-  );
-  return rows.flat();
-}
-
-async function loadNotificationsForStudents(context) {
-  const rows = await Promise.all(
-    (context.students || []).map(async (student) => {
-      const notifications = await loadNotifications(student.id);
-      return notifications.map((notification) => ({
-        ...notification,
-        student_id: student.id,
-        class_id: student.class_id
-      }));
-    })
-  );
-  return rows
-    .flat()
-    .sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+  const student = await loadStudentProfile(req.session.user.email);
+  if (!student) return null;
+  const classInfo = await loadClassInfo(student.class_id);
+  const classAbsenceMode = await loadClassAbsenceMode(student.class_id);
+  return { student, classInfo, classAbsenceMode };
 }
 
 router.get("/", async (req, res, next) => {
@@ -435,43 +326,34 @@ router.get("/", async (req, res, next) => {
     }
 
     const { student, classInfo, classAbsenceMode } = context;
-    const gradeRows = await loadGradeRowsForStudents(context);
-    const grades = gradeRows.map((row) =>
-      mapGradeRow(row, context.classInfoById.get(String(row.class_id)) || classInfo)
-    );
+    const gradeRows = await loadStudentGrades(student.id);
+    const grades = gradeRows.map((row) => mapGradeRow(row, classInfo));
     const subjectSet = new Set(grades.map((grade) => grade.subject));
-    context.students.forEach((entry) => {
-      if (entry.class_subject) subjectSet.add(entry.class_subject);
-    });
+    if (classInfo?.subject) subjectSet.add(classInfo.subject);
+    if (student.class_subject) subjectSet.add(student.class_subject);
     const subjects = Array.from(subjectSet).filter(Boolean);
     const averages = computeAverages(grades, { absenceMode: classAbsenceMode });
-    const templates = await loadTemplatesForStudents(context);
+    const templates = await loadTemplates(student.class_id);
     const gradeByTemplate = new Map(
       gradeRows
         .filter((row) => row.template_id != null)
-        .map((row) => [`${row.class_id}:${row.template_id}`, row])
+        .map((row) => [String(row.template_id), row])
     );
     const tasks = templates.map((template) =>
-      mapTaskRow(
-        template,
-        gradeByTemplate.get(`${template.class_id}:${template.id}`),
-        context.classInfoById.get(String(template.class_id)) || classInfo
-      )
+      mapTaskRow(template, gradeByTemplate.get(String(template.id)), classInfo)
     );
     const returns = gradeRows
-      .map((row) => mapReturnRow(row, context.classInfoById.get(String(row.class_id)) || classInfo))
+      .map((row) => mapReturnRow(row, classInfo))
       .sort((a, b) => new Date(b.graded_at) - new Date(a.graded_at));
-    const classRows = await loadClassRowsForStudents(context);
+    const classRows = await loadClassGradeRows(student.class_id);
     const classAverages = computeClassAverages(classRows, { absenceMode: classAbsenceMode });
-    const notifications = await loadNotificationsForStudents(context);
+    const notifications = await loadNotifications(student.id);
     const csrfToken = req.csrfToken();
-    const classLabels = [...new Set(context.students.map((entry) => entry.class_name).filter(Boolean))];
-    const subjectLabels = [...new Set(context.students.map((entry) => entry.class_subject).filter(Boolean))];
 
     const studentProfile = {
       name: student.name,
-      class: classLabels.length ? classLabels.join(" / ") : student.class_name || classInfo?.name || "Unbekannt",
-      subject: subjectLabels.join(" / ")
+      class: student.class_name || classInfo?.name || "Unbekannt",
+      subject: student.class_subject || classInfo?.subject || ""
     };
 
     res.render("student-dashboard", {
@@ -507,15 +389,11 @@ router.get("/profile", async (req, res, next) => {
     }
 
     const { student, classInfo } = context;
-    const classLabels = [...new Set(context.students.map((entry) => entry.class_name).filter(Boolean))];
-    const classIds = [...new Set(context.students.map((entry) => Number(entry.class_id)).filter(Number.isFinite))];
-    const subjectLabels = [...new Set(context.students.map((entry) => entry.class_subject).filter(Boolean))];
     res.json({
       name: student.name,
-      class: classLabels.length ? classLabels.join(" / ") : student.class_name || classInfo?.name || "",
-      classId: classIds[0] || student.class_id,
-      classIds,
-      subject: subjectLabels.join(" / "),
+      class: student.class_name || classInfo?.name || "",
+      classId: student.class_id,
+      subject: student.class_subject || classInfo?.subject || "",
       schoolYear: student.school_year || null
     });
   } catch (err) {
@@ -530,11 +408,9 @@ router.get("/grades", async (req, res, next) => {
       return res.status(404).json({ error: "Student nicht gefunden." });
     }
 
-    const { classInfo } = context;
-    const gradeRows = await loadGradeRowsForStudents(context);
-    let grades = gradeRows.map((row) =>
-      mapGradeRow(row, context.classInfoById.get(String(row.class_id)) || classInfo)
-    );
+    const { student, classInfo } = context;
+    const gradeRows = await loadStudentGrades(student.id);
+    let grades = gradeRows.map((row) => mapGradeRow(row, classInfo));
 
     const subject = String(req.query.subject || "").trim();
     const startDate = req.query.startDate ? new Date(req.query.startDate) : null;
@@ -580,20 +456,16 @@ router.get("/tasks", async (req, res, next) => {
       return res.status(404).json({ error: "Student nicht gefunden." });
     }
 
-    const { classInfo } = context;
-    const templates = await loadTemplatesForStudents(context);
-    const gradeRows = await loadGradeRowsForStudents(context);
+    const { student } = context;
+    const templates = await loadTemplates(student.class_id);
+    const gradeRows = await loadStudentGrades(student.id);
     const gradeByTemplate = new Map(
       gradeRows
         .filter((row) => row.template_id != null)
-        .map((row) => [`${row.class_id}:${row.template_id}`, row])
+        .map((row) => [String(row.template_id), row])
     );
     const tasks = templates.map((template) =>
-      mapTaskRow(
-        template,
-        gradeByTemplate.get(`${template.class_id}:${template.id}`),
-        context.classInfoById.get(String(template.class_id)) || classInfo
-      )
+      mapTaskRow(template, gradeByTemplate.get(String(template.id)), context.classInfo)
     );
     res.json({ tasks });
   } catch (err) {
@@ -608,9 +480,9 @@ router.get("/returns", async (req, res, next) => {
       return res.status(404).json({ error: "Student nicht gefunden." });
     }
 
-    const gradeRows = await loadGradeRowsForStudents(context);
+    const gradeRows = await loadStudentGrades(context.student.id);
     const returns = gradeRows
-      .map((row) => mapReturnRow(row, context.classInfoById.get(String(row.class_id)) || context.classInfo))
+      .map((row) => mapReturnRow(row, context.classInfo))
       .sort((a, b) => new Date(b.graded_at) - new Date(a.graded_at));
     res.json({ returns });
   } catch (err) {
@@ -630,14 +502,10 @@ router.get("/returns/:gradeId/attachment", async (req, res, next) => {
       return res.status(400).send("Ungültige ID.");
     }
 
-    let row = null;
-    for (const student of context.students) {
-      row = await getAsync(
-        "SELECT attachment_path, attachment_original_name, attachment_mime FROM grades WHERE id = ? AND student_id = ?",
-        [gradeId, student.id]
-      );
-      if (row) break;
-    }
+    const row = await getAsync(
+      "SELECT attachment_path, attachment_original_name, attachment_mime FROM grades WHERE id = ? AND student_id = ?",
+      [gradeId, context.student.id]
+    );
     if (!row || !row.attachment_path) {
       return res.status(404).send("Datei nicht gefunden.");
     }
@@ -670,7 +538,7 @@ router.get("/class-averages", async (req, res, next) => {
       return res.status(404).json({ error: "Student nicht gefunden." });
     }
 
-    const classRows = await loadClassRowsForStudents(context);
+    const classRows = await loadClassGradeRows(context.student.class_id);
     res.json({ subjects: computeClassAverages(classRows, { absenceMode: context.classAbsenceMode }) });
   } catch (err) {
     next(err);
@@ -684,7 +552,7 @@ router.get("/notifications", async (req, res, next) => {
       return res.status(404).json({ error: "Student nicht gefunden." });
     }
 
-    const notifications = await loadNotificationsForStudents(context);
+    const notifications = await loadNotifications(context.student.id);
     res.json({ notifications });
   } catch (err) {
     next(err);
@@ -703,15 +571,9 @@ router.post("/notifications/:id/read", async (req, res, next) => {
       return res.status(400).json({ error: "Ungültige ID." });
     }
 
-    const notifications = await loadNotificationsForStudents(context);
-    const notification = notifications.find((entry) => Number(entry.id) === id);
-    if (!notification) {
-      return res.status(404).json({ error: "Benachrichtigung nicht gefunden." });
-    }
-
     await runAsync(
       "UPDATE grade_notifications SET read_at = current_timestamp WHERE id = ? AND student_id = ?",
-      [id, notification.student_id]
+      [id, context.student.id]
     );
     res.json({ ok: true });
   } catch (err) {
@@ -727,10 +589,8 @@ router.get("/grades.csv", async (req, res, next) => {
     }
 
     const { student, classInfo } = context;
-    const gradeRows = await loadGradeRowsForStudents(context);
-    const grades = gradeRows.map((row) =>
-      mapGradeRow(row, context.classInfoById.get(String(row.class_id)) || classInfo)
-    );
+    const gradeRows = await loadStudentGrades(student.id);
+    const grades = gradeRows.map((row) => mapGradeRow(row, classInfo));
 
     const header = ["Fach", "Datum", "Note", "Gewichtung", "Lehrkraft", "Kommentar"];
     const lines = [header.map(escapeCsv).join(",")];
@@ -765,18 +625,14 @@ router.get("/grades.pdf", async (req, res, next) => {
     }
 
     const { student, classInfo } = context;
-    const gradeRows = await loadGradeRowsForStudents(context);
-    const grades = gradeRows.map((row) =>
-      mapGradeRow(row, context.classInfoById.get(String(row.class_id)) || classInfo)
-    );
-    const classLabels = [...new Set(context.students.map((entry) => entry.class_name).filter(Boolean))];
-    const subjectLabels = [...new Set(context.students.map((entry) => entry.class_subject).filter(Boolean))];
+    const gradeRows = await loadStudentGrades(student.id);
+    const grades = gradeRows.map((row) => mapGradeRow(row, classInfo));
 
     const lines = [
       "Notenuebersicht",
       `Schueler: ${student.name}`,
-      `Klasse: ${classLabels.join(" / ")}`,
-      `Fach: ${subjectLabels.join(" / ")}`,
+      `Klasse: ${student.class_name || classInfo?.name || ""}`,
+      `Fach: ${student.class_subject || classInfo?.subject || ""}`,
       "",
       "Fach | Datum | Note | Gewicht | Kommentar"
     ];

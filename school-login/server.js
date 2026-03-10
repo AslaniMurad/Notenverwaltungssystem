@@ -12,6 +12,9 @@ const { buildSessionStore } = require("./sessionStore");
 const { getPasswordValidationError } = require("./utils/password");
 
 const adminRouter = require("./routes/admin");
+const assignmentRouter = require("./routes/assignmentRoutes");
+const archiveRouter = require("./routes/archiveRoutes");
+const rolloverRouter = require("./routes/rolloverRoutes");
 const studentRouter = require("./routes/student");
 const teacherRouter = require("./routes/teacher");
 
@@ -162,7 +165,7 @@ app.use((req, res, next) => {
     const allowed = multipartAllowList.some((entry) => entry.test(req.path));
     if (!allowed) {
       return res.status(415).render("error", {
-        message: "Multipart ist fuer diese Route nicht erlaubt.",
+        message: "Multipart ist für diese Route nicht erlaubt.",
         status: 415,
         backUrl: "/"
       });
@@ -188,7 +191,7 @@ app.use((req, res, next) => {
 function getRedirectForRole(role) {
   const redirectMap = {
     admin: "/admin",
-    teacher: "/teacher/classes",
+    teacher: "/teacher",
     student: "/student"
   };
   return redirectMap[role] || "/";
@@ -260,7 +263,7 @@ app.post("/login", (req, res, next) => {
     return renderLogin(res, req, {
       status: 429,
       errorType: "invalid",
-      errorMessage: "Zu viele Versuche. Bitte spaeter erneut versuchen.",
+      errorMessage: "Zu viele Versuche. Bitte später erneut versuchen.",
       email
     });
   }
@@ -304,27 +307,47 @@ app.post("/login", (req, res, next) => {
         });
       }
 
-      req.session.regenerate((regenErr) => {
-        if (regenErr) return next(regenErr);
+      const completeLogin = () => {
+        req.session.regenerate((regenErr) => {
+          if (regenErr) return next(regenErr);
 
-        req.session.user = {
-          id: user.id,
-          email: user.email,
-          role: user.role,
-          status: user.status,
-          must_change_password: Boolean(user.must_change_password)
-        };
+          req.session.user = {
+            id: user.id,
+            email: user.email,
+            role: user.role,
+            status: user.status,
+            must_change_password: Boolean(user.must_change_password)
+          };
 
-        resetLoginAttempts(loginKey);
-        db.run("UPDATE users SET last_login = current_timestamp WHERE id = ?", [user.id], () => {});
-        const redirectTarget = user.must_change_password
-          ? "/force-password-change"
-          : getRedirectForRole(user.role);
-        req.session.save((saveErr) => {
-          if (saveErr) return next(saveErr);
-          res.redirect(redirectTarget);
+          resetLoginAttempts(loginKey);
+          db.run("UPDATE users SET last_login = current_timestamp WHERE id = ?", [user.id], () => {});
+          const redirectTarget = user.must_change_password
+            ? "/force-password-change"
+            : getRedirectForRole(user.role);
+          req.session.save((saveErr) => {
+            if (saveErr) return next(saveErr);
+            res.redirect(redirectTarget);
+          });
         });
-      });
+      };
+
+      if (user.role === "teacher") {
+        return db.get(
+          "SELECT COUNT(*) AS count FROM class_subject_teacher WHERE teacher_id = ?",
+          [user.id],
+          (assignmentErr, assignmentRow) => {
+            if (assignmentErr) {
+              console.error("Assignment count check failed:", assignmentErr);
+              console.log("Assignments found: 0");
+            } else {
+              console.log(`Assignments found: ${Number(assignmentRow?.count || 0)}`);
+            }
+            completeLogin();
+          }
+        );
+      }
+
+      completeLogin();
     }
   );
 });
@@ -336,8 +359,11 @@ app.post("/logout", (req, res) => {
 
 // --- Router Mounts ---
 app.use("/admin", adminRouter);
+app.use("/admin", assignmentRouter);
+app.use("/admin", rolloverRouter);
 app.use("/teacher", teacherRouter);
 app.use("/student", studentRouter);
+app.use("/", archiveRouter);
 
 app.use((req, res) => {
   res.status(404).render("error", {
@@ -360,7 +386,7 @@ app.use((err, req, res, next) => {
   if (isDbConnectionError(err)) {
     console.error("Database connection error:", err);
     return res.status(503).render("error", {
-      message: "Datenbank nicht erreichbar. Bitte spaeter erneut versuchen.",
+      message: "Datenbank nicht erreichbar. Bitte später erneut versuchen.",
       status: 503,
       backUrl: req.get("referer") || "/login"
     });

@@ -1,7 +1,9 @@
-﻿const express = require("express");
+const express = require("express");
 const router = express.Router();
 const { db, hashPassword } = require("../db");
+const schoolYearModel = require("../models/schoolYearModel");
 const { requireAuth, requireRole } = require("../middleware/auth");
+const { createAuditLogMiddleware } = require("../middleware/audit");
 const { getPasswordValidationError } = require("../utils/password");
 const { deriveNameFromEmail } = require("../utils/studentName");
 
@@ -31,20 +33,109 @@ const getAsync = (sql, params = []) =>
     });
   });
 
+function parseAuditFilters(req) {
+  const actor = String(req.query.actor || "").trim();
+  const action = String(req.query.action || "").trim();
+  const entity = String(req.query.entity || "").trim();
+  return { actor, action, entity };
+}
+
+function buildAuditWhereClause(filters = {}) {
+  const where = [];
+  const params = [];
+
+  if (filters.actor) {
+    where.push("LOWER(actor_email) LIKE LOWER(?)");
+    params.push(`%${filters.actor}%`);
+  }
+  if (filters.action) {
+    where.push("LOWER(action) LIKE LOWER(?)");
+    params.push(`%${filters.action}%`);
+  }
+  if (filters.entity) {
+    where.push("LOWER(entity_type) = LOWER(?)");
+    params.push(filters.entity);
+  }
+
+  return {
+    whereClause: where.length ? `WHERE ${where.join(" AND ")}` : "",
+    params
+  };
+}
+
+async function fetchAuditLogCount(filters) {
+  const { whereClause, params } = buildAuditWhereClause(filters);
+  const row = await getAsync(
+    `SELECT COUNT(*) AS count
+     FROM audit_logs
+     ${whereClause}`,
+    params
+  );
+  return Number(row?.count || 0);
+}
+
+async function fetchAuditLogsPage({ filters, beforeId = null, afterId = null, limit = 100 }) {
+  const { whereClause, params } = buildAuditWhereClause(filters);
+  const clauses = whereClause ? [whereClause.slice(6)] : [];
+  const queryParams = [...params];
+
+  if (beforeId != null) {
+    clauses.push("id < ?");
+    queryParams.push(Number(beforeId));
+  }
+  if (afterId != null) {
+    clauses.push("id > ?");
+    queryParams.push(Number(afterId));
+  }
+
+  const combinedWhere = clauses.length ? `WHERE ${clauses.join(" AND ")}` : "";
+  const rows = await allAsync(
+    `SELECT id, actor_email, actor_role, action, entity_type, entity_id, http_method, route_path, status_code, created_at
+     FROM audit_logs
+     ${combinedWhere}
+     ORDER BY id DESC
+     LIMIT ?`,
+    [...queryParams, Number(limit)]
+  );
+
+  return rows;
+}
+
+async function getActiveSchoolYearOrThrow() {
+  const activeSchoolYear = await schoolYearModel.getActiveSchoolYear();
+  if (!activeSchoolYear) {
+    throw new Error("Kein aktives Schuljahr vorhanden.");
+  }
+  return activeSchoolYear;
+}
+
+async function getActiveClassById(classId, columns = "id, name") {
+  const activeSchoolYear = await getActiveSchoolYearOrThrow();
+  return getAsync(
+    `SELECT ${columns}
+     FROM classes
+     WHERE id = ? AND school_year_id = ?`,
+    [classId, activeSchoolYear.id]
+  );
+}
+
 router.use(requireAuth, requireRole("admin"));
+router.use(createAuditLogMiddleware());
 
 router.get("/", async (req, res, next) => {
   try {
-    const [userCount, classCount, studentCount] = await Promise.all([
+    const [userCount, classCount, studentCount, activeSchoolYear] = await Promise.all([
       getAsync("SELECT COUNT(*) AS count FROM users"),
       getAsync("SELECT COUNT(*) AS count FROM classes"),
-      getAsync("SELECT COUNT(*) AS count FROM students")
+      getAsync("SELECT COUNT(*) AS count FROM students"),
+      schoolYearModel.getActiveSchoolYear()
     ]);
 
-    res.render("admin/home", {
+    res.render("admin/home-school-year", {
       csrfToken: req.csrfToken(),
       currentUser: req.session.user,
       activePath: req.originalUrl,
+      activeSchoolYear,
       stats: {
         users: userCount?.count || 0,
         classes: classCount?.count || 0,
@@ -126,7 +217,7 @@ router.post("/users", async (req, res, next) => {
   }
   if (role === "teacher" && wantsInitial) {
     return res.status(400).render("error", {
-      message: "FÃ¼r Lehrer darf kein Initial-Passwort vergeben werden.",
+      message: "Für Lehrer darf kein Initial-Passwort vergeben werden.",
       status: 400,
       backUrl: "/admin/users/new",
       csrfToken: req.csrfToken()
@@ -207,7 +298,7 @@ router.post("/users", async (req, res, next) => {
     console.error("DB error inserting user:", err);
     if (String(err).includes("UNIQUE")) {
       return res.status(409).render("error", {
-        message: "Eâ€‘Mail existiert bereits.",
+        message: "E-Mail existiert bereits.",
         status: 409,
         backUrl: "/admin/users/new",
         csrfToken: req.csrfToken()
@@ -223,7 +314,7 @@ router.post("/users/bulk", async (req, res, next) => {
 
   if (!bulkRole) {
     return res.status(400).render("error", {
-      message: "Bitte wÃ¤hle eine Rolle fÃ¼r neue Nutzer.",
+      message: "Bitte wähle eine Rolle für neue Nutzer.",
       status: 400,
       backUrl: "/admin/users/new",
       csrfToken: req.csrfToken()
@@ -231,7 +322,7 @@ router.post("/users/bulk", async (req, res, next) => {
   }
   if (wantsInitial && bulkRole === "teacher") {
     return res.status(400).render("error", {
-      message: "Lehrer dÃ¼rfen kein Initial-Passwort erhalten.",
+      message: "Lehrer dürfen kein Initial-Passwort erhalten.",
       status: 400,
       backUrl: "/admin/users/new",
       csrfToken: req.csrfToken()
@@ -334,21 +425,32 @@ router.get("/users/:id", async (req, res, next) => {
     }
 
     let classes = [];
+    const activeSchoolYear = await schoolYearModel.getActiveSchoolYear();
     if (user.role === "teacher") {
       classes = await allAsync(
-        "SELECT id, name, subject FROM classes WHERE teacher_id = ? ORDER BY created_at DESC",
-        [user.id]
+        `SELECT cst.id AS assignment_id, c.id, c.name, s.name AS subject
+         FROM class_subject_teacher cst
+         JOIN classes c ON c.id = cst.class_id
+         JOIN subjects s ON s.id = cst.subject_id
+         WHERE cst.teacher_id = ? AND cst.school_year_id = ?
+         ORDER BY c.created_at DESC`,
+        [user.id, activeSchoolYear?.id || 0]
       );
     } else if (user.role === "student") {
       classes = await allAsync(
         `SELECT s.id AS student_id, s.name AS student_name, s.email AS student_email, s.school_year,
-                c.id AS class_id, c.name AS class_name, c.subject, u.email AS teacher_email
+                c.id AS class_id, c.name AS class_name, c.subject,
+                COALESCE((
+                  SELECT STRING_AGG(u2.email, ', ' ORDER BY u2.email)
+                  FROM class_subject_teacher cst2
+                  JOIN users u2 ON u2.id = cst2.teacher_id
+                  WHERE cst2.class_id = c.id AND cst2.subject_id = c.subject_id
+                ), '') AS teacher_emails
          FROM students s
          JOIN classes c ON c.id = s.class_id
-         LEFT JOIN users u ON u.id = c.teacher_id
-         WHERE s.email = ?
+         WHERE s.email = ? AND c.school_year_id = ?
          ORDER BY c.name`,
-        [user.email]
+        [user.email, activeSchoolYear?.id || 0]
       );
     }
 
@@ -411,7 +513,7 @@ router.post("/users/:id", async (req, res, next) => {
     console.error("DB error updating user:", err);
     if (String(err).includes("UNIQUE")) {
       return res.status(409).render("error", {
-        message: "Eâ€‘Mail existiert bereits.",
+        message: "E-Mail existiert bereits.",
         status: 409,
         backUrl: `/admin/users/${id}/edit`,
         csrfToken: req.csrfToken()
@@ -461,19 +563,37 @@ router.post("/users/:id/delete", async (req, res, next) => {
 
 router.get("/classes", async (req, res, next) => {
   const q = req.query.q;
-  const params = [];
-  let whereClause = "";
+  const activeSchoolYear = await schoolYearModel.getActiveSchoolYear().catch(() => null);
+  const params = [activeSchoolYear?.id || 0];
+  let whereClause = "WHERE c.school_year_id = ?";
   if (q) {
-    whereClause = "WHERE c.name LIKE ? OR c.subject LIKE ? OR u.email LIKE ?";
+    whereClause += ` AND (
+      c.name LIKE ? OR c.subject LIKE ? OR EXISTS (
+        SELECT 1
+        FROM class_subject_teacher cst_s
+        JOIN users u_s ON u_s.id = cst_s.teacher_id
+        WHERE cst_s.class_id = c.id AND cst_s.subject_id = c.subject_id AND u_s.email LIKE ?
+      )
+    )`;
     const like = `%${q}%`;
     params.push(like, like, like);
   }
 
   try {
     const classes = await allAsync(
-      `SELECT c.id, c.name, c.subject, c.created_at, u.email AS teacher_email, u.id AS teacher_id
+      `SELECT c.id, c.name, c.subject, c.created_at,
+              (
+                SELECT STRING_AGG(u2.email, ', ' ORDER BY u2.email)
+                FROM class_subject_teacher cst2
+                JOIN users u2 ON u2.id = cst2.teacher_id
+                WHERE cst2.class_id = c.id AND cst2.subject_id = c.subject_id
+              ) AS teacher_emails,
+              (
+                SELECT COUNT(*)
+                FROM class_subject_teacher cst3
+                WHERE cst3.class_id = c.id AND cst3.subject_id = c.subject_id
+              ) AS teacher_count
        FROM classes c
-       LEFT JOIN users u ON c.teacher_id = u.id
        ${whereClause}
        ORDER BY c.created_at DESC`,
       params
@@ -492,34 +612,42 @@ router.get("/classes", async (req, res, next) => {
   }
 });
 
-router.get("/classes/new", async (req, res, next) => {
-  try {
-    const teachers = await allAsync(
-      "SELECT id, email FROM users WHERE role = 'teacher' AND status = 'active' ORDER BY email ASC"
-    );
-    res.render("admin/create-class", {
-      teachers,
-      csrfToken: req.csrfToken(),
-      currentUser: req.session.user,
-      activePath: req.originalUrl
-    });
-  } catch (err) {
-    next(err);
-  }
+router.get("/classes/new", async (req, res) => {
+  res.render("admin/create-class", {
+    csrfToken: req.csrfToken(),
+    currentUser: req.session.user,
+    activePath: req.originalUrl
+  });
 });
 
 router.post("/classes", async (req, res, next) => {
-  const { name, subject, teacher_id } = req.body || {};
-  if (!name || !subject || !teacher_id) {
+  const { name, subject } = req.body || {};
+  if (!name || !subject) {
     return res.status(400).render("error", {
-      message: "Bitte alle Pflichtfelder ausfÃ¼llen.",
+      message: "Bitte alle Pflichtfelder ausfüllen.",
       status: 400,
       backUrl: "/admin/classes/new",
       csrfToken: req.csrfToken()
     });
   }
   try {
-    await runAsync("INSERT INTO classes (name, subject, teacher_id) VALUES (?,?,?)", [name, subject, teacher_id]);
+    const activeSchoolYear = await getActiveSchoolYearOrThrow();
+    const subjectId = await ensureSubjectIdByName(subject);
+    if (!subjectId) {
+      return res.status(400).render("error", {
+        message: "Fach konnte nicht verarbeitet werden.",
+        status: 400,
+        backUrl: "/admin/classes/new",
+        csrfToken: req.csrfToken()
+      });
+    }
+
+    await runAsync("INSERT INTO classes (name, subject, subject_id, school_year_id) VALUES (?,?,?,?)", [
+      name,
+      subject,
+      subjectId,
+      activeSchoolYear.id
+    ]);
     res.redirect("/admin/classes");
   } catch (err) {
     console.error("DB error creating class:", err);
@@ -530,18 +658,7 @@ router.post("/classes", async (req, res, next) => {
 router.get("/classes/:id/edit", async (req, res, next) => {
   const classId = req.params.id;
   try {
-    const [classData, teachers] = await Promise.all([
-      getAsync(
-        `SELECT c.id, c.name, c.subject, c.teacher_id, u.email AS teacher_email
-         FROM classes c
-         LEFT JOIN users u ON c.teacher_id = u.id
-         WHERE c.id = ?`,
-        [classId]
-      ),
-      allAsync(
-        "SELECT id, email FROM users WHERE role = 'teacher' AND status = 'active' ORDER BY email ASC"
-      )
-    ]);
+    const classData = await getActiveClassById(classId, "id, name, subject, subject_id");
 
     if (!classData) {
       return res.status(404).render("error", {
@@ -554,7 +671,6 @@ router.get("/classes/:id/edit", async (req, res, next) => {
 
     res.render("admin/edit-class", {
       classData,
-      teachers,
       csrfToken: req.csrfToken(),
       currentUser: req.session.user,
       activePath: req.originalUrl
@@ -567,10 +683,10 @@ router.get("/classes/:id/edit", async (req, res, next) => {
 
 router.post("/classes/:id", async (req, res, next) => {
   const classId = req.params.id;
-  const { name, subject, teacher_id } = req.body || {};
-  if (!name || !subject || !teacher_id) {
+  const { name, subject } = req.body || {};
+  if (!name || !subject) {
     return res.status(400).render("error", {
-      message: "Bitte alle Pflichtfelder ausfÃ¼llen.",
+      message: "Bitte alle Pflichtfelder ausfüllen.",
       status: 400,
       backUrl: `/admin/classes/${classId}/edit`,
       csrfToken: req.csrfToken()
@@ -578,7 +694,32 @@ router.post("/classes/:id", async (req, res, next) => {
   }
 
   try {
-    await runAsync("UPDATE classes SET name = ?, subject = ?, teacher_id = ? WHERE id = ?", [name, subject, teacher_id, classId]);
+    const classData = await getActiveClassById(classId, "id");
+    if (!classData) {
+      return res.status(404).render("error", {
+        message: "Klasse nicht gefunden.",
+        status: 404,
+        backUrl: "/admin/classes",
+        csrfToken: req.csrfToken()
+      });
+    }
+
+    const subjectId = await ensureSubjectIdByName(subject);
+    if (!subjectId) {
+      return res.status(400).render("error", {
+        message: "Fach konnte nicht verarbeitet werden.",
+        status: 400,
+        backUrl: `/admin/classes/${classId}/edit`,
+        csrfToken: req.csrfToken()
+      });
+    }
+
+    await runAsync("UPDATE classes SET name = ?, subject = ?, subject_id = ? WHERE id = ?", [
+      name,
+      subject,
+      subjectId,
+      classId
+    ]);
     res.redirect("/admin/classes");
   } catch (err) {
     console.error("DB error updating class:", err);
@@ -589,6 +730,15 @@ router.post("/classes/:id", async (req, res, next) => {
 router.post("/classes/:id/delete", async (req, res, next) => {
   const classId = req.params.id;
   try {
+    const classData = await getActiveClassById(classId, "id");
+    if (!classData) {
+      return res.status(404).render("error", {
+        message: "Klasse nicht gefunden.",
+        status: 404,
+        backUrl: "/admin/classes",
+        csrfToken: req.csrfToken()
+      });
+    }
     await runAsync("DELETE FROM students WHERE class_id = ?", [classId]);
     await runAsync("DELETE FROM classes WHERE id = ?", [classId]);
     res.redirect("/admin/classes");
@@ -604,12 +754,18 @@ router.get("/classes/:id/students", async (req, res, next) => {
     const nameQuery = String(req.query.name || "").trim();
     const emailQuery = String(req.query.email || "").trim();
 
+    const activeSchoolYear = await getActiveSchoolYearOrThrow();
     const classData = await getAsync(
-      `SELECT c.id, c.name, c.subject, u.email AS teacher_email
+      `SELECT c.id, c.name, c.subject,
+              COALESCE((
+                SELECT STRING_AGG(u.email, ', ' ORDER BY u.email)
+                FROM class_subject_teacher cst
+                JOIN users u ON u.id = cst.teacher_id
+                WHERE cst.class_id = c.id AND cst.subject_id = c.subject_id AND cst.school_year_id = c.school_year_id
+              ), '') AS teacher_emails
        FROM classes c
-       LEFT JOIN users u ON c.teacher_id = u.id
-       WHERE c.id = ?`,
-      [classId]
+       WHERE c.id = ? AND c.school_year_id = ?`,
+      [classId, activeSchoolYear.id]
     );
 
     if (!classData) {
@@ -657,7 +813,7 @@ router.get("/classes/:id/students", async (req, res, next) => {
 router.post("/classes/:classId/students/:studentId/delete", async (req, res, next) => {
   const { classId, studentId } = req.params;
   try {
-    const classData = await getAsync("SELECT id, name, subject FROM classes WHERE id = ?", [classId]);
+    const classData = await getActiveClassById(classId, "id, name, subject");
     if (!classData) {
       return res.status(404).render("error", {
         message: "Klasse nicht gefunden.",
@@ -679,7 +835,7 @@ router.post("/classes/:classId/students/:studentId/delete", async (req, res, nex
 router.get("/classes/:id/students/add", async (req, res, next) => {
   const classId = req.params.id;
   try {
-    const classData = await getAsync("SELECT id, name FROM classes WHERE id = ?", [classId]);
+    const classData = await getActiveClassById(classId, "id, name");
     if (!classData) {
       return res.status(404).render("error", {
         message: "Klasse nicht gefunden.",
@@ -730,7 +886,10 @@ router.post("/classes/:id/students/add", async (req, res, next) => {
     }
   }
   try {
-    const classData = await getAsync("SELECT id, name FROM classes WHERE id = ?", [classId]);
+    const [classData, activeSchoolYear] = await Promise.all([
+      getActiveClassById(classId, "id, name"),
+      getActiveSchoolYearOrThrow()
+    ]);
     if (!classData) {
       return res.status(404).render("error", {
         message: "Klasse nicht gefunden.",
@@ -764,7 +923,12 @@ router.post("/classes/:id/students/add", async (req, res, next) => {
       });
     }
 
-    await runAsync("INSERT INTO students (name, email, class_id) VALUES (?,?,?)", [resolvedName, resolvedEmail, classId]);
+    await runAsync("INSERT INTO students (name, email, class_id, school_year) VALUES (?,?,?,?)", [
+      resolvedName,
+      resolvedEmail,
+      classId,
+      activeSchoolYear.name
+    ]);
     res.redirect(`/admin/classes/${classId}/students`);
   } catch (err) {
     console.error("DB error adding student:", err);
@@ -781,7 +945,10 @@ router.post("/classes/:id/students/add-bulk", async (req, res, next) => {
     .filter(Boolean);
 
   try {
-    const classData = await getAsync("SELECT id, name FROM classes WHERE id = ?", [classId]);
+    const [classData, activeSchoolYear] = await Promise.all([
+      getActiveClassById(classId, "id, name"),
+      getActiveSchoolYearOrThrow()
+    ]);
     if (!classData) {
       return res.status(404).render("error", {
         message: "Klasse nicht gefunden.",
@@ -828,13 +995,18 @@ router.post("/classes/:id/students/add-bulk", async (req, res, next) => {
       if (duplicate) {
         bulkResult.failed.push({
           email,
-          reason: "Schueler ist bereits in der Klasse."
+          reason: "Schüler ist bereits in der Klasse."
         });
         continue;
       }
 
       try {
-        await runAsync("INSERT INTO students (name, email, class_id) VALUES (?,?,?)", [derivedName, email, classId]);
+        await runAsync("INSERT INTO students (name, email, class_id, school_year) VALUES (?,?,?,?)", [
+          derivedName,
+          email,
+          classId,
+          activeSchoolYear.name
+        ]);
         bulkResult.success.push(email);
       } catch (err) {
         bulkResult.failed.push({ email, reason: String(err) });
@@ -851,6 +1023,60 @@ router.post("/classes/:id/students/add-bulk", async (req, res, next) => {
     });
   } catch (err) {
     console.error("DB error adding students in bulk:", err);
+    next(err);
+  }
+});
+
+router.get("/audit-logs", async (req, res, next) => {
+  try {
+    const filters = parseAuditFilters(req);
+    const [logs, totalCount] = await Promise.all([
+      fetchAuditLogsPage({ filters, limit: 100 }),
+      fetchAuditLogCount(filters)
+    ]);
+
+    res.render("admin/audit-logs", {
+      logs,
+      totalCount,
+      query: filters,
+      csrfToken: req.csrfToken(),
+      currentUser: req.session.user,
+      activePath: req.originalUrl
+    });
+  } catch (err) {
+    console.error("DB error loading audit logs:", err);
+    next(err);
+  }
+});
+
+router.get("/audit-logs/data", async (req, res, next) => {
+  try {
+    const filters = parseAuditFilters(req);
+    const rawBeforeId = req.query.beforeId ? Number(req.query.beforeId) : null;
+    const rawAfterId = req.query.afterId ? Number(req.query.afterId) : null;
+    const beforeId = Number.isFinite(rawBeforeId) ? rawBeforeId : null;
+    const afterId = Number.isFinite(rawAfterId) ? rawAfterId : null;
+    const requestedLimit = Number(req.query.limit);
+    const limit = Number.isFinite(requestedLimit)
+      ? Math.max(1, Math.min(200, requestedLimit))
+      : 100;
+
+    const [logs, totalCount] = await Promise.all([
+      fetchAuditLogsPage({ filters, beforeId, afterId, limit }),
+      fetchAuditLogCount(filters)
+    ]);
+
+    const oldestId = logs.length ? Number(logs[logs.length - 1].id) : null;
+    const hasMore = beforeId != null ? logs.length === limit : true;
+
+    return res.json({
+      logs,
+      hasMore,
+      oldestId,
+      totalCount
+    });
+  } catch (err) {
+    console.error("DB error loading audit logs data:", err);
     next(err);
   }
 });

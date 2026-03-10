@@ -48,12 +48,13 @@
                   <p class="admin-eyebrow">Fach</p>
                   <h4><%= cls.subject %></h4>
                   <p class="admin-muted">Klasse: <%= cls.name %></p>
-                  <p class="admin-muted">Lehrer: <%= cls.teacher_email || '–' %></p>
+                  <p class="admin-muted">Lehrer: <%= cls.teacher_emails || '–' %></p>
+                  <p class="admin-muted">Zuordnungen: <%= cls.teacher_count || 0 %></p>
                 </div>
                 <div class="admin-row wrap">
                   <a class="btn btn-primary" href="/admin/classes/<%= cls.id %>/students">Schüler</a>
                   <a class="btn btn-secondary" href="/admin/classes/<%= cls.id %>/edit">Bearbeiten</a>
-                  <form method="POST" action="/admin/classes/<%= cls.id %>/delete" onsubmit="return confirm('Klasse und Schüler löschen?');">
+                  <form method="POST" action="/admin/classes/<%= cls.id %>/delete" onsubmit="return confirm('Klasse und Schüler l&ouml;schen?');">
                     <input type="hidden" name="_csrf" value="<%= csrfToken %>">
                     <button class="btn btn-danger" type="submit">Löschen</button>
                   </form>

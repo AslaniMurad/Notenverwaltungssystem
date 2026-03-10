@@ -1,4 +1,4 @@
-﻿const express = require("express");
+const express = require("express");
 const router = express.Router();
 const path = require("path");
 const fs = require("fs");
@@ -6,7 +6,9 @@ const crypto = require("crypto");
 const multer = require("multer");
 const csrf = require("csurf");
 const { db } = require("../db");
+const schoolYearModel = require("../models/schoolYearModel");
 const { requireAuth, requireRole } = require("../middleware/auth");
+const { createAuditLogMiddleware } = require("../middleware/audit");
 const { deriveNameFromEmail } = require("../utils/studentName");
 
 const runAsync = (sql, params = []) =>
@@ -34,6 +36,7 @@ const getAsync = (sql, params = []) =>
   });
 
 router.use(requireAuth, requireRole("teacher"));
+router.use(createAuditLogMiddleware());
 
 const csrfProtection = csrf({
   value: (req) =>
@@ -55,7 +58,7 @@ const MAGIC_BYTES = new Map([
 
 fs.mkdirSync(GRADE_ATTACHMENT_DIR, { recursive: true });
 
-const SPECIAL_ASSESSMENT_TYPES = ["PrÃ¤sentation", "WunschprÃ¼fung", "Benutzerdefiniert"];
+const SPECIAL_ASSESSMENT_TYPES = ["Präsentation", "Wunschprüfung", "Benutzerdefiniert"];
 const WEIGHT_MODE_POINTS = "points";
 const SCORING_MODE_GRADE_ONLY = "grade_only";
 const SCORING_MODE_POINTS_ONLY = "points_only";
@@ -120,7 +123,7 @@ const TEMPLATE_CATEGORY_DEFINITIONS = [
     key: "Haus\u00fcbung",
     slug: "hausaufgabe",
     label: "Hausaufgabe",
-    aliases: ["hausaufgabe", "hausuebung", "hausubung", "haus\u00fcbung", "hausÃ¼bung"]
+    aliases: ["hausaufgabe", "hausuebung", "hausubung", "haus\u00fcbung", "hausübung"]
   },
   {
     key: "Mitarbeit",
@@ -554,7 +557,7 @@ function normalizeExternalLink(raw) {
   try {
     url = new URL(trimmed);
   } catch {
-    return { error: "UngÃ¼ltiger Link." };
+    return { error: "Ungültiger Link." };
   }
   if (!["http:", "https:"].includes(url.protocol)) {
     return { error: "Der Link muss mit http:// oder https:// beginnen." };
@@ -630,6 +633,7 @@ async function renderAddGradeForm(req, res, payload) {
   const scoringMode = normalizeScoringMode(activeProfile?.scoring_mode);
   const absenceMode = normalizeAbsenceMode(activeProfile?.absence_mode);
   const thresholds = normalizeThresholds(activeProfile?.thresholds || activeProfile || {});
+  const openMessageCount = classData?.id ? await loadClassOpenMessageCount(classData.id) : 0;
 
   return res.status(status).render("teacher/teacher-add-grade", {
     email: req.session.user.email,
@@ -642,6 +646,7 @@ async function renderAddGradeForm(req, res, payload) {
     scoringModeLabel: getScoringModeLabel(scoringMode),
     absenceMode,
     thresholds,
+    openMessageCount,
     formData: buildDefaultAddGradeFormData(formData),
     csrfToken: req.csrfToken(),
     error,
@@ -703,20 +708,18 @@ function handleUpload(req, res, next) {
       await removeUploadedFile(req.file);
       const classId = req.params.classId;
       const studentId = req.params.studentId;
-      const classData = await loadClassForTeacher(classId, req.session.user.id);
-      if (!classData) {
-        return renderError(res, req, "Klasse nicht gefunden.", 404, "/teacher/classes");
-      }
+      const classData = await requireClassAccessForTeacher(req, res, classId);
+      if (!classData) return;
       const students = await loadStudents(classId);
       const student = students.find((entry) => String(entry.id) === String(studentId));
       if (!student) {
-        return renderError(res, req, "SchÃ¼ler nicht gefunden.", 404, `/teacher/students/${classId}`);
+        return renderError(res, req, "Schüler nicht gefunden.", 404, `/teacher/students/${classId}`);
       }
       const templates = await loadTemplates(classId);
       const gradedTemplateIds = await loadGradedTemplateIdsForStudent(classId, student.id);
       const errorMessage =
         uploadErr.code === "LIMIT_FILE_SIZE"
-          ? `Datei ist zu groÃŸ. Maximal ${MAX_GRADE_FILE_MB} MB erlaubt.`
+          ? `Datei ist zu groß. Maximal ${MAX_GRADE_FILE_MB} MB erlaubt.`
           : uploadErr.code === "UNSUPPORTED_FILE_TYPE"
           ? "Nur PDF-, JPG- oder PNG-Dateien sind erlaubt."
           : uploadErr.code === "INVALID_FILE_SIGNATURE"
@@ -746,11 +749,149 @@ function renderError(res, req, message, status, backUrl) {
   });
 }
 
-async function loadClassForTeacher(classId, teacherId) {
-  return getAsync(
-    "SELECT id, name, subject FROM classes WHERE id = ? AND teacher_id = ?",
-    [classId, teacherId]
+async function ensureSubjectIdByName(subjectName) {
+  const normalized = String(subjectName || "").trim();
+  if (!normalized) return null;
+  const existing = await getAsync("SELECT id FROM subjects WHERE LOWER(name) = LOWER(?)", [normalized]);
+  if (existing) return existing.id;
+  try {
+    const result = await runAsync("INSERT INTO subjects (name) VALUES (?)", [normalized]);
+    return result?.lastID || null;
+  } catch (err) {
+    if (!String(err).includes("UNIQUE")) throw err;
+    const row = await getAsync("SELECT id FROM subjects WHERE LOWER(name) = LOWER(?)", [normalized]);
+    return row?.id || null;
+  }
+}
+
+async function getTeacherAssignments(teacherId) {
+  const activeSchoolYear = await schoolYearModel.getActiveSchoolYear();
+  if (!activeSchoolYear) return [];
+  return allAsync(
+    `SELECT cst.id, cst.class_id, cst.subject_id, c.name AS class_name, c.created_at, s.name AS subject_name
+     FROM class_subject_teacher cst
+     JOIN classes c ON c.id = cst.class_id
+     JOIN subjects s ON s.id = cst.subject_id
+     WHERE cst.teacher_id = ? AND cst.school_year_id = ?
+     ORDER BY c.created_at DESC, c.name ASC, s.name ASC`,
+    [teacherId, activeSchoolYear.id]
   );
+}
+
+async function teacherCanAccessClass(teacherId, classId) {
+  const activeSchoolYear = await schoolYearModel.getActiveSchoolYear();
+  if (!activeSchoolYear) return false;
+  const assignment = await getAsync(
+    `SELECT 1 AS allowed
+     FROM class_subject_teacher
+     WHERE teacher_id = ? AND class_id = ? AND school_year_id = ?
+     LIMIT 1`,
+    [teacherId, classId, activeSchoolYear.id]
+  );
+  return Boolean(assignment);
+}
+
+async function teacherCanAccessClassSubject(teacherId, classId, subjectId) {
+  const activeSchoolYear = await schoolYearModel.getActiveSchoolYear();
+  if (!activeSchoolYear) return false;
+  const assignment = await getAsync(
+    `SELECT 1 AS allowed
+     FROM class_subject_teacher
+     WHERE teacher_id = ? AND class_id = ? AND subject_id = ? AND school_year_id = ?
+     LIMIT 1`,
+    [teacherId, classId, subjectId, activeSchoolYear.id]
+  );
+  return Boolean(assignment);
+}
+
+async function loadClassSubjectsForTeacher(classId, teacherId) {
+  const activeSchoolYear = await schoolYearModel.getActiveSchoolYear();
+  if (!activeSchoolYear) return [];
+  return allAsync(
+    `SELECT cst.subject_id, COALESCE(s.name, c.subject) AS subject_name
+     FROM class_subject_teacher cst
+     JOIN classes c ON c.id = cst.class_id
+     LEFT JOIN subjects s ON s.id = cst.subject_id
+     WHERE cst.teacher_id = ? AND cst.class_id = ? AND cst.school_year_id = ?
+     ORDER BY cst.id DESC, subject_name ASC`,
+    [teacherId, classId, activeSchoolYear.id]
+  );
+}
+
+async function loadClassForTeacher(classId, teacherId, requestedSubjectId = null) {
+  const classRow = await getAsync(
+    "SELECT id, name, subject, subject_id, school_year_id, created_at FROM classes WHERE id = ?",
+    [classId]
+  );
+  if (!classRow) return null;
+
+  const subjectRows = await loadClassSubjectsForTeacher(classId, teacherId);
+  if (!subjectRows.length) return null;
+
+  let selectedSubject = subjectRows[0];
+  if (requestedSubjectId != null) {
+    const matchedSubject = subjectRows.find(
+      (row) => Number(row.subject_id) === Number(requestedSubjectId)
+    );
+    if (!matchedSubject) return null;
+    selectedSubject = matchedSubject;
+  }
+
+  const subjectNames = [...new Set(
+    subjectRows
+      .map((row) => String(row.subject_name || "").trim())
+      .filter(Boolean)
+  )];
+  const subjectLabel = subjectNames.length ? subjectNames.join(", ") : String(classRow.subject || "");
+
+  return {
+    id: classRow.id,
+    name: classRow.name,
+    subject_id: Number(selectedSubject.subject_id),
+    school_year_id: Number(classRow.school_year_id),
+    subject: subjectLabel,
+    selected_subject: selectedSubject.subject_name || classRow.subject || "",
+    subject_names: subjectNames,
+    created_at: classRow.created_at
+  };
+}
+
+async function requireClassAccessForTeacher(req, res, classId, backUrl = "/teacher/classes") {
+  const classExists = await getAsync("SELECT id FROM classes WHERE id = ?", [classId]);
+  if (!classExists) {
+    renderError(res, req, "Klasse nicht gefunden.", 404, backUrl);
+    return null;
+  }
+
+  const subjectIdRaw =
+    req.params?.subjectId ??
+    req.query?.subject_id ??
+    req.body?.subject_id;
+  const hasSubjectConstraint = subjectIdRaw != null && String(subjectIdRaw).trim() !== "";
+  const requestedSubjectId = hasSubjectConstraint ? Number(subjectIdRaw) : null;
+  if (hasSubjectConstraint && !Number.isFinite(requestedSubjectId)) {
+    renderError(res, req, "Ungültiges Fach.", 400, backUrl);
+    return null;
+  }
+
+  const canAccess = hasSubjectConstraint
+    ? await teacherCanAccessClassSubject(req.session.user.id, classId, requestedSubjectId)
+    : await teacherCanAccessClass(req.session.user.id, classId);
+  if (!canAccess) {
+    renderError(res, req, "Keine Berechtigung fuer diese Klasse/Fach-Zuordnung.", 403, backUrl);
+    return null;
+  }
+
+  const classData = await loadClassForTeacher(
+    classId,
+    req.session.user.id,
+    hasSubjectConstraint ? requestedSubjectId : null
+  );
+  if (!classData) {
+    renderError(res, req, "Keine Berechtigung fuer diese Klasse/Fach-Zuordnung.", 403, backUrl);
+    return null;
+  }
+  return classData;
 }
 
 async function loadStudents(classId) {
@@ -963,6 +1104,85 @@ async function loadSpecialAssessments(classId) {
   );
 }
 
+async function loadClassGradeMessages(classId) {
+  return allAsync(
+    `SELECT gm.id, gm.grade_id, gm.student_id, gm.student_message, gm.teacher_reply, gm.created_at, gm.replied_at,
+            s.name AS student_name, s.email AS student_email, gt.name AS test_name, g.grade AS grade_value
+     FROM grade_messages gm
+     JOIN grades g ON g.id = gm.grade_id
+     JOIN students s ON s.id = gm.student_id
+     LEFT JOIN grade_templates gt ON gt.id = g.grade_template_id
+     WHERE g.class_id = ? AND s.class_id = ?
+     ORDER BY gm.created_at ASC`,
+    [classId, classId]
+  );
+}
+
+async function loadStudentGradeMessages(classId, studentId) {
+  return allAsync(
+    `SELECT gm.id, gm.grade_id, gm.student_message, gm.teacher_reply, gm.created_at, gm.replied_at
+     FROM grade_messages gm
+     JOIN grades g ON g.id = gm.grade_id
+     WHERE g.class_id = ? AND g.student_id = ? AND gm.student_id = ?
+     ORDER BY gm.created_at ASC`,
+    [classId, studentId, studentId]
+  );
+}
+
+function groupClassMessageThreads(rows) {
+  const threadMap = new Map();
+  let openMessageCount = 0;
+
+  rows.forEach((row) => {
+    const key = `${row.grade_id}:${row.student_id}`;
+    if (!threadMap.has(key)) {
+      threadMap.set(key, {
+        grade_id: row.grade_id,
+        student_id: row.student_id,
+        student_name: row.student_name,
+        student_email: row.student_email,
+        test_name: row.test_name,
+        grade_value: row.grade_value,
+        latest_at: row.created_at,
+        messages: []
+      });
+    }
+
+    const thread = threadMap.get(key);
+    thread.messages.push({
+      id: row.id,
+      student_message: row.student_message,
+      teacher_reply: row.teacher_reply || null,
+      created_at: row.created_at,
+      replied_at: row.replied_at || null
+    });
+    thread.latest_at = row.created_at;
+    if (!row.teacher_reply) openMessageCount += 1;
+  });
+
+  const messageThreads = Array.from(threadMap.values()).sort(
+    (a, b) => new Date(b.latest_at) - new Date(a.latest_at)
+  );
+
+  return { messageThreads, openMessageCount };
+}
+
+async function loadClassOpenMessageCount(classId) {
+  const messages = await loadClassGradeMessages(classId);
+  const { openMessageCount } = groupClassMessageThreads(messages);
+  return openMessageCount;
+}
+
+async function loadMessageForTeacher(classId, messageId, teacherId) {
+  return getAsync(
+    `SELECT gm.id, gm.student_id
+     FROM grade_messages gm
+     JOIN grades g ON g.id = gm.grade_id
+     JOIN classes c ON c.id = g.class_id
+     WHERE gm.id = ? AND c.id = ? AND c.teacher_id = ?`,
+    [messageId, classId, teacherId]
+  );
+}
 function shouldSkipGradeForAbsence(grade, absenceMode) {
   if (!grade || !grade.is_absent) return false;
   return normalizeAbsenceMode(absenceMode) === ABSENCE_MODE_EXCLUDE;
@@ -1137,6 +1357,27 @@ async function buildSettingsPageData(teacherId, selectedProfileId, formOverride 
   };
 }
 
+router.get("/", async (req, res, next) => {
+  try {
+    const teacherId = req.session.user.id;
+    const activeSchoolYear = await schoolYearModel.getActiveSchoolYear();
+    const latestAssignment = await getAsync(
+      `SELECT cst.class_id, cst.subject_id
+       FROM class_subject_teacher cst
+       WHERE cst.teacher_id = ? AND cst.school_year_id = ?
+       ORDER BY cst.created_at DESC
+       LIMIT 1`,
+      [teacherId, activeSchoolYear?.id || 0]
+    );
+    if (!latestAssignment) {
+      return res.redirect("/teacher/classes?empty=1");
+    }
+    res.redirect(`/teacher/students/${latestAssignment.class_id}`);
+  } catch (err) {
+    next(err);
+  }
+});
+
 router.get("/classes", async (req, res, next) => {
   try {
     const qRaw = String(req.query.q || "").trim();
@@ -1154,10 +1395,29 @@ router.get("/classes", async (req, res, next) => {
       ? String(req.query.sort)
       : "newest";
 
-    const classesAll = await allAsync(
-      "SELECT id, name, subject, created_at FROM classes WHERE teacher_id = ?",
-      [req.session.user.id]
-    );
+    const assignments = await getTeacherAssignments(req.session.user.id);
+    const classMap = new Map();
+    assignments.forEach((entry) => {
+      const classId = Number(entry.class_id);
+      if (!classMap.has(classId)) {
+        classMap.set(classId, {
+          id: classId,
+          name: entry.class_name,
+          subjectSet: new Set(),
+          created_at: entry.created_at
+        });
+      }
+      const classEntry = classMap.get(classId);
+      if (entry.subject_name) {
+        classEntry.subjectSet.add(entry.subject_name);
+      }
+    });
+    const classesAll = [...classMap.values()].map((entry) => ({
+      id: entry.id,
+      name: entry.name,
+      subject: [...entry.subjectSet].sort((a, b) => a.localeCompare(b, "de", { sensitivity: "base" })).join(", "),
+      created_at: entry.created_at
+    }));
     let classes = classesAll.filter((entry) => {
       if (!qFolded) return true;
       const haystack = foldText(`${entry.name || ""} ${entry.subject || ""}`);
@@ -1198,6 +1458,7 @@ router.get("/classes", async (req, res, next) => {
       search: { q, sort },
       setupComplete: Boolean(activeProfile),
       activeProfile,
+      emptyStateMessage: req.query.empty ? "No class assignments yet." : "No class assignments yet.",
       csrfToken: req.csrfToken()
     });
   } catch (err) {
@@ -1216,14 +1477,33 @@ router.post("/create-class", async (req, res, next) => {
   try {
     const { name, subject } = req.body || {};
     if (!name || !subject) {
-      return renderError(res, req, "Bitte alle Pflichtfelder ausfÃ¼llen.", 400, "/teacher/create-class");
+      return renderError(res, req, "Bitte alle Pflichtfelder ausfüllen.", 400, "/teacher/create-class");
     }
 
-    await runAsync("INSERT INTO classes (name, subject, teacher_id) VALUES (?,?,?)", [
+    const subjectId = await ensureSubjectIdByName(subject);
+    if (!subjectId) {
+      return renderError(res, req, "Fach konnte nicht verarbeitet werden.", 400, "/teacher/create-class");
+    }
+
+    const activeSchoolYear = await schoolYearModel.getActiveSchoolYear();
+    if (!activeSchoolYear) {
+      return renderError(res, req, "Kein aktives Schuljahr vorhanden.", 400, "/teacher/create-class");
+    }
+
+    const createdClass = await runAsync("INSERT INTO classes (name, subject, subject_id, school_year_id) VALUES (?,?,?,?)", [
       name,
       subject,
-      req.session.user.id
+      subjectId,
+      activeSchoolYear.id
     ]);
+    if (createdClass?.lastID) {
+      await runAsync("INSERT INTO class_subject_teacher (class_id, subject_id, teacher_id, school_year_id) VALUES (?,?,?,?)", [
+        createdClass.lastID,
+        subjectId,
+        req.session.user.id,
+        activeSchoolYear.id
+      ]);
+    }
     res.redirect("/teacher/classes");
   } catch (err) {
     next(err);
@@ -1233,10 +1513,8 @@ router.post("/create-class", async (req, res, next) => {
 router.post("/delete-class/:id", async (req, res, next) => {
   try {
     const classId = req.params.id;
-    const classData = await loadClassForTeacher(classId, req.session.user.id);
-    if (!classData) {
-      return renderError(res, req, "Klasse nicht gefunden.", 404, "/teacher/classes");
-    }
+    const classData = await requireClassAccessForTeacher(req, res, classId);
+    if (!classData) return;
 
     await runAsync("DELETE FROM students WHERE class_id = ?", [classId]);
     await runAsync("DELETE FROM classes WHERE id = ?", [classId]);
@@ -1623,10 +1901,8 @@ router.post("/settings/delete-profile/:profileId", async (req, res, next) => {
 router.get("/students/:classId", async (req, res, next) => {
   try {
     const classId = req.params.classId;
-    const classData = await loadClassForTeacher(classId, req.session.user.id);
-    if (!classData) {
-      return renderError(res, req, "Klasse nicht gefunden.", 404, "/teacher/classes");
-    }
+    const classData = await requireClassAccessForTeacher(req, res, classId);
+    if (!classData) return;
 
     const qRaw = String(req.query.q || "").trim();
     const q = qRaw.slice(0, 120);
@@ -1657,11 +1933,12 @@ router.get("/students/:classId", async (req, res, next) => {
           return compareText(a.name, b.name);
       }
     });
-
+    const openMessageCount = await loadClassOpenMessageCount(classId);
     res.render("teacher/teacher-students", {
       email: req.session.user.email,
       classData,
       students,
+      openMessageCount,
       totalStudentCount: studentsAll.length,
       search: { q, sort },
       csrfToken: req.csrfToken()
@@ -1671,7 +1948,7 @@ router.get("/students/:classId", async (req, res, next) => {
   }
 });
 
-router.get("/add-student/:classId", async (req, res, next) => {
+router.get("/test-questions/:classId", async (req, res, next) => {
   try {
     const classId = req.params.classId;
     const classData = await loadClassForTeacher(classId, req.session.user.id);
@@ -1679,9 +1956,70 @@ router.get("/add-student/:classId", async (req, res, next) => {
       return renderError(res, req, "Klasse nicht gefunden.", 404, "/teacher/classes");
     }
 
+    const messages = await loadClassGradeMessages(classId);
+    const { messageThreads, openMessageCount } = groupClassMessageThreads(messages);
+    res.render("teacher/teacher-test-questions", {
+      email: req.session.user.email,
+      classData,
+      messageThreads,
+      openMessageCount,
+      csrfToken: req.csrfToken()
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
+router.post("/students/:classId/messages/:messageId/reply", async (req, res, next) => {
+  try {
+    const classId = req.params.classId;
+    const messageId = Number(req.params.messageId);
+    const classData = await loadClassForTeacher(classId, req.session.user.id);
+    if (!classData) {
+      return renderError(res, req, "Klasse nicht gefunden.", 404, "/teacher/classes");
+    }
+    if (!messageId) {
+      return renderError(res, req, "Ungültige Nachrichten-ID.", 400, `/teacher/test-questions/${classId}`);
+    }
+
+    const messageRow = await loadMessageForTeacher(classId, messageId, req.session.user.id);
+    if (!messageRow) {
+      return renderError(res, req, "Nachricht nicht gefunden.", 404, `/teacher/test-questions/${classId}`);
+    }
+
+    const reply = String(req.body?.reply || "").trim();
+    if (!reply) {
+      return renderError(res, req, "Bitte eine Antwort eingeben.", 400, `/teacher/test-questions/${classId}`);
+    }
+    if (reply.length > 1000) {
+      return renderError(res, req, "Antwort darf maximal 1000 Zeichen lang sein.", 400, `/teacher/test-questions/${classId}`);
+    }
+
+    await runAsync(
+      "UPDATE grade_messages SET teacher_reply = ?, replied_at = current_timestamp, teacher_reply_seen_at = NULL WHERE id = ?",
+      [reply, messageId]
+    );
+    await runAsync(
+      "INSERT INTO grade_notifications (student_id, message, type) VALUES (?,?,?)",
+      [messageRow.student_id, "Lehrkraft hat auf deine Rückgabe-Nachricht geantwortet.", "info"]
+    );
+    res.redirect(`/teacher/test-questions/${classId}`);
+  } catch (err) {
+    next(err);
+  }
+});
+
+router.get("/add-student/:classId", async (req, res, next) => {
+  try {
+    const classId = req.params.classId;
+    const classData = await requireClassAccessForTeacher(req, res, classId);
+    if (!classData) return;
+
+    const openMessageCount = await loadClassOpenMessageCount(classId);
     res.render("teacher/teacher-add-student", {
       email: req.session.user.email,
       classData,
+      openMessageCount,
       csrfToken: req.csrfToken(),
       error: null
     });
@@ -1696,10 +2034,8 @@ router.post("/add-student/:classId", async (req, res, next) => {
     const { name, email } = req.body || {};
     const resolvedEmail = String(email || "").trim();
     let resolvedName = String(name || "").trim();
-    const classData = await loadClassForTeacher(classId, req.session.user.id);
-    if (!classData) {
-      return renderError(res, req, "Klasse nicht gefunden.", 404, "/teacher/classes");
-    }
+    const classData = await requireClassAccessForTeacher(req, res, classId);
+    if (!classData) return;
 
     if (!resolvedEmail) {
       return res.status(400).render("teacher/teacher-add-student", {
@@ -1754,10 +2090,8 @@ router.post("/delete-student/:classId/:studentId", async (req, res, next) => {
   try {
     const classId = req.params.classId;
     const studentId = req.params.studentId;
-    const classData = await loadClassForTeacher(classId, req.session.user.id);
-    if (!classData) {
-      return renderError(res, req, "Klasse nicht gefunden.", 404, "/teacher/classes");
-    }
+    const classData = await requireClassAccessForTeacher(req, res, classId);
+    if (!classData) return;
 
     await runAsync("DELETE FROM students WHERE id = ? AND class_id = ?", [studentId, classId]);
     res.redirect(`/teacher/students/${classId}`);
@@ -1769,10 +2103,8 @@ router.post("/delete-student/:classId/:studentId", async (req, res, next) => {
 router.get("/grades/:classId", async (req, res, next) => {
   try {
     const classId = req.params.classId;
-    const classData = await loadClassForTeacher(classId, req.session.user.id);
-    if (!classData) {
-      return renderError(res, req, "Klasse nicht gefunden.", 404, "/teacher/classes");
-    }
+    const classData = await requireClassAccessForTeacher(req, res, classId);
+    if (!classData) return;
 
     const qRaw = String(req.query.q || "").trim();
     const q = qRaw.slice(0, 120);
@@ -1806,6 +2138,7 @@ router.get("/grades/:classId", async (req, res, next) => {
     );
     const absenceMode = normalizeAbsenceMode(activeProfile?.absence_mode);
     const thresholds = normalizeThresholds(activeProfile?.thresholds || activeProfile || {});
+    const openMessageCount = await loadClassOpenMessageCount(classId);
     const possibleCount = templates.length;
     const studentsWithGrades = await Promise.all(
       studentsBase.map(async (student) => {
@@ -1884,6 +2217,7 @@ router.get("/grades/:classId", async (req, res, next) => {
       participationSymbolOptions: PARTICIPATION_SYMBOL_OPTIONS,
       search: { q, status, sort },
       message: req.query.ma_saved ? "Mitarbeit eingetragen." : null,
+      openMessageCount,
       csrfToken: req.csrfToken()
     });
   } catch (err) {
@@ -1894,10 +2228,8 @@ router.get("/grades/:classId", async (req, res, next) => {
 router.post("/grades/:classId/participation", async (req, res, next) => {
   try {
     const classId = req.params.classId;
-    const classData = await loadClassForTeacher(classId, req.session.user.id);
-    if (!classData) {
-      return renderError(res, req, "Klasse nicht gefunden.", 404, "/teacher/classes");
-    }
+    const classData = await requireClassAccessForTeacher(req, res, classId);
+    if (!classData) return;
 
     const activeProfile = await loadActiveTeacherProfile(req.session.user.id);
     if (!activeProfile) {
@@ -1941,15 +2273,13 @@ router.post("/delete-participation/:classId/:studentId/:markId", async (req, res
     const classId = req.params.classId;
     const studentId = req.params.studentId;
     const markId = req.params.markId;
-    const classData = await loadClassForTeacher(classId, req.session.user.id);
-    if (!classData) {
-      return renderError(res, req, "Klasse nicht gefunden.", 404, "/teacher/classes");
-    }
+    const classData = await requireClassAccessForTeacher(req, res, classId);
+    if (!classData) return;
 
     const students = await loadStudents(classId);
     const student = students.find((entry) => String(entry.id) === String(studentId));
     if (!student) {
-      return renderError(res, req, "Schueler nicht gefunden.", 404, `/teacher/students/${classId}`);
+      return renderError(res, req, "Schüler nicht gefunden.", 404, `/teacher/students/${classId}`);
     }
 
     const participationMarks = await loadParticipationMarks(classId, student.id);
@@ -1978,18 +2308,31 @@ router.get("/student-grades/:classId/:studentId", async (req, res, next) => {
   try {
     const classId = req.params.classId;
     const studentId = req.params.studentId;
-    const classData = await loadClassForTeacher(classId, req.session.user.id);
-    if (!classData) {
-      return renderError(res, req, "Klasse nicht gefunden.", 404, "/teacher/classes");
-    }
+    const classData = await requireClassAccessForTeacher(req, res, classId);
+    if (!classData) return;
 
     const students = await loadStudents(classId);
     const student = students.find((entry) => String(entry.id) === String(studentId));
     if (!student) {
-      return renderError(res, req, "SchÃ¼ler nicht gefunden.", 404, `/teacher/students/${classId}`);
+      return renderError(res, req, "Schüler nicht gefunden.", 404, `/teacher/students/${classId}`);
     }
 
     const gradeRows = await loadStudentGrades(student.id);
+    const openMessageCount = await loadClassOpenMessageCount(classId);
+    const gradeMessages = await loadStudentGradeMessages(classId, student.id);
+    const messagesByGrade = new Map();
+    gradeMessages.forEach((message) => {
+      const key = String(message.grade_id);
+      const list = messagesByGrade.get(key) || [];
+      list.push({
+        id: message.id,
+        student_message: message.student_message,
+        teacher_reply: message.teacher_reply || null,
+        created_at: message.created_at,
+        replied_at: message.replied_at || null
+      });
+      messagesByGrade.set(key, list);
+    });
     const activeProfile = await loadActiveTeacherProfile(req.session.user.id);
     const participationConfig = normalizeParticipationConfig(
       activeProfile?.participation || activeProfile || {}
@@ -2005,6 +2348,7 @@ router.get("/student-grades/:classId/:studentId", async (req, res, next) => {
       const pointsMax = Number(row.points_max);
       const hasPoints = Number.isFinite(pointsAchieved) && Number.isFinite(pointsMax) && pointsMax > 0;
       const pointsPercent = hasPoints ? Number(((pointsAchieved / pointsMax) * 100).toFixed(2)) : null;
+      const messages = row.is_special ? [] : messagesByGrade.get(String(row.id)) || [];
       return {
         id: row.id,
         grade: row.grade,
@@ -2025,6 +2369,8 @@ router.get("/student-grades/:classId/:studentId", async (req, res, next) => {
         attachment_delete_action: hasAttachment
           ? `/teacher/delete-grade-attachment/${classId}/${row.id}`
           : null,
+        messages,
+        open_message_count: messages.filter((message) => !message.teacher_reply).length,
         delete_action: row.is_special
           ? `/teacher/delete-special-assessment/${classId}/${row.id}`
           : `/teacher/delete-grade/${classId}/${row.id}`
@@ -2098,6 +2444,7 @@ router.get("/student-grades/:classId/:studentId", async (req, res, next) => {
       average,
       pointsSummary,
       activeWeightMode: fallbackMode,
+      openMessageCount,
       csrfToken: req.csrfToken()
     });
   } catch (err) {
@@ -2109,15 +2456,13 @@ router.get("/student-grades/:classId/:studentId/details", async (req, res, next)
   try {
     const classId = req.params.classId;
     const studentId = req.params.studentId;
-    const classData = await loadClassForTeacher(classId, req.session.user.id);
-    if (!classData) {
-      return renderError(res, req, "Klasse nicht gefunden.", 404, "/teacher/classes");
-    }
+    const classData = await requireClassAccessForTeacher(req, res, classId);
+    if (!classData) return;
 
     const students = await loadStudents(classId);
     const student = students.find((entry) => String(entry.id) === String(studentId));
     if (!student) {
-      return renderError(res, req, "Schueler nicht gefunden.", 404, `/teacher/students/${classId}`);
+      return renderError(res, req, "Schüler nicht gefunden.", 404, `/teacher/students/${classId}`);
     }
 
     const gradeRows = await loadStudentGrades(student.id);
@@ -2156,14 +2501,14 @@ router.get("/student-grades/:classId/:studentId/details", async (req, res, next)
       if (skippedForAbsence) {
         includeReason = "Nicht gewichtet (Abwesenheit laut Profil).";
       } else if (!hasValidGrade) {
-        includeReason = "Nicht gewichtet (ungueltige Note).";
+        includeReason = "Nicht gewichtet (ungültige Note).";
       } else if (!hasValidWeight) {
-        includeReason = "Nicht gewichtet (ungueltige Gewichtung).";
+        includeReason = "Nicht gewichtet (ungültige Gewichtung).";
       }
 
       detailRows.push({
-        source_type: Boolean(row.is_special) ? "Sonderleistung" : "Pruefung",
-        source_name: row.name || (Boolean(row.is_special) ? "Sonderleistung" : "Pruefung"),
+        source_type: Boolean(row.is_special) ? "Sonderleistung" : "Prüfung",
+        source_name: row.name || (Boolean(row.is_special) ? "Sonderleistung" : "Prüfung"),
         category: row.category || "-",
         created_at: row.created_at || null,
         exam_date: row.date || null,
@@ -2210,7 +2555,7 @@ router.get("/student-grades/:classId/:studentId/details", async (req, res, next)
       } else if (!hasValidGrade) {
         includeReason = "Nicht gewichtet (Symbol nicht im MA-Schema).";
       } else if (!hasValidWeight) {
-        includeReason = "Nicht gewichtet (ungueltige MA-Gewichtung).";
+        includeReason = "Nicht gewichtet (ungültige MA-Gewichtung).";
       }
 
       detailRows.push({
@@ -2328,7 +2673,7 @@ router.get("/student-grades/:classId/:studentId/details", async (req, res, next)
 
       pushCsv(["Sektion", "Schluessel", "Wert"]);
       pushCsv(["Meta", "Klasse", classData.name || ""]);
-      pushCsv(["Meta", "Schueler", student.name || ""]);
+      pushCsv(["Meta", "Schüler", student.name || ""]);
       pushCsv(["Meta", "Fach", classData.subject || ""]);
       csvLines.push("");
 
@@ -2340,7 +2685,7 @@ router.get("/student-grades/:classId/:studentId/details", async (req, res, next)
           "Bezeichnung",
           "Kategorie",
           "Erfasst am",
-          "Pruefungsdatum",
+          "Prüfungsdatum",
           "Note",
           "Gewicht roh",
           "Gewicht effektiv",
@@ -2454,10 +2799,8 @@ router.post("/delete-grade/:classId/:gradeId", async (req, res, next) => {
   try {
     const classId = req.params.classId;
     const gradeId = req.params.gradeId;
-    const classData = await loadClassForTeacher(classId, req.session.user.id);
-    if (!classData) {
-      return renderError(res, req, "Klasse nicht gefunden.", 404, "/teacher/classes");
-    }
+    const classData = await requireClassAccessForTeacher(req, res, classId);
+    if (!classData) return;
 
     const gradeRow = await getAsync(
       "SELECT attachment_path FROM grades WHERE id = ? AND class_id = ?",
@@ -2476,10 +2819,8 @@ router.post("/delete-grade-attachment/:classId/:gradeId", async (req, res, next)
   try {
     const classId = req.params.classId;
     const gradeId = req.params.gradeId;
-    const classData = await loadClassForTeacher(classId, req.session.user.id);
-    if (!classData) {
-      return renderError(res, req, "Klasse nicht gefunden.", 404, "/teacher/classes");
-    }
+    const classData = await requireClassAccessForTeacher(req, res, classId);
+    if (!classData) return;
 
     const gradeRow = await getAsync(
       "SELECT attachment_path FROM grades WHERE id = ? AND class_id = ?",
@@ -2506,15 +2847,13 @@ router.get("/add-grade/:classId/:studentId", async (req, res, next) => {
   try {
     const classId = req.params.classId;
     const studentId = req.params.studentId;
-    const classData = await loadClassForTeacher(classId, req.session.user.id);
-    if (!classData) {
-      return renderError(res, req, "Klasse nicht gefunden.", 404, "/teacher/classes");
-    }
+    const classData = await requireClassAccessForTeacher(req, res, classId);
+    if (!classData) return;
 
     const students = await loadStudents(classId);
     const student = students.find((entry) => String(entry.id) === String(studentId));
     if (!student) {
-      return renderError(res, req, "SchÃ¼ler nicht gefunden.", 404, `/teacher/students/${classId}`);
+      return renderError(res, req, "Schüler nicht gefunden.", 404, `/teacher/students/${classId}`);
     }
 
     const templates = await loadTemplates(classId);
@@ -2543,17 +2882,17 @@ router.post("/add-grade/:classId/:studentId", handleUpload, async (req, res, nex
       external_link,
       is_absent
     } = req.body || {};
-    const classData = await loadClassForTeacher(classId, req.session.user.id);
+    const classData = await requireClassAccessForTeacher(req, res, classId);
     if (!classData) {
       await removeUploadedFile(req.file);
-      return renderError(res, req, "Klasse nicht gefunden.", 404, "/teacher/classes");
+      return;
     }
 
     const students = await loadStudents(classId);
     const student = students.find((entry) => String(entry.id) === String(studentId));
     if (!student) {
       await removeUploadedFile(req.file);
-      return renderError(res, req, "SchÃ¼ler nicht gefunden.", 404, `/teacher/students/${classId}`);
+      return renderError(res, req, "Schüler nicht gefunden.", 404, `/teacher/students/${classId}`);
     }
 
     const templates = await loadTemplates(classId);
@@ -2593,7 +2932,7 @@ router.post("/add-grade/:classId/:studentId", handleUpload, async (req, res, nex
     };
 
     if (!grade_template_id) {
-      return renderValidationError(400, "Bitte eine Pruefung auswaehlen.");
+      return renderValidationError(400, "Bitte eine Prüfung auswählen.");
     }
 
     if (hasGrade && (!Number.isFinite(gradeInput.value) || gradeInput.value < 1 || gradeInput.value > 5)) {
@@ -2609,7 +2948,7 @@ router.post("/add-grade/:classId/:studentId", handleUpload, async (req, res, nex
       [grade_template_id, classId]
     );
     if (!templateRow) {
-      return renderValidationError(400, "Pruefungsvorlage nicht gefunden.");
+      return renderValidationError(400, "Prüfungsvorlage nicht gefunden.");
     }
     const templateMaxPointsRaw = Number(templateRow.max_points);
     const templateHasMaxPoints =
@@ -2618,7 +2957,7 @@ router.post("/add-grade/:classId/:studentId", handleUpload, async (req, res, nex
     if (hasPoints && !templateHasMaxPoints) {
       return renderValidationError(
         400,
-        "Diese Pruefung hat keine maximalen Punkte. Bitte in der Pruefungsvorlage setzen."
+        "Diese Prüfung hat keine maximalen Punkte. Bitte in der Prüfungsvorlage setzen."
       );
     }
 
@@ -2640,7 +2979,7 @@ router.post("/add-grade/:classId/:studentId", handleUpload, async (req, res, nex
           400,
           templateHasMaxPoints
             ? "Dieses Profil verlangt Punkte."
-            : "Dieses Profil verlangt Punkte. Bitte zuerst maximale Punkte in der Pruefungsvorlage setzen."
+            : "Dieses Profil verlangt Punkte. Bitte zuerst maximale Punkte in der Prüfungsvorlage setzen."
         );
       }
       if (scoringMode === SCORING_MODE_POINTS_AND_GRADE && (!hasGrade || !hasCompletePoints)) {
@@ -2648,7 +2987,7 @@ router.post("/add-grade/:classId/:studentId", handleUpload, async (req, res, nex
           400,
           templateHasMaxPoints
             ? "Dieses Profil verlangt Punkte und Note."
-            : "Dieses Profil verlangt Punkte und Note. Bitte zuerst maximale Punkte in der Pruefungsvorlage setzen."
+            : "Dieses Profil verlangt Punkte und Note. Bitte zuerst maximale Punkte in der Prüfungsvorlage setzen."
         );
       }
       if (scoringMode === SCORING_MODE_POINTS_OR_GRADE && !hasGrade && !hasCompletePoints) {
@@ -2656,7 +2995,7 @@ router.post("/add-grade/:classId/:studentId", handleUpload, async (req, res, nex
           400,
           templateHasMaxPoints
             ? "Bitte mindestens Note oder Punkte angeben."
-            : "Bitte mindestens eine Note angeben oder maximale Punkte in der Pruefungsvorlage setzen."
+            : "Bitte mindestens eine Note angeben oder maximale Punkte in der Prüfungsvorlage setzen."
         );
       }
     }
@@ -2682,7 +3021,7 @@ router.post("/add-grade/:classId/:studentId", handleUpload, async (req, res, nex
         if (!templateHasMaxPoints) {
           return renderValidationError(
             400,
-            "Fuer 'Mit 0% werten' braucht die Pruefung maximale Punkte in der Vorlage."
+            "Fuer 'Mit 0% werten' braucht die Prüfung maximale Punkte in der Vorlage."
           );
         }
         resolvedPointsAchieved = 0;
@@ -2711,7 +3050,7 @@ router.post("/add-grade/:classId/:studentId", handleUpload, async (req, res, nex
 
     try {
       await runAsync(
-        "INSERT INTO grades (student_id, class_id, grade_template_id, grade, points_achieved, points_max, note, attachment_path, attachment_original_name, attachment_mime, attachment_size, external_link, is_absent) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)",
+        "INSERT INTO grades (student_id, class_id, grade_template_id, grade, points_achieved, points_max, note, attachment_path, attachment_original_name, attachment_mime, attachment_size, external_link, is_absent, school_year_id) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
         [
           studentId,
           classId,
@@ -2725,7 +3064,8 @@ router.post("/add-grade/:classId/:studentId", handleUpload, async (req, res, nex
           attachmentMime,
           attachmentSize,
           linkResult.value,
-          isAbsent ? 1 : 0
+          isAbsent ? 1 : 0,
+          classData.school_year_id
         ]
       );
       await runAsync("INSERT INTO grade_notifications (student_id, message, type) VALUES (?,?,?)", [
@@ -2743,7 +3083,7 @@ router.post("/add-grade/:classId/:studentId", handleUpload, async (req, res, nex
           templates,
           gradedTemplateIds,
           formData,
-          error: "Diese Pruefung wurde bereits benotet."
+          error: "Diese Prüfung wurde bereits benotet."
         });
       }
       throw err;
@@ -2759,10 +3099,8 @@ router.post("/add-grade/:classId/:studentId", handleUpload, async (req, res, nex
 router.get("/grade-templates/:classId", async (req, res, next) => {
   try {
     const classId = req.params.classId;
-    const classData = await loadClassForTeacher(classId, req.session.user.id);
-    if (!classData) {
-      return renderError(res, req, "Klasse nicht gefunden.", 404, "/teacher/classes");
-    }
+    const classData = await requireClassAccessForTeacher(req, res, classId);
+    if (!classData) return;
 
     const qRaw = String(req.query.q || "").trim();
     const q = qRaw.slice(0, 120);
@@ -2863,6 +3201,7 @@ router.get("/grade-templates/:classId", async (req, res, next) => {
       }
     });
 
+    const openMessageCount = await loadClassOpenMessageCount(classId);
     const activeProfile = await loadActiveTeacherProfile(req.session.user.id);
     const totalPointWeight = Number(
       templatesAll.reduce((sum, template) => sum + Number(template.weight || 0), 0).toFixed(2)
@@ -2881,6 +3220,7 @@ router.get("/grade-templates/:classId", async (req, res, next) => {
       activeProfile,
       studentCount,
       totalPointWeight,
+      openMessageCount,
       csrfToken: req.csrfToken()
     });
   } catch (err) {
@@ -3183,15 +3523,14 @@ router.post("/bulk-grade-template/:classId/:templateId", async (req, res, next) 
 router.get("/create-template/:classId", async (req, res, next) => {
   try {
     const classId = req.params.classId;
-    const classData = await loadClassForTeacher(classId, req.session.user.id);
-    if (!classData) {
-      return renderError(res, req, "Klasse nicht gefunden.", 404, "/teacher/classes");
-    }
+    const classData = await requireClassAccessForTeacher(req, res, classId);
+    if (!classData) return;
     const activeProfile = await loadActiveTeacherProfile(req.session.user.id);
     if (!activeProfile) {
       return res.redirect("/teacher/settings?setup=1");
     }
 
+    const openMessageCount = await loadClassOpenMessageCount(classId);
     res.render("teacher/teacher-create-template", {
       email: req.session.user.email,
       classData,
@@ -3205,6 +3544,7 @@ router.get("/create-template/:classId", async (req, res, next) => {
         date: "",
         description: ""
       },
+      openMessageCount,
       csrfToken: req.csrfToken(),
       error: null
     });
@@ -3217,10 +3557,8 @@ router.post("/create-template/:classId", async (req, res, next) => {
   try {
     const classId = req.params.classId;
     const { name, category, weight, max_points, date, description } = req.body || {};
-    const classData = await loadClassForTeacher(classId, req.session.user.id);
-    if (!classData) {
-      return renderError(res, req, "Klasse nicht gefunden.", 404, "/teacher/classes");
-    }
+    const classData = await requireClassAccessForTeacher(req, res, classId);
+    if (!classData) return;
     const activeProfile = await loadActiveTeacherProfile(req.session.user.id);
     if (!activeProfile) {
       return res.redirect("/teacher/settings?setup=1");
@@ -3252,7 +3590,7 @@ router.post("/create-template/:classId", async (req, res, next) => {
         categoryDefinitions: TEMPLATE_CATEGORY_DEFINITIONS,
         formData,
         csrfToken: req.csrfToken(),
-        error: "Bitte alle Pflichtfelder ausfÃ¼llen."
+        error: "Bitte alle Pflichtfelder ausfüllen."
       });
     }
     if (weightValue < 0) {
@@ -3301,10 +3639,8 @@ router.get("/edit-template/:classId/:templateId", async (req, res, next) => {
   try {
     const classId = req.params.classId;
     const templateId = req.params.templateId;
-    const classData = await loadClassForTeacher(classId, req.session.user.id);
-    if (!classData) {
-      return renderError(res, req, "Klasse nicht gefunden.", 404, "/teacher/classes");
-    }
+    const classData = await requireClassAccessForTeacher(req, res, classId);
+    if (!classData) return;
     const activeProfile = await loadActiveTeacherProfile(req.session.user.id);
     if (!activeProfile) {
       return res.redirect("/teacher/settings?setup=1");
@@ -3315,7 +3651,7 @@ router.get("/edit-template/:classId/:templateId", async (req, res, next) => {
       [templateId, classId]
     );
     if (!template) {
-      return renderError(res, req, "Pruefung nicht gefunden.", 404, `/teacher/grade-templates/${classId}`);
+      return renderError(res, req, "Prüfung nicht gefunden.", 404, `/teacher/grade-templates/${classId}`);
     }
 
     const dateValue =
@@ -3350,10 +3686,8 @@ router.post("/edit-template/:classId/:templateId", async (req, res, next) => {
     const classId = req.params.classId;
     const templateId = req.params.templateId;
     const { name, category, weight, max_points, date, description } = req.body || {};
-    const classData = await loadClassForTeacher(classId, req.session.user.id);
-    if (!classData) {
-      return renderError(res, req, "Klasse nicht gefunden.", 404, "/teacher/classes");
-    }
+    const classData = await requireClassAccessForTeacher(req, res, classId);
+    if (!classData) return;
     const activeProfile = await loadActiveTeacherProfile(req.session.user.id);
     if (!activeProfile) {
       return res.redirect("/teacher/settings?setup=1");
@@ -3364,7 +3698,7 @@ router.post("/edit-template/:classId/:templateId", async (req, res, next) => {
       [templateId, classId]
     );
     if (!existingTemplate) {
-      return renderError(res, req, "Pruefung nicht gefunden.", 404, `/teacher/grade-templates/${classId}`);
+      return renderError(res, req, "Prüfung nicht gefunden.", 404, `/teacher/grade-templates/${classId}`);
     }
 
     const normalizedCategory = normalizeCategoryKey(category);
@@ -3390,7 +3724,7 @@ router.post("/edit-template/:classId/:templateId", async (req, res, next) => {
         templateId,
         formData,
         csrfToken: req.csrfToken(),
-        error: "Bitte alle Pflichtfelder ausfuellen."
+        error: "Bitte alle Pflichtfelder ausfüllen."
       });
     }
     if (rawWeightValue < 0) {
@@ -3442,17 +3776,15 @@ router.post("/delete-template/:classId/:templateId", async (req, res, next) => {
   try {
     const classId = req.params.classId;
     const templateId = req.params.templateId;
-    const classData = await loadClassForTeacher(classId, req.session.user.id);
-    if (!classData) {
-      return renderError(res, req, "Klasse nicht gefunden.", 404, "/teacher/classes");
-    }
+    const classData = await requireClassAccessForTeacher(req, res, classId);
+    if (!classData) return;
 
     const templateRow = await getAsync(
       "SELECT id FROM grade_templates WHERE id = ? AND class_id = ?",
       [templateId, classId]
     );
     if (!templateRow) {
-      return renderError(res, req, "PrÃ¼fung nicht gefunden.", 404, `/teacher/grade-templates/${classId}`);
+      return renderError(res, req, "Prüfung nicht gefunden.", 404, `/teacher/grade-templates/${classId}`);
     }
 
     await runAsync("DELETE FROM grade_templates WHERE id = ? AND class_id = ?", [templateId, classId]);
@@ -3465,15 +3797,14 @@ router.post("/delete-template/:classId/:templateId", async (req, res, next) => {
 router.get("/special-assessments/:classId", async (req, res, next) => {
   try {
     const classId = req.params.classId;
-    const classData = await loadClassForTeacher(classId, req.session.user.id);
-    if (!classData) {
-      return renderError(res, req, "Klasse nicht gefunden.", 404, "/teacher/classes");
-    }
+    const classData = await requireClassAccessForTeacher(req, res, classId);
+    if (!classData) return;
 
     const students = await loadStudents(classId);
     const assessments = await loadSpecialAssessments(classId);
     const activeProfile = await loadActiveTeacherProfile(req.session.user.id);
     const weightMode = resolveWeightMode(activeProfile?.weight_mode);
+    const openMessageCount = await loadClassOpenMessageCount(classId);
     const selectedStudent = req.query.student_id ? String(req.query.student_id) : "";
 
     res.render("teacher/teacher-special-assessments", {
@@ -3484,6 +3815,7 @@ router.get("/special-assessments/:classId", async (req, res, next) => {
       activeProfile,
       weightMode,
       weightUnit: getWeightUnit(weightMode),
+      openMessageCount,
       specialTypes: SPECIAL_ASSESSMENT_TYPES,
       formData: {
         student_id: selectedStudent,
@@ -3504,10 +3836,8 @@ router.get("/special-assessments/:classId", async (req, res, next) => {
 router.post("/special-assessments/:classId", async (req, res, next) => {
   try {
     const classId = req.params.classId;
-    const classData = await loadClassForTeacher(classId, req.session.user.id);
-    if (!classData) {
-      return renderError(res, req, "Klasse nicht gefunden.", 404, "/teacher/classes");
-    }
+    const classData = await requireClassAccessForTeacher(req, res, classId);
+    if (!classData) return;
 
     const students = await loadStudents(classId);
     const activeProfile = await loadActiveTeacherProfile(req.session.user.id);
@@ -3543,7 +3873,7 @@ router.post("/special-assessments/:classId", async (req, res, next) => {
           weight,
           grade
         },
-        error: "Bitte alle Pflichtfelder korrekt ausfÃ¼llen.",
+        error: "Bitte alle Pflichtfelder korrekt ausfüllen.",
         csrfToken: req.csrfToken()
       });
     }
@@ -3567,7 +3897,7 @@ router.post("/special-assessments/:classId", async (req, res, next) => {
           weight,
           grade
         },
-        error: "Bitte eine Bezeichnung fÃ¼r die benutzerdefinierte Sonderleistung angeben.",
+        error: "Bitte eine Bezeichnung für die benutzerdefinierte Sonderleistung angeben.",
         csrfToken: req.csrfToken()
       });
     }
@@ -3648,10 +3978,8 @@ router.post("/delete-special-assessment/:classId/:assessmentId", async (req, res
   try {
     const classId = req.params.classId;
     const assessmentId = req.params.assessmentId;
-    const classData = await loadClassForTeacher(classId, req.session.user.id);
-    if (!classData) {
-      return renderError(res, req, "Klasse nicht gefunden.", 404, "/teacher/classes");
-    }
+    const classData = await requireClassAccessForTeacher(req, res, classId);
+    if (!classData) return;
 
     const assessmentRow = await getAsync(
       "SELECT id FROM special_assessments WHERE id = ? AND class_id = ?",
@@ -3672,10 +4000,8 @@ router.post("/delete-special-assessment/:classId/:assessmentId", async (req, res
 router.get("/class-statistics/:classId", async (req, res, next) => {
   try {
     const classId = req.params.classId;
-    const classData = await loadClassForTeacher(classId, req.session.user.id);
-    if (!classData) {
-      return renderError(res, req, "Klasse nicht gefunden.", 404, "/teacher/classes");
-    }
+    const classData = await requireClassAccessForTeacher(req, res, classId);
+    if (!classData) return;
 
     const students = await loadStudents(classId);
     const templates = await loadTemplates(classId);
@@ -3684,6 +4010,7 @@ router.get("/class-statistics/:classId", async (req, res, next) => {
       activeProfile?.participation || activeProfile || {}
     );
     const absenceMode = normalizeAbsenceMode(activeProfile?.absence_mode);
+    const openMessageCount = await loadClassOpenMessageCount(classId);
     const studentMap = new Map(students.map((student) => [String(student.id), student]));
     const gradesByStudent = new Map();
 
@@ -3779,6 +4106,7 @@ router.get("/class-statistics/:classId", async (req, res, next) => {
       overallWeightedAverage,
       overallAverage,
       templateStats,
+      openMessageCount,
       csrfToken: req.csrfToken()
     });
   } catch (err) {
@@ -3796,4 +4124,7 @@ router.use((err, req, res, next) => {
 });
 
 module.exports = router;
+
+
+
 

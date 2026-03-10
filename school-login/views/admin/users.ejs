@@ -37,10 +37,10 @@
               <option value="">Alle Rollen</option>
               <option value="admin" <%= search.role === 'admin' ? 'selected' : '' %>>Admin</option>
               <option value="teacher" <%= search.role === 'teacher' ? 'selected' : '' %>>Lehrer</option>
-              <option value="student" <%= search.role === 'student' ? 'selected' : '' %>>Schueler</option>
+              <option value="student" <%= search.role === 'student' ? 'selected' : '' %>>Schüler</option>
             </select>
             <button class="btn btn-secondary" type="submit">Suchen</button>
-            <a class="btn" href="/admin/users">Zuruecksetzen</a>
+            <a class="btn" href="/admin/users">Zurücksetzen</a>
           </form>
         </div>
 
@@ -66,11 +66,11 @@
                   <td><%= u.must_change_password ? 'Ja' : 'Nein' %></td>
                   <td><%= u.created_at || '-' %></td>
                   <td class="admin-actions">
-                    <a class="btn btn-secondary" href="/admin/users/<%= u.id %>/edit">Bearbeiten</a>
+                    <a class="btn btn-primary" href="/admin/users/<%= u.id %>/edit">Bearbeiten</a>
                     <form method="POST" action="/admin/users/<%= u.id %>/reset">
                       <input type="hidden" name="_csrf" value="<%= csrfToken %>">
                       <input type="hidden" name="useInitial" value="1">
-                      <button class="btn" type="submit">Passwort reset</button>
+                      <button class="btn btn-secondary" type="submit">Passwort reset</button>
                     </form>
                     <form method="POST" action="/admin/users/<%= u.id %>/delete" onsubmit="return confirm('Nutzer wirklich löschen (soft-delete)?');">
                       <input type="hidden" name="_csrf" value="<%= csrfToken %>">

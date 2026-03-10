@@ -1,6 +1,7 @@
 // db.js
 const crypto = require("crypto");
 const { Pool } = require("pg");
+const { getDefaultSchoolYearWindow } = require("./utils/schoolYear");
 
 // --- Password-Hashing via scrypt (ohne externe Lib)
 // Wir speichern die Parameter im Hash, damit verify immer passt.
@@ -49,25 +50,70 @@ const seedDemoEnabled = process.env.SEED_DEMO === "true";
 
 function createFakeDb() {
   const users = [];
+  const schoolYears = [];
   const classes = [];
   const students = [];
   const gradeTemplates = [];
   const grades = [];
   const specialAssessments = [];
   const notifications = [];
+  const auditLogs = [];
   const participationMarks = [];
+  const subjects = [];
+  const teachingAssignments = [];
+  const archives = [];
+  const rolloverLogs = [];
   const teacherGradingProfiles = [];
   const teacherGradingProfileItems = [];
   let userId = 1;
+  let schoolYearId = 1;
   let classId = 1;
   let studentId = 1;
   let gradeTemplateId = 1;
   let gradeId = 1;
   let specialAssessmentId = 1;
   let notificationId = 1;
+  let auditLogId = 1;
   let participationMarkId = 1;
+  let subjectId = 1;
+  let teachingAssignmentId = 1;
+  let archiveId = 1;
+  let rolloverLogId = 1;
   let gradingProfileId = 1;
   let gradingProfileItemId = 1;
+
+  function ensureActiveSchoolYear() {
+    const active = schoolYears.find((entry) => Boolean(entry.is_active));
+    if (active) return active;
+
+    const defaultWindow = getDefaultSchoolYearWindow();
+    const newYear = {
+      id: schoolYearId++,
+      name: defaultWindow.name,
+      start_date: defaultWindow.startDate,
+      end_date: defaultWindow.endDate,
+      is_active: true
+    };
+    schoolYears.push(newYear);
+    return newYear;
+  }
+
+  function getAssignmentsForClassSubject(targetClassId, targetSubjectId) {
+    return teachingAssignments.filter(
+      (entry) =>
+        entry.class_id === Number(targetClassId) &&
+        entry.subject_id === Number(targetSubjectId)
+    );
+  }
+
+  function getTeacherEmailsForClassSubject(targetClassId, targetSubjectId) {
+    return getAssignmentsForClassSubject(targetClassId, targetSubjectId)
+      .map((entry) => users.find((user) => user.id === entry.teacher_id)?.email)
+      .filter(Boolean)
+      .sort((a, b) => a.localeCompare(b));
+  }
+
+  const activeSchoolYear = ensureActiveSchoolYear();
 
   const db = {
     serialize(fn) {
@@ -124,6 +170,92 @@ function createFakeDb() {
         if (user) {
           user.must_change_password = must_change_password;
         }
+      } else if (/INSERT INTO school_years/i.test(sql)) {
+        const [name, start_date, end_date, is_active] = params;
+        const duplicate = schoolYears.find((entry) => entry.name === String(name));
+        if (duplicate) {
+          err = new Error("UNIQUE constraint failed: school_years.name");
+        } else {
+          if (is_active) {
+            schoolYears.forEach((entry) => {
+              entry.is_active = false;
+            });
+          }
+          const schoolYear = {
+            id: schoolYearId++,
+            name: String(name),
+            start_date: start_date || null,
+            end_date: end_date || null,
+            is_active: Boolean(is_active)
+          };
+          schoolYears.push(schoolYear);
+          lastID = schoolYear.id;
+        }
+      } else if (/UPDATE school_years SET is_active = \? WHERE id = \?/i.test(sql)) {
+        const [is_active, id] = params;
+        if (is_active) {
+          schoolYears.forEach((entry) => {
+            entry.is_active = false;
+          });
+        }
+        const schoolYear = schoolYears.find((entry) => entry.id === Number(id));
+        if (schoolYear) {
+          schoolYear.is_active = Boolean(is_active);
+        }
+      } else if (/INSERT INTO archives/i.test(sql)) {
+        const [school_year_id, archive_type, entity_count] = params;
+        const archiveEntry = {
+          id: archiveId++,
+          school_year_id: Number(school_year_id),
+          archive_type: String(archive_type),
+          entity_count: Number(entity_count),
+          created_at: new Date().toISOString()
+        };
+        archives.push(archiveEntry);
+        lastID = archiveEntry.id;
+      } else if (/INSERT INTO rollover_logs/i.test(sql)) {
+        const [executed_by, old_school_year, new_school_year, status, backup_path] = params;
+        const logEntry = {
+          id: rolloverLogId++,
+          executed_by: Number(executed_by),
+          old_school_year: String(old_school_year),
+          new_school_year: String(new_school_year),
+          status: String(status),
+          backup_path: backup_path || null,
+          executed_at: new Date().toISOString()
+        };
+        rolloverLogs.push(logEntry);
+        lastID = logEntry.id;
+      } else if (/INSERT INTO subjects/i.test(sql)) {
+        const [name] = params;
+        const existing = subjects.find((entry) => String(entry.name).toLowerCase() === String(name).toLowerCase());
+        if (existing) {
+          err = new Error("UNIQUE constraint failed: subjects.name");
+        } else {
+          const newSubject = {
+            id: subjectId++,
+            name: String(name || "").trim()
+          };
+          subjects.push(newSubject);
+          lastID = newSubject.id;
+        }
+      } else if (/UPDATE classes SET name = \?, subject = \?, subject_id = \? WHERE id = \?/i.test(sql)) {
+        const [name, subject, subjId, id] = params;
+        const classRow = classes.find((c) => c.id === Number(id));
+        if (classRow) {
+          classRow.name = name;
+          classRow.subject = subject;
+          classRow.subject_id = Number(subjId);
+        }
+      } else if (/UPDATE classes SET name = \?, subject = \?, subject_id = \?, teacher_id = \? WHERE id = \?/i.test(sql)) {
+        const [name, subject, subjId, teacher_id, id] = params;
+        const classRow = classes.find((c) => c.id === Number(id));
+        if (classRow) {
+          classRow.name = name;
+          classRow.subject = subject;
+          classRow.subject_id = Number(subjId);
+          classRow.teacher_id = Number(teacher_id);
+        }
       } else if (/UPDATE classes SET name = \?, subject = \?, teacher_id = \? WHERE id = \?/i.test(sql)) {
         const [name, subject, teacher_id, id] = params;
         const classRow = classes.find((c) => c.id === Number(id));
@@ -133,16 +265,90 @@ function createFakeDb() {
           classRow.teacher_id = Number(teacher_id);
         }
       } else if (/INSERT INTO classes/i.test(sql)) {
-        const [name, subject, teacher_id] = params;
+        const [name, subject, thirdParam, fourthParam] = params;
+        const isSchoolYearInsert = /school_year_id/i.test(sql);
+        const hasTeacherId = params.length >= 4 && !isSchoolYearInsert;
+        const hasSubjectId = params.length >= 3;
+        const teacher_id = hasTeacherId ? Number(fourthParam) : null;
+        const resolvedSchoolYearId = isSchoolYearInsert
+          ? Number(fourthParam)
+          : Number(activeSchoolYear.id);
+        let resolvedSubjectId = hasSubjectId ? Number(thirdParam) : null;
+        if (!resolvedSubjectId && subject) {
+          const existingSubject = subjects.find(
+            (entry) => String(entry.name).toLowerCase() === String(subject).toLowerCase()
+          );
+          if (existingSubject) {
+            resolvedSubjectId = existingSubject.id;
+          } else {
+            const newSubject = { id: subjectId++, name: String(subject) };
+            subjects.push(newSubject);
+            resolvedSubjectId = newSubject.id;
+          }
+        }
         const newClass = {
           id: classId++,
           name,
           subject,
-          teacher_id: Number(teacher_id),
+          subject_id: resolvedSubjectId == null ? null : Number(resolvedSubjectId),
+          school_year_id: Number.isFinite(resolvedSchoolYearId) ? resolvedSchoolYearId : Number(activeSchoolYear.id),
+          teacher_id: Number.isFinite(teacher_id) ? teacher_id : null,
           created_at: new Date().toISOString()
         };
         classes.push(newClass);
         lastID = newClass.id;
+        if (Number.isFinite(teacher_id) && newClass.subject_id != null) {
+          const existsAssignment = teachingAssignments.some(
+            (entry) =>
+              entry.teacher_id === teacher_id &&
+              entry.class_id === newClass.id &&
+              entry.subject_id === Number(newClass.subject_id)
+          );
+          if (!existsAssignment) {
+            teachingAssignments.push({
+              id: teachingAssignmentId++,
+              teacher_id,
+              class_id: newClass.id,
+              subject_id: Number(newClass.subject_id),
+              school_year_id: newClass.school_year_id,
+              created_at: new Date().toISOString()
+            });
+          }
+        }
+      } else if (/INSERT INTO (teaching_assignments|class_subject_teacher)/i.test(sql)) {
+        const usesNewOrder = /INSERT INTO class_subject_teacher/i.test(sql);
+        const [firstId, secondId, thirdId, fourthId] = params;
+        const resolvedClassId = usesNewOrder ? firstId : secondId;
+        const subjId = usesNewOrder ? secondId : thirdId;
+        const teacher_id = usesNewOrder ? thirdId : firstId;
+        const school_year_id = params.length >= 4
+          ? Number(fourthId)
+          : Number(classes.find((entry) => entry.id === Number(resolvedClassId))?.school_year_id || activeSchoolYear.id);
+        const duplicate = teachingAssignments.find(
+          (entry) =>
+            entry.teacher_id === Number(teacher_id) &&
+            entry.class_id === Number(resolvedClassId) &&
+            entry.subject_id === Number(subjId)
+        );
+        if (duplicate) {
+          err = new Error("UNIQUE constraint failed: class_subject_teacher.class_id, class_subject_teacher.subject_id, class_subject_teacher.teacher_id");
+        } else {
+          const newAssignment = {
+            id: teachingAssignmentId++,
+            teacher_id: Number(teacher_id),
+            class_id: Number(resolvedClassId),
+            subject_id: Number(subjId),
+            school_year_id,
+            created_at: new Date().toISOString()
+          };
+          teachingAssignments.push(newAssignment);
+          lastID = newAssignment.id;
+        }
+      } else if (/DELETE FROM (teaching_assignments|class_subject_teacher) WHERE id = \?/i.test(sql)) {
+        const [id] = params;
+        for (let i = teachingAssignments.length - 1; i >= 0; i -= 1) {
+          if (teachingAssignments[i].id === Number(id)) teachingAssignments.splice(i, 1);
+        }
       } else if (/DELETE FROM grade_notifications WHERE student_id = \?/i.test(sql)) {
         const [studentIdParam] = params;
         for (let i = notifications.length - 1; i >= 0; i -= 1) {
@@ -186,6 +392,9 @@ function createFakeDb() {
         const [id] = params;
         for (let i = classes.length - 1; i >= 0; i -= 1) {
           if (classes[i].id === Number(id)) classes.splice(i, 1);
+        }
+        for (let i = teachingAssignments.length - 1; i >= 0; i -= 1) {
+          if (teachingAssignments[i].class_id === Number(id)) teachingAssignments.splice(i, 1);
         }
         for (let i = specialAssessments.length - 1; i >= 0; i -= 1) {
           if (specialAssessments[i].class_id === Number(id)) specialAssessments.splice(i, 1);
@@ -446,7 +655,8 @@ function createFakeDb() {
           max_points: max_points != null && max_points !== "" ? Number(max_points) : null,
           date: date || null,
           description: description || null,
-          created_at: new Date().toISOString()
+          created_at: new Date().toISOString(),
+          archived_at: null
         };
         gradeTemplates.push(template);
         lastID = template.id;
@@ -464,6 +674,47 @@ function createFakeDb() {
           template.date = date || null;
           template.description = description || null;
         }
+      } else if (/UPDATE grade_templates\s+SET archived_at = \?\s+WHERE class_id = \? AND archived_at IS NULL AND COALESCE\(date, created_at\) < \?/i.test(sql)) {
+        const [archivedAt, classId, cutoff] = params;
+        const cutoffTime = new Date(cutoff).getTime();
+        gradeTemplates.forEach((template) => {
+          const effectiveTime = new Date(template.date || template.created_at).getTime();
+          if (
+            template.class_id === Number(classId) &&
+            !template.archived_at &&
+            Number.isFinite(effectiveTime) &&
+            effectiveTime < cutoffTime
+          ) {
+            template.archived_at = archivedAt;
+          }
+        });
+      } else if (/UPDATE grade_templates\s+SET archived_at = \?\s+WHERE archived_at IS NULL AND COALESCE\(date, created_at\) < \?/i.test(sql)) {
+        const [archivedAt, cutoff] = params;
+        const cutoffTime = new Date(cutoff).getTime();
+        gradeTemplates.forEach((template) => {
+          const effectiveTime = new Date(template.date || template.created_at).getTime();
+          if (!template.archived_at && Number.isFinite(effectiveTime) && effectiveTime < cutoffTime) {
+            template.archived_at = archivedAt;
+          }
+        });
+      } else if (/DELETE FROM grade_templates WHERE archived_at IS NOT NULL AND archived_at <= \?/i.test(sql)) {
+        const [cutoff] = params;
+        const cutoffTime = new Date(cutoff).getTime();
+        const deletedTemplateIds = [];
+        for (let i = gradeTemplates.length - 1; i >= 0; i -= 1) {
+          const archivedTime = new Date(gradeTemplates[i].archived_at || "").getTime();
+          if (Number.isFinite(archivedTime) && archivedTime <= cutoffTime) {
+            deletedTemplateIds.push(gradeTemplates[i].id);
+            gradeTemplates.splice(i, 1);
+          }
+        }
+        if (deletedTemplateIds.length) {
+          for (let i = grades.length - 1; i >= 0; i -= 1) {
+            if (deletedTemplateIds.includes(grades[i].grade_template_id)) {
+              grades.splice(i, 1);
+            }
+          }
+        }
       } else if (/INSERT INTO grades/i.test(sql)) {
         const student_id = params[0];
         const class_id = params[1];
@@ -479,6 +730,9 @@ function createFakeDb() {
         const attachment_size = hasPoints ? params[10] : params[8];
         const external_link = hasPoints ? params[11] : params[9];
         const is_absent = hasPoints && params.length >= 13 ? params[12] : 0;
+        const school_year_id = hasPoints && params.length >= 14
+          ? Number(params[13])
+          : Number(classes.find((entry) => entry.id === Number(class_id))?.school_year_id || activeSchoolYear.id);
         const duplicate = grades.find(
           (entry) =>
             entry.student_id === Number(student_id) &&
@@ -503,6 +757,7 @@ function createFakeDb() {
             attachment_size: attachment_size ? Number(attachment_size) : null,
             external_link: external_link || null,
             is_absent: Boolean(is_absent),
+            school_year_id,
             created_at: new Date().toISOString()
           };
           grades.push(newGrade);
@@ -569,6 +824,39 @@ function createFakeDb() {
         };
         notifications.push(notification);
         lastID = notification.id;
+      } else if (/INSERT INTO audit_logs/i.test(sql)) {
+        const [
+          actor_user_id,
+          actor_email,
+          actor_role,
+          action,
+          entity_type,
+          entity_id,
+          http_method,
+          route_path,
+          status_code,
+          ip_address,
+          user_agent,
+          payload
+        ] = params;
+        const auditEntry = {
+          id: auditLogId++,
+          actor_user_id: actor_user_id == null ? null : Number(actor_user_id),
+          actor_email: actor_email || null,
+          actor_role: actor_role || null,
+          action,
+          entity_type: entity_type || null,
+          entity_id: entity_id || null,
+          http_method: http_method || null,
+          route_path: route_path || null,
+          status_code: status_code == null ? null : Number(status_code),
+          ip_address: ip_address || null,
+          user_agent: user_agent || null,
+          payload: payload || null,
+          created_at: new Date().toISOString()
+        };
+        auditLogs.push(auditEntry);
+        lastID = auditEntry.id;
       } else if (/UPDATE grade_notifications SET read_at = current_timestamp WHERE id = \? AND student_id = \?/i.test(sql)) {
         const [id, student_id] = params.map(Number);
         const note = notifications.find((n) => n.id === id && n.student_id === student_id);
@@ -586,6 +874,26 @@ function createFakeDb() {
         const [email] = params;
         const user = users.find((u) => u.email === email);
         row = user ? { id: user.id } : undefined;
+      } else if (/SELECT id, name, start_date, end_date, is_active\s+FROM school_years\s+WHERE is_active = \?\s+ORDER BY id DESC\s+LIMIT 1/i.test(sql)) {
+        const [is_active] = params;
+        row = schoolYears
+          .filter((entry) => Boolean(entry.is_active) === Boolean(is_active))
+          .sort((a, b) => b.id - a.id)[0];
+      } else if (/SELECT id, name, start_date, end_date, is_active\s+FROM school_years\s+WHERE id = \?/i.test(sql)) {
+        const [id] = params;
+        row = schoolYears.find((entry) => entry.id === Number(id));
+      } else if (/SELECT id, name, start_date, end_date, is_active\s+FROM school_years\s+WHERE name = \?/i.test(sql)) {
+        const [name] = params;
+        row = schoolYears.find((entry) => entry.name === String(name));
+      } else if (/SELECT cst\.class_id,\s*cst\.subject_id\s+FROM class_subject_teacher cst\s+WHERE cst\.teacher_id = \? AND cst\.school_year_id = \?/i.test(sql)) {
+        const [teacher_id, school_year_id] = params;
+        row = teachingAssignments
+          .filter(
+            (entry) =>
+              entry.teacher_id === Number(teacher_id) &&
+              Number(entry.school_year_id) === Number(school_year_id)
+          )
+          .sort((a, b) => new Date(b.created_at) - new Date(a.created_at) || b.id - a.id)[0];
       } else if (/SELECT id, email, password_hash, role, status, must_change_password FROM users WHERE email = \?/i.test(sql)) {
         const [email] = params;
         const user = users.find((u) => u.email === email);
@@ -603,6 +911,18 @@ function createFakeDb() {
         const [email] = params;
         const user = users.find((u) => u.email === email);
         row = user ? { id: user.id, role: user.role } : undefined;
+      } else if (/SELECT id FROM subjects WHERE LOWER\(name\) = LOWER\(\?\)/i.test(sql)) {
+        const [name] = params;
+        const subject = subjects.find((entry) => String(entry.name).toLowerCase() === String(name).toLowerCase());
+        row = subject ? { id: subject.id } : undefined;
+      } else if (/SELECT id FROM subjects WHERE id = \?/i.test(sql)) {
+        const [id] = params;
+        const subject = subjects.find((entry) => entry.id === Number(id));
+        row = subject ? { id: subject.id } : undefined;
+      } else if (/SELECT id, subject_id FROM classes WHERE id = \?/i.test(sql)) {
+        const [id] = params;
+        const classRow = classes.find((entry) => entry.id === Number(id));
+        row = classRow ? { id: classRow.id, subject_id: classRow.subject_id } : undefined;
       } else if (/SELECT id, email, role, status, created_at, must_change_password FROM users WHERE id = \?/i.test(sql)) {
         const [id] = params;
         const user = users.find((u) => u.id === Number(id));
@@ -626,6 +946,139 @@ function createFakeDb() {
         const [id] = params;
         const classRow = classes.find((c) => c.id === Number(id));
         row = classRow ? { id: classRow.id, name: classRow.name, subject: classRow.subject } : undefined;
+      } else if (/SELECT id, name, subject, subject_id, school_year_id, created_at FROM classes WHERE id = \?/i.test(sql)) {
+        const [id] = params;
+        const classRow = classes.find((c) => c.id === Number(id));
+        row = classRow
+          ? {
+              id: classRow.id,
+              name: classRow.name,
+              subject: classRow.subject,
+              subject_id: classRow.subject_id,
+              school_year_id: classRow.school_year_id,
+              created_at: classRow.created_at
+            }
+          : undefined;
+      } else if (/SELECT .*FROM classes\s+WHERE id = \? AND school_year_id = \?/i.test(sql)) {
+        const [id, school_year_id] = params;
+        const classRow = classes.find(
+          (entry) => entry.id === Number(id) && Number(entry.school_year_id) === Number(school_year_id)
+        );
+        row = classRow
+          ? {
+              id: classRow.id,
+              name: classRow.name,
+              subject: classRow.subject,
+              subject_id: classRow.subject_id,
+              school_year_id: classRow.school_year_id,
+              created_at: classRow.created_at
+            }
+          : undefined;
+      } else if (/SELECT id, name, subject, subject_id, school_year_id FROM classes WHERE id = \?/i.test(sql)) {
+        const [id] = params;
+        const classRow = classes.find((c) => c.id === Number(id));
+        row = classRow
+          ? {
+              id: classRow.id,
+              name: classRow.name,
+              subject: classRow.subject,
+              subject_id: classRow.subject_id,
+              school_year_id: classRow.school_year_id
+            }
+          : undefined;
+      } else if (/SELECT id, name, subject, subject_id(, created_at)? FROM classes WHERE id = \?/i.test(sql)) {
+        const [id] = params;
+        const classRow = classes.find((c) => c.id === Number(id));
+        row = classRow
+          ? {
+              id: classRow.id,
+              name: classRow.name,
+              subject: classRow.subject,
+              subject_id: classRow.subject_id,
+              created_at: classRow.created_at
+            }
+          : undefined;
+      } else if (/SELECT c\.id, c\.name, c\.subject, c\.subject_id\s+FROM classes c\s+WHERE c\.id = \?/i.test(sql)) {
+        const [id] = params;
+        const classRow = classes.find((c) => c.id === Number(id));
+        row = classRow
+          ? {
+              id: classRow.id,
+              name: classRow.name,
+              subject: classRow.subject,
+              subject_id: classRow.subject_id
+            }
+          : undefined;
+      } else if (/SELECT id, name FROM subjects WHERE id = \?/i.test(sql)) {
+        const [id] = params;
+        const subjectRow = subjects.find((entry) => entry.id === Number(id));
+        row = subjectRow ? { id: subjectRow.id, name: subjectRow.name } : undefined;
+      } else if (/SELECT id FROM classes WHERE id = \?/i.test(sql)) {
+        const [id] = params;
+        const classRow = classes.find((c) => c.id === Number(id));
+        row = classRow ? { id: classRow.id } : undefined;
+      } else if (/SELECT COUNT\(\*\) AS count FROM class_subject_teacher WHERE teacher_id = \?/i.test(sql)) {
+        const [teacher_id] = params;
+        row = {
+          count: teachingAssignments.filter((entry) => entry.teacher_id === Number(teacher_id)).length
+        };
+      } else if (/SELECT COUNT\(\*\) AS count\s+FROM grades\s+WHERE school_year_id = \?/i.test(sql)) {
+        const [school_year_id] = params;
+        row = {
+          count: grades.filter((entry) => Number(entry.school_year_id) === Number(school_year_id)).length
+        };
+      } else if (/SELECT cst\.class_id, cst\.subject_id\s+FROM class_subject_teacher cst\s+WHERE cst\.teacher_id = \?/i.test(sql)) {
+        const [teacher_id] = params;
+        row = teachingAssignments
+          .filter((entry) => entry.teacher_id === Number(teacher_id))
+          .sort((a, b) => new Date(b.created_at) - new Date(a.created_at))[0];
+      } else if (/SELECT 1 AS allowed\s+FROM class_subject_teacher\s+WHERE teacher_id = \? AND class_id = \? AND school_year_id = \?\s+LIMIT 1/i.test(sql)) {
+        const [teacher_id, class_id, school_year_id] = params;
+        const match = teachingAssignments.find(
+          (entry) =>
+            entry.teacher_id === Number(teacher_id) &&
+            entry.class_id === Number(class_id) &&
+            Number(entry.school_year_id) === Number(school_year_id)
+        );
+        row = match ? { allowed: 1 } : undefined;
+      } else if (/SELECT 1 AS allowed\s+FROM class_subject_teacher\s+WHERE teacher_id = \? AND class_id = \?\s+LIMIT 1/i.test(sql)) {
+        const [teacher_id, class_id] = params;
+        const match = teachingAssignments.find(
+          (entry) => entry.teacher_id === Number(teacher_id) && entry.class_id === Number(class_id)
+        );
+        row = match ? { allowed: 1 } : undefined;
+      } else if (/SELECT 1 AS allowed\s+FROM class_subject_teacher\s+WHERE teacher_id = \? AND class_id = \? AND subject_id = \? AND school_year_id = \?\s+LIMIT 1/i.test(sql)) {
+        const [teacher_id, class_id, subject_id, school_year_id] = params;
+        const match = teachingAssignments.find(
+          (entry) =>
+            entry.teacher_id === Number(teacher_id) &&
+            entry.class_id === Number(class_id) &&
+            entry.subject_id === Number(subject_id) &&
+            Number(entry.school_year_id) === Number(school_year_id)
+        );
+        row = match ? { allowed: 1 } : undefined;
+      } else if (/SELECT 1 AS allowed\s+FROM class_subject_teacher\s+WHERE teacher_id = \? AND class_id = \? AND subject_id = \?\s+LIMIT 1/i.test(sql)) {
+        const [teacher_id, class_id, subject_id] = params;
+        const match = teachingAssignments.find(
+          (entry) =>
+            entry.teacher_id === Number(teacher_id) &&
+            entry.class_id === Number(class_id) &&
+            entry.subject_id === Number(subject_id)
+        );
+        row = match ? { allowed: 1 } : undefined;
+      } else if (/SELECT c\.id, c\.name, c\.subject,\s+COALESCE\(\(/i.test(sql) && /FROM classes c\s+WHERE c\.id = \?/i.test(sql)) {
+        const [id] = params;
+        const classRow = classes.find((c) => c.id === Number(id));
+        if (classRow) {
+          const teacherEmails = getTeacherEmailsForClassSubject(classRow.id, classRow.subject_id).join(", ");
+          const alias = /AS teacher_emails/i.test(sql) ? "teacher_emails" : "teacher_email";
+          row = {
+            id: classRow.id,
+            name: classRow.name,
+            subject: classRow.subject,
+            [alias]: teacherEmails
+          };
+        }
       } else if (/SELECT c.id, c.name, c.subject, u.email AS teacher_email FROM classes c/i.test(sql)) {
         const [id] = params;
         const classRow = classes.find((c) => c.id === Number(id));
@@ -645,6 +1098,31 @@ function createFakeDb() {
         row = { count: classes.length };
       } else if (/SELECT COUNT\(\*\) AS count FROM students/i.test(sql)) {
         row = { count: students.length };
+      } else if (/SELECT COUNT\(\*\) AS count\s+FROM audit_logs/i.test(sql)) {
+        const hasActorFilter = /LOWER\(actor_email\) LIKE LOWER\(\?\)/i.test(sql);
+        const hasActionFilter = /LOWER\(action\) LIKE LOWER\(\?\)/i.test(sql);
+        const hasEntityFilter = /LOWER\(entity_type\) = LOWER\(\?\)/i.test(sql);
+        let index = 0;
+        const actorNeedle = hasActorFilter
+          ? String(params[index++] || "").replace(/%/g, "").toLowerCase()
+          : null;
+        const actionNeedle = hasActionFilter
+          ? String(params[index++] || "").replace(/%/g, "").toLowerCase()
+          : null;
+        const entityNeedle = hasEntityFilter ? String(params[index++] || "").toLowerCase() : null;
+
+        row = {
+          count: auditLogs
+            .filter((entry) =>
+              !actorNeedle ? true : String(entry.actor_email || "").toLowerCase().includes(actorNeedle)
+            )
+            .filter((entry) =>
+              !actionNeedle ? true : String(entry.action || "").toLowerCase().includes(actionNeedle)
+            )
+            .filter((entry) =>
+              !entityNeedle ? true : String(entry.entity_type || "").toLowerCase() === entityNeedle
+            ).length
+        };
       } else if (/SELECT id FROM classes WHERE id = \? AND teacher_id = \?/i.test(sql)) {
         const [id, teacher_id] = params;
         const classRow = classes.find((c) => c.id === Number(id) && c.teacher_id === Number(teacher_id));
@@ -653,10 +1131,60 @@ function createFakeDb() {
         const [id, teacher_id] = params;
         const classRow = classes.find((c) => c.id === Number(id) && c.teacher_id === Number(teacher_id));
         row = classRow ? { id: classRow.id, name: classRow.name, subject: classRow.subject } : undefined;
+      } else if (/FROM classes c\s+JOIN (teaching_assignments ta|class_subject_teacher cst) ON (ta|cst)\.class_id = c.id AND (ta|cst)\.subject_id = c.subject_id/i.test(sql) && /WHERE c.id = \? AND (ta|cst)\.teacher_id = \?/i.test(sql)) {
+        const [id, teacher_id] = params;
+        const classRow = classes.find((entry) => entry.id === Number(id));
+        if (classRow) {
+          const hasAssignment = teachingAssignments.some(
+            (entry) =>
+              entry.class_id === classRow.id &&
+              entry.subject_id === Number(classRow.subject_id) &&
+              entry.teacher_id === Number(teacher_id)
+          );
+          if (hasAssignment) {
+            const subject = subjects.find((entry) => entry.id === Number(classRow.subject_id));
+            row = {
+              id: classRow.id,
+              name: classRow.name,
+              subject: subject ? subject.name : classRow.subject,
+              subject_id: classRow.subject_id
+            };
+          }
+        }
       } else if (/SELECT id, name FROM classes WHERE id = \? AND teacher_id = \?/i.test(sql)) {
         const [id, teacher_id] = params;
         const classRow = classes.find((c) => c.id === Number(id) && c.teacher_id === Number(teacher_id));
         row = classRow ? { id: classRow.id, name: classRow.name } : undefined;
+      } else if (/SELECT gp\.absence_mode FROM class_subject_teacher cst[\s\S]*WHERE c\.id = \?/i.test(sql)) {
+        const [is_active, classId] = params;
+        const classRow = classes.find((entry) => entry.id === Number(classId));
+        if (classRow) {
+          const assignment = teachingAssignments.find(
+            (entry) =>
+              entry.class_id === classRow.id &&
+              entry.subject_id === Number(classRow.subject_id) &&
+              Boolean(
+                teacherGradingProfiles.find(
+                  (profile) =>
+                    profile.teacher_id === entry.teacher_id &&
+                    Boolean(profile.is_active) === Boolean(is_active)
+                )
+              )
+          );
+          if (assignment) {
+            const activeProfile = teacherGradingProfiles
+              .filter(
+                (entry) =>
+                  entry.teacher_id === Number(assignment.teacher_id) &&
+                  Boolean(entry.is_active) === Boolean(is_active)
+              )
+              .sort((a, b) => {
+                if (a.created_at === b.created_at) return a.id - b.id;
+                return new Date(a.created_at) - new Date(b.created_at);
+              })[0];
+            row = { absence_mode: activeProfile?.absence_mode || "include_zero" };
+          }
+        }
       } else if (/SELECT gp\.absence_mode FROM classes c[\s\S]*WHERE c\.id = \?/i.test(sql)) {
         const [is_active, classId] = params;
         const classRow = classes.find((entry) => entry.id === Number(classId));
@@ -784,10 +1312,282 @@ function createFakeDb() {
     },
     all(sql, params = [], cb) {
       let rows = [];
-      if (/SELECT id, email, role, status, created_at, must_change_password FROM users ORDER BY id DESC/i.test(sql)) {
+      if (/SELECT id, name, start_date, end_date, is_active\s+FROM school_years\s+ORDER BY start_date DESC, id DESC/i.test(sql)) {
+        rows = [...schoolYears]
+          .sort((a, b) => {
+            const dateComparison = String(b.start_date || "").localeCompare(String(a.start_date || ""));
+            return dateComparison || b.id - a.id;
+          })
+          .map((entry) => ({ ...entry }));
+      } else if (/SELECT id, school_year_id, archive_type, entity_count, created_at\s+FROM archives\s+WHERE school_year_id = \?/i.test(sql)) {
+        const [school_year_id] = params;
+        rows = archives
+          .filter((entry) => entry.school_year_id === Number(school_year_id))
+          .sort((a, b) => `${a.archive_type}`.localeCompare(`${b.archive_type}`))
+          .map((entry) => ({ ...entry }));
+      } else if (/SELECT rl\.id,[\s\S]*FROM rollover_logs rl[\s\S]*ORDER BY rl\.executed_at DESC, rl\.id DESC/i.test(sql)) {
+        rows = [...rolloverLogs]
+          .sort((a, b) => {
+            const timeDiff = new Date(b.executed_at) - new Date(a.executed_at);
+            return timeDiff || b.id - a.id;
+          })
+          .map((entry) => {
+            const user = users.find((userEntry) => userEntry.id === entry.executed_by);
+            return {
+              ...entry,
+              executed_by_email: user?.email || null
+            };
+          });
+      } else if (/SELECT id, email, role, status, created_at, must_change_password FROM users ORDER BY id DESC/i.test(sql)) {
         rows = [...users]
           .sort((a, b) => b.id - a.id)
           .map((u) => ({ id: u.id, email: u.email, role: u.role, status: u.status, created_at: u.created_at, must_change_password: u.must_change_password || 0 }));
+      } else if (/SELECT id, name FROM subjects ORDER BY name ASC/i.test(sql)) {
+        rows = [...subjects]
+          .sort((a, b) => a.name.localeCompare(b.name))
+          .map((entry) => ({ id: entry.id, name: entry.name }));
+      } else if (/SELECT id, name, subject, subject_id, school_year_id, created_at\s+FROM classes\s+WHERE school_year_id = \?/i.test(sql)) {
+        const [school_year_id] = params;
+        rows = classes
+          .filter((entry) => Number(entry.school_year_id) === Number(school_year_id))
+          .sort((a, b) => `${a.name} ${a.subject}`.localeCompare(`${b.name} ${b.subject}`))
+          .map((entry) => ({
+            id: entry.id,
+            name: entry.name,
+            subject: entry.subject,
+            subject_id: entry.subject_id,
+            school_year_id: entry.school_year_id,
+            created_at: entry.created_at
+          }));
+      } else if (/SELECT id, name, subject, subject_id, school_year_id, created_at\s+FROM classes\s+ORDER BY id ASC/i.test(sql)) {
+        rows = [...classes]
+          .sort((a, b) => a.id - b.id)
+          .map((entry) => ({
+            id: entry.id,
+            name: entry.name,
+            subject: entry.subject,
+            subject_id: entry.subject_id,
+            school_year_id: entry.school_year_id,
+            created_at: entry.created_at
+          }));
+      } else if (/SELECT c.id, c.name, c.subject, c.subject_id, c.school_year_id\s+FROM classes c\s+JOIN school_years sy ON sy.id = c.school_year_id\s+WHERE sy.is_active = \?/i.test(sql)) {
+        const [is_active] = params;
+        const activeYearIds = schoolYears
+          .filter((entry) => Boolean(entry.is_active) === Boolean(is_active))
+          .map((entry) => Number(entry.id));
+        rows = classes
+          .filter((entry) => activeYearIds.includes(Number(entry.school_year_id)))
+          .sort((a, b) => `${a.name} ${a.subject}`.localeCompare(`${b.name} ${b.subject}`))
+          .map((entry) => ({
+            id: entry.id,
+            name: entry.name,
+            subject: entry.subject,
+            subject_id: entry.subject_id,
+            school_year_id: entry.school_year_id
+          }));
+      } else if (/SELECT c.id, c.name, c.subject, c.subject_id\s+FROM classes c/i.test(sql)) {
+        rows = [...classes]
+          .sort((a, b) => `${a.name} ${a.subject}`.localeCompare(`${b.name} ${b.subject}`))
+          .map((entry) => ({
+            id: entry.id,
+            name: entry.name,
+            subject: entry.subject,
+            subject_id: entry.subject_id
+          }));
+      } else if (/SELECT cst.subject_id,\s*COALESCE\(s.name, c.subject\) AS subject_name\s+FROM class_subject_teacher cst[\s\S]*WHERE cst.teacher_id = \? AND cst.class_id = \? AND cst.school_year_id = \?/i.test(sql)) {
+        const [teacherIdParam, classIdParam, schoolYearIdParam] = params;
+        rows = teachingAssignments
+          .filter(
+            (entry) =>
+              entry.teacher_id === Number(teacherIdParam) &&
+              entry.class_id === Number(classIdParam) &&
+              Number(entry.school_year_id) === Number(schoolYearIdParam)
+          )
+          .map((entry) => {
+            const classRow = classes.find((c) => c.id === entry.class_id) || {};
+            const subjectRow = subjects.find((s) => s.id === entry.subject_id) || {};
+            return {
+              subject_id: entry.subject_id,
+              subject_name: subjectRow.name || classRow.subject || ""
+            };
+          })
+          .sort((a, b) => `${a.subject_name}`.localeCompare(`${b.subject_name}`));
+      } else if (/SELECT cst.id AS assignment_id, c.id, c.name, s.name AS subject\s+FROM class_subject_teacher cst/i.test(sql)) {
+        const [teacherIdParam] = params;
+        rows = teachingAssignments
+          .filter((entry) => entry.teacher_id === Number(teacherIdParam))
+          .map((entry) => {
+            const classRow = classes.find((c) => c.id === entry.class_id) || {};
+            const subjectRow = subjects.find((s) => s.id === entry.subject_id) || {};
+            return {
+              assignment_id: entry.id,
+              id: entry.class_id,
+              name: classRow.name,
+              subject: subjectRow.name
+            };
+          })
+          .sort((a, b) => Number(b.assignment_id) - Number(a.assignment_id));
+      } else if (/SELECT cst.id, cst.class_id, cst.subject_id, c.name AS class_name, c.created_at, s.name AS subject_name\s+FROM class_subject_teacher cst/i.test(sql) || /SELECT ta.id, ta.class_id, ta.subject_id, c.name AS class_name, c.created_at, s.name AS subject_name\s+FROM teaching_assignments ta/i.test(sql)) {
+        const [teacherIdParam] = params;
+        rows = teachingAssignments
+          .filter((entry) => entry.teacher_id === Number(teacherIdParam))
+          .map((entry) => {
+            const classRow = classes.find((c) => c.id === entry.class_id) || {};
+            const subjectRow = subjects.find((s) => s.id === entry.subject_id) || {};
+            return {
+              id: entry.id,
+              class_id: entry.class_id,
+              subject_id: entry.subject_id,
+              class_name: classRow.name,
+              created_at: classRow.created_at,
+              subject_name: subjectRow.name
+            };
+          })
+          .sort((a, b) => `${a.class_name} ${a.subject_name}`.localeCompare(`${b.class_name} ${b.subject_name}`));
+      } else if (/SELECT cst.class_id,\s*cst.subject_id,\s*c.name AS class_name,\s*s.name AS subject_name,\s*STRING_AGG/i.test(sql) && /FROM class_subject_teacher cst/i.test(sql)) {
+        const groupMap = new Map();
+        teachingAssignments.forEach((entry) => {
+          const classRow = classes.find((c) => c.id === entry.class_id) || {};
+          const subjectRow = subjects.find((s) => s.id === entry.subject_id) || {};
+          const teacher = users.find((u) => u.id === entry.teacher_id) || {};
+          const key = `${entry.class_id}:${entry.subject_id}`;
+          if (!groupMap.has(key)) {
+            groupMap.set(key, {
+              class_id: entry.class_id,
+              subject_id: entry.subject_id,
+              class_name: classRow.name,
+              subject_name: subjectRow.name,
+              teacherNames: []
+            });
+          }
+          if (teacher.email) {
+            groupMap.get(key).teacherNames.push(teacher.email);
+          }
+        });
+        rows = [...groupMap.values()]
+          .map((entry) => {
+            const teacherNames = [...new Set(entry.teacherNames)].sort((a, b) => a.localeCompare(b));
+            return {
+              class_id: entry.class_id,
+              subject_id: entry.subject_id,
+              class_name: entry.class_name,
+              subject_name: entry.subject_name,
+              teacher_names: teacherNames.join(", "),
+              teacher_count: teacherNames.length
+            };
+          })
+          .sort((a, b) => `${a.class_name} ${a.subject_name}`.localeCompare(`${b.class_name} ${b.subject_name}`));
+      } else if (/SELECT cst.id,\s*cst.class_id,\s*cst.subject_id,\s*cst.teacher_id,\s*cst.school_year_id,/i.test(sql) && /FROM class_subject_teacher cst/i.test(sql)) {
+        const [school_year_id] = params;
+        rows = teachingAssignments
+          .filter((entry) => Number(entry.school_year_id) === Number(school_year_id))
+          .map((entry) => {
+            const classRow = classes.find((c) => c.id === entry.class_id) || {};
+            const subjectRow = subjects.find((s) => s.id === entry.subject_id) || {};
+            const teacher = users.find((u) => u.id === entry.teacher_id) || {};
+            return {
+              id: entry.id,
+              class_id: entry.class_id,
+              subject_id: entry.subject_id,
+              teacher_id: entry.teacher_id,
+              school_year_id: entry.school_year_id,
+              class_name: classRow.name,
+              subject_name: subjectRow.name,
+              teacher_email: teacher.email
+            };
+          })
+          .sort((a, b) => `${a.class_name} ${a.subject_name} ${a.teacher_email}`.localeCompare(`${b.class_name} ${b.subject_name} ${b.teacher_email}`));
+      } else if (/SELECT id, class_id, subject_id, teacher_id, school_year_id\s+FROM class_subject_teacher ORDER BY id ASC/i.test(sql)) {
+        rows = [...teachingAssignments]
+          .sort((a, b) => a.id - b.id)
+          .map((entry) => ({
+            id: entry.id,
+            class_id: entry.class_id,
+            subject_id: entry.subject_id,
+            teacher_id: entry.teacher_id,
+            school_year_id: entry.school_year_id
+          }));
+      } else if (/SELECT cst.id,\s*cst.class_id,\s*cst.subject_id,\s*cst.teacher_id,/i.test(sql) && /FROM class_subject_teacher cst/i.test(sql) || /SELECT ta.id, ta.class_id, ta.subject_id, ta.teacher_id, ta.created_at,/i.test(sql) && /FROM teaching_assignments ta/i.test(sql)) {
+        rows = teachingAssignments
+          .map((entry) => {
+            const classRow = classes.find((c) => c.id === entry.class_id) || {};
+            const subjectRow = subjects.find((s) => s.id === entry.subject_id) || {};
+            const teacher = users.find((u) => u.id === entry.teacher_id) || {};
+            return {
+              id: entry.id,
+              class_id: entry.class_id,
+              subject_id: entry.subject_id,
+              teacher_id: entry.teacher_id,
+              created_at: entry.created_at,
+              class_name: classRow.name,
+              subject_name: subjectRow.name,
+              teacher_email: teacher.email
+            };
+          })
+          .sort((a, b) => `${a.class_name} ${a.subject_name} ${a.teacher_email}`.localeCompare(`${b.class_name} ${b.subject_name} ${b.teacher_email}`));
+      } else if (/SELECT g.id,\s*g.class_id,\s*g.student_id,\s*g.grade,\s*g.note,\s*g.created_at,[\s\S]*FROM grades g[\s\S]*WHERE g.school_year_id = \?/i.test(sql)) {
+        const [school_year_id] = params;
+        rows = grades
+          .filter((entry) => Number(entry.school_year_id) === Number(school_year_id))
+          .sort((a, b) => new Date(b.created_at) - new Date(a.created_at) || b.id - a.id)
+          .map((entry) => {
+            const student = students.find((studentEntry) => studentEntry.id === entry.student_id) || {};
+            const classRow = classes.find((classEntry) => classEntry.id === entry.class_id) || {};
+            return {
+              id: entry.id,
+              class_id: entry.class_id,
+              student_id: entry.student_id,
+              grade: entry.grade,
+              note: entry.note,
+              created_at: entry.created_at,
+              student_name: student.name,
+              class_name: classRow.name,
+              subject: classRow.subject
+            };
+          });
+      } else if (/SELECT id, class_id, student_id, grade, note, school_year_id, created_at\s+FROM grades ORDER BY id ASC/i.test(sql)) {
+        rows = [...grades]
+          .sort((a, b) => a.id - b.id)
+          .map((entry) => ({
+            id: entry.id,
+            class_id: entry.class_id,
+            student_id: entry.student_id,
+            grade: entry.grade,
+            note: entry.note,
+            school_year_id: entry.school_year_id,
+            created_at: entry.created_at
+          }));
+      } else if (/SELECT s.id AS student_id, s.name AS student_name, s.email AS student_email, s.school_year,[\s\S]*AS teacher_emails[\s\S]*FROM students s/i.test(sql)) {
+        const [email] = params;
+        rows = students
+          .filter((student) => student.email === email)
+          .map((student) => {
+            const classRow = classes.find((entry) => entry.id === student.class_id) || {};
+            return {
+              student_id: student.id,
+              student_name: student.name,
+              student_email: student.email,
+              school_year: student.school_year,
+              class_id: classRow.id,
+              class_name: classRow.name,
+              subject: classRow.subject,
+              teacher_emails: getTeacherEmailsForClassSubject(classRow.id, classRow.subject_id).join(", ")
+            };
+          })
+          .sort((a, b) => (a.class_name || "").localeCompare(b.class_name || ""));
+      } else if (/SELECT c.id, c.name, c.subject, c.created_at,\s+\(/i.test(sql) && /FROM classes c/i.test(sql)) {
+        rows = classes
+          .map((c) => {
+            const teacherEmails = getTeacherEmailsForClassSubject(c.id, c.subject_id);
+            return {
+              id: c.id,
+              name: c.name,
+              subject: c.subject,
+              created_at: c.created_at,
+              teacher_emails: teacherEmails.join(", "),
+              teacher_count: teacherEmails.length
+            };
+          });
       } else if (/SELECT id, name, subject FROM classes WHERE teacher_id = \? ORDER BY created_at DESC/i.test(sql)) {
         const [teacher_id] = params;
         rows = classes
@@ -799,6 +1599,11 @@ function createFakeDb() {
           .filter((u) => u.role === "teacher" && u.status === "active")
           .sort((a, b) => a.email.localeCompare(b.email))
           .map((u) => ({ id: u.id, email: u.email }));
+      } else if (/SELECT id\s+FROM users\s+WHERE role = 'teacher' AND status = 'active' AND id IN/i.test(sql)) {
+        const ids = params.map((entry) => Number(entry));
+        rows = users
+          .filter((u) => u.role === "teacher" && u.status === "active" && ids.includes(Number(u.id)))
+          .map((u) => ({ id: u.id }));
       } else if (/FROM teacher_grading_profiles\s+WHERE teacher_id = \?\s+ORDER BY is_active DESC, created_at ASC, id ASC/i.test(sql)) {
         const [teacher_id] = params;
         rows = teacherGradingProfiles
@@ -1004,11 +1809,45 @@ function createFakeDb() {
           .filter((n) => n.student_id === Number(student_id))
           .sort((a, b) => new Date(b.created_at) - new Date(a.created_at))
           .map((n) => ({ ...n }));
+      } else if (/FROM audit_logs/i.test(sql)) {
+        const hasActorFilter = /LOWER\(actor_email\) LIKE LOWER\(\?\)/i.test(sql);
+        const hasActionFilter = /LOWER\(action\) LIKE LOWER\(\?\)/i.test(sql);
+        const hasEntityFilter = /LOWER\(entity_type\) = LOWER\(\?\)/i.test(sql);
+        const hasBeforeIdFilter = /id < \?/i.test(sql);
+        const hasAfterIdFilter = /id > \?/i.test(sql);
+        const hasLimit = /LIMIT \?/i.test(sql);
+        let index = 0;
+        const actorNeedle = hasActorFilter
+          ? String(params[index++] || "").replace(/%/g, "").toLowerCase()
+          : null;
+        const actionNeedle = hasActionFilter
+          ? String(params[index++] || "").replace(/%/g, "").toLowerCase()
+          : null;
+        const entityNeedle = hasEntityFilter ? String(params[index++] || "").toLowerCase() : null;
+        const beforeId = hasBeforeIdFilter ? Number(params[index++]) : null;
+        const afterId = hasAfterIdFilter ? Number(params[index++]) : null;
+        const limit = hasLimit ? Number(params[index++]) : 300;
+
+        rows = auditLogs
+          .filter((entry) =>
+            !actorNeedle ? true : String(entry.actor_email || "").toLowerCase().includes(actorNeedle)
+          )
+          .filter((entry) =>
+            !actionNeedle ? true : String(entry.action || "").toLowerCase().includes(actionNeedle)
+          )
+          .filter((entry) =>
+            !entityNeedle ? true : String(entry.entity_type || "").toLowerCase() === entityNeedle
+          )
+          .filter((entry) => (!Number.isFinite(beforeId) ? true : Number(entry.id) < beforeId))
+          .filter((entry) => (!Number.isFinite(afterId) ? true : Number(entry.id) > afterId))
+          .sort((a, b) => Number(b.id) - Number(a.id))
+          .slice(0, Number.isFinite(limit) ? Math.max(1, limit) : 300)
+          .map((entry) => ({ ...entry }));
       } else if (/SELECT id, name, subject, teacher_id FROM classes WHERE id = \?/i.test(sql)) {
         const [id] = params;
         const cls = classes.find((c) => c.id === Number(id));
         rows = cls ? [{ ...cls }] : [];
-      } else if (/SELECT id, name, category, weight, (weight_mode, )?(max_points, )?date, description FROM grade_templates WHERE class_id = \? ORDER BY date, name/i.test(sql)) {
+      } else if (/SELECT id, name, category, weight, .* FROM grade_templates WHERE class_id = \? ORDER BY date, name/i.test(sql)) {
         const [clsId] = params;
         rows = gradeTemplates
           .filter((t) => t.class_id === Number(clsId))
@@ -1093,77 +1932,82 @@ function createFakeDb() {
           "INSERT INTO users (email, password_hash, role, status, must_change_password) VALUES (?,?,?,?,?)",
           [studentEmail, studentHash, "student", "active", 1],
           function () {
-            db.run(
-              "INSERT INTO classes (name, subject, teacher_id) VALUES (?,?,?)",
-              ["3AHWII", "Informatik", teacherId],
-              function () {
-                const createdClassId = this.lastID;
-                db.run(
-                  "INSERT INTO students (name, email, class_id, school_year) VALUES (?,?,?,?)",
-                  ["Max Muster", studentEmail, createdClassId, "2024/25"],
-                  function () {
-                    const studentId = this.lastID;
-                    const now = new Date();
+            db.run("INSERT INTO subjects (name) VALUES (?)", ["Informatik"], function () {
+              const createdSubjectId = this.lastID;
+              db.run(
+                "INSERT INTO classes (name, subject, subject_id) VALUES (?,?,?)",
+                ["3AHWII", "Informatik", createdSubjectId],
+                function () {
+                  const createdClassId = this.lastID;
+                  db.run(
+                    "INSERT INTO class_subject_teacher (class_id, subject_id, teacher_id) VALUES (?,?,?)",
+                    [createdClassId, createdSubjectId, teacherId],
+                    function () {
+                      db.run(
+                        "INSERT INTO students (name, email, class_id, school_year) VALUES (?,?,?,?)",
+                        ["Max Muster", studentEmail, createdClassId, "2024/25"],
+                        function () {
+                          const studentId = this.lastID;
+                          const now = new Date();
 
-                    db.run(
-                      "INSERT INTO grade_templates (class_id, name, category, weight, date, description) VALUES (?,?,?,?,?,?)",
-                      [
-                        createdClassId,
-                        "SA 1",
-                        "Schularbeit",
-                        40,
-                        new Date(
-                          now.getTime() - 1000 * 60 * 60 * 24 * 14
-                        ).toISOString(),
-                        "Schularbeit 1"
-                      ]
-                    );
-                    db.run(
-                      "INSERT INTO grade_templates (class_id, name, category, weight, date, description) VALUES (?,?,?,?,?,?)",
-                      [
-                        createdClassId,
-                        "Test 1",
-                        "Test",
-                        30,
-                        new Date(
-                          now.getTime() - 1000 * 60 * 60 * 24 * 7
-                        ).toISOString(),
-                        "Wochentlicher Test"
-                      ]
-                    );
-                    db.run(
-                      "INSERT INTO grade_templates (class_id, name, category, weight, date, description) VALUES (?,?,?,?,?,?)",
-                      [
-                        createdClassId,
-                        "Mitarbeit",
-                        "Mitarbeit",
-                        30,
-                        now.toISOString(),
-                        "Aktive Teilnahme"
-                      ]
-                    );
+                          db.run(
+                            "INSERT INTO grade_templates (class_id, name, category, weight, date, description) VALUES (?,?,?,?,?,?)",
+                            [
+                              createdClassId,
+                              "SA 1",
+                              "Schularbeit",
+                              40,
+                              new Date(now.getTime() - 1000 * 60 * 60 * 24 * 14).toISOString(),
+                              "Schularbeit 1"
+                            ]
+                          );
+                          db.run(
+                            "INSERT INTO grade_templates (class_id, name, category, weight, date, description) VALUES (?,?,?,?,?,?)",
+                            [
+                              createdClassId,
+                              "Test 1",
+                              "Test",
+                              30,
+                              new Date(now.getTime() - 1000 * 60 * 60 * 24 * 7).toISOString(),
+                              "Wochentlicher Test"
+                            ]
+                          );
+                          db.run(
+                            "INSERT INTO grade_templates (class_id, name, category, weight, date, description) VALUES (?,?,?,?,?,?)",
+                            [
+                              createdClassId,
+                              "Mitarbeit",
+                              "Mitarbeit",
+                              30,
+                              now.toISOString(),
+                              "Aktive Teilnahme"
+                            ]
+                          );
 
-                    db.run(
-                      "INSERT INTO grades (student_id, class_id, grade_template_id, grade, note) VALUES (?,?,?,?,?)",
-                      [studentId, createdClassId, 1, 2, "Gute Struktur"]
-                    );
-                    db.run(
-                      "INSERT INTO grades (student_id, class_id, grade_template_id, grade, note) VALUES (?,?,?,?,?)",
-                      [studentId, createdClassId, 2, 1.5, "Sauberer Code"]
-                    );
-                    db.run(
-                      "INSERT INTO grades (student_id, class_id, grade_template_id, grade, note) VALUES (?,?,?,?,?)",
-                      [studentId, createdClassId, 3, 3, "Mehr Quellenangaben"]
-                    );
+                          db.run(
+                            "INSERT INTO grades (student_id, class_id, grade_template_id, grade, note) VALUES (?,?,?,?,?)",
+                            [studentId, createdClassId, 1, 2, "Gute Struktur"]
+                          );
+                          db.run(
+                            "INSERT INTO grades (student_id, class_id, grade_template_id, grade, note) VALUES (?,?,?,?,?)",
+                            [studentId, createdClassId, 2, 1.5, "Sauberer Code"]
+                          );
+                          db.run(
+                            "INSERT INTO grades (student_id, class_id, grade_template_id, grade, note) VALUES (?,?,?,?,?)",
+                            [studentId, createdClassId, 3, 3, "Mehr Quellenangaben"]
+                          );
 
-                    db.run(
-                      "INSERT INTO grade_notifications (student_id, message, type, created_at) VALUES (?,?,?,?)",
-                      [studentId, "Neue Note in Informatik eingetragen.", "grade", now.toISOString()]
-                    );
-                  }
-                );
-              }
-            );
+                          db.run(
+                            "INSERT INTO grade_notifications (student_id, message, type, created_at) VALUES (?,?,?,?)",
+                            [studentId, "Neue Note in Informatik eingetragen.", "grade", now.toISOString()]
+                          );
+                        }
+                      );
+                    }
+                  );
+                }
+              );
+            });
           }
         );
       }
@@ -1334,15 +2178,29 @@ async function seedDemoData() {
   );
   const studentUserId = studentUser.rows[0].id;
 
+  const subjectInsert = await pool.query(
+    "INSERT INTO subjects (name) VALUES ($1) ON CONFLICT (name) DO UPDATE SET name = EXCLUDED.name RETURNING id",
+    ["Informatik"]
+  );
+  const subjectId = subjectInsert.rows[0].id;
+  const activeSchoolYearResult = await pool.query(
+    "SELECT id, name FROM school_years WHERE is_active = TRUE ORDER BY id DESC LIMIT 1"
+  );
+  const activeSchoolYear = activeSchoolYearResult.rows[0];
+
   const classInsert = await pool.query(
-    "INSERT INTO classes (name, subject, teacher_id) VALUES ($1, $2, $3) RETURNING id",
-    ["3AHWII", "Informatik", teacherId]
+    "INSERT INTO classes (name, subject, subject_id, school_year_id) VALUES ($1, $2, $3, $4) RETURNING id",
+    ["3AHWII", "Informatik", subjectId, activeSchoolYear.id]
   );
   const classId = classInsert.rows[0].id;
+  await pool.query(
+    "INSERT INTO class_subject_teacher (class_id, subject_id, teacher_id, school_year_id) VALUES ($1, $2, $3, $4) ON CONFLICT (class_id, subject_id, teacher_id) DO NOTHING",
+    [classId, subjectId, teacherId, activeSchoolYear.id]
+  );
 
   const studentInsert = await pool.query(
     "INSERT INTO students (name, email, class_id, school_year) VALUES ($1, $2, $3, $4) RETURNING id",
-    ["Max Muster", studentEmail, classId, "2024/25"]
+    ["Max Muster", studentEmail, classId, activeSchoolYear.name]
   );
   const studentId = studentInsert.rows[0].id;
 
@@ -1364,16 +2222,16 @@ async function seedDemoData() {
   );
 
   await pool.query(
-    "INSERT INTO grades (student_id, class_id, grade_template_id, grade, note) VALUES ($1, $2, $3, $4, $5)",
-    [studentId, classId, templateOne.rows[0].id, 2, "Gute Struktur"]
+    "INSERT INTO grades (student_id, class_id, grade_template_id, grade, note, school_year_id) VALUES ($1, $2, $3, $4, $5, $6)",
+    [studentId, classId, templateOne.rows[0].id, 2, "Gute Struktur", activeSchoolYear.id]
   );
   await pool.query(
-    "INSERT INTO grades (student_id, class_id, grade_template_id, grade, note) VALUES ($1, $2, $3, $4, $5)",
-    [studentId, classId, templateTwo.rows[0].id, 1.5, "Sauberer Code"]
+    "INSERT INTO grades (student_id, class_id, grade_template_id, grade, note, school_year_id) VALUES ($1, $2, $3, $4, $5, $6)",
+    [studentId, classId, templateTwo.rows[0].id, 1.5, "Sauberer Code", activeSchoolYear.id]
   );
   await pool.query(
-    "INSERT INTO grades (student_id, class_id, grade_template_id, grade, note) VALUES ($1, $2, $3, $4, $5)",
-    [studentId, classId, templateThree.rows[0].id, 3, "Mehr Quellenangaben"]
+    "INSERT INTO grades (student_id, class_id, grade_template_id, grade, note, school_year_id) VALUES ($1, $2, $3, $4, $5, $6)",
+    [studentId, classId, templateThree.rows[0].id, 3, "Mehr Quellenangaben", activeSchoolYear.id]
   );
   await pool.query(
     "INSERT INTO grade_notifications (student_id, message, type) VALUES ($1, $2, $3)",
@@ -1388,6 +2246,8 @@ async function seedDemoData() {
 }
 
 async function initializeDatabase() {
+  const defaultSchoolYear = getDefaultSchoolYearWindow();
+
   await pool.query(`
     CREATE TABLE IF NOT EXISTS users (
       id SERIAL PRIMARY KEY,
@@ -1402,11 +2262,43 @@ async function initializeDatabase() {
   `);
 
   await pool.query(`
+    CREATE TABLE IF NOT EXISTS school_years (
+      id SERIAL PRIMARY KEY,
+      name TEXT NOT NULL UNIQUE,
+      start_date DATE NOT NULL,
+      end_date DATE NOT NULL,
+      is_active BOOLEAN NOT NULL DEFAULT FALSE
+    )
+  `);
+  await pool.query(
+    "CREATE UNIQUE INDEX IF NOT EXISTS school_years_single_active_idx ON school_years (is_active) WHERE is_active = TRUE"
+  );
+  await pool.query(
+    `INSERT INTO school_years (name, start_date, end_date, is_active)
+     SELECT $1, $2, $3, TRUE
+     WHERE NOT EXISTS (SELECT 1 FROM school_years)`,
+    [defaultSchoolYear.name, defaultSchoolYear.startDate, defaultSchoolYear.endDate]
+  );
+  await pool.query(`
+    UPDATE school_years
+    SET is_active = TRUE
+    WHERE id = (
+      SELECT id
+      FROM school_years
+      ORDER BY start_date DESC, id DESC
+      LIMIT 1
+    )
+    AND NOT EXISTS (
+      SELECT 1 FROM school_years WHERE is_active = TRUE
+    )
+  `);
+
+  await pool.query(`
     CREATE TABLE IF NOT EXISTS classes (
       id SERIAL PRIMARY KEY,
       name TEXT NOT NULL,
       subject TEXT NOT NULL,
-      teacher_id INTEGER NOT NULL REFERENCES users(id),
+      school_year_id INTEGER REFERENCES school_years(id),
       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
     )
   `);
@@ -1482,6 +2374,189 @@ async function initializeDatabase() {
   await pool.query(
     "ALTER TABLE classes ALTER COLUMN teacher_id SET NOT NULL"
   );
+
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS subjects (
+      id SERIAL PRIMARY KEY,
+      name TEXT NOT NULL UNIQUE,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    )
+  `);
+  await pool.query(
+    "ALTER TABLE classes ADD COLUMN IF NOT EXISTS subject_id INTEGER"
+  );
+  await pool.query(
+    "INSERT INTO subjects (name) SELECT DISTINCT subject FROM classes WHERE subject IS NOT NULL AND TRIM(subject) <> '' ON CONFLICT (name) DO NOTHING"
+  );
+  await pool.query(`
+    UPDATE classes c
+    SET subject_id = s.id
+    FROM subjects s
+    WHERE c.subject_id IS NULL
+      AND LOWER(TRIM(c.subject)) = LOWER(TRIM(s.name))
+  `);
+  await pool.query(`
+    DO $$
+    BEGIN
+      IF NOT EXISTS (
+        SELECT 1
+        FROM pg_constraint
+        WHERE conname = 'classes_subject_id_fkey'
+      ) THEN
+        ALTER TABLE classes
+        ADD CONSTRAINT classes_subject_id_fkey
+        FOREIGN KEY (subject_id) REFERENCES subjects(id) ON DELETE RESTRICT;
+      END IF;
+    END $$;
+  `);
+  await pool.query(
+    "ALTER TABLE classes ADD COLUMN IF NOT EXISTS school_year_id INTEGER"
+  );
+  await pool.query(`
+    UPDATE classes
+    SET school_year_id = (
+      SELECT id
+      FROM school_years
+      WHERE is_active = TRUE
+      ORDER BY id DESC
+      LIMIT 1
+    )
+    WHERE school_year_id IS NULL
+  `);
+  await pool.query(`
+    DO $$
+    BEGIN
+      IF NOT EXISTS (
+        SELECT 1
+        FROM pg_constraint
+        WHERE conname = 'classes_school_year_id_fkey'
+      ) THEN
+        ALTER TABLE classes
+        ADD CONSTRAINT classes_school_year_id_fkey
+        FOREIGN KEY (school_year_id) REFERENCES school_years(id) ON DELETE RESTRICT;
+      END IF;
+    END $$;
+  `);
+  await pool.query(
+    "ALTER TABLE classes ALTER COLUMN school_year_id SET NOT NULL"
+  );
+  await pool.query(
+    "CREATE INDEX IF NOT EXISTS classes_school_year_idx ON classes (school_year_id)"
+  );
+
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS class_subject_teacher (
+      id SERIAL PRIMARY KEY,
+      class_id INTEGER NOT NULL REFERENCES classes(id) ON DELETE CASCADE,
+      subject_id INTEGER NOT NULL REFERENCES subjects(id) ON DELETE CASCADE,
+      teacher_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      school_year_id INTEGER REFERENCES school_years(id),
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      UNIQUE (class_id, subject_id, teacher_id)
+    )
+  `);
+  await pool.query(
+    "CREATE INDEX IF NOT EXISTS class_subject_teacher_teacher_idx ON class_subject_teacher (teacher_id)"
+  );
+  await pool.query(
+    "CREATE INDEX IF NOT EXISTS class_subject_teacher_class_subject_idx ON class_subject_teacher (class_id, subject_id)"
+  );
+  await pool.query(`
+    DO $$
+    BEGIN
+      IF EXISTS (
+        SELECT 1
+        FROM information_schema.tables
+        WHERE table_schema = 'public' AND table_name = 'teaching_assignments'
+      ) THEN
+        INSERT INTO class_subject_teacher (class_id, subject_id, teacher_id, school_year_id)
+        SELECT ta.class_id, ta.subject_id, ta.teacher_id, c.school_year_id
+        FROM teaching_assignments ta
+        JOIN classes c ON c.id = ta.class_id
+        ON CONFLICT (class_id, subject_id, teacher_id) DO NOTHING;
+      END IF;
+    END $$;
+  `);
+  await pool.query(`
+    DO $$
+    BEGIN
+      IF EXISTS (
+        SELECT 1
+        FROM information_schema.columns
+        WHERE table_schema = 'public' AND table_name = 'classes' AND column_name = 'teacher_id'
+      ) THEN
+        INSERT INTO class_subject_teacher (class_id, subject_id, teacher_id, school_year_id)
+        SELECT c.id, c.subject_id, c.teacher_id, c.school_year_id
+        FROM classes c
+        WHERE c.teacher_id IS NOT NULL AND c.subject_id IS NOT NULL
+        ON CONFLICT (class_id, subject_id, teacher_id) DO NOTHING;
+      END IF;
+    END $$;
+  `);
+  await pool.query(
+    "ALTER TABLE class_subject_teacher ADD COLUMN IF NOT EXISTS school_year_id INTEGER"
+  );
+  await pool.query(`
+    UPDATE class_subject_teacher cst
+    SET school_year_id = c.school_year_id
+    FROM classes c
+    WHERE c.id = cst.class_id AND cst.school_year_id IS NULL
+  `);
+  await pool.query(`
+    DO $$
+    BEGIN
+      IF NOT EXISTS (
+        SELECT 1
+        FROM pg_constraint
+        WHERE conname = 'class_subject_teacher_school_year_id_fkey'
+      ) THEN
+        ALTER TABLE class_subject_teacher
+        ADD CONSTRAINT class_subject_teacher_school_year_id_fkey
+        FOREIGN KEY (school_year_id) REFERENCES school_years(id) ON DELETE RESTRICT;
+      END IF;
+    END $$;
+  `);
+  await pool.query(
+    "ALTER TABLE class_subject_teacher ALTER COLUMN school_year_id SET NOT NULL"
+  );
+  await pool.query(
+    "CREATE INDEX IF NOT EXISTS class_subject_teacher_school_year_idx ON class_subject_teacher (school_year_id)"
+  );
+  await pool.query("DROP TABLE IF EXISTS teaching_assignments");
+  await pool.query(`
+    DO $$
+    BEGIN
+      IF EXISTS (
+        SELECT 1
+        FROM information_schema.columns
+        WHERE table_schema = 'public' AND table_name = 'classes' AND column_name = 'teacher_id'
+      ) THEN
+        ALTER TABLE classes DROP COLUMN teacher_id;
+      END IF;
+    END $$;
+  `);
+
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS archives (
+      id SERIAL PRIMARY KEY,
+      school_year_id INTEGER NOT NULL REFERENCES school_years(id) ON DELETE CASCADE,
+      archive_type TEXT NOT NULL,
+      entity_count INTEGER NOT NULL DEFAULT 0,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    )
+  `);
+
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS rollover_logs (
+      id SERIAL PRIMARY KEY,
+      executed_by INTEGER REFERENCES users(id) ON DELETE SET NULL,
+      executed_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      old_school_year TEXT NOT NULL,
+      new_school_year TEXT NOT NULL,
+      status TEXT NOT NULL,
+      backup_path TEXT
+    )
+  `);
 
   await pool.query(`
     CREATE TABLE IF NOT EXISTS students (
@@ -1797,6 +2872,9 @@ async function initializeDatabase() {
     "ALTER TABLE grade_templates ADD COLUMN IF NOT EXISTS max_points NUMERIC"
   );
   await pool.query(
+    "ALTER TABLE grade_templates ADD COLUMN IF NOT EXISTS archived_at TIMESTAMPTZ"
+  );
+  await pool.query(
     "UPDATE grade_templates SET weight_mode = 'points' WHERE weight_mode IS NULL"
   );
   await pool.query(
@@ -1825,6 +2903,9 @@ async function initializeDatabase() {
   await pool.query(
     "ALTER TABLE grade_templates ADD CONSTRAINT grade_templates_max_points_check CHECK (max_points IS NULL OR max_points > 0)"
   );
+  await pool.query(
+    "CREATE INDEX IF NOT EXISTS grade_templates_archived_at_idx ON grade_templates (archived_at)"
+  );
 
   await pool.query(`
     CREATE TABLE IF NOT EXISTS grades (
@@ -1832,6 +2913,7 @@ async function initializeDatabase() {
       student_id INTEGER NOT NULL REFERENCES students(id) ON DELETE CASCADE,
       class_id INTEGER NOT NULL REFERENCES classes(id) ON DELETE CASCADE,
       grade_template_id INTEGER NOT NULL REFERENCES grade_templates(id) ON DELETE CASCADE,
+      school_year_id INTEGER REFERENCES school_years(id),
       grade NUMERIC NOT NULL CHECK (grade >= 1 AND grade <= 5),
       is_absent BOOLEAN NOT NULL DEFAULT FALSE,
       points_achieved NUMERIC,
@@ -1879,6 +2961,57 @@ async function initializeDatabase() {
   );
   await pool.query(
     "ALTER TABLE grades ADD COLUMN IF NOT EXISTS external_link TEXT"
+  );
+  await pool.query(
+    "ALTER TABLE grades ADD COLUMN IF NOT EXISTS school_year_id INTEGER"
+  );
+  await pool.query(`
+    UPDATE grades g
+    SET school_year_id = c.school_year_id
+    FROM classes c
+    WHERE c.id = g.class_id AND g.school_year_id IS NULL
+  `);
+  await pool.query(`
+    DO $$
+    BEGIN
+      IF NOT EXISTS (
+        SELECT 1
+        FROM pg_constraint
+        WHERE conname = 'grades_school_year_id_fkey'
+      ) THEN
+        ALTER TABLE grades
+        ADD CONSTRAINT grades_school_year_id_fkey
+        FOREIGN KEY (school_year_id) REFERENCES school_years(id) ON DELETE RESTRICT;
+      END IF;
+    END $$;
+  `);
+  await pool.query(
+    "ALTER TABLE grades ALTER COLUMN school_year_id SET NOT NULL"
+  );
+  await pool.query(
+    "CREATE INDEX IF NOT EXISTS grades_school_year_idx ON grades (school_year_id)"
+  );
+
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS grade_messages (
+      id SERIAL PRIMARY KEY,
+      grade_id INTEGER NOT NULL REFERENCES grades(id) ON DELETE CASCADE,
+      student_id INTEGER NOT NULL REFERENCES students(id) ON DELETE CASCADE,
+      student_message TEXT NOT NULL,
+      teacher_reply TEXT,
+      teacher_reply_seen_at TIMESTAMPTZ,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      replied_at TIMESTAMPTZ
+    )
+  `);
+  await pool.query(
+    "ALTER TABLE grade_messages ADD COLUMN IF NOT EXISTS teacher_reply_seen_at TIMESTAMPTZ"
+  );
+  await pool.query(
+    "CREATE INDEX IF NOT EXISTS grade_messages_student_idx ON grade_messages (student_id)"
+  );
+  await pool.query(
+    "CREATE INDEX IF NOT EXISTS grade_messages_grade_idx ON grade_messages (grade_id)"
   );
 
   await pool.query(`
@@ -1933,6 +3066,31 @@ async function initializeDatabase() {
       read_at TIMESTAMPTZ
     )
   `);
+
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS audit_logs (
+      id SERIAL PRIMARY KEY,
+      actor_user_id INTEGER REFERENCES users(id),
+      actor_email TEXT,
+      actor_role TEXT,
+      action TEXT NOT NULL,
+      entity_type TEXT,
+      entity_id TEXT,
+      http_method TEXT NOT NULL,
+      route_path TEXT NOT NULL,
+      status_code INTEGER,
+      ip_address TEXT,
+      user_agent TEXT,
+      payload TEXT,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    )
+  `);
+  await pool.query(
+    "CREATE INDEX IF NOT EXISTS audit_logs_created_at_idx ON audit_logs (created_at DESC)"
+  );
+  await pool.query(
+    "CREATE INDEX IF NOT EXISTS audit_logs_actor_idx ON audit_logs (actor_email, created_at DESC)"
+  );
 
   await pool.query(`
     CREATE TABLE IF NOT EXISTS sessions (
