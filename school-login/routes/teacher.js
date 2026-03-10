@@ -10,6 +10,7 @@ const schoolYearModel = require("../models/schoolYearModel");
 const { requireAuth, requireRole } = require("../middleware/auth");
 const { createAuditLogMiddleware } = require("../middleware/audit");
 const { deriveNameFromEmail } = require("../utils/studentName");
+const { ensureSubjectIdByName } = require("../utils/subjects");
 
 const runAsync = (sql, params = []) =>
   new Promise((resolve, reject) => {
@@ -747,21 +748,6 @@ function renderError(res, req, message, status, backUrl) {
     backUrl,
     csrfToken: req.csrfToken()
   });
-}
-
-async function ensureSubjectIdByName(subjectName) {
-  const normalized = String(subjectName || "").trim();
-  if (!normalized) return null;
-  const existing = await getAsync("SELECT id FROM subjects WHERE LOWER(name) = LOWER(?)", [normalized]);
-  if (existing) return existing.id;
-  try {
-    const result = await runAsync("INSERT INTO subjects (name) VALUES (?)", [normalized]);
-    return result?.lastID || null;
-  } catch (err) {
-    if (!String(err).includes("UNIQUE")) throw err;
-    const row = await getAsync("SELECT id FROM subjects WHERE LOWER(name) = LOWER(?)", [normalized]);
-    return row?.id || null;
-  }
 }
 
 async function getTeacherAssignments(teacherId) {
@@ -3463,13 +3449,18 @@ router.post("/bulk-grade-template/:classId/:templateId", async (req, res, next) 
     let saved = 0;
     let updated = 0;
     let duplicates = 0;
+    const classSchoolYearId = Number(classData.school_year_id);
+
+    if (!Number.isFinite(classSchoolYearId)) {
+      throw new Error(`Klasse ${classId} hat kein gueltiges school_year_id.`);
+    }
 
     for (const row of preparedRows) {
       try {
         if (row.existingGradeId) {
           await runAsync(
             `UPDATE grades
-             SET grade = ?, points_achieved = ?, points_max = ?, note = ?, is_absent = ?
+             SET grade = ?, points_achieved = ?, points_max = ?, note = ?, is_absent = ?, school_year_id = ?
              WHERE id = ? AND class_id = ? AND grade_template_id = ?`,
             [
               row.grade,
@@ -3477,6 +3468,7 @@ router.post("/bulk-grade-template/:classId/:templateId", async (req, res, next) 
               row.pointsMax,
               row.note,
               row.isAbsent,
+              classSchoolYearId,
               row.existingGradeId,
               classId,
               template.id
@@ -3485,7 +3477,7 @@ router.post("/bulk-grade-template/:classId/:templateId", async (req, res, next) 
           updated += 1;
         } else {
           await runAsync(
-            "INSERT INTO grades (student_id, class_id, grade_template_id, grade, points_achieved, points_max, note, external_link, is_absent) VALUES (?,?,?,?,?,?,?,?,?)",
+            "INSERT INTO grades (student_id, class_id, grade_template_id, grade, points_achieved, points_max, note, external_link, is_absent, school_year_id) VALUES (?,?,?,?,?,?,?,?,?,?)",
             [
               row.studentId,
               classId,
@@ -3495,7 +3487,8 @@ router.post("/bulk-grade-template/:classId/:templateId", async (req, res, next) 
               row.pointsMax,
               row.note,
               null,
-              row.isAbsent
+              row.isAbsent,
+              classSchoolYearId
             ]
           );
           await runAsync("INSERT INTO grade_notifications (student_id, message, type) VALUES (?,?,?)", [

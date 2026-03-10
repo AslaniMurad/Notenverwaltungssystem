@@ -6,6 +6,7 @@ const { requireAuth, requireRole } = require("../middleware/auth");
 const { createAuditLogMiddleware } = require("../middleware/audit");
 const { getPasswordValidationError } = require("../utils/password");
 const { deriveNameFromEmail } = require("../utils/studentName");
+const { ensureSubjectIdByName } = require("../utils/subjects");
 
 const INITIAL_PASSWORD = process.env.INITIAL_PASSWORD || null;
 
