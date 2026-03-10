@@ -21,3 +21,9 @@
 .ionide
 
 # End of https://www.toptal.com/developers/gitignore/api/visualstudiocode
+/.idea/.gitignore
+/.idea/dataSources.xml
+/.idea/modules.xml
+/.idea/NVS.iml
+/output/pdf/nvs-app-summary.pdf
+/.idea/vcs.xml
