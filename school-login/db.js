@@ -1201,7 +1201,7 @@ function createFakeDb() {
             })[0];
           row = { absence_mode: activeProfile?.absence_mode || "include_zero" };
         }
-      } else if (/SELECT id, name, category, weight, max_points, date, description FROM grade_templates WHERE id = \? AND class_id = \?/i.test(sql)) {
+      } else if (/SELECT id, name, category, weight, (weight_mode, )?max_points, date, description FROM grade_templates WHERE id = \? AND class_id = \?/i.test(sql)) {
         const [templateId, clsId] = params;
         const template = gradeTemplates.find(
           (entry) => entry.id === Number(templateId) && entry.class_id === Number(clsId)
@@ -1212,6 +1212,7 @@ function createFakeDb() {
               name: template.name,
               category: template.category,
               weight: template.weight,
+              weight_mode: template.weight_mode || "points",
               max_points: template.max_points ?? null,
               date: template.date || null,
               description: template.description || null
@@ -1684,6 +1685,23 @@ function createFakeDb() {
               entry.class_id === Number(class_id) && entry.student_id === Number(student_id)
           )
           .map((entry) => ({ grade_template_id: entry.grade_template_id }));
+      } else if (/SELECT id, student_id, grade, points_achieved, points_max, note, is_absent\s+FROM grades\s+WHERE class_id = \? AND grade_template_id = \?/i.test(sql)) {
+        const [class_id, grade_template_id] = params;
+        rows = grades
+          .filter(
+            (entry) =>
+              entry.class_id === Number(class_id) &&
+              entry.grade_template_id === Number(grade_template_id)
+          )
+          .map((entry) => ({
+            id: entry.id,
+            student_id: entry.student_id,
+            grade: entry.grade,
+            points_achieved: entry.points_achieved ?? null,
+            points_max: entry.points_max ?? null,
+            note: entry.note || null,
+            is_absent: entry.is_absent ? 1 : 0
+          }));
       } else if (/FROM grades g[\s\S]*UNION ALL[\s\S]*special_assessments/i.test(sql) && /WHERE g\.student_id = \?/i.test(sql)) {
         const [student_id] = params;
         const baseRows = grades
@@ -2284,6 +2302,78 @@ async function initializeDatabase() {
       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
     )
   `);
+  await pool.query(
+    "ALTER TABLE classes ADD COLUMN IF NOT EXISTS teacher_id INTEGER"
+  );
+  await pool.query(
+    "CREATE INDEX IF NOT EXISTS classes_teacher_id_idx ON classes (teacher_id)"
+  );
+
+  const legacyClassTeacherTable = await pool.query(`
+    SELECT EXISTS (
+      SELECT 1
+      FROM information_schema.tables
+      WHERE table_schema = 'public' AND table_name = 'class_subject_teacher'
+    ) AS exists
+  `);
+
+  if (legacyClassTeacherTable.rows[0]?.exists) {
+    const ambiguousTeacherAssignments = await pool.query(`
+      SELECT class_id
+      FROM class_subject_teacher
+      GROUP BY class_id
+      HAVING COUNT(DISTINCT teacher_id) > 1
+      LIMIT 1
+    `);
+
+    if (ambiguousTeacherAssignments.rowCount > 0) {
+      throw new Error(
+        `Legacy migration blocked: class_subject_teacher contains multiple teachers for class ${ambiguousTeacherAssignments.rows[0].class_id}.`
+      );
+    }
+
+    await pool.query(`
+      UPDATE classes c
+      SET teacher_id = legacy.teacher_id
+      FROM (
+        SELECT class_id, MIN(teacher_id) AS teacher_id
+        FROM class_subject_teacher
+        GROUP BY class_id
+      ) AS legacy
+      WHERE c.id = legacy.class_id AND c.teacher_id IS NULL
+    `);
+  }
+
+  const missingTeacherIds = await pool.query(
+    "SELECT id FROM classes WHERE teacher_id IS NULL LIMIT 1"
+  );
+  if (missingTeacherIds.rowCount > 0) {
+    throw new Error(
+      `Legacy migration blocked: classes.teacher_id is still NULL for class ${missingTeacherIds.rows[0].id}.`
+    );
+  }
+
+  await pool.query(`
+    DO $$
+    BEGIN
+      IF NOT EXISTS (
+        SELECT 1
+        FROM pg_constraint c
+        JOIN pg_class t ON t.oid = c.conrelid
+        JOIN pg_attribute a ON a.attrelid = t.oid AND a.attnum = ANY(c.conkey)
+        WHERE t.relname = 'classes'
+          AND c.contype = 'f'
+          AND a.attname = 'teacher_id'
+      ) THEN
+        ALTER TABLE classes
+        ADD CONSTRAINT classes_teacher_id_fkey
+        FOREIGN KEY (teacher_id) REFERENCES users(id);
+      END IF;
+    END $$;
+  `);
+  await pool.query(
+    "ALTER TABLE classes ALTER COLUMN teacher_id SET NOT NULL"
+  );
 
   await pool.query(`
     CREATE TABLE IF NOT EXISTS subjects (

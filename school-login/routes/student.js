@@ -4,7 +4,6 @@ const path = require("path");
 const fs = require("fs");
 const { db } = require("../db");
 const { requireAuth, requireRole } = require("../middleware/auth");
-const { createAuditLogMiddleware } = require("../middleware/audit");
 
 const runAsync = (sql, params = []) =>
   new Promise((resolve, reject) => {
@@ -31,7 +30,6 @@ const getAsync = (sql, params = []) =>
   });
 
 router.use(requireAuth, requireRole("student"));
-router.use(createAuditLogMiddleware());
 
 const GRADE_ATTACHMENT_DIR = path.join(__dirname, "..", "uploads", "grade-attachments");
 const ABSENCE_MODE_INCLUDE_ZERO = "include_zero";
@@ -53,15 +51,7 @@ async function loadStudentProfile(email) {
 
 async function loadClassInfo(classId) {
   return getAsync(
-    `SELECT c.id, c.name, c.subject,
-            COALESCE((
-              SELECT STRING_AGG(u.email, ', ' ORDER BY u.email)
-              FROM class_subject_teacher cst
-              JOIN users u ON u.id = cst.teacher_id
-              WHERE cst.class_id = c.id AND cst.subject_id = c.subject_id
-            ), '') AS teacher_email
-     FROM classes c
-     WHERE c.id = ?`,
+    "SELECT c.id, c.name, c.subject, u.email AS teacher_email FROM classes c LEFT JOIN users u ON c.teacher_id = u.id WHERE c.id = ?",
     [classId]
   );
 }
@@ -85,11 +75,10 @@ function isValidWeightValue(value) {
 async function loadClassAbsenceMode(classId) {
   const row = await getAsync(
     `SELECT gp.absence_mode
-     FROM class_subject_teacher cst
-     JOIN classes c ON c.id = cst.class_id
-     JOIN teacher_grading_profiles gp ON gp.teacher_id = cst.teacher_id AND gp.is_active = ?
-     WHERE c.id = ? AND cst.subject_id = c.subject_id
-     ORDER BY cst.id ASC, gp.created_at ASC, gp.id ASC
+     FROM classes c
+     LEFT JOIN teacher_grading_profiles gp ON gp.teacher_id = c.teacher_id AND gp.is_active = ?
+     WHERE c.id = ?
+     ORDER BY gp.created_at ASC, gp.id ASC
      LIMIT 1`,
     [true, classId]
   );
@@ -115,7 +104,7 @@ async function loadStudentGrades(studentId) {
 
 async function loadTemplates(classId) {
   return allAsync(
-    "SELECT id, name, category, weight, date, description, created_at, archived_at FROM grade_templates WHERE class_id = ? ORDER BY date, name",
+    "SELECT id, name, category, weight, date, description FROM grade_templates WHERE class_id = ? ORDER BY date, name",
     [classId]
   );
 }
@@ -139,17 +128,6 @@ async function loadNotifications(studentId) {
   return allAsync(
     "SELECT id, message, type, created_at, read_at FROM grade_notifications WHERE student_id = ? ORDER BY created_at DESC",
     [studentId]
-  );
-}
-
-async function loadGradeMessages(studentId) {
-  return allAsync(
-    `SELECT gm.id, gm.grade_id, gm.student_message, gm.teacher_reply, gm.teacher_reply_seen_at, gm.created_at, gm.replied_at
-     FROM grade_messages gm
-     JOIN grades g ON g.id = gm.grade_id
-     WHERE gm.student_id = ? AND g.student_id = ?
-     ORDER BY gm.created_at ASC`,
-    [studentId, studentId]
   );
 }
 
@@ -182,10 +160,7 @@ function mapTaskRow(template, gradeRow, classInfo) {
     title: template.name,
     category: template.category,
     weight: Number(template.weight || 0),
-    due_at: template.date || template.created_at || null,
-    original_due_at: template.date || null,
-    created_at: template.created_at || null,
-    archived_at: template.archived_at || null,
+    due_at: template.date || null,
     description: template.description || "",
     subject: classInfo?.subject || "",
     graded: Boolean(gradeRow && gradeRow.id),
@@ -195,11 +170,10 @@ function mapTaskRow(template, gradeRow, classInfo) {
   };
 }
 
-function mapReturnRow(row, classInfo, messagesByGrade = new Map()) {
+function mapReturnRow(row, classInfo) {
   const subject = row.class_subject || classInfo?.subject || row.name || "";
   const hasFile = Boolean(row.attachment_path);
   const hasLink = Boolean(row.external_link);
-  const messages = messagesByGrade.get(String(row.id)) || [];
   return {
     id: row.id,
     template_id: row.template_id,
@@ -214,9 +188,7 @@ function mapReturnRow(row, classInfo, messagesByGrade = new Map()) {
     attachment_name: hasFile ? row.attachment_original_name || null : null,
     attachment_mime: hasFile ? row.attachment_mime || null : null,
     attachment_size: hasFile ? row.attachment_size || null : null,
-    external_link: hasLink ? row.external_link : null,
-    can_message: Boolean(row.template_id && !row.is_special),
-    messages
+    external_link: hasLink ? row.external_link : null
   };
 }
 
@@ -336,141 +308,12 @@ function buildPdf(lines) {
 async function getStudentContext(req) {
   const student = await loadStudentProfile(req.session.user.email);
   if (!student) return null;
-  await maintainGradeTemplateArchive(student.class_id);
   const classInfo = await loadClassInfo(student.class_id);
   const classAbsenceMode = await loadClassAbsenceMode(student.class_id);
   return { student, classInfo, classAbsenceMode };
 }
 
-const STUDENT_PAGE_KEYS = new Set(["overview", "tasks", "returns", "requests", "grades", "archive"]);
-
-function normalizeStudentPage(value) {
-  const key = String(value || "").trim().toLowerCase();
-  return STUDENT_PAGE_KEYS.has(key) ? key : "overview";
-}
-
-function requestPrefersJson(req) {
-  const format = String(req.query?.format || "").trim().toLowerCase();
-  if (format === "json") return true;
-  if (format === "html") return false;
-  return req.accepts(["json", "html"]) === "json";
-}
-
-function getArchiveCutoffDate(now = new Date()) {
-  const year = now.getMonth() >= 6 ? now.getFullYear() : now.getFullYear() - 1;
-  return new Date(year, 6, 1, 0, 0, 0, 0);
-}
-
-function getArchiveDeleteDate(now = new Date()) {
-  const cutoff = getArchiveCutoffDate(now);
-  cutoff.setFullYear(cutoff.getFullYear() - 10);
-  return cutoff;
-}
-
-async function maintainGradeTemplateArchive(classId = null, now = new Date()) {
-  const archiveCutoff = getArchiveCutoffDate(now).toISOString();
-  const deleteCutoff = getArchiveDeleteDate(now).toISOString();
-
-  if (classId != null) {
-    await runAsync(
-      `UPDATE grade_templates
-       SET archived_at = ?
-       WHERE class_id = ? AND archived_at IS NULL AND COALESCE(date, created_at) < ?`,
-      [archiveCutoff, classId, archiveCutoff]
-    );
-  } else {
-    await runAsync(
-      `UPDATE grade_templates
-       SET archived_at = ?
-       WHERE archived_at IS NULL AND COALESCE(date, created_at) < ?`,
-      [archiveCutoff, archiveCutoff]
-    );
-  }
-
-  await runAsync(
-    "DELETE FROM grade_templates WHERE archived_at IS NOT NULL AND archived_at <= ?",
-    [deleteCutoff]
-  );
-}
-
-function splitTasksByArchive(tasks) {
-  const activeTasks = [];
-  const archivedTasks = [];
-
-  tasks.forEach((task) => {
-    if (task?.archived_at) {
-      archivedTasks.push(task);
-      return;
-    }
-    activeTasks.push(task);
-  });
-
-  return { activeTasks, archivedTasks };
-}
-
-async function buildStudentDashboardPayload(context, csrfToken) {
-  const { student, classInfo, classAbsenceMode } = context;
-  const gradeRows = await loadStudentGrades(student.id);
-  const grades = gradeRows.map((row) => mapGradeRow(row, classInfo));
-  const subjectSet = new Set(grades.map((grade) => grade.subject));
-  if (classInfo?.subject) subjectSet.add(classInfo.subject);
-  if (student.class_subject) subjectSet.add(student.class_subject);
-  const subjects = Array.from(subjectSet).filter(Boolean);
-  const averages = computeAverages(grades, { absenceMode: classAbsenceMode });
-  const templates = await loadTemplates(student.class_id);
-  const gradeByTemplate = new Map(
-    gradeRows
-      .filter((row) => row.template_id != null)
-      .map((row) => [String(row.template_id), row])
-  );
-  const tasks = templates.map((template) =>
-    mapTaskRow(template, gradeByTemplate.get(String(template.id)), classInfo)
-  );
-  const { activeTasks, archivedTasks } = splitTasksByArchive(tasks);
-  const returnMessages = await loadGradeMessages(student.id);
-  const messagesByGrade = new Map();
-  returnMessages.forEach((message) => {
-    const key = String(message.grade_id);
-    const list = messagesByGrade.get(key) || [];
-    list.push({
-      id: message.id,
-      student_message: message.student_message,
-      teacher_reply: message.teacher_reply || null,
-      teacher_reply_seen_at: message.teacher_reply_seen_at || null,
-      created_at: message.created_at,
-      replied_at: message.replied_at || null
-    });
-    messagesByGrade.set(key, list);
-  });
-  const returns = gradeRows
-    .map((row) => mapReturnRow(row, classInfo, messagesByGrade))
-    .sort((a, b) => new Date(b.graded_at) - new Date(a.graded_at));
-  const classRows = await loadClassGradeRows(student.class_id);
-  const classAverages = computeClassAverages(classRows, { absenceMode: classAbsenceMode });
-  const notifications = await loadNotifications(student.id);
-
-  return {
-    studentProfile: {
-      name: student.name,
-      class: student.class_name || classInfo?.name || "Unbekannt",
-      subject: student.class_subject || classInfo?.subject || ""
-    },
-    subjects,
-    initialData: {
-      grades,
-      averages,
-      tasks: activeTasks,
-      archivedTasks,
-      returns,
-      classAverages,
-      notifications,
-      trend: { direction: "steady", change: 0 },
-      csrfToken
-    }
-  };
-}
-
-async function renderStudentDashboard(req, res, next, page) {
+router.get("/", async (req, res, next) => {
   try {
     const context = await getStudentContext(req);
     if (!context) {
@@ -482,74 +325,57 @@ async function renderStudentDashboard(req, res, next, page) {
       });
     }
 
-    const csrfToken = req.csrfToken();
-    const payload = await buildStudentDashboardPayload(context, csrfToken);
-
-    res.render("student-dashboard", {
-      email: req.session.user.email,
-      studentProfile: payload.studentProfile,
-      subjects: payload.subjects,
-      initialData: payload.initialData,
-      csrfToken,
-      activePage: normalizeStudentPage(page)
-    });
-  } catch (err) {
-    next(err);
-  }
-}
-
-router.get("/", async (req, res, next) => {
-  await renderStudentDashboard(req, res, next, "overview");
-});
-
-router.get("/overview", async (req, res, next) => {
-  await renderStudentDashboard(req, res, next, "overview");
-});
-
-router.get("/aufgaben", async (req, res) => {
-  res.redirect("/student/tasks");
-});
-
-router.get("/rueckgaben", async (req, res) => {
-  res.redirect("/student/returns");
-});
-
-router.get("/noten", async (req, res) => {
-  res.redirect("/student/grades");
-});
-
-router.get("/anfragen", async (req, res) => {
-  res.redirect("/student/requests");
-});
-
-router.get("/archiv", async (req, res) => {
-  res.redirect("/student/archive");
-});
-
-router.get("/archive", async (req, res, next) => {
-  try {
-    if (!requestPrefersJson(req)) {
-      return await renderStudentDashboard(req, res, next, "archive");
-    }
-
-    const context = await getStudentContext(req);
-    if (!context) {
-      return res.status(404).json({ error: "Student nicht gefunden." });
-    }
-
-    const { student } = context;
-    const templates = await loadTemplates(student.class_id);
+    const { student, classInfo, classAbsenceMode } = context;
     const gradeRows = await loadStudentGrades(student.id);
+    const grades = gradeRows.map((row) => mapGradeRow(row, classInfo));
+    const subjectSet = new Set(grades.map((grade) => grade.subject));
+    if (classInfo?.subject) subjectSet.add(classInfo.subject);
+    if (student.class_subject) subjectSet.add(student.class_subject);
+    const subjects = Array.from(subjectSet).filter(Boolean);
+    const averages = computeAverages(grades, { absenceMode: classAbsenceMode });
+    const templates = await loadTemplates(student.class_id);
     const gradeByTemplate = new Map(
       gradeRows
         .filter((row) => row.template_id != null)
         .map((row) => [String(row.template_id), row])
     );
     const tasks = templates.map((template) =>
-      mapTaskRow(template, gradeByTemplate.get(String(template.id)), context.classInfo)
+      mapTaskRow(template, gradeByTemplate.get(String(template.id)), classInfo)
     );
-    const { archivedTasks } = splitTasksByArchive(tasks);
-    res.json({ tasks: archivedTasks });
+    const returns = gradeRows
+      .map((row) => mapReturnRow(row, classInfo))
+      .sort((a, b) => new Date(b.graded_at) - new Date(a.graded_at));
+    const classRows = await loadClassGradeRows(student.class_id);
+    const classAverages = computeClassAverages(classRows, { absenceMode: classAbsenceMode });
+    const notifications = await loadNotifications(student.id);
+    const csrfToken = req.csrfToken();
+
+    const studentProfile = {
+      name: student.name,
+      class: student.class_name || classInfo?.name || "Unbekannt",
+      subject: student.class_subject || classInfo?.subject || ""
+    };
+
+    res.render("student-dashboard", {
+      email: req.session.user.email,
+      studentProfile,
+      subjects,
+      tasks,
+      returns,
+      materials: [],
+      messages: [],
+      initialData: {
+        grades,
+        averages,
+        tasks,
+        returns,
+        classAverages,
+        notifications,
+        trend: { direction: "steady", change: 0 },
+        csrfToken
+      },
+      csrfToken
+    });
   } catch (err) {
     next(err);
   }
@@ -577,10 +403,6 @@ router.get("/profile", async (req, res, next) => {
 
 router.get("/grades", async (req, res, next) => {
   try {
-    if (!requestPrefersJson(req)) {
-      return await renderStudentDashboard(req, res, next, "grades");
-    }
-
     const context = await getStudentContext(req);
     if (!context) {
       return res.status(404).json({ error: "Student nicht gefunden." });
@@ -629,10 +451,6 @@ router.get("/grades", async (req, res, next) => {
 
 router.get("/tasks", async (req, res, next) => {
   try {
-    if (!requestPrefersJson(req)) {
-      return await renderStudentDashboard(req, res, next, "tasks");
-    }
-
     const context = await getStudentContext(req);
     if (!context) {
       return res.status(404).json({ error: "Student nicht gefunden." });
@@ -649,8 +467,7 @@ router.get("/tasks", async (req, res, next) => {
     const tasks = templates.map((template) =>
       mapTaskRow(template, gradeByTemplate.get(String(template.id)), context.classInfo)
     );
-    const { activeTasks } = splitTasksByArchive(tasks);
-    res.json({ tasks: activeTasks });
+    res.json({ tasks });
   } catch (err) {
     next(err);
   }
@@ -658,112 +475,16 @@ router.get("/tasks", async (req, res, next) => {
 
 router.get("/returns", async (req, res, next) => {
   try {
-    if (!requestPrefersJson(req)) {
-      return await renderStudentDashboard(req, res, next, "returns");
-    }
-
     const context = await getStudentContext(req);
     if (!context) {
       return res.status(404).json({ error: "Student nicht gefunden." });
     }
 
     const gradeRows = await loadStudentGrades(context.student.id);
-    const returnMessages = await loadGradeMessages(context.student.id);
-    const messagesByGrade = new Map();
-    returnMessages.forEach((message) => {
-      const key = String(message.grade_id);
-      const list = messagesByGrade.get(key) || [];
-      list.push({
-        id: message.id,
-        student_message: message.student_message,
-        teacher_reply: message.teacher_reply || null,
-        teacher_reply_seen_at: message.teacher_reply_seen_at || null,
-        created_at: message.created_at,
-        replied_at: message.replied_at || null
-      });
-      messagesByGrade.set(key, list);
-    });
     const returns = gradeRows
-      .map((row) => mapReturnRow(row, context.classInfo, messagesByGrade))
+      .map((row) => mapReturnRow(row, context.classInfo))
       .sort((a, b) => new Date(b.graded_at) - new Date(a.graded_at));
     res.json({ returns });
-  } catch (err) {
-    next(err);
-  }
-});
-
-router.get("/requests", async (req, res, next) => {
-  await renderStudentDashboard(req, res, next, "requests");
-});
-
-router.post("/returns/:gradeId/message", async (req, res, next) => {
-  try {
-    const context = await getStudentContext(req);
-    if (!context) {
-      return res.status(404).json({ error: "Student nicht gefunden." });
-    }
-
-    const gradeId = Number(req.params.gradeId);
-    if (!gradeId) {
-      return res.status(400).json({ error: "Ungültige Rückgabe-ID." });
-    }
-
-    const grade = await getAsync(
-      "SELECT id, student_id, grade_template_id FROM grades WHERE id = ? AND student_id = ?",
-      [gradeId, context.student.id]
-    );
-    if (!grade) {
-      return res.status(404).json({ error: "Rückgabe nicht gefunden." });
-    }
-    if (!grade.grade_template_id) {
-      return res.status(400).json({ error: "Nachrichten sind nur für Tests möglich." });
-    }
-
-    const message = String(req.body?.message || "").trim();
-    if (!message) {
-      return res.status(400).json({ error: "Bitte eine Nachricht eingeben." });
-    }
-    if (message.length > 1000) {
-      return res.status(400).json({ error: "Die Nachricht darf maximal 1000 Zeichen lang sein." });
-    }
-
-    await runAsync(
-      "INSERT INTO grade_messages (grade_id, student_id, student_message) VALUES (?,?,?)",
-      [gradeId, context.student.id, message]
-    );
-    res.json({ ok: true });
-  } catch (err) {
-    next(err);
-  }
-});
-
-router.post("/returns/:gradeId/messages/seen", async (req, res, next) => {
-  try {
-    const context = await getStudentContext(req);
-    if (!context) {
-      return res.status(404).json({ error: "Student nicht gefunden." });
-    }
-
-    const gradeId = Number(req.params.gradeId);
-    if (!gradeId) {
-      return res.status(400).json({ error: "Ungültige Rückgabe-ID." });
-    }
-
-    const grade = await getAsync(
-      "SELECT id FROM grades WHERE id = ? AND student_id = ?",
-      [gradeId, context.student.id]
-    );
-    if (!grade) {
-      return res.status(404).json({ error: "Rückgabe nicht gefunden." });
-    }
-
-    await runAsync(
-      `UPDATE grade_messages
-       SET teacher_reply_seen_at = current_timestamp
-       WHERE grade_id = ? AND student_id = ? AND teacher_reply IS NOT NULL AND teacher_reply_seen_at IS NULL`,
-      [gradeId, context.student.id]
-    );
-    res.json({ ok: true });
   } catch (err) {
     next(err);
   }
@@ -908,8 +629,8 @@ router.get("/grades.pdf", async (req, res, next) => {
     const grades = gradeRows.map((row) => mapGradeRow(row, classInfo));
 
     const lines = [
-      "Notenübersicht",
-      `Schüler: ${student.name}`,
+      "Notenuebersicht",
+      `Schueler: ${student.name}`,
       `Klasse: ${student.class_name || classInfo?.name || ""}`,
       `Fach: ${student.class_subject || classInfo?.subject || ""}`,
       "",

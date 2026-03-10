@@ -8,7 +8,6 @@
 !.vscode/launch.json
 !.vscode/extensions.json
 !.vscode/*.code-snippets
-.idea/
 
 # Local History for Visual Studio Code
 .history/
@@ -22,4 +21,9 @@
 .ionide
 
 # End of https://www.toptal.com/developers/gitignore/api/visualstudiocode
-output/pdf/nvs-app-summary.pdf
+/.idea/.gitignore
+/.idea/dataSources.xml
+/.idea/modules.xml
+/.idea/NVS.iml
+/output/pdf/nvs-app-summary.pdf
+/.idea/vcs.xml
