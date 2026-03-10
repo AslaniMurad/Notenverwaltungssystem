@@ -1179,7 +1179,8 @@ async function loadMessageForTeacher(classId, messageId, teacherId) {
      FROM grade_messages gm
      JOIN grades g ON g.id = gm.grade_id
      JOIN classes c ON c.id = g.class_id
-     WHERE gm.id = ? AND c.id = ? AND c.teacher_id = ?`,
+     JOIN class_subject_teacher cst ON cst.class_id = c.id AND cst.subject_id = c.subject_id
+     WHERE gm.id = ? AND c.id = ? AND cst.teacher_id = ?`,
     [messageId, classId, teacherId]
   );
 }
@@ -1516,6 +1517,10 @@ router.post("/delete-class/:id", async (req, res, next) => {
     const classData = await requireClassAccessForTeacher(req, res, classId);
     if (!classData) return;
 
+    await runAsync(
+      "DELETE FROM grade_notifications WHERE student_id IN (SELECT id FROM students WHERE class_id = ?)",
+      [classId]
+    );
     await runAsync("DELETE FROM students WHERE class_id = ?", [classId]);
     await runAsync("DELETE FROM classes WHERE id = ?", [classId]);
     res.redirect("/teacher/classes");
@@ -2093,6 +2098,7 @@ router.post("/delete-student/:classId/:studentId", async (req, res, next) => {
     const classData = await requireClassAccessForTeacher(req, res, classId);
     if (!classData) return;
 
+    await runAsync("DELETE FROM grade_notifications WHERE student_id = ?", [studentId]);
     await runAsync("DELETE FROM students WHERE id = ? AND class_id = ?", [studentId, classId]);
     res.redirect(`/teacher/students/${classId}`);
   } catch (err) {

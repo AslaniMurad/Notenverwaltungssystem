@@ -349,6 +349,16 @@ function createFakeDb() {
         for (let i = teachingAssignments.length - 1; i >= 0; i -= 1) {
           if (teachingAssignments[i].id === Number(id)) teachingAssignments.splice(i, 1);
         }
+      } else if (/DELETE FROM grade_notifications WHERE student_id IN \(SELECT id FROM students WHERE class_id = \?\)/i.test(sql)) {
+        const [classIdParam] = params;
+        const studentIds = new Set(
+          students
+            .filter((entry) => entry.class_id === Number(classIdParam))
+            .map((entry) => Number(entry.id))
+        );
+        for (let i = notifications.length - 1; i >= 0; i -= 1) {
+          if (studentIds.has(Number(notifications[i].student_id))) notifications.splice(i, 1);
+        }
       } else if (/DELETE FROM grade_notifications WHERE student_id = \?/i.test(sql)) {
         const [studentIdParam] = params;
         for (let i = notifications.length - 1; i >= 0; i -= 1) {
@@ -360,6 +370,9 @@ function createFakeDb() {
           if (students[i].id === Number(idParam) && students[i].class_id === Number(classIdParam)) {
             students.splice(i, 1);
           }
+        }
+        for (let i = notifications.length - 1; i >= 0; i -= 1) {
+          if (notifications[i].student_id === Number(idParam)) notifications.splice(i, 1);
         }
         for (let i = grades.length - 1; i >= 0; i -= 1) {
           if (grades[i].student_id === Number(idParam)) grades.splice(i, 1);
@@ -377,8 +390,21 @@ function createFakeDb() {
         }
       } else if (/DELETE FROM students WHERE class_id = \?/i.test(sql)) {
         const [classIdParam] = params;
+        const studentIds = new Set(
+          students
+            .filter((entry) => entry.class_id === Number(classIdParam))
+            .map((entry) => Number(entry.id))
+        );
         for (let i = students.length - 1; i >= 0; i -= 1) {
           if (students[i].class_id === Number(classIdParam)) students.splice(i, 1);
+        }
+        for (let i = notifications.length - 1; i >= 0; i -= 1) {
+          if (studentIds.has(Number(notifications[i].student_id))) notifications.splice(i, 1);
+        }
+        for (let i = grades.length - 1; i >= 0; i -= 1) {
+          if (studentIds.has(Number(grades[i].student_id)) || grades[i].class_id === Number(classIdParam)) {
+            grades.splice(i, 1);
+          }
         }
         for (let i = specialAssessments.length - 1; i >= 0; i -= 1) {
           if (specialAssessments[i].class_id === Number(classIdParam)) specialAssessments.splice(i, 1);
@@ -1847,12 +1873,21 @@ function createFakeDb() {
         const [id] = params;
         const cls = classes.find((c) => c.id === Number(id));
         rows = cls ? [{ ...cls }] : [];
-      } else if (/SELECT id, name, category, weight, .* FROM grade_templates WHERE class_id = \? ORDER BY date, name/i.test(sql)) {
+      } else if (/SELECT id, name, category, weight, .* FROM grade_templates WHERE class_id = \?/i.test(sql) && /ORDER BY date( DESC)?, name/i.test(sql)) {
         const [clsId] = params;
+        const wantsArchived = /archived_at IS NOT NULL/i.test(sql);
+        const wantsActiveOnly = /archived_at IS NULL/i.test(sql) && !wantsArchived;
+        const sortDescending = /ORDER BY date DESC, name/i.test(sql);
         rows = gradeTemplates
           .filter((t) => t.class_id === Number(clsId))
+          .filter((t) => (wantsArchived ? Boolean(t.archived_at) : wantsActiveOnly ? !t.archived_at : true))
           .sort((a, b) => {
-            if (a.date && b.date && a.date !== b.date) return new Date(a.date) - new Date(b.date);
+            if (a.date && b.date && a.date !== b.date) {
+              const delta = new Date(a.date) - new Date(b.date);
+              return sortDescending ? -delta : delta;
+            }
+            if (a.date && !b.date) return sortDescending ? -1 : 1;
+            if (!a.date && b.date) return sortDescending ? 1 : -1;
             return a.name.localeCompare(b.name);
           })
           .map((t) => ({
@@ -2456,6 +2491,9 @@ async function initializeDatabase() {
     )
   `);
   await pool.query(
+    "ALTER TABLE class_subject_teacher ADD COLUMN IF NOT EXISTS school_year_id INTEGER"
+  );
+  await pool.query(
     "CREATE INDEX IF NOT EXISTS class_subject_teacher_teacher_idx ON class_subject_teacher (teacher_id)"
   );
   await pool.query(
@@ -2493,9 +2531,6 @@ async function initializeDatabase() {
       END IF;
     END $$;
   `);
-  await pool.query(
-    "ALTER TABLE class_subject_teacher ADD COLUMN IF NOT EXISTS school_year_id INTEGER"
-  );
   await pool.query(`
     UPDATE class_subject_teacher cst
     SET school_year_id = c.school_year_id
@@ -3059,13 +3094,24 @@ async function initializeDatabase() {
   await pool.query(`
     CREATE TABLE IF NOT EXISTS grade_notifications (
       id SERIAL PRIMARY KEY,
-      student_id INTEGER NOT NULL REFERENCES students(id),
+      student_id INTEGER NOT NULL REFERENCES students(id) ON DELETE CASCADE,
       message TEXT NOT NULL,
       type TEXT NOT NULL DEFAULT 'info',
       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
       read_at TIMESTAMPTZ
     )
   `);
+  await pool.query(
+    "ALTER TABLE grade_notifications DROP CONSTRAINT IF EXISTS grade_notifications_student_id_fkey"
+  );
+  await pool.query(`
+    ALTER TABLE grade_notifications
+    ADD CONSTRAINT grade_notifications_student_id_fkey
+    FOREIGN KEY (student_id) REFERENCES students(id) ON DELETE CASCADE
+  `);
+  await pool.query(
+    "CREATE INDEX IF NOT EXISTS grade_notifications_student_idx ON grade_notifications (student_id)"
+  );
 
   await pool.query(`
     CREATE TABLE IF NOT EXISTS audit_logs (

@@ -739,6 +739,10 @@ router.post("/classes/:id/delete", async (req, res, next) => {
         csrfToken: req.csrfToken()
       });
     }
+    await runAsync(
+      "DELETE FROM grade_notifications WHERE student_id IN (SELECT id FROM students WHERE class_id = ?)",
+      [classId]
+    );
     await runAsync("DELETE FROM students WHERE class_id = ?", [classId]);
     await runAsync("DELETE FROM classes WHERE id = ?", [classId]);
     res.redirect("/admin/classes");
