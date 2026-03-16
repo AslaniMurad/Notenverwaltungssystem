@@ -55,6 +55,7 @@ function createFakeDb() {
   const students = [];
   const gradeTemplates = [];
   const grades = [];
+  const gradeMessages = [];
   const specialAssessments = [];
   const notifications = [];
   const auditLogs = [];
@@ -71,6 +72,7 @@ function createFakeDb() {
   let studentId = 1;
   let gradeTemplateId = 1;
   let gradeId = 1;
+  let gradeMessageId = 1;
   let specialAssessmentId = 1;
   let notificationId = 1;
   let auditLogId = 1;
@@ -770,6 +772,41 @@ function createFakeDb() {
             participationMarks.splice(i, 1);
           }
         }
+      } else if (/INSERT INTO grade_messages/i.test(sql)) {
+        const [grade_id, student_id, student_message] = params;
+        const message = {
+          id: gradeMessageId++,
+          grade_id: Number(grade_id),
+          student_id: Number(student_id),
+          student_message: String(student_message || ""),
+          teacher_reply: null,
+          teacher_reply_seen_at: null,
+          created_at: new Date().toISOString(),
+          replied_at: null
+        };
+        gradeMessages.push(message);
+        lastID = message.id;
+      } else if (/UPDATE grade_messages SET teacher_reply = \?, replied_at = current_timestamp, teacher_reply_seen_at = NULL WHERE id = \?/i.test(sql)) {
+        const [teacher_reply, id] = params;
+        const message = gradeMessages.find((entry) => entry.id === Number(id));
+        if (message) {
+          message.teacher_reply = String(teacher_reply || "");
+          message.replied_at = new Date().toISOString();
+          message.teacher_reply_seen_at = null;
+        }
+      } else if (/UPDATE grade_messages\s+SET teacher_reply_seen_at = current_timestamp\s+WHERE grade_id = \? AND student_id = \? AND teacher_reply IS NOT NULL AND teacher_reply_seen_at IS NULL/i.test(sql)) {
+        const [grade_id, student_id] = params;
+        const seenAt = new Date().toISOString();
+        gradeMessages.forEach((entry) => {
+          if (
+            entry.grade_id === Number(grade_id) &&
+            entry.student_id === Number(student_id) &&
+            entry.teacher_reply &&
+            !entry.teacher_reply_seen_at
+          ) {
+            entry.teacher_reply_seen_at = seenAt;
+          }
+        });
       } else if (/INSERT INTO grade_notifications/i.test(sql)) {
         const [student_id, message, type, created_at] = params;
         const notification = {
@@ -1239,6 +1276,24 @@ function createFakeDb() {
           (entry) => entry.id === Number(gradeId) && entry.class_id === Number(clsId)
         );
         row = grade ? { attachment_path: grade.attachment_path || null } : undefined;
+      } else if (/SELECT id, student_id, grade_template_id FROM grades WHERE id = \? AND student_id = \?/i.test(sql)) {
+        const [gradeId, studentId] = params;
+        const grade = grades.find(
+          (entry) => entry.id === Number(gradeId) && entry.student_id === Number(studentId)
+        );
+        row = grade
+          ? {
+              id: grade.id,
+              student_id: grade.student_id,
+              grade_template_id: grade.grade_template_id
+            }
+          : undefined;
+      } else if (/SELECT id FROM grades WHERE id = \? AND student_id = \?/i.test(sql)) {
+        const [gradeId, studentId] = params;
+        const grade = grades.find(
+          (entry) => entry.id === Number(gradeId) && entry.student_id === Number(studentId)
+        );
+        row = grade ? { id: grade.id } : undefined;
       } else if (/SELECT attachment_path, attachment_original_name, attachment_mime FROM grades WHERE id = \? AND student_id = \?/i.test(sql)) {
         const [gradeId, studentId] = params;
         const grade = grades.find(
@@ -1251,6 +1306,21 @@ function createFakeDb() {
               attachment_mime: grade.attachment_mime || null
             }
           : undefined;
+      } else if (/SELECT gm\.id, gm\.student_id\s+FROM grade_messages gm\s+JOIN grades g ON g\.id = gm\.grade_id\s+WHERE gm\.id = \? AND g\.class_id = \?/i.test(sql)) {
+        const [messageId, classIdParam] = params;
+        const message = gradeMessages.find((entry) => entry.id === Number(messageId));
+        if (message) {
+          const grade = grades.find(
+            (entry) =>
+              entry.id === Number(message.grade_id) && entry.class_id === Number(classIdParam)
+          );
+          row = grade
+            ? {
+                id: message.id,
+                student_id: message.student_id
+              }
+            : undefined;
+        }
       } else if (/SELECT s\.\*, c\.name as class_name, c\.subject as class_subject, c\.id as class_id FROM students s (LEFT )?JOIN classes c ON c.id = s.class_id WHERE s.email = \?/i.test(sql)) {
         const [email] = params;
         const student = students.find((s) => s.email === email);
@@ -1742,6 +1812,79 @@ function createFakeDb() {
             symbol: entry.symbol,
             note: entry.note,
             created_at: entry.created_at
+          }));
+      } else if (/SELECT gm\.id, gm\.grade_id, gm\.student_message, gm\.teacher_reply, gm\.teacher_reply_seen_at, gm\.created_at, gm\.replied_at\s+FROM grade_messages gm\s+JOIN grades g ON g\.id = gm\.grade_id\s+WHERE gm\.student_id = \? AND g\.student_id = \?\s+ORDER BY gm\.created_at ASC/i.test(sql)) {
+        const [student_id, gradeStudentId] = params;
+        rows = gradeMessages
+          .filter((entry) => entry.student_id === Number(student_id))
+          .filter((entry) => {
+            const grade = grades.find((gradeEntry) => gradeEntry.id === Number(entry.grade_id));
+            return grade && grade.student_id === Number(gradeStudentId);
+          })
+          .sort((a, b) => new Date(a.created_at) - new Date(b.created_at))
+          .map((entry) => ({
+            id: entry.id,
+            grade_id: entry.grade_id,
+            student_message: entry.student_message,
+            teacher_reply: entry.teacher_reply,
+            teacher_reply_seen_at: entry.teacher_reply_seen_at,
+            created_at: entry.created_at,
+            replied_at: entry.replied_at
+          }));
+      } else if (/SELECT gm\.id, gm\.grade_id, gm\.student_id, gm\.student_message, gm\.teacher_reply, gm\.created_at, gm\.replied_at,\s+s\.name AS student_name, s\.email AS student_email, gt\.name AS test_name, g\.grade AS grade_value\s+FROM grade_messages gm\s+JOIN grades g ON g\.id = gm\.grade_id\s+JOIN students s ON s\.id = gm\.student_id\s+LEFT JOIN grade_templates gt ON gt\.id = g\.grade_template_id\s+WHERE g\.class_id = \? AND s\.class_id = \?\s+ORDER BY gm\.created_at ASC/i.test(sql)) {
+        const [class_id, studentClassId] = params;
+        rows = gradeMessages
+          .filter((entry) => {
+            const grade = grades.find((gradeEntry) => gradeEntry.id === Number(entry.grade_id));
+            const student = students.find((studentEntry) => studentEntry.id === Number(entry.student_id));
+            return (
+              grade &&
+              student &&
+              grade.class_id === Number(class_id) &&
+              student.class_id === Number(studentClassId)
+            );
+          })
+          .sort((a, b) => new Date(a.created_at) - new Date(b.created_at))
+          .map((entry) => {
+            const grade = grades.find((gradeEntry) => gradeEntry.id === Number(entry.grade_id));
+            const student = students.find((studentEntry) => studentEntry.id === Number(entry.student_id));
+            const template = gradeTemplates.find(
+              (templateEntry) => templateEntry.id === Number(grade?.grade_template_id)
+            );
+            return {
+              id: entry.id,
+              grade_id: entry.grade_id,
+              student_id: entry.student_id,
+              student_message: entry.student_message,
+              teacher_reply: entry.teacher_reply,
+              created_at: entry.created_at,
+              replied_at: entry.replied_at,
+              student_name: student?.name || "",
+              student_email: student?.email || "",
+              test_name: template?.name || null,
+              grade_value: grade?.grade ?? null
+            };
+          });
+      } else if (/SELECT gm\.id, gm\.grade_id, gm\.student_message, gm\.teacher_reply, gm\.created_at, gm\.replied_at\s+FROM grade_messages gm\s+JOIN grades g ON g\.id = gm\.grade_id\s+WHERE g\.class_id = \? AND g\.student_id = \? AND gm\.student_id = \?\s+ORDER BY gm\.created_at ASC/i.test(sql)) {
+        const [class_id, gradeStudentId, messageStudentId] = params;
+        rows = gradeMessages
+          .filter((entry) => entry.student_id === Number(messageStudentId))
+          .filter((entry) => {
+            const grade = grades.find((gradeEntry) => gradeEntry.id === Number(entry.grade_id));
+            return (
+              grade &&
+              grade.class_id === Number(class_id) &&
+              grade.student_id === Number(gradeStudentId)
+            );
+          })
+          .sort((a, b) => new Date(a.created_at) - new Date(b.created_at))
+          .map((entry) => ({
+            id: entry.id,
+            grade_id: entry.grade_id,
+            student_message: entry.student_message,
+            teacher_reply: entry.teacher_reply,
+            created_at: entry.created_at,
+            replied_at: entry.replied_at
           }));
       } else if (/SELECT id, message, type, created_at, read_at FROM grade_notifications WHERE student_id = \? ORDER BY created_at DESC/i.test(sql)) {
         const [student_id] = params;

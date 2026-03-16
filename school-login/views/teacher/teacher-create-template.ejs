@@ -10,6 +10,7 @@
     content: function () {
       const unitLabel = 'Punkte';
       const defaultsByCategory = (activeProfile && activeProfile.weights) || {};
+      const useProfileSettings = Boolean(formData && formData.use_profile_settings);
 %>
     <div class="app-shell teacher-shell">
       <aside class="teacher-sidebar" aria-label="Lehrer Navigation">
@@ -30,7 +31,6 @@
             <div class="nav-section-title">Klasse: <%= classData.name %> / <%= classData.subject %></div>
             <a href="/teacher/students/<%= classData.id %>">Schueler</a>
             <a class="<%= (typeof openMessageCount !== 'undefined' && openMessageCount > 0) ? 'is-alert' : '' %>" href="/teacher/test-questions/<%= classData.id %>">Fragen zu Tests<% if (typeof openMessageCount !== 'undefined' && openMessageCount > 0) { %><span class="nav-notification-badge"><%= openMessageCount %></span><% } %></a>
-            <a href="/teacher/students/<%= classData.id %>">Schüler</a>
             <a href="/teacher/grades/<%= classData.id %>">Noten</a>
             <a href="/teacher/special-assessments/<%= classData.id %>">Sonderleistungen</a>
             <a class="is-active" href="/teacher/grade-templates/<%= classData.id %>">Prüfungen</a>
@@ -97,6 +97,18 @@
               <% }) %>
             </select>
 
+            <label class="checkbox-line" for="use_profile_settings">
+              <input
+                type="checkbox"
+                id="use_profile_settings"
+                name="use_profile_settings"
+                value="1"
+                <%= useProfileSettings ? 'checked' : '' %>
+              >
+              Gespeicherte Einstellungen aus dem aktiven Profil verwenden
+            </label>
+            <small class="form-hint" id="profile-settings-hint">Wenn aktiv, werden Gewichtung und weitere Profilwerte automatisch uebernommen und gesperrt.</small>
+
             <label for="weight">Gewichtung (<span id="weight-unit-label"><%= unitLabel %></span>) *</label>
             <input
               type="number"
@@ -104,8 +116,10 @@
               name="weight"
               min="0"
               step="0.5"
+              data-manual-required="0"
               placeholder="Wert leer lassen für Profil-Vorschlag"
               value="<%= formData && formData.weight !== '' ? formData.weight : '' %>"
+              <%= useProfileSettings ? 'disabled' : '' %>
             >
             <small class="form-hint" id="weight-hint">Profil-Vorschlag wird automatisch gesetzt.</small>
 
@@ -118,8 +132,9 @@
               step="0.25"
               placeholder="z.B. 50"
               value="<%= formData && formData.max_points !== '' ? formData.max_points : '' %>"
+              <%= useProfileSettings ? 'readonly class="is-readonly"' : '' %>
             >
-            <small class="form-hint">Wenn gesetzt, wird bei der Benotung nur noch "Erreichte Punkte" abgefragt.</small>
+            <small class="form-hint" id="max-points-hint">Wenn gesetzt, wird bei der Benotung nur noch "Erreichte Punkte" abgefragt.</small>
 
             <label for="date">Datum (optional)</label>
             <input type="date" id="date" name="date" value="<%= formData && formData.date ? formData.date : '' %>">
@@ -145,9 +160,14 @@
       (function() {
         const defaultsByCategory = <%- JSON.stringify(defaultsByCategory || {}).replace(/</g, "\\u003c") %>;
         const categorySelect = document.getElementById('category');
+        const useProfileSettingsToggle = document.getElementById('use_profile_settings');
         const weightInput = document.getElementById('weight');
+        const maxPointsInput = document.getElementById('max_points');
         const weightHint = document.getElementById('weight-hint');
+        const profileSettingsHint = document.getElementById('profile-settings-hint');
+        const maxPointsHint = document.getElementById('max-points-hint');
         const unitLabel = document.getElementById('weight-unit-label');
+        const manualWeightRequired = weightInput ? weightInput.dataset.manualRequired === '1' : false;
 
         function formatWeight(value) {
           const numeric = Number(value);
@@ -155,26 +175,77 @@
           return String(Number(numeric.toFixed(2)));
         }
 
+        function syncManagedFieldState(suggestion) {
+          const useProfileSettings = Boolean(useProfileSettingsToggle && useProfileSettingsToggle.checked);
+
+          if (weightInput) {
+            if (useProfileSettings) {
+              if (!weightInput.disabled) {
+                weightInput.dataset.manualValue = weightInput.value;
+              }
+              weightInput.value = Number.isFinite(Number(suggestion)) ? formatWeight(suggestion) : '';
+            } else if (weightInput.disabled) {
+              weightInput.value = Object.prototype.hasOwnProperty.call(weightInput.dataset, 'manualValue')
+                ? weightInput.dataset.manualValue
+                : '';
+            }
+
+            weightInput.disabled = useProfileSettings;
+            weightInput.required = useProfileSettings ? false : manualWeightRequired;
+          }
+
+          if (maxPointsInput) {
+            maxPointsInput.readOnly = useProfileSettings;
+            maxPointsInput.classList.toggle('is-readonly', useProfileSettings);
+          }
+
+          if (profileSettingsHint) {
+            profileSettingsHint.textContent = useProfileSettings
+              ? 'Aktives Profil ist eingeschaltet: Gewichtung wird automatisch gesetzt und Maximalpunkte sind schreibgeschuetzt.'
+              : 'Wenn aktiv, werden Gewichtung und weitere Profilwerte automatisch uebernommen und gesperrt.';
+          }
+
+          if (maxPointsHint) {
+            maxPointsHint.textContent = useProfileSettings
+              ? 'Maximalpunkte koennen bei aktiven Profileinstellungen nicht manuell geaendert werden.'
+              : 'Wenn gesetzt, wird bei der Benotung nur noch "Erreichte Punkte" abgefragt.';
+          }
+        }
+
         function updateWeightSuggestion() {
           const selectedCategory = categorySelect ? categorySelect.value : '';
           const suggestion = defaultsByCategory ? defaultsByCategory[selectedCategory] : null;
-          const hasManualValue = String(weightInput.value || '').trim() !== '';
+          const useProfileSettings = Boolean(useProfileSettingsToggle && useProfileSettingsToggle.checked);
+          const hasManualValue = String((weightInput && weightInput.value) || '').trim() !== '';
           if (unitLabel) unitLabel.textContent = 'Punkte';
 
           if (!selectedCategory) {
-            if (weightHint) weightHint.textContent = 'Wähle zuerst eine Kategorie.';
+            if (weightHint) {
+              weightHint.textContent = useProfileSettings
+                ? 'Waehle zuerst eine Kategorie, damit das Profil die Gewichtung setzen kann.'
+                : 'Wähle zuerst eine Kategorie.';
+            }
+            syncManagedFieldState(null);
             return;
           }
 
           if (Number.isFinite(Number(suggestion))) {
-            if (weightHint) weightHint.textContent = 'Vorschlag aus Profil: ' + formatWeight(suggestion) + ' Punkte.';
-            if (!hasManualValue) weightInput.value = formatWeight(suggestion);
+            if (weightHint) {
+              weightHint.textContent = useProfileSettings
+                ? 'Aktives Profil setzt die Gewichtung auf ' + formatWeight(suggestion) + ' Punkte.'
+                : 'Vorschlag aus Profil: ' + formatWeight(suggestion) + ' Punkte.';
+            }
+            if (!useProfileSettings && !hasManualValue && weightInput) {
+              weightInput.value = formatWeight(suggestion);
+            }
           } else if (weightHint) {
             weightHint.textContent = 'Keine Profil-Gewichtung für diese Kategorie gefunden.';
           }
+          syncManagedFieldState(suggestion);
         }
 
         if (categorySelect) categorySelect.addEventListener('change', updateWeightSuggestion);
+        if (useProfileSettingsToggle) useProfileSettingsToggle.addEventListener('change', updateWeightSuggestion);
         updateWeightSuggestion();
       })();
     </script>
