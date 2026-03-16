@@ -1070,7 +1070,10 @@ function createFakeDb() {
         const [id] = params;
         const classRow = classes.find((c) => c.id === Number(id));
         if (classRow) {
-          const teacherEmails = getTeacherEmailsForClassSubject(classRow.id, classRow.subject_id).join(", ");
+          const teacherEmails =
+            getTeacherEmailsForClassSubject(classRow.id, classRow.subject_id).join(", ") ||
+            users.find((u) => u.id === classRow.teacher_id)?.email ||
+            "";
           const alias = /AS teacher_emails/i.test(sql) ? "teacher_emails" : "teacher_email";
           row = {
             id: classRow.id,
@@ -1171,11 +1174,12 @@ function createFakeDb() {
                 )
               )
           );
-          if (assignment) {
+          const teacherId = assignment?.teacher_id ?? classRow.teacher_id;
+          if (teacherId != null) {
             const activeProfile = teacherGradingProfiles
               .filter(
                 (entry) =>
-                  entry.teacher_id === Number(assignment.teacher_id) &&
+                  entry.teacher_id === Number(teacherId) &&
                   Boolean(entry.is_active) === Boolean(is_active)
               )
               .sort((a, b) => {
@@ -1847,10 +1851,17 @@ function createFakeDb() {
         const [id] = params;
         const cls = classes.find((c) => c.id === Number(id));
         rows = cls ? [{ ...cls }] : [];
-      } else if (/SELECT id, name, category, weight, .* FROM grade_templates WHERE class_id = \? ORDER BY date, name/i.test(sql)) {
+      } else if (/SELECT id, name, category, weight, .* FROM grade_templates WHERE class_id = \? .*ORDER BY date, name/i.test(sql)) {
         const [clsId] = params;
+        const onlyArchived = /archived_at IS NOT NULL/i.test(sql);
+        const onlyActive = /archived_at IS NULL/i.test(sql);
         rows = gradeTemplates
-          .filter((t) => t.class_id === Number(clsId))
+          .filter((t) => {
+            if (t.class_id !== Number(clsId)) return false;
+            if (onlyArchived) return Boolean(t.archived_at);
+            if (onlyActive) return !t.archived_at;
+            return true;
+          })
           .sort((a, b) => {
             if (a.date && b.date && a.date !== b.date) return new Date(a.date) - new Date(b.date);
             return a.name.localeCompare(b.name);

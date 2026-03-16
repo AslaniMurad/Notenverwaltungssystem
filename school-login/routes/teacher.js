@@ -1173,14 +1173,13 @@ async function loadClassOpenMessageCount(classId) {
   return openMessageCount;
 }
 
-async function loadMessageForTeacher(classId, messageId, teacherId) {
+async function loadMessageForTeacher(classId, messageId) {
   return getAsync(
     `SELECT gm.id, gm.student_id
      FROM grade_messages gm
      JOIN grades g ON g.id = gm.grade_id
-     JOIN classes c ON c.id = g.class_id
-     WHERE gm.id = ? AND c.id = ? AND c.teacher_id = ?`,
-    [messageId, classId, teacherId]
+     WHERE gm.id = ? AND g.class_id = ?`,
+    [messageId, classId]
   );
 }
 function shouldSkipGradeForAbsence(grade, absenceMode) {
@@ -1982,7 +1981,7 @@ router.post("/students/:classId/messages/:messageId/reply", async (req, res, nex
       return renderError(res, req, "Ungültige Nachrichten-ID.", 400, `/teacher/test-questions/${classId}`);
     }
 
-    const messageRow = await loadMessageForTeacher(classId, messageId, req.session.user.id);
+    const messageRow = await loadMessageForTeacher(classId, messageId);
     if (!messageRow) {
       return renderError(res, req, "Nachricht nicht gefunden.", 404, `/teacher/test-questions/${classId}`);
     }

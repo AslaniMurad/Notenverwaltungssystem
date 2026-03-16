@@ -7,7 +7,8 @@
     grades: { title: "Schueler - Noten", heading: "Noten" },
     archive: { title: "Schueler - Archiv", heading: "Archiv" }
   };
-  const currentPage = pageMeta[activePage] ? activePage : "overview";
+  const requestedPage = typeof activePage === "string" ? activePage : "overview";
+  const currentPage = pageMeta[requestedPage] ? requestedPage : "overview";
   const currentMeta = pageMeta[currentPage];
   const safeSubjects = Array.isArray(subjects) ? subjects : [];
   const page = {

@@ -910,10 +910,11 @@
 
   async function refreshGrades(skipRequest = false) {
     const form = document.getElementById("grade-filter");
-    const params = form ? new URLSearchParams(new FormData(form)).toString() : "";
+    const params = new URLSearchParams(form ? new FormData(form) : []);
+    params.set("format", "json");
     if (!skipRequest) {
       try {
-        const response = await fetch(`/student/grades?${params}`);
+        const response = await fetch(`/student/grades?${params.toString()}`);
         const data = await response.json();
         state.grades = (data.grades || []).map(normalizeGrade);
         state.averages = computeAveragesClient(state.grades);
@@ -928,7 +929,7 @@
 
   async function loadClassComparison() {
     try {
-      const response = await fetch("/student/class-averages");
+      const response = await fetch("/student/class-averages?format=json");
       const data = await response.json();
       state.classAverages = data.subjects || [];
       renderClassAverage();
@@ -939,7 +940,7 @@
 
   async function loadTasksFromServer() {
     try {
-      const response = await fetch("/student/tasks");
+      const response = await fetch("/student/tasks?format=json");
       const data = await response.json();
       state.tasks = (data.tasks || []).map(normalizeTask);
       renderTasks();
@@ -951,7 +952,7 @@
 
   async function loadArchiveFromServer() {
     try {
-      const response = await fetch("/student/archive");
+      const response = await fetch("/student/archive?format=json");
       const data = await response.json();
       state.archivedTasks = (data.tasks || []).map(normalizeTask);
       renderArchive();
@@ -962,7 +963,7 @@
 
   async function loadReturnsFromServer() {
     try {
-      const response = await fetch("/student/returns");
+      const response = await fetch("/student/returns?format=json");
       const data = await response.json();
       state.returns = (data.returns || []).map(normalizeReturn);
       renderReturns();
@@ -975,7 +976,7 @@
 
   async function loadNotificationsFromServer() {
     try {
-      const response = await fetch("/student/notifications");
+      const response = await fetch("/student/notifications?format=json");
       const data = await response.json();
       state.notifications = data.notifications || [];
       renderNotifications();
