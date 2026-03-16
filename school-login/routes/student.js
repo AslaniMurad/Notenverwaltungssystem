@@ -53,12 +53,14 @@ async function loadClassInfo(classId) {
   return getAsync(
     `SELECT c.id, c.name, c.subject,
             COALESCE((
-              SELECT STRING_AGG(u.email, ', ' ORDER BY u.email)
-              FROM class_subject_teacher cst
-              JOIN users u ON u.id = cst.teacher_id
-              WHERE cst.class_id = c.id
-                AND cst.subject_id = c.subject_id
-                AND cst.school_year_id = c.school_year_id
+              SELECT STRING_AGG(teacher_rows.email, ', ')
+              FROM (
+                SELECT DISTINCT u.email
+                FROM class_subject_teacher cst
+                JOIN users u ON u.id = cst.teacher_id
+                WHERE cst.class_id = c.id AND cst.subject_id = c.subject_id
+                ORDER BY u.email
+              ) AS teacher_rows
             ), '') AS teacher_email
      FROM classes c
      WHERE c.id = ?`,
@@ -88,9 +90,7 @@ async function loadClassAbsenceMode(classId) {
      FROM class_subject_teacher cst
      JOIN classes c ON c.id = cst.class_id
      LEFT JOIN teacher_grading_profiles gp ON gp.teacher_id = cst.teacher_id AND gp.is_active = ?
-     WHERE c.id = ?
-       AND cst.subject_id = c.subject_id
-       AND cst.school_year_id = c.school_year_id
+     WHERE c.id = ? AND cst.subject_id = c.subject_id
      ORDER BY gp.created_at ASC, gp.id ASC
      LIMIT 1`,
     [true, classId]
@@ -124,7 +124,7 @@ async function loadTemplates(classId) {
 
 async function loadArchivedTemplates(classId) {
   return allAsync(
-    "SELECT id, name, category, weight, date, description FROM grade_templates WHERE class_id = ? AND archived_at IS NOT NULL ORDER BY date, name",
+    "SELECT id, name, category, weight, date, description FROM grade_templates WHERE class_id = ? AND archived_at IS NOT NULL ORDER BY date DESC, name",
     [classId]
   );
 }
@@ -339,41 +339,35 @@ function wantsJson(req) {
   return String(req.get("Accept") || "").toLowerCase().includes("application/json");
 }
 
-async function buildStudentDashboardViewModel(req) {
-  const context = await getStudentContext(req);
-  if (!context) return null;
-
-  const { student, classInfo, classAbsenceMode } = context;
-  const [gradeRows, templates, archivedTemplates, classRows, notifications] = await Promise.all([
-    loadStudentGrades(student.id),
-    loadTemplates(student.class_id),
-    loadArchivedTemplates(student.class_id),
-    loadClassGradeRows(student.class_id),
-    loadNotifications(student.id)
-  ]);
-
-  const grades = gradeRows.map((row) => mapGradeRow(row, classInfo));
-  const subjectSet = new Set(grades.map((grade) => grade.subject));
-  if (classInfo?.subject) subjectSet.add(classInfo.subject);
-  if (student.class_subject) subjectSet.add(student.class_subject);
-  const subjects = Array.from(subjectSet).filter(Boolean);
-  const averages = computeAverages(grades, { absenceMode: classAbsenceMode });
-  const gradeByTemplate = new Map(
-    gradeRows
-      .filter((row) => row.template_id != null)
-      .map((row) => [String(row.template_id), row])
-  );
-  const tasks = templates.map((template) =>
-    mapTaskRow(template, gradeByTemplate.get(String(template.id)), classInfo)
-  );
-  const archivedTasks = archivedTemplates.map((template) =>
-    mapTaskRow(template, gradeByTemplate.get(String(template.id)), classInfo)
-  );
-  const returns = gradeRows
-    .map((row) => mapReturnRow(row, classInfo))
-    .sort((a, b) => new Date(b.graded_at) - new Date(a.graded_at));
-  const classAverages = computeClassAverages(classRows, { absenceMode: classAbsenceMode });
-  const csrfToken = req.csrfToken();
+    const { student, classInfo, classAbsenceMode } = context;
+    const activePage = String(req.query.page || "overview").trim().toLowerCase();
+    const gradeRows = await loadStudentGrades(student.id);
+    const grades = gradeRows.map((row) => mapGradeRow(row, classInfo));
+    const subjectSet = new Set(grades.map((grade) => grade.subject));
+    if (classInfo?.subject) subjectSet.add(classInfo.subject);
+    if (student.class_subject) subjectSet.add(student.class_subject);
+    const subjects = Array.from(subjectSet).filter(Boolean);
+    const averages = computeAverages(grades, { absenceMode: classAbsenceMode });
+    const templates = await loadTemplates(student.class_id);
+    const archivedTemplates = await loadArchivedTemplates(student.class_id);
+    const gradeByTemplate = new Map(
+      gradeRows
+        .filter((row) => row.template_id != null)
+        .map((row) => [String(row.template_id), row])
+    );
+    const tasks = templates.map((template) =>
+      mapTaskRow(template, gradeByTemplate.get(String(template.id)), classInfo)
+    );
+    const archivedTasks = archivedTemplates.map((template) =>
+      mapTaskRow(template, gradeByTemplate.get(String(template.id)), classInfo)
+    );
+    const returns = gradeRows
+      .map((row) => mapReturnRow(row, classInfo))
+      .sort((a, b) => new Date(b.graded_at) - new Date(a.graded_at));
+    const classRows = await loadClassGradeRows(student.class_id);
+    const classAverages = computeClassAverages(classRows, { absenceMode: classAbsenceMode });
+    const notifications = await loadNotifications(student.id);
+    const csrfToken = req.csrfToken();
 
   return {
     context,
@@ -381,20 +375,29 @@ async function buildStudentDashboardViewModel(req) {
       name: student.name,
       class: student.class_name || classInfo?.name || "Unbekannt",
       subject: student.class_subject || classInfo?.subject || ""
-    },
-    subjects,
-    tasks,
-    archivedTasks,
-    returns,
-    initialData: {
-      grades,
-      averages,
+    };
+
+    res.render("student-dashboard", {
+      email: req.session.user.email,
+      activePage,
+      studentProfile,
+      subjects,
       tasks,
       archivedTasks,
       returns,
-      classAverages,
-      notifications,
-      trend: { direction: "steady", change: 0 },
+      materials: [],
+      messages: [],
+      initialData: {
+        grades,
+        averages,
+        tasks,
+        archivedTasks,
+        returns,
+        classAverages,
+        notifications,
+        trend: { direction: "steady", change: 0 },
+        csrfToken
+      },
       csrfToken
     },
     csrfToken
@@ -520,6 +523,30 @@ router.get("/tasks", async (req, res, next) => {
 
     const { student } = context;
     const templates = await loadTemplates(student.class_id);
+    const gradeRows = await loadStudentGrades(student.id);
+    const gradeByTemplate = new Map(
+      gradeRows
+        .filter((row) => row.template_id != null)
+        .map((row) => [String(row.template_id), row])
+    );
+    const tasks = templates.map((template) =>
+      mapTaskRow(template, gradeByTemplate.get(String(template.id)), context.classInfo)
+    );
+    res.json({ tasks });
+  } catch (err) {
+    next(err);
+  }
+});
+
+router.get("/archive", async (req, res, next) => {
+  try {
+    const context = await getStudentContext(req);
+    if (!context) {
+      return res.status(404).json({ error: "Student nicht gefunden." });
+    }
+
+    const { student } = context;
+    const templates = await loadArchivedTemplates(student.class_id);
     const gradeRows = await loadStudentGrades(student.id);
     const gradeByTemplate = new Map(
       gradeRows

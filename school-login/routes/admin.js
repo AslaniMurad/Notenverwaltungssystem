@@ -6,6 +6,7 @@ const { requireAuth, requireRole } = require("../middleware/auth");
 const { createAuditLogMiddleware } = require("../middleware/audit");
 const { getPasswordValidationError } = require("../utils/password");
 const { deriveNameFromEmail } = require("../utils/studentName");
+const { ensureSubjectIdByName } = require("../utils/subjects");
 
 const INITIAL_PASSWORD = process.env.INITIAL_PASSWORD || null;
 
@@ -739,6 +740,10 @@ router.post("/classes/:id/delete", async (req, res, next) => {
         csrfToken: req.csrfToken()
       });
     }
+    await runAsync(
+      "DELETE FROM grade_notifications WHERE student_id IN (SELECT id FROM students WHERE class_id = ?)",
+      [classId]
+    );
     await runAsync("DELETE FROM students WHERE class_id = ?", [classId]);
     await runAsync("DELETE FROM classes WHERE id = ?", [classId]);
     res.redirect("/admin/classes");
