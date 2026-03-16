@@ -1,0 +1,668 @@
+.school-year-rollover {
+  --sy-accent-soft: rgba(79, 111, 220, 0.12);
+  --sy-accent-border: rgba(79, 111, 220, 0.22);
+  --sy-warning-bg: rgba(245, 158, 11, 0.12);
+  --sy-warning-border: rgba(245, 158, 11, 0.22);
+  --sy-warning-text: #9a5a00;
+  --sy-danger-bg: rgba(225, 29, 72, 0.12);
+  --sy-danger-border: rgba(225, 29, 72, 0.22);
+  --sy-danger-text: #be123c;
+  --sy-success-bg: rgba(34, 197, 94, 0.12);
+  --sy-success-border: rgba(34, 197, 94, 0.22);
+  --sy-success-text: #15803d;
+  --sy-shadow-soft: 0 14px 32px rgba(15, 23, 42, 0.08);
+  display: grid;
+  gap: 18px;
+}
+
+html[data-theme="dark"] .school-year-rollover {
+  --sy-accent-soft: rgba(111, 143, 255, 0.18);
+  --sy-accent-border: rgba(111, 143, 255, 0.3);
+  --sy-warning-bg: rgba(245, 158, 11, 0.16);
+  --sy-warning-border: rgba(245, 158, 11, 0.32);
+  --sy-warning-text: #fbbf24;
+  --sy-danger-bg: rgba(251, 113, 133, 0.16);
+  --sy-danger-border: rgba(251, 113, 133, 0.28);
+  --sy-danger-text: #fda4af;
+  --sy-success-bg: rgba(74, 222, 128, 0.16);
+  --sy-success-border: rgba(74, 222, 128, 0.28);
+  --sy-success-text: #86efac;
+  --sy-shadow-soft: 0 18px 36px rgba(3, 8, 19, 0.42);
+}
+
+.school-year-rollover .school-year-header {
+  margin-bottom: 0;
+  gap: 16px;
+}
+
+.school-year-rollover .school-year-header-copy {
+  max-width: 460px;
+  margin-top: 8px;
+  line-height: 1.45;
+}
+
+.school-year-rollover .school-year-alert-stack {
+  display: grid;
+  gap: 10px;
+}
+
+.school-year-rollover .school-year-alert {
+  padding: 12px 14px;
+  border-radius: 12px;
+  border: 1px solid var(--border);
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+.school-year-rollover .school-year-alert-info {
+  background: var(--sy-accent-soft);
+  border-color: var(--sy-accent-border);
+  color: var(--text);
+}
+
+.school-year-rollover .school-year-alert-error {
+  background: var(--sy-danger-bg);
+  border-color: var(--sy-danger-border);
+  color: var(--sy-danger-text);
+}
+
+.school-year-rollover .school-year-flow,
+.school-year-rollover .school-year-secondary {
+  border: 1px solid var(--border);
+  border-radius: 18px;
+  background: var(--surface);
+  box-shadow: var(--sy-shadow-soft);
+}
+
+.school-year-rollover .school-year-flow {
+  overflow: hidden;
+  background:
+    radial-gradient(circle at top right, var(--sy-accent-soft), transparent 34%),
+    linear-gradient(180deg, var(--surface) 0%, var(--surface-2) 100%);
+}
+
+.school-year-rollover .school-year-flow-hero,
+.school-year-rollover .school-year-flow-section,
+.school-year-rollover .school-year-secondary {
+  padding: 24px 26px;
+}
+
+.school-year-rollover .school-year-flow-section {
+  border-top: 1px solid var(--border);
+}
+
+.school-year-rollover .school-year-flow-hero {
+  display: grid;
+  gap: 18px;
+  align-items: start;
+}
+
+.school-year-rollover .school-year-eyebrow {
+  margin: 0 0 10px;
+  color: var(--text-muted);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.school-year-rollover .school-year-state {
+  display: grid;
+  gap: 4px;
+  max-width: 540px;
+  padding-left: 12px;
+  border-left: 3px solid var(--border);
+}
+
+.school-year-rollover .school-year-state strong {
+  color: var(--text);
+  font-size: 15px;
+}
+
+.school-year-rollover .school-year-state span {
+  color: var(--text-muted);
+  font-size: 14px;
+  line-height: 1.55;
+}
+
+.school-year-rollover .school-year-state-success {
+  border-left-color: var(--sy-success-text);
+}
+
+.school-year-rollover .school-year-state-warning {
+  border-left-color: var(--sy-warning-text);
+}
+
+.school-year-rollover .school-year-state-blocked {
+  border-left-color: var(--sy-danger-text);
+}
+
+.school-year-rollover .school-year-route {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  margin-top: 6px;
+  color: var(--text);
+  line-height: 1.05;
+}
+
+.school-year-rollover .school-year-route-year {
+  font-size: clamp(1.95rem, 3.4vw, 3rem);
+  font-weight: 800;
+  letter-spacing: -0.03em;
+}
+
+.school-year-rollover .school-year-route-arrow {
+  color: var(--primary);
+  font-size: clamp(1.4rem, 2.2vw, 2rem);
+  font-weight: 700;
+}
+
+.school-year-rollover .school-year-route-year.is-target {
+  color: var(--primary);
+}
+
+.school-year-rollover .school-year-hero-meta {
+  display: grid;
+  gap: 14px;
+}
+
+.school-year-rollover .school-year-route-date {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+  color: var(--text-muted);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.school-year-rollover .school-year-route-date-separator {
+  color: var(--border);
+}
+
+.school-year-rollover .school-year-hero-actions {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.school-year-rollover .school-year-hero-actions .btn {
+  min-width: 170px;
+}
+
+.school-year-rollover .school-year-section-head {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 14px;
+  margin-bottom: 14px;
+}
+
+.school-year-rollover .school-year-section-head h2 {
+  margin: 2px 0 0;
+  font-size: 18px;
+  color: var(--text);
+}
+
+.school-year-rollover .school-year-impact-strip {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  background: var(--surface);
+  overflow: hidden;
+}
+
+.school-year-rollover .school-year-impact-item {
+  padding: 16px 18px;
+  border-right: 1px solid var(--border);
+}
+
+.school-year-rollover .school-year-impact-item.is-last {
+  border-right: none;
+}
+
+.school-year-rollover .school-year-impact-item span,
+.school-year-rollover .school-year-impact-item small {
+  display: block;
+}
+
+.school-year-rollover .school-year-impact-item span {
+  color: var(--text-muted);
+  font-size: 12px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.school-year-rollover .school-year-impact-item strong {
+  display: block;
+  margin: 6px 0 4px;
+  color: var(--text);
+  font-size: 28px;
+  line-height: 1;
+}
+
+.school-year-rollover .school-year-impact-item small {
+  color: var(--text-muted);
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+.school-year-rollover .school-year-safety-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(320px, 0.95fr);
+  gap: 22px;
+  align-items: start;
+}
+
+.school-year-rollover .school-year-warning-panel {
+  display: grid;
+  gap: 12px;
+}
+
+.school-year-rollover .school-year-warning-title {
+  margin: 0;
+  color: var(--text);
+  font-size: 18px;
+  font-weight: 700;
+}
+
+.school-year-rollover .school-year-warning-copy,
+.school-year-rollover .school-year-warning-panel-muted {
+  margin: 0;
+  color: var(--text-muted);
+  line-height: 1.6;
+}
+
+.school-year-rollover .school-year-warning-panel-muted,
+.school-year-rollover .school-year-block-note {
+  padding: 14px 16px;
+  border-radius: 14px;
+  border: 1px solid var(--border);
+  background: var(--surface-2);
+}
+
+.school-year-rollover .school-year-block-note {
+  background: var(--sy-danger-bg);
+  border-color: var(--sy-danger-border);
+  color: var(--sy-danger-text);
+}
+
+.school-year-rollover .school-year-action-panel {
+  padding: 18px;
+  border-radius: 16px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+}
+
+.school-year-rollover .school-year-confirm-form {
+  margin: 0;
+}
+
+.school-year-rollover .school-year-confirm-form label {
+  display: block;
+  margin-bottom: 8px;
+  color: var(--text);
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.school-year-rollover .school-year-confirm-input {
+  min-height: 48px;
+}
+
+.school-year-rollover .school-year-confirm-note {
+  display: block;
+  margin-top: 2px;
+  line-height: 1.45;
+}
+
+.school-year-rollover .school-year-consent {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  margin-top: 12px;
+  color: var(--text);
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.school-year-rollover .school-year-consent input {
+  width: 16px;
+  height: 16px;
+  margin: 2px 0 0;
+  flex: 0 0 auto;
+}
+
+.school-year-rollover .school-year-consent span {
+  color: var(--text-muted);
+}
+
+.school-year-rollover .school-year-button-row {
+  display: flex;
+  gap: 10px;
+  margin-top: 14px;
+}
+
+.school-year-rollover .school-year-button-row .btn {
+  width: 100%;
+}
+
+.school-year-rollover .school-year-button-row .btn[disabled],
+.school-year-rollover .school-year-consent input[disabled] {
+  cursor: not-allowed;
+  opacity: 0.62;
+}
+
+.school-year-rollover .school-year-secondary {
+  padding: 22px 26px;
+}
+
+.school-year-rollover .school-year-secondary-head {
+  margin-bottom: 8px;
+}
+
+.school-year-rollover .school-year-secondary-link {
+  color: var(--link);
+  text-decoration: none;
+  font-weight: 600;
+}
+
+.school-year-rollover .school-year-secondary-link:hover {
+  color: var(--link-hover);
+}
+
+.school-year-rollover .school-year-detail {
+  border-top: 1px solid var(--border);
+}
+
+.school-year-rollover .school-year-detail:first-of-type {
+  border-top: none;
+}
+
+.school-year-rollover .school-year-detail summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 16px 0;
+  cursor: pointer;
+  list-style: none;
+  color: var(--text);
+  font-weight: 700;
+}
+
+.school-year-rollover .school-year-detail summary::-webkit-details-marker {
+  display: none;
+}
+
+.school-year-rollover .school-year-detail summary::after {
+  content: "+";
+  color: var(--text-muted);
+  font-size: 18px;
+  line-height: 1;
+}
+
+.school-year-rollover .school-year-detail[open] summary::after {
+  content: "-";
+}
+
+.school-year-rollover .school-year-detail summary small {
+  margin-left: auto;
+  color: var(--text-muted);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.school-year-rollover .school-year-detail-body {
+  padding: 0 0 18px;
+}
+
+.school-year-rollover .school-year-detail-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: grid;
+  gap: 10px;
+}
+
+.school-year-rollover .school-year-detail-list li {
+  position: relative;
+  padding-left: 16px;
+  color: var(--text-muted);
+  line-height: 1.55;
+}
+
+.school-year-rollover .school-year-detail-list li::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 0.62em;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--primary);
+  transform: translateY(-50%);
+}
+
+.school-year-rollover .school-year-empty {
+  padding: 12px 14px;
+  border-radius: 12px;
+  border: 1px dashed var(--border);
+  background: var(--surface-2);
+  color: var(--text-muted);
+  line-height: 1.5;
+}
+
+.school-year-rollover .school-year-table-wrap {
+  max-height: 360px;
+  overflow: auto;
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  background: var(--surface);
+}
+
+.school-year-rollover .school-year-table {
+  width: 100%;
+  border-collapse: separate;
+  border-spacing: 0;
+}
+
+.school-year-rollover .school-year-table thead th {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  padding: 12px 14px;
+  background: var(--surface-2);
+  color: var(--text-muted);
+  border-bottom: 1px solid var(--border);
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-align: left;
+  text-transform: uppercase;
+}
+
+.school-year-rollover .school-year-table tbody td {
+  padding: 13px 14px;
+  border-bottom: 1px solid var(--border);
+  color: var(--text);
+  font-size: 14px;
+  vertical-align: middle;
+}
+
+.school-year-rollover .school-year-table tbody tr:last-child td {
+  border-bottom: none;
+}
+
+.school-year-rollover .school-year-table tbody tr:hover td {
+  background: var(--surface-2);
+}
+
+.school-year-rollover .school-year-list,
+.school-year-rollover .school-year-log-list {
+  display: grid;
+}
+
+.school-year-rollover .school-year-list-row,
+.school-year-rollover .school-year-log-row {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 14px 0;
+  border-top: 1px solid var(--border);
+}
+
+.school-year-rollover .school-year-list-row:first-child,
+.school-year-rollover .school-year-log-row:first-child {
+  border-top: none;
+  padding-top: 0;
+}
+
+.school-year-rollover .school-year-list-row:last-child,
+.school-year-rollover .school-year-log-row:last-child {
+  padding-bottom: 0;
+}
+
+.school-year-rollover .school-year-list-row strong,
+.school-year-rollover .school-year-log-main strong {
+  display: block;
+  color: var(--text);
+  font-size: 14px;
+}
+
+.school-year-rollover .school-year-list-row small,
+.school-year-rollover .school-year-log-main small {
+  display: block;
+  margin-top: 4px;
+  color: var(--text-muted);
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.school-year-rollover .school-year-inline-state,
+.school-year-rollover .school-year-log-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--text-muted);
+  font-size: 12px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.school-year-rollover .school-year-inline-state::before,
+.school-year-rollover .school-year-log-status::before {
+  content: "";
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: currentColor;
+}
+
+.school-year-rollover .school-year-inline-state.is-active,
+.school-year-rollover .school-year-log-status-success {
+  color: var(--sy-success-text);
+}
+
+.school-year-rollover .school-year-log-status-failed {
+  color: var(--sy-danger-text);
+}
+
+.school-year-rollover .school-year-log-status-neutral {
+  color: var(--text-muted);
+}
+
+.school-year-rollover .school-year-log-side {
+  display: grid;
+  justify-items: end;
+  gap: 6px;
+}
+
+.school-year-rollover .school-year-log-side code {
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  padding: 4px 6px;
+  border-radius: 8px;
+  background: var(--surface-2);
+  color: var(--text-muted);
+  font-size: 11px;
+}
+
+@media (max-width: 1180px) {
+  .school-year-rollover .school-year-safety-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 900px) {
+  .school-year-rollover .school-year-impact-strip {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .school-year-rollover .school-year-impact-item:nth-child(2) {
+    border-right: none;
+  }
+
+  .school-year-rollover .school-year-impact-item:nth-child(n + 3) {
+    border-top: 1px solid var(--border);
+  }
+}
+
+@media (max-width: 720px) {
+  .school-year-rollover .school-year-flow-hero,
+  .school-year-rollover .school-year-flow-section,
+  .school-year-rollover .school-year-secondary {
+    padding: 18px;
+  }
+
+  .school-year-rollover .school-year-route {
+    flex-wrap: wrap;
+    gap: 10px;
+  }
+
+  .school-year-rollover .school-year-route-year {
+    font-size: 1.8rem;
+  }
+
+  .school-year-rollover .school-year-impact-strip {
+    grid-template-columns: 1fr;
+  }
+
+  .school-year-rollover .school-year-impact-item {
+    border-right: none;
+    border-top: 1px solid var(--border);
+  }
+
+  .school-year-rollover .school-year-impact-item:first-child {
+    border-top: none;
+  }
+
+  .school-year-rollover .school-year-detail summary,
+  .school-year-rollover .school-year-list-row,
+  .school-year-rollover .school-year-log-row {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .school-year-rollover .school-year-hero-actions {
+    width: 100%;
+  }
+
+  .school-year-rollover .school-year-hero-actions .btn {
+    width: 100%;
+  }
+
+  .school-year-rollover .school-year-log-side {
+    justify-items: start;
+  }
+
+  .school-year-rollover .school-year-table-wrap {
+    max-height: none;
+  }
+}
