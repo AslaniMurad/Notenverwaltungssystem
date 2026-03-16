@@ -623,8 +623,7 @@ html[data-theme="dark"] .login-alert-panel {
 }
 
 .login-alert-title,
-.login-alert-text,
-.login-alert-contact {
+.login-alert-text {
   color: var(--danger);
 }
 

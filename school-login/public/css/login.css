@@ -308,13 +308,6 @@ body.page-force-password {
   font-size: 14px;
 }
 
-.login-alert-contact {
-  margin: 0;
-  font-weight: 700;
-  color: #b91c1c;
-  font-family: 'Inter', sans-serif;
-}
-
 .login-card-header h1 {
   margin: 0;
 }
