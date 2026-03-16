@@ -1159,7 +1159,7 @@ async function loadClassOpenMessageCount(classId) {
   return openMessageCount;
 }
 
-async function loadMessageForTeacher(classId, messageId, teacherId) {
+async function loadMessageForTeacher(classId, messageId) {
   return getAsync(
     `SELECT gm.id, gm.student_id
      FROM grade_messages gm
@@ -1973,7 +1973,7 @@ router.post("/students/:classId/messages/:messageId/reply", async (req, res, nex
       return renderError(res, req, "Ungültige Nachrichten-ID.", 400, `/teacher/test-questions/${classId}`);
     }
 
-    const messageRow = await loadMessageForTeacher(classId, messageId, req.session.user.id);
+    const messageRow = await loadMessageForTeacher(classId, messageId);
     if (!messageRow) {
       return renderError(res, req, "Nachricht nicht gefunden.", 404, `/teacher/test-questions/${classId}`);
     }
