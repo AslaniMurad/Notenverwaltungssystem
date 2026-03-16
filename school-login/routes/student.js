@@ -339,65 +339,93 @@ function wantsJson(req) {
   return String(req.get("Accept") || "").toLowerCase().includes("application/json");
 }
 
-    const { student, classInfo, classAbsenceMode } = context;
-    const activePage = String(req.query.page || "overview").trim().toLowerCase();
-    const gradeRows = await loadStudentGrades(student.id);
-    const grades = gradeRows.map((row) => mapGradeRow(row, classInfo));
-    const subjectSet = new Set(grades.map((grade) => grade.subject));
-    if (classInfo?.subject) subjectSet.add(classInfo.subject);
-    if (student.class_subject) subjectSet.add(student.class_subject);
-    const subjects = Array.from(subjectSet).filter(Boolean);
-    const averages = computeAverages(grades, { absenceMode: classAbsenceMode });
-    const templates = await loadTemplates(student.class_id);
-    const archivedTemplates = await loadArchivedTemplates(student.class_id);
-    const gradeByTemplate = new Map(
-      gradeRows
-        .filter((row) => row.template_id != null)
-        .map((row) => [String(row.template_id), row])
-    );
-    const tasks = templates.map((template) =>
-      mapTaskRow(template, gradeByTemplate.get(String(template.id)), classInfo)
-    );
-    const archivedTasks = archivedTemplates.map((template) =>
-      mapTaskRow(template, gradeByTemplate.get(String(template.id)), classInfo)
-    );
-    const returns = gradeRows
-      .map((row) => mapReturnRow(row, classInfo))
-      .sort((a, b) => new Date(b.graded_at) - new Date(a.graded_at));
-    const classRows = await loadClassGradeRows(student.class_id);
-    const classAverages = computeClassAverages(classRows, { absenceMode: classAbsenceMode });
-    const notifications = await loadNotifications(student.id);
-    const csrfToken = req.csrfToken();
+function buildStudentPageUrl(page, query = {}) {
+  const normalizedPage = String(page || "overview").trim().toLowerCase();
+  const pagePathByKey = {
+    overview: "/student",
+    tasks: "/student/tasks",
+    returns: "/student/returns",
+    requests: "/student/requests",
+    grades: "/student/grades",
+    archive: "/student/archive"
+  };
+  const pathname = pagePathByKey[normalizedPage];
+  if (!pathname) return null;
+
+  const params = new URLSearchParams();
+  Object.entries(query || {}).forEach(([key, rawValue]) => {
+    if (key === "page" || rawValue == null) return;
+    if (Array.isArray(rawValue)) {
+      rawValue.forEach((value) => {
+        if (value != null) params.append(key, String(value));
+      });
+      return;
+    }
+    params.append(key, String(rawValue));
+  });
+
+  const search = params.toString();
+  return search ? `${pathname}?${search}` : pathname;
+}
+
+async function buildStudentDashboardViewModel(req) {
+  const context = await getStudentContext(req);
+  if (!context) return null;
+
+  const { student, classInfo, classAbsenceMode } = context;
+  const [gradeRows, templates, archivedTemplates, classRows, notifications] = await Promise.all([
+    loadStudentGrades(student.id),
+    loadTemplates(student.class_id),
+    loadArchivedTemplates(student.class_id),
+    loadClassGradeRows(student.class_id),
+    loadNotifications(student.id)
+  ]);
+
+  const grades = gradeRows.map((row) => mapGradeRow(row, classInfo));
+  const subjectSet = new Set(grades.map((grade) => grade.subject));
+  if (classInfo?.subject) subjectSet.add(classInfo.subject);
+  if (student.class_subject) subjectSet.add(student.class_subject);
+
+  const subjects = Array.from(subjectSet).filter(Boolean);
+  const averages = computeAverages(grades, { absenceMode: classAbsenceMode });
+  const gradeByTemplate = new Map(
+    gradeRows
+      .filter((row) => row.template_id != null)
+      .map((row) => [String(row.template_id), row])
+  );
+  const tasks = templates.map((template) =>
+    mapTaskRow(template, gradeByTemplate.get(String(template.id)), classInfo)
+  );
+  const archivedTasks = archivedTemplates.map((template) =>
+    mapTaskRow(template, gradeByTemplate.get(String(template.id)), classInfo)
+  );
+  const returns = gradeRows
+    .map((row) => mapReturnRow(row, classInfo))
+    .sort((a, b) => new Date(b.graded_at) - new Date(a.graded_at));
+  const classAverages = computeClassAverages(classRows, { absenceMode: classAbsenceMode });
+  const csrfToken = req.csrfToken();
+  const studentProfile = {
+    name: student.name,
+    class: student.class_name || classInfo?.name || "Unbekannt",
+    subject: student.class_subject || classInfo?.subject || ""
+  };
 
   return {
     context,
-    studentProfile: {
-      name: student.name,
-      class: student.class_name || classInfo?.name || "Unbekannt",
-      subject: student.class_subject || classInfo?.subject || ""
-    };
-
-    res.render("student-dashboard", {
-      email: req.session.user.email,
-      activePage,
-      studentProfile,
-      subjects,
+    studentProfile,
+    subjects,
+    tasks,
+    archivedTasks,
+    returns,
+    initialData: {
+      grades,
+      averages,
       tasks,
       archivedTasks,
       returns,
-      materials: [],
-      messages: [],
-      initialData: {
-        grades,
-        averages,
-        tasks,
-        archivedTasks,
-        returns,
-        classAverages,
-        notifications,
-        trend: { direction: "steady", change: 0 },
-        csrfToken
-      },
+      classAverages,
+      notifications,
+      trend: { direction: "steady", change: 0 },
       csrfToken
     },
     csrfToken
@@ -432,6 +460,13 @@ async function renderStudentDashboardPage(req, res, activePage) {
 
 router.get("/", async (req, res, next) => {
   try {
+    const requestedPage = String(req.query.page || "").trim().toLowerCase();
+    if (requestedPage) {
+      const legacyTarget = buildStudentPageUrl(requestedPage, req.query);
+      if (legacyTarget) {
+        return res.redirect(legacyTarget);
+      }
+    }
     return await renderStudentDashboardPage(req, res, "overview");
   } catch (err) {
     next(err);
@@ -540,23 +575,29 @@ router.get("/tasks", async (req, res, next) => {
 
 router.get("/archive", async (req, res, next) => {
   try {
+    if (!wantsJson(req)) {
+      return await renderStudentDashboardPage(req, res, "archive");
+    }
+
     const context = await getStudentContext(req);
     if (!context) {
       return res.status(404).json({ error: "Student nicht gefunden." });
     }
 
-    const { student } = context;
-    const templates = await loadArchivedTemplates(student.class_id);
-    const gradeRows = await loadStudentGrades(student.id);
+    const { student, classInfo } = context;
+    const [templates, gradeRows] = await Promise.all([
+      loadArchivedTemplates(student.class_id),
+      loadStudentGrades(student.id)
+    ]);
     const gradeByTemplate = new Map(
       gradeRows
         .filter((row) => row.template_id != null)
         .map((row) => [String(row.template_id), row])
     );
     const tasks = templates.map((template) =>
-      mapTaskRow(template, gradeByTemplate.get(String(template.id)), context.classInfo)
+      mapTaskRow(template, gradeByTemplate.get(String(template.id)), classInfo)
     );
-    res.json({ tasks });
+    return res.json({ tasks });
   } catch (err) {
     next(err);
   }
@@ -586,36 +627,6 @@ router.get("/returns", async (req, res, next) => {
 router.get("/requests", async (req, res, next) => {
   try {
     return await renderStudentDashboardPage(req, res, "requests");
-  } catch (err) {
-    next(err);
-  }
-});
-
-router.get("/archive", async (req, res, next) => {
-  try {
-    if (!wantsJson(req)) {
-      return await renderStudentDashboardPage(req, res, "archive");
-    }
-
-    const context = await getStudentContext(req);
-    if (!context) {
-      return res.status(404).json({ error: "Student nicht gefunden." });
-    }
-
-    const { student, classInfo } = context;
-    const [templates, gradeRows] = await Promise.all([
-      loadArchivedTemplates(student.class_id),
-      loadStudentGrades(student.id)
-    ]);
-    const gradeByTemplate = new Map(
-      gradeRows
-        .filter((row) => row.template_id != null)
-        .map((row) => [String(row.template_id), row])
-    );
-    const tasks = templates.map((template) =>
-      mapTaskRow(template, gradeByTemplate.get(String(template.id)), classInfo)
-    );
-    return res.json({ tasks });
   } catch (err) {
     next(err);
   }

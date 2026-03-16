@@ -35,11 +35,11 @@
           <div class="nav-section">
             <div class="nav-section-title">Menue</div>
             <a class="<%= currentPage === 'overview' ? 'is-active' : '' %>" href="/student">Uebersicht</a>
-            <a class="<%= currentPage === 'tasks' ? 'is-active' : '' %>" href="/student?page=tasks">Aufgaben</a>
-            <a class="<%= currentPage === 'returns' ? 'is-active' : '' %>" href="/student?page=returns">Rueckgaben</a>
-            <a class="<%= currentPage === 'requests' ? 'is-active' : '' %>" href="/student?page=requests">Anfragen</a>
-            <a class="<%= currentPage === 'grades' ? 'is-active' : '' %>" href="/student?page=grades">Noten</a>
-            <a class="<%= currentPage === 'archive' ? 'is-active' : '' %>" href="/student?page=archive">Archiv</a>
+            <a class="<%= currentPage === 'tasks' ? 'is-active' : '' %>" href="/student/tasks">Aufgaben</a>
+            <a class="<%= currentPage === 'returns' ? 'is-active' : '' %>" href="/student/returns">Rueckgaben</a>
+            <a class="<%= currentPage === 'requests' ? 'is-active' : '' %>" href="/student/requests">Anfragen</a>
+            <a class="<%= currentPage === 'grades' ? 'is-active' : '' %>" href="/student/grades">Noten</a>
+            <a class="<%= currentPage === 'archive' ? 'is-active' : '' %>" href="/student/archive">Archiv</a>
             <form class="logout-form" method="POST" action="/logout">
               <% if (typeof csrfToken !== "undefined") { %>
                 <input type="hidden" name="_csrf" value="<%= csrfToken %>">

@@ -772,7 +772,7 @@
             ? `<div class="return-actions"><a class="btn small secondary" href="${downloadUrl}">Datei herunterladen</a><small>${attachmentName}</small></div>`
             : "";
         const requestActionHtml = entry.can_message
-          ? `<div class="return-actions"><a class="btn small" href="/student?page=requests&gradeId=${encodeURIComponent(String(entry.id))}">${stats.totalCount > 0 ? "Anfragen ansehen" : "Anfrage erstellen"}</a></div>`
+          ? `<div class="return-actions"><a class="btn small" href="/student/requests?gradeId=${encodeURIComponent(String(entry.id))}">${stats.totalCount > 0 ? "Anfragen ansehen" : "Anfrage erstellen"}</a></div>`
           : "";
         return `
           <div class="return-row">
