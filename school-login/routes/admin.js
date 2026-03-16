@@ -122,6 +122,14 @@ async function getActiveClassById(classId, columns = "id, name") {
 
 router.use(requireAuth, requireRole("admin"));
 router.use(createAuditLogMiddleware());
+router.use(async (req, res, next) => {
+  try {
+    res.locals.activeSchoolYear = await schoolYearModel.getActiveSchoolYear();
+  } catch (err) {
+    res.locals.activeSchoolYear = null;
+  }
+  next();
+});
 
 router.get("/", async (req, res, next) => {
   try {
