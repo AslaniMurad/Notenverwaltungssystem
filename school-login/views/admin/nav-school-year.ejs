@@ -1,9 +1,9 @@
-<% const resolvedActiveSchoolYear = activeSchoolYear || null; %>
+<% const resolvedActiveSchoolYear = (typeof activeSchoolYear !== "undefined" ? activeSchoolYear : locals.activeSchoolYear) || null; %>
 <aside class="app-sidebar" aria-label="Admin Navigation">
   <div class="sidebar-brand">
     <div>
       <div class="sidebar-title">Admin-Konsole</div>
-      <div class="sidebar-meta"><%= currentUser?.email %> · <%= currentUser?.role %></div>
+      <div class="sidebar-meta"><%= currentUser?.email %> &middot; <%= currentUser?.role %></div>
       <% if (resolvedActiveSchoolYear) { %>
         <div class="sidebar-meta">Aktiv: <%= resolvedActiveSchoolYear.name %></div>
       <% } %>
