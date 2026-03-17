@@ -285,6 +285,461 @@ body.page-admin-edit {
   border-color: var(--border);
 }
 
+.rollover-page {
+  display: grid;
+  gap: 18px;
+}
+
+.rollover-header {
+  margin-bottom: 0;
+}
+
+.rollover-header-copy {
+  max-width: 760px;
+  margin-top: 8px;
+  font-size: 14px;
+  line-height: 1.6;
+}
+
+.rollover-header-actions form {
+  margin: 0;
+}
+
+.rollover-hero-card {
+  position: relative;
+  overflow: hidden;
+  border-color: rgba(96, 165, 250, 0.55);
+  background:
+    radial-gradient(circle at top right, rgba(59, 130, 246, 0.16), transparent 38%),
+    linear-gradient(180deg, rgba(232, 240, 255, 0.9), rgba(255, 255, 255, 0.96));
+}
+
+.rollover-hero-card::after {
+  content: "";
+  position: absolute;
+  right: -90px;
+  bottom: -110px;
+  width: 260px;
+  height: 260px;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(27, 126, 255, 0.16), transparent 72%);
+  pointer-events: none;
+}
+
+.rollover-hero-grid,
+.rollover-info-row {
+  position: relative;
+  z-index: 1;
+}
+
+.rollover-hero-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.15fr) minmax(280px, 0.85fr);
+  gap: 20px;
+  align-items: start;
+}
+
+.rollover-hero-copy h2 {
+  margin: 12px 0 10px;
+  font-size: clamp(1.7rem, 2.6vw, 2.3rem);
+  line-height: 1.08;
+  color: var(--text);
+}
+
+.rollover-hero-text {
+  max-width: 720px;
+  color: var(--text-light);
+  font-size: 15px;
+  line-height: 1.7;
+}
+
+.rollover-status-pill {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 8px 12px;
+  border-radius: 999px;
+  border: 1px solid transparent;
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.rollover-status-pill-ready,
+.rollover-status-pill-success {
+  background: rgba(34, 197, 94, 0.12);
+  border-color: rgba(34, 197, 94, 0.22);
+  color: #166534;
+}
+
+.rollover-status-pill-neutral {
+  background: rgba(59, 130, 246, 0.12);
+  border-color: rgba(59, 130, 246, 0.2);
+  color: #1d4ed8;
+}
+
+.rollover-status-pill-warning {
+  background: rgba(245, 158, 11, 0.12);
+  border-color: rgba(245, 158, 11, 0.22);
+  color: #92400e;
+}
+
+.rollover-status-pill-blocked {
+  background: rgba(239, 68, 68, 0.12);
+  border-color: rgba(239, 68, 68, 0.2);
+  color: #b91c1c;
+}
+
+.rollover-hero-summary {
+  display: grid;
+  gap: 12px;
+}
+
+.rollover-highlight {
+  padding: 16px 18px;
+  border-radius: 16px;
+  border: 1px solid rgba(191, 219, 254, 0.85);
+  background: rgba(255, 255, 255, 0.92);
+  box-shadow: 0 12px 26px rgba(37, 99, 235, 0.08);
+}
+
+.rollover-highlight-label {
+  display: block;
+  margin-bottom: 8px;
+  color: #64748b;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.rollover-highlight strong {
+  display: block;
+  font-size: 20px;
+  color: var(--text);
+  line-height: 1.2;
+}
+
+.rollover-highlight small {
+  display: block;
+  margin-top: 6px;
+  color: #64748b;
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+.rollover-info-row {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 12px;
+  margin-top: 20px;
+}
+
+.rollover-info-box {
+  padding: 14px 16px;
+  border-radius: 14px;
+  border: 1px solid rgba(209, 213, 219, 0.75);
+  background: rgba(255, 255, 255, 0.82);
+  box-shadow: 0 8px 18px rgba(15, 23, 42, 0.04);
+  color: #475569;
+  font-size: 14px;
+  line-height: 1.55;
+}
+
+.rollover-info-box strong {
+  display: block;
+  margin-bottom: 6px;
+  color: var(--text);
+  font-size: 14px;
+}
+
+.rollover-alert-stack {
+  display: grid;
+  gap: 12px;
+}
+
+.rollover-empty-card {
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.96), rgba(248, 250, 252, 0.98));
+}
+
+.rollover-summary-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+  gap: 16px;
+}
+
+.rollover-stat-card {
+  background: linear-gradient(180deg, rgba(232, 240, 255, 0.6), rgba(255, 255, 255, 0.96));
+}
+
+.rollover-stat-value {
+  margin: 10px 0 8px;
+  font-size: clamp(2rem, 4vw, 2.5rem);
+  font-weight: 800;
+  line-height: 1;
+  color: var(--accent);
+}
+
+.rollover-section-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.08fr) minmax(0, 0.92fr);
+  gap: 18px;
+  align-items: start;
+}
+
+.rollover-process-card {
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.98), rgba(248, 250, 252, 0.98));
+}
+
+.rollover-metric-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+  margin-top: 18px;
+}
+
+.rollover-metric-card {
+  padding: 14px;
+  border-radius: 14px;
+  border: 1px solid rgba(209, 213, 219, 0.78);
+  background: var(--surface-2);
+}
+
+.rollover-metric-card strong {
+  display: block;
+  margin-bottom: 5px;
+  font-size: 22px;
+  color: var(--text);
+}
+
+.rollover-metric-card span {
+  color: #64748b;
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+.rollover-checklist {
+  display: grid;
+  gap: 10px;
+  margin-top: 18px;
+}
+
+.rollover-check-item {
+  padding: 14px 15px;
+  border-radius: 14px;
+  border: 1px solid rgba(191, 219, 254, 0.82);
+  background: linear-gradient(180deg, rgba(239, 246, 255, 0.9), rgba(255, 255, 255, 0.96));
+}
+
+.rollover-check-item strong {
+  display: block;
+  margin-bottom: 5px;
+  color: var(--text);
+  font-size: 14px;
+}
+
+.rollover-check-item span {
+  color: #475569;
+  font-size: 14px;
+  line-height: 1.55;
+}
+
+.rollover-action-card {
+  border-color: rgba(96, 165, 250, 0.48);
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.98), rgba(248, 250, 252, 0.98));
+}
+
+.rollover-action-card-critical {
+  box-shadow: 0 18px 36px rgba(0, 61, 165, 0.1);
+}
+
+.rollover-warning-box,
+.rollover-locked-box {
+  padding: 15px 16px;
+  border-radius: 14px;
+  margin: 16px 0 0;
+  font-size: 14px;
+  line-height: 1.6;
+}
+
+.rollover-warning-box {
+  border: 1px solid rgba(245, 158, 11, 0.28);
+  background: linear-gradient(180deg, #fffbeb, #fff7ed);
+  color: #92400e;
+}
+
+.rollover-locked-box {
+  border: 1px solid rgba(239, 68, 68, 0.25);
+  background: linear-gradient(180deg, #fef2f2, #fff5f5);
+  color: #b91c1c;
+}
+
+.rollover-warning-box strong,
+.rollover-locked-box strong {
+  display: block;
+  margin-bottom: 6px;
+  font-size: 14px;
+}
+
+.rollover-confirm-form {
+  margin-top: 18px;
+}
+
+.rollover-confirm-form label {
+  display: block;
+  margin-bottom: 8px;
+  color: var(--text);
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.rollover-confirm-form input {
+  font-size: 15px;
+  min-height: 48px;
+  border-radius: 12px;
+  padding-left: 15px;
+  padding-right: 15px;
+}
+
+.rollover-confirm-hint {
+  display: block;
+  margin: 2px 0 4px;
+}
+
+.rollover-confirm-actions {
+  margin-top: 6px;
+}
+
+.rollover-confirm-actions .btn {
+  min-height: 48px;
+}
+
+.rollover-execute-btn[disabled] {
+  opacity: 0.58;
+  cursor: not-allowed;
+  box-shadow: none;
+  transform: none;
+}
+
+.rollover-note-list {
+  display: grid;
+  gap: 9px;
+  margin-top: 16px;
+}
+
+.rollover-note-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  color: #64748b;
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.rollover-note-bullet {
+  width: 8px;
+  height: 8px;
+  margin-top: 6px;
+  border-radius: 50%;
+  background: var(--accent);
+  flex-shrink: 0;
+}
+
+.rollover-table-card .admin-topbar,
+.rollover-bottom-grid .admin-topbar {
+  margin-bottom: 8px;
+}
+
+.rollover-table-card .admin-muted,
+.rollover-bottom-grid .admin-muted {
+  margin-bottom: 14px;
+}
+
+.rollover-table-status {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 7px 11px;
+  border-radius: 999px;
+  border: 1px solid transparent;
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1.2;
+}
+
+.rollover-table-status-changed {
+  background: rgba(34, 197, 94, 0.14);
+  border-color: rgba(34, 197, 94, 0.24);
+  color: #166534;
+}
+
+.rollover-table-status-copied {
+  background: rgba(59, 130, 246, 0.12);
+  border-color: rgba(59, 130, 246, 0.2);
+  color: #1d4ed8;
+}
+
+.rollover-bottom-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 0.82fr) minmax(0, 1.18fr);
+  gap: 18px;
+  align-items: start;
+}
+
+.rollover-year-list {
+  display: grid;
+  gap: 12px;
+}
+
+.rollover-year-item {
+  padding: 14px 16px;
+  border-radius: 14px;
+  border: 1px solid rgba(209, 213, 219, 0.78);
+  background: linear-gradient(180deg, rgba(248, 250, 252, 0.98), rgba(255, 255, 255, 0.96));
+}
+
+.rollover-year-item.is-active {
+  border-color: rgba(96, 165, 250, 0.52);
+  background: linear-gradient(180deg, rgba(239, 246, 255, 0.96), rgba(255, 255, 255, 0.98));
+  box-shadow: 0 12px 24px rgba(37, 99, 235, 0.07);
+}
+
+.rollover-year-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.rollover-year-range {
+  margin-top: 6px;
+}
+
+.rollover-year-status {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 88px;
+  padding: 7px 10px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 800;
+  line-height: 1.1;
+}
+
+.rollover-year-status-active {
+  background: rgba(59, 130, 246, 0.14);
+  color: #1d4ed8;
+}
+
+.rollover-year-status-archive {
+  background: rgba(148, 163, 184, 0.14);
+  color: #475569;
+}
+
 .rollover-log-table-responsive {
   width: 100%;
   overflow-x: auto;
@@ -416,6 +871,16 @@ body.page-admin-edit {
 }
 
 @media (max-width: 900px) {
+  .rollover-hero-grid,
+  .rollover-section-grid,
+  .rollover-bottom-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .rollover-metric-grid {
+    grid-template-columns: 1fr;
+  }
+
   .rollover-log-table {
     min-width: 780px;
   }
@@ -423,5 +888,30 @@ body.page-admin-edit {
   .rollover-log-table thead th,
   .rollover-log-table tbody td {
     padding: 13px 14px;
+  }
+}
+
+@media (max-width: 720px) {
+  .rollover-hero-card,
+  .rollover-stat-card,
+  .rollover-process-card,
+  .rollover-action-card,
+  .rollover-table-card {
+    padding: 20px;
+  }
+
+  .rollover-hero-summary {
+    grid-template-columns: 1fr;
+  }
+
+  .rollover-year-head {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .rollover-status-pill,
+  .rollover-year-status,
+  .rollover-table-status {
+    white-space: normal;
   }
 }

@@ -1,23 +1,69 @@
 <%
-  const previewRows = preview?.classes || [];
+  const classRows = rollover?.classes || [];
   const schoolYearRows = schoolYears || [];
-  const dateFormatter = new Intl.DateTimeFormat('de-DE', {
+  const hasRollover = Boolean(rollover);
+  const activeYearName = rollover?.activeSchoolYear?.name || activeSchoolYear?.name || 'Nicht gesetzt';
+  const targetYearName = rollover?.nextSchoolYear?.name || 'Noch nicht verfuegbar';
+  const pageState = !hasRollover
+    ? {
+        title: 'Aktives Schuljahr fehlt',
+        tone: 'warning',
+        text: 'Kein aktives Schuljahr vorhanden.'
+      }
+    : rollover.nextSchoolYearExists
+      ? {
+          title: 'Zielschuljahr bereits vorhanden',
+          tone: 'blocked',
+          text: `Das Zielschuljahr ${targetYearName} existiert bereits.`
+        }
+      : {
+          title: 'Bereit fuer den Wechsel',
+          tone: 'success',
+          text: `Wechsel nach ${targetYearName} kann freigegeben werden.`
+        };
+  const conciseSteps = hasRollover
+    ? [
+        'Klassen und Zuordnungen werden uebernommen.',
+        'Noten bleiben im bisherigen Schuljahr archiviert.',
+        'Vor dem Wechsel wird ein Backup erstellt.'
+      ]
+    : [];
+  const impactStats = hasRollover
+    ? [
+        { label: 'Klassen', value: rollover.classCount, detail: 'im Zieljahr' },
+        { label: 'Zuordnungen', value: rollover.assignmentsCopied, detail: 'werden mitgenommen' },
+        { label: 'Lehrkraefte', value: rollover.teachersAffected, detail: 'bleiben verbunden' },
+        { label: 'Noten', value: rollover.gradeCount, detail: 'bleiben archiviert' }
+      ]
+    : [];
+  const shortDateFormatter = new Intl.DateTimeFormat('de-DE', {
+    day: '2-digit',
+    month: '2-digit',
+    year: 'numeric'
+  });
+  const dateTimeFormatter = new Intl.DateTimeFormat('de-DE', {
     day: '2-digit',
     month: '2-digit',
     year: 'numeric',
     hour: '2-digit',
     minute: '2-digit'
   });
-  const formatLogTimestamp = (value) => {
+  const formatDate = (value) => {
     if (!value) return '-';
     const parsed = new Date(value);
-    return Number.isNaN(parsed.getTime()) ? String(value) : dateFormatter.format(parsed);
+    return Number.isNaN(parsed.getTime()) ? String(value) : shortDateFormatter.format(parsed);
   };
+  const formatDateTime = (value) => {
+    if (!value) return '-';
+    const parsed = new Date(value);
+    return Number.isNaN(parsed.getTime()) ? String(value) : dateTimeFormatter.format(parsed);
+  };
+  const formatDateRange = (start, end) => `${formatDate(start)} bis ${formatDate(end)}`;
   const getLogStatusMeta = (value) => {
     const normalized = String(value || '').trim().toLowerCase();
     if (normalized === 'success') return { label: 'Erfolgreich', tone: 'success' };
     if (normalized === 'failed') return { label: 'Fehlgeschlagen', tone: 'failed' };
-    if (normalized === 'test') return { label: 'Test', tone: 'test' };
+    if (normalized === 'test') return { label: 'Nicht produktiv', tone: 'neutral' };
     return { label: normalized || '-', tone: 'neutral' };
   };
   const getBackupFilename = (value) => {
@@ -26,20 +72,24 @@
     const segments = fullPath.split(/[\\/]+/).filter(Boolean);
     return segments.length ? segments[segments.length - 1] : fullPath;
   };
+  const compactSchoolYears = schoolYearRows.map((schoolYear) => ({
+    ...schoolYear,
+    rangeLabel: formatDateRange(schoolYear.start_date, schoolYear.end_date)
+  }));
   const logRows = (logs || []).map((logRow) => {
     const statusMeta = getLogStatusMeta(logRow.status);
     return {
       ...logRow,
-      executed_at_compact: formatLogTimestamp(logRow.executed_at),
+      executed_at_compact: formatDateTime(logRow.executed_at),
       backup_filename: getBackupFilename(logRow.backup_path),
       status_label: statusMeta.label,
       status_tone: statusMeta.tone
     };
   });
   const page = {
-    title: 'Admin - School Year Management',
+    title: 'Admin - Schuljahreswechsel',
     headerTitle: 'Adminbereich',
-    styles: ['/css/admin.css'],
+    styles: ['/css/admin.css', '/css/admin-rollover.css'],
     scripts: ['/js/app.js'],
     bodyClass: 'page-admin',
     hideHeader: true,
@@ -48,222 +98,268 @@
     <div class="app-shell">
       <%- include('./nav-school-year', { csrfToken, currentUser, activePath, activeSchoolYear }) %>
 
-      <section class="app-main">
-        <div class="app-main-header">
+      <section class="app-main school-year-rollover">
+        <div class="app-main-header school-year-header">
           <div>
-            <p class="app-main-subtitle">School Year Management</p>
+            <p class="app-main-subtitle">Schuljahresverwaltung</p>
             <h1>Schuljahreswechsel</h1>
-            <p class="admin-muted">
-              Aktives Schuljahr:
-              <strong><%= preview?.activeSchoolYear?.name || activeSchoolYear?.name || 'Nicht gesetzt' %></strong>
+            <p class="admin-muted school-year-header-copy">
+              Aktives Schuljahr geordnet ins naechste Jahr ueberfuehren.
             </p>
           </div>
-          <div class="admin-actions-row">
-            <a class="btn" href="/archive">Archiv</a>
-            <form method="POST" action="/admin/rollover/test">
-              <input type="hidden" name="_csrf" value="<%= csrfToken %>">
-              <button class="btn btn-secondary" type="submit">Test Rollover</button>
-            </form>
+          <div class="admin-actions-row school-year-header-actions">
+            <a class="btn btn-primary" href="#rollover-action">Zum Wechsel</a>
+            <a class="btn btn-secondary" href="/admin">Zurueck</a>
           </div>
         </div>
 
-        <% if (message) { %>
-          <div class="teacher-alert info"><%= message %></div>
-        <% } %>
-        <% if (error) { %>
-          <div class="teacher-alert error"><%= error %></div>
-        <% } %>
-
-        <% if (!preview) { %>
-          <div class="admin-card">
-            <div class="admin-empty">Kein aktives Schuljahr vorhanden.</div>
+        <% if (message || error) { %>
+          <div class="school-year-alert-stack">
+            <% if (message) { %>
+              <div class="school-year-alert school-year-alert-info"><%= message %></div>
+            <% } %>
+            <% if (error) { %>
+              <div class="school-year-alert school-year-alert-error"><%= error %></div>
+            <% } %>
           </div>
-        <% } else { %>
-          <div class="admin-grid">
-            <div class="admin-card">
-              <p class="admin-eyebrow">Aktuell</p>
-              <h3><%= preview.activeSchoolYear.name %></h3>
-              <p class="admin-muted"><%= preview.activeSchoolYear.start_date %> bis <%= preview.activeSchoolYear.end_date %></p>
-            </div>
-            <div class="admin-card">
-              <p class="admin-eyebrow">Naechstes Schuljahr</p>
-              <h3><%= preview.nextSchoolYear.name %></h3>
-              <p class="admin-muted"><%= preview.nextSchoolYear.startDate %> bis <%= preview.nextSchoolYear.endDate %></p>
-            </div>
-            <div class="admin-card">
-              <p class="admin-eyebrow">Preview</p>
-              <h3><%= preview.assignmentsCopied %> Zuordnungen</h3>
-              <p class="admin-muted"><%= preview.teachersAffected %> Lehrer betroffen</p>
-            </div>
-          </div>
+        <% } %>
 
-          <div class="admin-grid">
-            <div class="admin-card">
-              <div class="admin-topbar">
-                <div>
-                  <p class="admin-eyebrow">Test Mode</p>
-                  <h3>Preview</h3>
-                </div>
-                <span class="admin-badge"><%= testMode ? 'Simulation aktiv' : 'Noch nicht ausgefuehrt' %></span>
-              </div>
-              <p class="admin-muted">
-                Klassen werden hochgestuft, Zuordnungen werden uebernommen, Noten bleiben im alten Schuljahr archiviert.
-              </p>
-              <div class="admin-row wrap">
-                <div><strong>Klassen:</strong> <%= preview.classCount %></div>
-                <div><strong>Zuordnungen:</strong> <%= preview.assignmentsCopied %></div>
-                <div><strong>Lehrer:</strong> <%= preview.teachersAffected %></div>
-                <div><strong>Archivierte Noten:</strong> <%= preview.gradeCount %></div>
-              </div>
-            </div>
-
-            <div class="admin-card">
-              <div class="admin-topbar">
-                <div>
-                  <p class="admin-eyebrow">Sicherheit</p>
-                  <h3>Execute</h3>
-                </div>
-              </div>
-              <p class="admin-muted">
-                Vor dem Wechsel wird ein Backup geschrieben und der Lauf in <code>rollover_logs</code> protokolliert.
-              </p>
-              <form class="admin-form vertical" method="POST" action="/admin/rollover/execute" onsubmit="return confirm('Schuljahreswechsel wirklich ausfuehren?');">
-                <input type="hidden" name="_csrf" value="<%= csrfToken %>">
-                <label for="confirmation_text">Bestaetigung</label>
-                <input
-                  id="confirmation_text"
-                  name="confirmation_text"
-                  type="text"
-                  placeholder="<%= preview.nextSchoolYear.name %>"
-                  autocomplete="off"
-                  required
-                >
-                <small class="admin-muted">Gib exakt <strong><%= preview.nextSchoolYear.name %></strong> ein.</small>
-                <button class="btn btn-primary" type="submit" <%= preview.nextSchoolYearExists ? 'disabled' : '' %>>
-                  Execute School Year Change
-                </button>
-              </form>
-              <% if (preview.nextSchoolYearExists) { %>
-                <p class="admin-muted">Das Zielschuljahr existiert bereits. Ein erneuter Lauf ist gesperrt.</p>
+        <section class="school-year-flow school-year-flow-<%= pageState.tone %>">
+          <div class="school-year-flow-hero">
+            <p class="school-year-eyebrow">Schuljahr wechseln</p>
+            <div class="school-year-route">
+              <span class="school-year-route-year"><%= activeYearName %></span>
+              <% if (hasRollover) { %>
+                <span class="school-year-route-arrow">-&gt;</span>
+                <span class="school-year-route-year is-target"><%= targetYearName %></span>
               <% } %>
             </div>
-          </div>
 
-          <div class="admin-card">
-            <div class="admin-topbar">
-              <div>
-                <p class="admin-eyebrow">Klassenvorschau</p>
-                <h3>Promotion Map</h3>
+            <div class="school-year-hero-meta">
+              <div class="school-year-state school-year-state-<%= pageState.tone %>">
+                <strong><%= pageState.title %></strong>
+                <span><%= pageState.text %></span>
               </div>
-              <span class="admin-badge"><%= previewRows.length %> Klassen</span>
-            </div>
-            <% if (!previewRows.length) { %>
-              <div class="admin-empty">Keine Klassen im aktiven Schuljahr vorhanden.</div>
-            <% } else { %>
-              <div class="grades-table-wrapper">
-                <table class="grades-table">
-                  <thead>
-                    <tr>
-                      <th>Aktuell</th>
-                      <th>Neu</th>
-                      <th>Fach</th>
-                      <th>Status</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    <% previewRows.forEach((row) => { %>
-                      <tr>
-                        <td><%= row.current_name %></td>
-                        <td><%= row.next_name %></td>
-                        <td><%= row.subject %></td>
-                        <td><%= row.changed ? 'Wird kopiert' : 'Unveraendert kopiert' %></td>
-                      </tr>
-                    <% }) %>
-                  </tbody>
-                </table>
-              </div>
-            <% } %>
-          </div>
-        <% } %>
 
-        <div class="admin-grid">
-          <div class="admin-card">
-            <div class="admin-topbar">
-              <div>
-                <p class="admin-eyebrow">Schuljahre</p>
-                <h3>Verfuegbare Jahre</h3>
-              </div>
-            </div>
-            <div class="admin-list">
-              <% schoolYearRows.forEach((schoolYear) => { %>
-                <div class="admin-student-row">
-                  <div>
-                    <strong><%= schoolYear.name %></strong>
-                    <p class="admin-muted"><%= schoolYear.start_date %> bis <%= schoolYear.end_date %></p>
-                  </div>
-                  <span class="admin-badge"><%= schoolYear.is_active ? 'Aktiv' : 'Archiv' %></span>
+              <% if (hasRollover) { %>
+                <div class="school-year-route-date">
+                  <span><%= formatDateRange(rollover?.activeSchoolYear?.start_date, rollover?.activeSchoolYear?.end_date) %></span>
+                  <span class="school-year-route-date-separator">|</span>
+                  <span><%= formatDateRange(rollover?.nextSchoolYear?.startDate, rollover?.nextSchoolYear?.endDate) %></span>
                 </div>
-              <% }) %>
+              <% } %>
+
+              <div class="school-year-hero-actions">
+                <a class="btn btn-primary" href="#rollover-action">Wechsel freigeben</a>
+                <a class="btn btn-secondary" href="#rollover-details">Details</a>
+              </div>
             </div>
           </div>
 
-          <div class="admin-card">
-            <div class="admin-topbar">
-              <div>
-                <p class="admin-eyebrow">Rollover Logs</p>
-                <h3>Letzte Laeufe</h3>
+          <% if (hasRollover) { %>
+            <div class="school-year-flow-section school-year-impact">
+              <div class="school-year-section-head">
+                <div>
+                  <p class="admin-eyebrow">Auswirkungen</p>
+                  <h2>Uebersicht des Wechsels</h2>
+                </div>
+              </div>
+
+              <div class="school-year-impact-strip">
+                <% impactStats.forEach((stat, index) => { %>
+                  <div class="school-year-impact-item <%= index === impactStats.length - 1 ? 'is-last' : '' %>">
+                    <span><%= stat.label %></span>
+                    <strong><%= stat.value %></strong>
+                    <small><%= stat.detail %></small>
+                  </div>
+                <% }) %>
               </div>
             </div>
-            <% if (!logRows.length) { %>
-              <div class="admin-empty">Noch keine Rollover-Logs vorhanden.</div>
-            <% } else { %>
-              <div class="table-responsive rollover-log-table-responsive">
-                <table class="table rollover-log-table">
-                  <thead>
-                    <tr>
-                      <th scope="col" class="rollover-log-col-time">Zeitpunkt</th>
-                      <th scope="col" class="rollover-log-col-year">Von</th>
-                      <th scope="col" class="rollover-log-col-year">Nach</th>
-                      <th scope="col" class="rollover-log-col-status">Status</th>
-                      <th scope="col" class="rollover-log-col-backup">Backup</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    <% logRows.forEach((logRow) => { %>
-                      <tr>
-                        <td>
-                          <time class="rollover-log-time" datetime="<%= logRow.executed_at || '' %>">
-                            <%= logRow.executed_at_compact %>
-                          </time>
-                        </td>
-                        <td>
-                          <span class="rollover-log-school-year"><%= logRow.old_school_year || '-' %></span>
-                        </td>
-                        <td>
-                          <span class="rollover-log-school-year"><%= logRow.new_school_year || '-' %></span>
-                        </td>
-                        <td>
-                          <span class="rollover-log-status rollover-log-status-<%= logRow.status_tone %>">
-                            <%= logRow.status_label %>
-                          </span>
-                        </td>
-                        <td>
-                          <% if (logRow.backup_filename) { %>
-                            <code class="rollover-log-backup" title="<%= logRow.backup_path %>">
-                              <%= logRow.backup_filename %>
-                            </code>
-                          <% } else { %>
-                            <span class="rollover-log-backup-empty">-</span>
-                          <% } %>
-                        </td>
-                      </tr>
-                    <% }) %>
-                  </tbody>
-                </table>
+          <% } %>
+
+          <div class="school-year-flow-section school-year-safety" id="rollover-action">
+            <div class="school-year-section-head">
+              <div>
+                <p class="admin-eyebrow">Sicherheit</p>
+                <h2>Wechsel bewusst freigeben</h2>
               </div>
-            <% } %>
+            </div>
+
+            <div class="school-year-safety-grid">
+              <div class="school-year-warning-panel">
+                <% if (hasRollover) { %>
+                  <p class="school-year-warning-title">Vor dem Start wird automatisch gesichert.</p>
+                <% } else { %>
+                  <div class="school-year-warning-panel-muted">
+                    Es fehlt ein aktives Schuljahr. Ohne gueltigen Ausgangspunkt kann kein neues Schuljahr angelegt oder aktiviert werden.
+                  </div>
+                <% } %>
+              </div>
+
+              <div class="school-year-action-panel">
+                <% if (hasRollover) { %>
+                  <form class="admin-form vertical school-year-confirm-form" method="POST" action="/admin/rollover/execute" onsubmit="return confirm('Schuljahreswechsel wirklich ausfuehren?');">
+                    <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+                    <label for="confirmation_text">Zielschuljahr bestaetigen</label>
+                    <input
+                      id="confirmation_text"
+                      class="form-input school-year-confirm-input"
+                      name="confirmation_text"
+                      type="text"
+                      placeholder="<%= targetYearName %>"
+                      autocomplete="off"
+                      required
+                    >
+                    <small class="admin-muted school-year-confirm-note">
+                      Gib exakt <strong><%= targetYearName %></strong> ein.
+                    </small>
+
+                    <label class="school-year-consent">
+                      <input type="checkbox" required <%= rollover.nextSchoolYearExists ? 'disabled' : '' %>>
+                      <span>Ich habe die Auswirkungen geprueft und moechte den Wechsel jetzt ausfuehren.</span>
+                    </label>
+
+                    <div class="school-year-button-row">
+                      <button class="btn btn-danger" type="submit" <%= rollover.nextSchoolYearExists ? 'disabled' : '' %>>
+                        Schuljahreswechsel ausfuehren
+                      </button>
+                    </div>
+                  </form>
+                <% } else { %>
+                  <div class="school-year-empty">
+                    Die Freigabe wird erst sichtbar, wenn ein aktives Schuljahr vorhanden ist.
+                  </div>
+                <% } %>
+              </div>
+            </div>
           </div>
-        </div>
+        </section>
+
+        <section class="school-year-secondary" id="rollover-details">
+          <div class="school-year-section-head school-year-secondary-head">
+            <div>
+              <p class="admin-eyebrow">Weitere Details</p>
+              <h2>Nur bei Bedarf</h2>
+            </div>
+            <a class="school-year-secondary-link" href="/archive">Archiv oeffnen</a>
+          </div>
+
+          <details class="school-year-detail">
+            <summary>
+              <span>Was beim Wechsel passiert</span>
+              <small><%= conciseSteps.length %> Punkte</small>
+            </summary>
+            <div class="school-year-detail-body">
+              <% if (!hasRollover) { %>
+                <div class="school-year-empty">
+                  Sobald ein aktives Schuljahr vorhanden ist, erscheinen hier die wichtigsten Auswirkungen des Wechsels.
+                </div>
+              <% } else { %>
+                <ul class="school-year-detail-list">
+                  <% conciseSteps.forEach((item) => { %>
+                    <li><%= item %></li>
+                  <% }) %>
+                </ul>
+              <% } %>
+            </div>
+          </details>
+
+          <details class="school-year-detail">
+            <summary>
+              <span>Klassen im Zielschuljahr</span>
+              <small><%= classRows.length %> Eintraege</small>
+            </summary>
+            <div class="school-year-detail-body">
+              <% if (!hasRollover || !classRows.length) { %>
+                <div class="school-year-empty">
+                  <% if (hasRollover) { %>
+                    Keine Klassen im aktiven Schuljahr vorhanden.
+                  <% } else { %>
+                    Sobald ein aktives Schuljahr vorhanden ist, erscheinen hier die uebernommenen Klassen.
+                  <% } %>
+                </div>
+              <% } else { %>
+                <div class="school-year-table-wrap">
+                  <table class="school-year-table">
+                    <thead>
+                      <tr>
+                        <th>Aktuell</th>
+                        <th>Zielklasse</th>
+                        <th>Fach</th>
+                        <th>Status</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      <% classRows.forEach((row) => { %>
+                        <tr>
+                          <td><%= row.current_name %></td>
+                          <td><%= row.next_name %></td>
+                          <td><%= row.subject %></td>
+                          <td><%= row.changed ? 'Hochstufung' : 'Unveraendert' %></td>
+                        </tr>
+                      <% }) %>
+                    </tbody>
+                  </table>
+                </div>
+              <% } %>
+            </div>
+          </details>
+
+          <details class="school-year-detail">
+            <summary>
+              <span>Verfuegbare Schuljahre</span>
+              <small><%= compactSchoolYears.length %> Eintraege</small>
+            </summary>
+            <div class="school-year-detail-body">
+              <% if (!compactSchoolYears.length) { %>
+                <div class="school-year-empty">Noch keine Schuljahre vorhanden.</div>
+              <% } else { %>
+                <div class="school-year-list">
+                  <% compactSchoolYears.forEach((schoolYear) => { %>
+                    <div class="school-year-list-row">
+                      <div>
+                        <strong><%= schoolYear.name %></strong>
+                        <small><%= schoolYear.rangeLabel %></small>
+                      </div>
+                      <span class="school-year-inline-state <%= schoolYear.is_active ? 'is-active' : '' %>">
+                        <%= schoolYear.is_active ? 'Aktiv' : 'Archiv' %>
+                      </span>
+                    </div>
+                  <% }) %>
+                </div>
+              <% } %>
+            </div>
+          </details>
+
+          <details class="school-year-detail">
+            <summary>
+              <span>Letzte Wechsel</span>
+              <small><%= logRows.length %> Eintraege</small>
+            </summary>
+            <div class="school-year-detail-body">
+              <% if (!logRows.length) { %>
+                <div class="school-year-empty">Noch keine Rollover-Logs vorhanden.</div>
+              <% } else { %>
+                <div class="school-year-log-list">
+                  <% logRows.forEach((logRow) => { %>
+                    <div class="school-year-log-row">
+                      <div class="school-year-log-main">
+                        <strong><%= logRow.old_school_year || '-' %> -&gt; <%= logRow.new_school_year || '-' %></strong>
+                        <small><%= logRow.executed_at_compact %></small>
+                      </div>
+                      <div class="school-year-log-side">
+                        <span class="school-year-log-status school-year-log-status-<%= logRow.status_tone %>"><%= logRow.status_label %></span>
+                        <% if (logRow.backup_filename) { %>
+                          <code><%= logRow.backup_filename %></code>
+                        <% } %>
+                      </div>
+                    </div>
+                  <% }) %>
+                </div>
+              <% } %>
+            </div>
+          </details>
+        </section>
       </section>
     </div>
 <% } }; %>

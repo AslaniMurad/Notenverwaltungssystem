@@ -1,9 +1,66 @@
 <%
+  const numberFormatter = new Intl.NumberFormat('de-AT');
+  const shortDateFormatter = new Intl.DateTimeFormat('de-DE', {
+    day: '2-digit',
+    month: '2-digit',
+    year: 'numeric'
+  });
+  const dateTimeFormatter = new Intl.DateTimeFormat('de-DE', {
+    day: '2-digit',
+    month: '2-digit',
+    year: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit'
+  });
+  const formatNumber = (value) => numberFormatter.format(Number(value || 0));
+  const formatDate = (value) => {
+    if (!value) return '-';
+    const parsed = new Date(value);
+    return Number.isNaN(parsed.getTime()) ? String(value) : shortDateFormatter.format(parsed);
+  };
+  const formatDateTime = (value) => {
+    if (!value) return '-';
+    const parsed = new Date(value);
+    return Number.isNaN(parsed.getTime()) ? String(value) : dateTimeFormatter.format(parsed);
+  };
+  const formatDateRange = (start, end) => `${formatDate(start)} bis ${formatDate(end)}`;
+  const formatAverageGrade = (value) => {
+    if (value == null) return '-';
+    return Number(value).toFixed(2).replace('.', ',');
+  };
+  const buildSearchText = (...values) => values
+    .filter((value) => value != null && String(value).trim() !== '')
+    .join(' ')
+    .toLowerCase();
+  const buildExportUrl = (dataset) => selectedSchoolYear
+    ? `/archive/export/${dataset}?school_year_id=${encodeURIComponent(selectedSchoolYear.id)}`
+    : null;
+  const selectedYearLabel = selectedSchoolYear
+    ? formatDateRange(selectedSchoolYear.start_date, selectedSchoolYear.end_date)
+    : 'Kein Schuljahr ausgewaehlt';
+  const jumpLinks = [
+    { href: '#archive-overview', label: 'Uebersicht', count: archiveStats?.totalRecords || 0 },
+    { href: '#archive-log', label: 'Archivstatus', count: archiveEntries.length },
+    { href: '#archive-classes', label: 'Klassen', count: classes.length },
+    { href: '#archive-assignments', label: 'Zuordnungen', count: assignments.length },
+    { href: '#archive-grades', label: 'Noten', count: grades.length }
+  ];
+  const getGradeTone = (value) => {
+    const numeric = Number(value);
+    if (numeric === 1) return 'grade-1';
+    if (numeric === 2) return 'grade-2';
+    if (numeric === 3) return 'grade-3';
+    if (numeric === 4) return 'grade-4';
+    if (numeric === 5) return 'grade-5';
+    return 'grade-default';
+  };
+  const totalGrades = grades.length;
+  const totalRecords = archiveStats?.totalRecords || 0;
   const page = {
     title: 'Admin - Archiv',
     headerTitle: 'Adminbereich',
-    styles: ['/css/admin.css'],
-    scripts: ['/js/app.js'],
+    styles: ['/css/admin.css', '/css/admin-archive.css'],
+    scripts: ['/js/app.js', '/js/archive.js'],
     bodyClass: 'page-admin',
     hideHeader: true,
     hideFooter: true,
@@ -11,181 +68,418 @@
     <div class="app-shell">
       <%- include('./nav-school-year', { csrfToken, currentUser, activePath, activeSchoolYear }) %>
 
-      <section class="app-main">
-        <div class="app-main-header">
-          <div>
-            <p class="app-main-subtitle">Archiv</p>
-            <h1>Historische Schuljahre</h1>
-            <p class="admin-muted">Alle Daten sind read-only und nach Schuljahr filterbar.</p>
-          </div>
-          <div class="admin-actions-row">
-            <a class="btn btn-secondary" href="/admin/rollover">School Year Management</a>
-          </div>
-        </div>
+      <section class="app-main archive-page">
+        <section class="admin-card archive-hero" id="archive-overview">
+          <div class="archive-hero-grid">
+            <div class="archive-hero-copy">
+              <p class="app-main-subtitle">Archiv</p>
+              <h1>Historische Schuljahre fuer viel Datenvolumen aufbereitet</h1>
+              <p class="admin-muted archive-hero-text">
+                Die Seite ist auf grosse Tabellen ausgelegt: klare Kennzahlen, Sprungmarken, kompakte Tabellen,
+                Live-Filter und CSV-Downloads pro Datenbereich.
+              </p>
+            </div>
 
-        <div class="admin-card">
-          <div class="admin-topbar">
+            <div class="archive-hero-side">
+              <div class="archive-highlight-card">
+                <span class="archive-highlight-label">Gewaehltes Schuljahr</span>
+                <strong><%= selectedSchoolYear?.name || 'Kein Schuljahr' %></strong>
+                <small><%= selectedYearLabel %></small>
+              </div>
+
+              <div class="archive-highlight-grid">
+                <div class="archive-mini-stat">
+                  <span>Gesamtzeilen</span>
+                  <strong><%= formatNumber(totalRecords) %></strong>
+                </div>
+                <div class="archive-mini-stat">
+                  <span>Durchschnittsnote</span>
+                  <strong><%= formatAverageGrade(archiveStats?.averageGrade) %></strong>
+                </div>
+                <div class="archive-mini-stat">
+                  <span>Schueler mit Noten</span>
+                  <strong><%= formatNumber(archiveStats?.uniqueStudents || 0) %></strong>
+                </div>
+                <div class="archive-mini-stat">
+                  <span>Letzte Aktivitaet</span>
+                  <strong><%= formatDateTime(archiveStats?.latestActivityAt) %></strong>
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <section class="admin-card archive-toolbar">
+          <div class="archive-toolbar-head">
             <div>
               <p class="admin-eyebrow">Filter</p>
-              <h3>Schuljahr waehlen</h3>
+              <h2>Schuljahr fokussieren</h2>
+              <p class="admin-muted">
+                Wechsle zwischen Schuljahren und exportiere die sichtbaren Bereiche als vollstaendige CSV.
+              </p>
             </div>
-            <span class="admin-badge"><%= selectedSchoolYear?.name || 'Kein Schuljahr' %></span>
+            <div class="archive-toolbar-actions">
+              <a class="btn btn-secondary" href="/admin/rollover">Schuljahreswechsel</a>
+              <a class="btn btn-secondary" href="/admin">Zurueck zur Admin-Startseite</a>
+            </div>
           </div>
-          <form class="admin-form" method="GET" action="/archive">
-            <select name="school_year_id" required>
-              <% schoolYears.forEach((schoolYear) => { %>
-                <option value="<%= schoolYear.id %>" <%= Number(selectedSchoolYear?.id) === Number(schoolYear.id) ? 'selected' : '' %>>
-                  <%= schoolYear.name %><%= schoolYear.is_active ? ' (aktiv)' : '' %>
-                </option>
-              <% }) %>
-            </select>
-            <button class="btn btn-secondary" type="submit">Filtern</button>
-          </form>
-        </div>
 
-        <div class="admin-grid">
-          <div class="admin-card">
-            <p class="admin-eyebrow">Klassen</p>
-            <h3><%= classes.length %></h3>
-          </div>
-          <div class="admin-card">
-            <p class="admin-eyebrow">Zuordnungen</p>
-            <h3><%= assignments.length %></h3>
-          </div>
-          <div class="admin-card">
-            <p class="admin-eyebrow">Noten</p>
-            <h3><%= grades.length %></h3>
-          </div>
-        </div>
+          <% if (!schoolYears.length) { %>
+            <div class="admin-empty">Es sind noch keine Schuljahre hinterlegt.</div>
+          <% } else { %>
+            <div class="archive-toolbar-grid">
+              <form class="admin-form archive-filter-form" method="GET" action="/archive">
+                <label class="archive-search-field archive-select-field">
+                  <span>Schuljahr</span>
+                  <select name="school_year_id" required>
+                    <% schoolYears.forEach((schoolYear) => { %>
+                      <option value="<%= schoolYear.id %>" <%= Number(selectedSchoolYear?.id) === Number(schoolYear.id) ? 'selected' : '' %>>
+                        <%= schoolYear.name %><%= schoolYear.is_active ? ' (aktiv)' : '' %>
+                      </option>
+                    <% }) %>
+                  </select>
+                </label>
+                <button class="btn btn-primary" type="submit">Ansicht laden</button>
+              </form>
 
-        <div class="admin-card">
-          <div class="admin-topbar">
+              <div class="archive-export-strip">
+                <% if (buildExportUrl('grades')) { %>
+                  <a class="archive-export-link" href="<%= buildExportUrl('grades') %>">
+                    <strong>CSV Noten</strong>
+                    <span><%= formatNumber(grades.length) %> Zeilen</span>
+                  </a>
+                  <a class="archive-export-link" href="<%= buildExportUrl('classes') %>">
+                    <strong>CSV Klassen</strong>
+                    <span><%= formatNumber(classes.length) %> Zeilen</span>
+                  </a>
+                  <a class="archive-export-link" href="<%= buildExportUrl('assignments') %>">
+                    <strong>CSV Zuordnungen</strong>
+                    <span><%= formatNumber(assignments.length) %> Zeilen</span>
+                  </a>
+                  <a class="archive-export-link" href="<%= buildExportUrl('archives') %>">
+                    <strong>CSV Archivstatus</strong>
+                    <span><%= formatNumber(archiveEntries.length) %> Zeilen</span>
+                  </a>
+                <% } %>
+              </div>
+            </div>
+          <% } %>
+
+          <% if (activeSchoolYear) { %>
+            <div class="archive-context-note">
+              <strong>Aktives Schuljahr:</strong> <%= activeSchoolYear.name %>
+              <% if (selectedSchoolYear && Number(activeSchoolYear.id) !== Number(selectedSchoolYear.id)) { %>
+                <span> | Archivansicht zeigt derzeit <%= selectedSchoolYear.name %></span>
+              <% } %>
+            </div>
+          <% } %>
+
+          <noscript>
+            <div class="archive-context-note">
+              Live-Filter und schrittweises Nachladen benoetigen JavaScript. CSV-Downloads funktionieren weiterhin.
+            </div>
+          </noscript>
+        </section>
+
+        <nav class="archive-jumpbar" aria-label="Archivbereiche">
+          <% jumpLinks.forEach((link) => { %>
+            <a class="archive-jump-link" href="<%= link.href %>">
+              <span><%= link.label %></span>
+              <strong><%= formatNumber(link.count) %></strong>
+            </a>
+          <% }) %>
+        </nav>
+
+        <section class="archive-summary-grid">
+          <div class="admin-card archive-summary-card">
+            <p class="admin-eyebrow">Datendichte</p>
+            <h3><%= formatNumber(totalRecords) %></h3>
+            <p class="admin-muted">Klassen, Zuordnungen, Noten und Archivprotokolle in einer Sicht.</p>
+          </div>
+          <div class="admin-card archive-summary-card">
+            <p class="admin-eyebrow">Lehrkraefte</p>
+            <h3><%= formatNumber(archiveStats?.uniqueTeachers || 0) %></h3>
+            <p class="admin-muted"><%= formatNumber(assignments.length) %> Unterrichtszuordnungen im gewaehlten Jahr.</p>
+          </div>
+          <div class="admin-card archive-summary-card">
+            <p class="admin-eyebrow">Schueler</p>
+            <h3><%= formatNumber(archiveStats?.uniqueStudents || 0) %></h3>
+            <p class="admin-muted"><%= formatNumber(totalGrades) %> archivierte Noten mit direktem CSV-Export.</p>
+          </div>
+          <div class="admin-card archive-summary-card">
+            <p class="admin-eyebrow">Archivtypen</p>
+            <h3><%= formatNumber(archiveStats?.archiveTypes || 0) %></h3>
+            <p class="admin-muted">Zuletzt aktualisiert: <%= formatDateTime(archiveStats?.latestActivityAt) %>.</p>
+          </div>
+        </section>
+
+        <section class="admin-card archive-section" id="archive-log" data-archive-section data-archive-page-size="20">
+          <div class="archive-section-head">
             <div>
               <p class="admin-eyebrow">Archivstatus</p>
-              <h3>Archivierte Bereiche</h3>
+              <h2>Archivierte Bereiche</h2>
+              <p class="admin-muted">Protokollierte Archivlaeufe und deren Umfang im gewaehlten Schuljahr.</p>
+            </div>
+            <div class="archive-section-actions">
+              <span class="admin-badge"><%= formatNumber(archiveEntries.length) %> Eintraege</span>
+              <% if (buildExportUrl('archives')) { %>
+                <a class="btn btn-secondary" href="<%= buildExportUrl('archives') %>">CSV herunterladen</a>
+              <% } %>
             </div>
           </div>
+
           <% if (!archiveEntries.length) { %>
             <div class="admin-empty">Fuer dieses Schuljahr wurden noch keine Archiv-Eintraege protokolliert.</div>
           <% } else { %>
-            <div class="admin-list">
-              <% archiveEntries.forEach((entry) => { %>
-                <div class="admin-student-row">
-                  <div>
-                    <strong><%= entry.archive_type %></strong>
-                    <p class="admin-muted">Eintraege: <%= entry.entity_count %></p>
-                  </div>
-                  <span class="admin-badge"><%= entry.created_at %></span>
+            <div class="archive-section-tools">
+              <label class="archive-search-field">
+                <span>Archivstatus durchsuchen</span>
+                <input type="search" placeholder="Nach Typ, Anzahl oder Datum filtern" data-archive-search>
+              </label>
+              <div class="archive-inline-stats">
+                <span class="archive-inline-stat">CSV exportiert alle <%= formatNumber(archiveEntries.length) %> Zeilen.</span>
+              </div>
+            </div>
+
+            <div class="archive-table-shell">
+              <div class="archive-table-scroller">
+                <table class="archive-data-table archive-data-table-compact">
+                  <thead>
+                    <tr>
+                      <th>Archivtyp</th>
+                      <th>Anzahl</th>
+                      <th>Erstellt</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <% archiveEntries.forEach((entry) => { %>
+                      <tr data-archive-row data-search-text="<%= buildSearchText(entry.archive_type, entry.entity_count, entry.created_at) %>">
+                        <td>
+                          <span class="archive-table-title"><%= entry.archive_type %></span>
+                        </td>
+                        <td class="archive-cell-number"><%= formatNumber(entry.entity_count) %></td>
+                        <td class="archive-nowrap"><%= formatDateTime(entry.created_at) %></td>
+                      </tr>
+                    <% }) %>
+                  </tbody>
+                </table>
+              </div>
+              <div class="archive-filter-empty" data-archive-filter-empty hidden>Keine Eintraege fuer den aktuellen Filter gefunden.</div>
+              <div class="archive-table-footer">
+                <span class="archive-table-summary" data-archive-summary>Alle <%= formatNumber(archiveEntries.length) %> Zeilen geladen.</span>
+                <div class="archive-table-actions" data-archive-actions hidden>
+                  <button class="btn btn-secondary" type="button" data-archive-more hidden>Mehr laden</button>
+                  <button class="btn btn-secondary" type="button" data-archive-all hidden>Alle zeigen</button>
+                  <button class="btn btn-secondary" type="button" data-archive-reset hidden>Zuruecksetzen</button>
                 </div>
-              <% }) %>
+              </div>
             </div>
           <% } %>
-        </div>
+        </section>
 
-        <div class="admin-card">
-          <div class="admin-topbar">
+        <section class="admin-card archive-section" id="archive-classes" data-archive-section data-archive-page-size="24">
+          <div class="archive-section-head">
             <div>
               <p class="admin-eyebrow">Read-only</p>
-              <h3>Klassen</h3>
+              <h2>Klassen</h2>
+              <p class="admin-muted">Klassenstammdaten mit Zeitstempel, optimiert fuer schnelle Uebersicht und Export.</p>
+            </div>
+            <div class="archive-section-actions">
+              <span class="admin-badge"><%= formatNumber(classes.length) %> Klassen</span>
+              <% if (buildExportUrl('classes')) { %>
+                <a class="btn btn-secondary" href="<%= buildExportUrl('classes') %>">CSV herunterladen</a>
+              <% } %>
             </div>
           </div>
+
           <% if (!classes.length) { %>
             <div class="admin-empty">Keine Klassen fuer dieses Schuljahr gefunden.</div>
           <% } else { %>
-            <div class="grades-table-wrapper">
-              <table class="grades-table">
-                <thead>
-                  <tr>
-                    <th>Klasse</th>
-                    <th>Fach</th>
-                    <th>Erstellt</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  <% classes.forEach((row) => { %>
+            <div class="archive-section-tools">
+              <label class="archive-search-field">
+                <span>Klassen durchsuchen</span>
+                <input type="search" placeholder="Nach Klasse, Fach oder Datum filtern" data-archive-search>
+              </label>
+              <div class="archive-inline-stats">
+                <span class="archive-inline-stat"><%= formatNumber(classes.length) %> Datensaetze</span>
+                <span class="archive-inline-stat">CSV enthaelt alle Klassen dieses Schuljahres.</span>
+              </div>
+            </div>
+
+            <div class="archive-table-shell">
+              <div class="archive-table-scroller">
+                <table class="archive-data-table">
+                  <thead>
                     <tr>
-                      <td><%= row.name %></td>
-                      <td><%= row.subject %></td>
-                      <td><%= row.created_at %></td>
+                      <th>Klasse</th>
+                      <th>Fach</th>
+                      <th>Fach-ID</th>
+                      <th>Erstellt</th>
                     </tr>
-                  <% }) %>
-                </tbody>
-              </table>
+                  </thead>
+                  <tbody>
+                    <% classes.forEach((row) => { %>
+                      <tr data-archive-row data-search-text="<%= buildSearchText(row.name, row.subject, row.subject_id, row.created_at) %>">
+                        <td>
+                          <span class="archive-table-title"><%= row.name %></span>
+                        </td>
+                        <td><%= row.subject %></td>
+                        <td class="archive-cell-number"><%= row.subject_id ?? '-' %></td>
+                        <td class="archive-nowrap"><%= formatDateTime(row.created_at) %></td>
+                      </tr>
+                    <% }) %>
+                  </tbody>
+                </table>
+              </div>
+              <div class="archive-filter-empty" data-archive-filter-empty hidden>Keine Klassen fuer den aktuellen Filter gefunden.</div>
+              <div class="archive-table-footer">
+                <span class="archive-table-summary" data-archive-summary>Alle <%= formatNumber(classes.length) %> Zeilen geladen.</span>
+                <div class="archive-table-actions" data-archive-actions hidden>
+                  <button class="btn btn-secondary" type="button" data-archive-more hidden>Mehr laden</button>
+                  <button class="btn btn-secondary" type="button" data-archive-all hidden>Alle zeigen</button>
+                  <button class="btn btn-secondary" type="button" data-archive-reset hidden>Zuruecksetzen</button>
+                </div>
+              </div>
             </div>
           <% } %>
-        </div>
+        </section>
 
-        <div class="admin-card">
-          <div class="admin-topbar">
+        <section class="admin-card archive-section" id="archive-assignments" data-archive-section data-archive-page-size="24">
+          <div class="archive-section-head">
             <div>
               <p class="admin-eyebrow">Read-only</p>
-              <h3>Lehrerzuordnungen</h3>
+              <h2>Lehrerzuordnungen</h2>
+              <p class="admin-muted">Gebuendelte Unterrichtszuordnungen pro Klasse und Fach fuer schnelles Nachschlagen.</p>
+            </div>
+            <div class="archive-section-actions">
+              <span class="admin-badge"><%= formatNumber(assignments.length) %> Zuordnungen</span>
+              <% if (buildExportUrl('assignments')) { %>
+                <a class="btn btn-secondary" href="<%= buildExportUrl('assignments') %>">CSV herunterladen</a>
+              <% } %>
             </div>
           </div>
+
           <% if (!assignments.length) { %>
             <div class="admin-empty">Keine Zuordnungen fuer dieses Schuljahr gefunden.</div>
           <% } else { %>
-            <div class="grades-table-wrapper">
-              <table class="grades-table">
-                <thead>
-                  <tr>
-                    <th>Klasse</th>
-                    <th>Fach</th>
-                    <th>Lehrer</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  <% assignments.forEach((row) => { %>
+            <div class="archive-section-tools">
+              <label class="archive-search-field">
+                <span>Zuordnungen durchsuchen</span>
+                <input type="search" placeholder="Nach Klasse, Fach oder Lehrkraft filtern" data-archive-search>
+              </label>
+              <div class="archive-inline-stats">
+                <span class="archive-inline-stat"><%= formatNumber(archiveStats?.uniqueTeachers || 0) %> Lehrkraefte beteiligt</span>
+                <span class="archive-inline-stat">Mehrfachzuweisungen wurden pro Klasse und Fach gebuendelt.</span>
+              </div>
+            </div>
+
+            <div class="archive-table-shell">
+              <div class="archive-table-scroller">
+                <table class="archive-data-table">
+                  <thead>
                     <tr>
-                      <td><%= row.class_name %></td>
-                      <td><%= row.subject_name %></td>
-                      <td><%= row.teacher_names %></td>
+                      <th>Klasse</th>
+                      <th>Fach</th>
+                      <th>Lehrkraefte</th>
                     </tr>
-                  <% }) %>
-                </tbody>
-              </table>
+                  </thead>
+                  <tbody>
+                    <% assignments.forEach((row) => { %>
+                      <tr data-archive-row data-search-text="<%= buildSearchText(row.class_name, row.subject_name, row.teacher_names) %>">
+                        <td><span class="archive-table-title"><%= row.class_name %></span></td>
+                        <td><%= row.subject_name %></td>
+                        <td><span class="archive-note" title="<%= row.teacher_names %>"><%= row.teacher_names %></span></td>
+                      </tr>
+                    <% }) %>
+                  </tbody>
+                </table>
+              </div>
+              <div class="archive-filter-empty" data-archive-filter-empty hidden>Keine Zuordnungen fuer den aktuellen Filter gefunden.</div>
+              <div class="archive-table-footer">
+                <span class="archive-table-summary" data-archive-summary>Alle <%= formatNumber(assignments.length) %> Zeilen geladen.</span>
+                <div class="archive-table-actions" data-archive-actions hidden>
+                  <button class="btn btn-secondary" type="button" data-archive-more hidden>Mehr laden</button>
+                  <button class="btn btn-secondary" type="button" data-archive-all hidden>Alle zeigen</button>
+                  <button class="btn btn-secondary" type="button" data-archive-reset hidden>Zuruecksetzen</button>
+                </div>
+              </div>
             </div>
           <% } %>
-        </div>
+        </section>
 
-        <div class="admin-card">
-          <div class="admin-topbar">
+        <section class="admin-card archive-section archive-section-wide" id="archive-grades" data-archive-section data-archive-page-size="40">
+          <div class="archive-section-head">
             <div>
               <p class="admin-eyebrow">Read-only</p>
-              <h3>Noten</h3>
+              <h2>Noten</h2>
+              <p class="admin-muted">Die groesste Datenmenge startet kompakt und laesst sich live filtern oder vollstaendig exportieren.</p>
+            </div>
+            <div class="archive-section-actions">
+              <span class="admin-badge"><%= formatNumber(totalGrades) %> Noten</span>
+              <% if (buildExportUrl('grades')) { %>
+                <a class="btn btn-primary" href="<%= buildExportUrl('grades') %>">CSV herunterladen</a>
+              <% } %>
             </div>
           </div>
+
           <% if (!grades.length) { %>
             <div class="admin-empty">Keine Noten fuer dieses Schuljahr gefunden.</div>
           <% } else { %>
-            <div class="grades-table-wrapper">
-              <table class="grades-table">
-                <thead>
-                  <tr>
-                    <th>Klasse</th>
-                    <th>Schueler</th>
-                    <th>Fach</th>
-                    <th>Note</th>
-                    <th>Kommentar</th>
-                    <th>Zeitpunkt</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  <% grades.forEach((row) => { %>
+            <div class="archive-section-tools archive-section-tools-wide">
+              <label class="archive-search-field">
+                <span>Noten durchsuchen</span>
+                <input type="search" placeholder="Nach Klasse, Schueler, Fach, Note oder Kommentar filtern" data-archive-search>
+              </label>
+              <div class="archive-inline-stats">
+                <span class="archive-inline-stat"><%= formatNumber(archiveStats?.uniqueStudents || 0) %> Schueler</span>
+                <span class="archive-inline-stat">Durchschnitt: <%= formatAverageGrade(archiveStats?.averageGrade) %></span>
+                <span class="archive-inline-stat">CSV exportiert alle <%= formatNumber(totalGrades) %> Noten.</span>
+              </div>
+            </div>
+
+            <div class="archive-table-shell archive-table-shell-tall">
+              <div class="archive-table-scroller">
+                <table class="archive-data-table archive-data-table-grades">
+                  <thead>
                     <tr>
-                      <td><%= row.class_name %></td>
-                      <td><%= row.student_name %></td>
-                      <td><%= row.subject %></td>
-                      <td><%= row.grade %></td>
-                      <td><%= row.note || '-' %></td>
-                      <td><%= row.created_at %></td>
+                      <th>Klasse</th>
+                      <th>Schueler</th>
+                      <th>Fach</th>
+                      <th>Note</th>
+                      <th>Kommentar</th>
+                      <th>Zeitpunkt</th>
                     </tr>
-                  <% }) %>
-                </tbody>
-              </table>
+                  </thead>
+                  <tbody>
+                    <% grades.forEach((row) => { %>
+                      <tr data-archive-row data-search-text="<%= buildSearchText(row.class_name, row.student_name, row.subject, row.grade, row.note, row.created_at) %>">
+                        <td><span class="archive-table-title"><%= row.class_name %></span></td>
+                        <td><%= row.student_name %></td>
+                        <td><%= row.subject %></td>
+                        <td>
+                          <span class="archive-grade-badge <%= getGradeTone(row.grade) %>"><%= row.grade %></span>
+                        </td>
+                        <td>
+                          <span class="archive-note" title="<%= row.note || '-' %>"><%= row.note || '-' %></span>
+                        </td>
+                        <td class="archive-nowrap"><%= formatDateTime(row.created_at) %></td>
+                      </tr>
+                    <% }) %>
+                  </tbody>
+                </table>
+              </div>
+              <div class="archive-filter-empty" data-archive-filter-empty hidden>Keine Noten fuer den aktuellen Filter gefunden.</div>
+              <div class="archive-table-footer">
+                <span class="archive-table-summary" data-archive-summary>Alle <%= formatNumber(totalGrades) %> Zeilen geladen.</span>
+                <div class="archive-table-actions" data-archive-actions hidden>
+                  <button class="btn btn-secondary" type="button" data-archive-more hidden>Mehr laden</button>
+                  <button class="btn btn-secondary" type="button" data-archive-all hidden>Alle zeigen</button>
+                  <button class="btn btn-secondary" type="button" data-archive-reset hidden>Zuruecksetzen</button>
+                </div>
+              </div>
             </div>
           <% } %>
-        </div>
+        </section>
       </section>
     </div>
 <% } }; %>

@@ -462,6 +462,26 @@ test("student routes redirect when unauthenticated", async () => {
   assert.strictEqual(res.response.headers.get("location"), "/login");
 });
 
+test("admin archive renders the optimized overview and exports CSV", async () => {
+  const loginResult = await loginAdmin();
+
+  const archivePage = await fetchWithCookies("/archive", {}, loginResult.cookies);
+  assert.strictEqual(archivePage.response.status, 200);
+  assert.match(archivePage.body, /Historische Schuljahre fuer viel Datenvolumen aufbereitet/);
+  assert.match(archivePage.body, /CSV Noten/);
+
+  const csvResponse = await fetchWithCookies(
+    "/archive/export/grades",
+    { redirect: "manual" },
+    loginResult.cookies
+  );
+  assert.strictEqual(csvResponse.response.status, 200);
+  assert.match(csvResponse.response.headers.get("content-type") || "", /text\/csv/);
+  assert.match(csvResponse.response.headers.get("content-disposition") || "", /archiv-.*-noten\.csv/);
+  assert.match(csvResponse.body, /"Schueler"/);
+  assert.match(csvResponse.body, /"Kommentar"/);
+});
+
 test("audit logs keep appended changes and return live updates in descending order", async () => {
   const loginResult = await loginAdmin();
 
