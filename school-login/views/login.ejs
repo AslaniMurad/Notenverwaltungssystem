@@ -5,7 +5,7 @@
   const _email = typeof email !== 'undefined' ? email : '';
 
   const page = {
-    title: 'Login | School Panel',
+    title: 'Login | Notenverwaltungssystem',
     styles: ['/css/login.css'],
     scripts: ['/js/app.js'],
     bodyClass: 'page-login',
@@ -38,8 +38,7 @@
             <div class="login-alert-body">
               <p class="login-alert-title">Der Login ist fehlgeschlagen</p>
               <p class="login-alert-text"><%= _errorMessage || 'Versuchen Sie es erneut.' %></p>
-              <p class="login-alert-text">Sollte es sich um einen Fehler handeln, melden Sie sich bitte bei einem Administrator:</p>
-              <p class="login-alert-contact">admin@example.com</p>
+              <p class="login-alert-text">Sollte der Fehler bestehen bleiben, wende dich bitte an die Schuladministration.</p>
             </div>
           </div>
         <% } %>
