@@ -31,6 +31,11 @@
     </div>
 
     <div class="nav-section">
+      <div class="nav-section-title">Logs</div>
+      <a class="<%= activePath.startsWith('/admin/audit-logs') ? 'is-active' : '' %>" href="/admin/audit-logs">Audit-Log</a>
+    </div>
+
+    <div class="nav-section">
       <div class="nav-section-title">Schuljahre</div>
       <a class="<%= activePath.startsWith('/admin/rollover') ? 'is-active' : '' %>" href="/admin/rollover">School Year Management</a>
       <a class="<%= activePath.startsWith('/archive') ? 'is-active' : '' %>" href="/archive">Archiv</a>
