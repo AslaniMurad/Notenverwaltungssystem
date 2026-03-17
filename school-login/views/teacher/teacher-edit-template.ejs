@@ -10,6 +10,7 @@
     content: function () {
       const unitLabel = "Punkte";
       const defaultsByCategory = (activeProfile && activeProfile.weights) || {};
+      const useProfileSettings = Boolean(formData && formData.use_profile_settings);
 %>
     <div class="app-shell teacher-shell">
       <aside class="teacher-sidebar" aria-label="Lehrer Navigation">
@@ -91,6 +92,18 @@
               <% }) %>
             </select>
 
+            <label class="checkbox-line" for="use_profile_settings">
+              <input
+                type="checkbox"
+                id="use_profile_settings"
+                name="use_profile_settings"
+                value="1"
+                <%= useProfileSettings ? "checked" : "" %>
+              >
+              Gespeicherte Einstellungen aus dem aktiven Profil verwenden
+            </label>
+            <small class="form-hint" id="profile-settings-hint">Wenn aktiv, werden Gewichtung und weitere Profilwerte automatisch uebernommen und gesperrt.</small>
+
             <label for="weight">Gewichtung (<span id="weight-unit-label"><%= unitLabel %></span>) *</label>
             <input
               type="number"
@@ -98,8 +111,10 @@
               name="weight"
               min="0"
               step="0.5"
-              required
+              data-manual-required="1"
+              <%= useProfileSettings ? '' : 'required' %>
               value="<%= formData && formData.weight !== '' ? formData.weight : '' %>"
+              <%= useProfileSettings ? 'disabled' : '' %>
             >
             <small class="form-hint" id="weight-hint">Profil-Vorschlag wird automatisch gesetzt.</small>
 
@@ -112,7 +127,9 @@
               step="0.25"
               placeholder="z.B. 50"
               value="<%= formData && formData.max_points !== '' ? formData.max_points : '' %>"
+              <%= useProfileSettings ? 'readonly class="is-readonly"' : '' %>
             >
+            <small class="form-hint" id="max-points-hint">Wenn aktiv, bleibt der bisherige Maximalwert sichtbar, aber gesperrt.</small>
 
             <label for="date">Datum (optional)</label>
             <input type="date" id="date" name="date" value="<%= formData && formData.date ? formData.date : '' %>">
@@ -138,9 +155,14 @@
       (function() {
         const defaultsByCategory = <%- JSON.stringify(defaultsByCategory || {}).replace(/</g, "\\u003c") %>;
         const categorySelect = document.getElementById("category");
+        const useProfileSettingsToggle = document.getElementById("use_profile_settings");
         const weightInput = document.getElementById("weight");
+        const maxPointsInput = document.getElementById("max_points");
         const weightHint = document.getElementById("weight-hint");
+        const profileSettingsHint = document.getElementById("profile-settings-hint");
+        const maxPointsHint = document.getElementById("max-points-hint");
         const unitLabel = document.getElementById("weight-unit-label");
+        const manualWeightRequired = weightInput ? weightInput.dataset.manualRequired === "1" : false;
 
         function formatWeight(value) {
           const numeric = Number(value);
@@ -148,28 +170,77 @@
           return String(Number(numeric.toFixed(2)));
         }
 
+        function syncManagedFieldState(suggestion) {
+          const useProfileSettings = Boolean(useProfileSettingsToggle && useProfileSettingsToggle.checked);
+
+          if (weightInput) {
+            if (useProfileSettings) {
+              if (!weightInput.disabled) {
+                weightInput.dataset.manualValue = weightInput.value;
+              }
+              weightInput.value = Number.isFinite(Number(suggestion)) ? formatWeight(suggestion) : "";
+            } else if (weightInput.disabled) {
+              weightInput.value = Object.prototype.hasOwnProperty.call(weightInput.dataset, "manualValue")
+                ? weightInput.dataset.manualValue
+                : "";
+            }
+
+            weightInput.disabled = useProfileSettings;
+            weightInput.required = useProfileSettings ? false : manualWeightRequired;
+          }
+
+          if (maxPointsInput) {
+            maxPointsInput.readOnly = useProfileSettings;
+            maxPointsInput.classList.toggle("is-readonly", useProfileSettings);
+          }
+
+          if (profileSettingsHint) {
+            profileSettingsHint.textContent = useProfileSettings
+              ? "Aktives Profil ist eingeschaltet: Gewichtung wird automatisch gesetzt und Maximalpunkte bleiben schreibgeschuetzt."
+              : "Wenn aktiv, werden Gewichtung und weitere Profilwerte automatisch uebernommen und gesperrt.";
+          }
+
+          if (maxPointsHint) {
+            maxPointsHint.textContent = useProfileSettings
+              ? "Maximalpunkte bleiben sichtbar, koennen mit aktiven Profileinstellungen aber nicht bearbeitet werden."
+              : "Wenn aktiv, bleibt der bisherige Maximalwert sichtbar, aber gesperrt.";
+          }
+        }
+
         function updateWeightSuggestion() {
           const selectedCategory = categorySelect ? categorySelect.value : "";
           const suggestion = defaultsByCategory ? defaultsByCategory[selectedCategory] : null;
+          const useProfileSettings = Boolean(useProfileSettingsToggle && useProfileSettingsToggle.checked);
           if (unitLabel) unitLabel.textContent = "Punkte";
 
           if (!selectedCategory) {
-            if (weightHint) weightHint.textContent = "Wähle zuerst eine Kategorie.";
+            if (weightHint) {
+              weightHint.textContent = useProfileSettings
+                ? "Waehle zuerst eine Kategorie, damit das Profil die Gewichtung setzen kann."
+                : "Wähle zuerst eine Kategorie.";
+            }
+            syncManagedFieldState(null);
             return;
           }
 
           if (Number.isFinite(Number(suggestion))) {
             if (weightHint) {
-              weightHint.textContent =
-                "Vorschlag aus Profil: " + formatWeight(suggestion) + " Punkte.";
+              weightHint.textContent = useProfileSettings
+                ? "Aktives Profil setzt die Gewichtung auf " + formatWeight(suggestion) + " Punkte."
+                : "Vorschlag aus Profil: " + formatWeight(suggestion) + " Punkte.";
+            }
+            if (!useProfileSettings && weightInput && String(weightInput.value || "").trim() === "") {
+              weightInput.value = formatWeight(suggestion);
             }
           } else if (weightHint) {
             weightHint.textContent =
               "Keine Profil-Gewichtung für diese Kategorie gefunden.";
           }
+          syncManagedFieldState(suggestion);
         }
 
         if (categorySelect) categorySelect.addEventListener("change", updateWeightSuggestion);
+        if (useProfileSettingsToggle) useProfileSettingsToggle.addEventListener("change", updateWeightSuggestion);
         updateWeightSuggestion();
       })();
     </script>

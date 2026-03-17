@@ -620,6 +620,22 @@ function parseOptionalNumber(raw) {
   return { provided: true, value };
 }
 
+function isCheckedInput(value) {
+  return value === true || value === 1 || value === "1" || value === "true" || value === "on";
+}
+
+function deduplicateStudents(rows = []) {
+  const uniqueStudents = new Map();
+  rows.forEach((row) => {
+    if (!row) return;
+    const key = row.id != null ? `id:${row.id}` : `email:${String(row.email || "").toLowerCase()}`;
+    if (!uniqueStudents.has(key)) {
+      uniqueStudents.set(key, row);
+    }
+  });
+  return [...uniqueStudents.values()];
+}
+
 async function renderAddGradeForm(req, res, payload) {
   const {
     status = 200,
@@ -881,7 +897,11 @@ async function requireClassAccessForTeacher(req, res, classId, backUrl = "/teach
 }
 
 async function loadStudents(classId) {
-  return allAsync("SELECT id, name, email FROM students WHERE class_id = ? ORDER BY name", [classId]);
+  const rows = await allAsync(
+    "SELECT DISTINCT id, name, email FROM students WHERE class_id = ? ORDER BY name, email, id",
+    [classId]
+  );
+  return deduplicateStudents(rows);
 }
 
 async function loadTemplates(classId) {
@@ -1115,12 +1135,23 @@ async function loadStudentGradeMessages(classId, studentId) {
   );
 }
 
+function pickLatestTimestamp(...values) {
+  return values.reduce((latest, value) => {
+    const time = value ? new Date(value).getTime() : Number.NaN;
+    if (Number.isNaN(time)) return latest;
+
+    const latestTime = latest ? new Date(latest).getTime() : Number.NEGATIVE_INFINITY;
+    return time > latestTime ? value : latest;
+  }, null);
+}
+
 function groupClassMessageThreads(rows) {
   const threadMap = new Map();
   let openMessageCount = 0;
 
   rows.forEach((row) => {
     const key = `${row.grade_id}:${row.student_id}`;
+    const rowLatestAt = pickLatestTimestamp(row.created_at, row.replied_at) || row.created_at;
     if (!threadMap.has(key)) {
       threadMap.set(key, {
         grade_id: row.grade_id,
@@ -1129,7 +1160,7 @@ function groupClassMessageThreads(rows) {
         student_email: row.student_email,
         test_name: row.test_name,
         grade_value: row.grade_value,
-        latest_at: row.created_at,
+        latest_at: rowLatestAt,
         messages: []
       });
     }
@@ -1142,7 +1173,7 @@ function groupClassMessageThreads(rows) {
       created_at: row.created_at,
       replied_at: row.replied_at || null
     });
-    thread.latest_at = row.created_at;
+    thread.latest_at = pickLatestTimestamp(thread.latest_at, rowLatestAt) || thread.latest_at;
     if (!row.teacher_reply) openMessageCount += 1;
   });
 
@@ -1159,14 +1190,18 @@ async function loadClassOpenMessageCount(classId) {
   return openMessageCount;
 }
 
-async function loadMessageForTeacher(classId, messageId) {
+async function loadMessageForTeacher(classId, messageId, teacherId) {
   return getAsync(
     `SELECT gm.id, gm.student_id
      FROM grade_messages gm
      JOIN grades g ON g.id = gm.grade_id
-     JOIN classes c ON c.id = g.class_id
-     JOIN class_subject_teacher cst ON cst.class_id = c.id AND cst.subject_id = c.subject_id
-     WHERE gm.id = ? AND c.id = ? AND cst.teacher_id = ?`,
+     WHERE gm.id = ? AND g.class_id = ?
+       AND EXISTS (
+         SELECT 1
+         FROM classes c
+         JOIN class_subject_teacher cst ON cst.class_id = c.id AND cst.subject_id = c.subject_id
+         WHERE c.id = g.class_id AND cst.teacher_id = ?
+       )`,
     [messageId, classId, teacherId]
   );
 }
@@ -1973,7 +2008,7 @@ router.post("/students/:classId/messages/:messageId/reply", async (req, res, nex
       return renderError(res, req, "Ungültige Nachrichten-ID.", 400, `/teacher/test-questions/${classId}`);
     }
 
-    const messageRow = await loadMessageForTeacher(classId, messageId);
+    const messageRow = await loadMessageForTeacher(classId, messageId, req.session.user.id);
     if (!messageRow) {
       return renderError(res, req, "Nachricht nicht gefunden.", 404, `/teacher/test-questions/${classId}`);
     }
@@ -3539,6 +3574,7 @@ router.get("/create-template/:classId", async (req, res, next) => {
         name: "",
         category: "",
         weight: "",
+        use_profile_settings: false,
         max_points: "",
         date: "",
         description: ""
@@ -3564,18 +3600,22 @@ router.post("/create-template/:classId", async (req, res, next) => {
     }
 
     const normalizedCategory = normalizeCategoryKey(category);
+    const useProfileSettings = isCheckedInput(req.body?.use_profile_settings);
     const profileSuggestedWeight = normalizedCategory
       ? Number(activeProfile.weights?.[normalizedCategory])
       : NaN;
     const rawWeightValue = parseNumericInput(weight);
-    const weightValue = Number.isFinite(rawWeightValue) ? rawWeightValue : profileSuggestedWeight;
+    const weightValue = useProfileSettings
+      ? profileSuggestedWeight
+      : (Number.isFinite(rawWeightValue) ? rawWeightValue : profileSuggestedWeight);
     const parsedMaxPoints = parseNumericInput(max_points);
-    const hasMaxPointsInput = String(max_points || "").trim() !== "";
+    const hasMaxPointsInput = !useProfileSettings && String(max_points || "").trim() !== "";
     const maxPointsValue = hasMaxPointsInput ? parsedMaxPoints : null;
     const formData = {
       name: name || "",
       category: normalizedCategory || category || "",
       weight: Number.isFinite(rawWeightValue) ? rawWeightValue : "",
+      use_profile_settings: useProfileSettings,
       max_points: hasMaxPointsInput ? max_points : "",
       date: date || "",
       description: description || ""
@@ -3590,6 +3630,17 @@ router.post("/create-template/:classId", async (req, res, next) => {
         formData,
         csrfToken: req.csrfToken(),
         error: "Bitte alle Pflichtfelder ausfüllen."
+      });
+    }
+    if (useProfileSettings && !Number.isFinite(profileSuggestedWeight)) {
+      return res.status(400).render("teacher/teacher-create-template", {
+        email: req.session.user.email,
+        classData,
+        activeProfile,
+        categoryDefinitions: TEMPLATE_CATEGORY_DEFINITIONS,
+        formData,
+        csrfToken: req.csrfToken(),
+        error: "Fuer diese Kategorie ist im aktiven Profil keine gespeicherte Gewichtung vorhanden."
       });
     }
     if (weightValue < 0) {
@@ -3623,7 +3674,7 @@ router.post("/create-template/:classId", async (req, res, next) => {
         normalizedCategory,
         weightValue,
         resolveWeightMode(activeProfile.weight_mode),
-        hasMaxPointsInput ? maxPointsValue : null,
+        useProfileSettings ? null : (hasMaxPointsInput ? maxPointsValue : null),
         date || null,
         description || null
       ]
@@ -3668,6 +3719,7 @@ router.get("/edit-template/:classId/:templateId", async (req, res, next) => {
         name: template.name || "",
         category: template.category || "",
         weight: template.weight != null ? String(template.weight) : "",
+        use_profile_settings: false,
         max_points: template.max_points != null ? String(template.max_points) : "",
         date: dateValue,
         description: template.description || ""
@@ -3693,7 +3745,7 @@ router.post("/edit-template/:classId/:templateId", async (req, res, next) => {
     }
 
     const existingTemplate = await getAsync(
-      "SELECT id FROM grade_templates WHERE id = ? AND class_id = ?",
+      "SELECT id, max_points FROM grade_templates WHERE id = ? AND class_id = ?",
       [templateId, classId]
     );
     if (!existingTemplate) {
@@ -3701,20 +3753,29 @@ router.post("/edit-template/:classId/:templateId", async (req, res, next) => {
     }
 
     const normalizedCategory = normalizeCategoryKey(category);
+    const useProfileSettings = isCheckedInput(req.body?.use_profile_settings);
+    const profileSuggestedWeight = normalizedCategory
+      ? Number(activeProfile.weights?.[normalizedCategory])
+      : NaN;
     const rawWeightValue = parseNumericInput(weight);
+    const weightValue = useProfileSettings ? profileSuggestedWeight : rawWeightValue;
     const parsedMaxPoints = parseNumericInput(max_points);
-    const hasMaxPointsInput = String(max_points || "").trim() !== "";
+    const hasMaxPointsInput = !useProfileSettings && String(max_points || "").trim() !== "";
     const maxPointsValue = hasMaxPointsInput ? parsedMaxPoints : null;
+    const resolvedMaxPointsValue = useProfileSettings
+      ? existingTemplate.max_points
+      : (hasMaxPointsInput ? maxPointsValue : null);
     const formData = {
       name: name || "",
       category: normalizedCategory || category || "",
       weight: Number.isFinite(rawWeightValue) ? rawWeightValue : weight || "",
-      max_points: hasMaxPointsInput ? max_points : "",
+      use_profile_settings: useProfileSettings,
+      max_points: hasMaxPointsInput ? max_points : (useProfileSettings ? (existingTemplate.max_points != null ? String(existingTemplate.max_points) : "") : ""),
       date: date || "",
       description: description || ""
     };
 
-    if (!name || !normalizedCategory || !Number.isFinite(rawWeightValue)) {
+    if (!name || !normalizedCategory || !Number.isFinite(weightValue)) {
       return res.status(400).render("teacher/teacher-edit-template", {
         email: req.session.user.email,
         classData,
@@ -3726,7 +3787,19 @@ router.post("/edit-template/:classId/:templateId", async (req, res, next) => {
         error: "Bitte alle Pflichtfelder ausfüllen."
       });
     }
-    if (rawWeightValue < 0) {
+    if (useProfileSettings && !Number.isFinite(profileSuggestedWeight)) {
+      return res.status(400).render("teacher/teacher-edit-template", {
+        email: req.session.user.email,
+        classData,
+        activeProfile,
+        categoryDefinitions: TEMPLATE_CATEGORY_DEFINITIONS,
+        templateId,
+        formData,
+        csrfToken: req.csrfToken(),
+        error: "Fuer diese Kategorie ist im aktiven Profil keine gespeicherte Gewichtung vorhanden."
+      });
+    }
+    if (weightValue < 0) {
       return res.status(400).render("teacher/teacher-edit-template", {
         email: req.session.user.email,
         classData,
@@ -3738,7 +3811,7 @@ router.post("/edit-template/:classId/:templateId", async (req, res, next) => {
         error: `Gewichtung muss mindestens 0 ${getWeightUnit(activeProfile.weight_mode)} sein.`
       });
     }
-    if (hasMaxPointsInput && (!Number.isFinite(maxPointsValue) || maxPointsValue <= 0)) {
+    if (!useProfileSettings && hasMaxPointsInput && (!Number.isFinite(maxPointsValue) || maxPointsValue <= 0)) {
       return res.status(400).render("teacher/teacher-edit-template", {
         email: req.session.user.email,
         classData,
@@ -3756,8 +3829,8 @@ router.post("/edit-template/:classId/:templateId", async (req, res, next) => {
       [
         String(name).trim(),
         normalizedCategory,
-        rawWeightValue,
-        hasMaxPointsInput ? maxPointsValue : null,
+        weightValue,
+        resolvedMaxPointsValue,
         date || null,
         description || null,
         templateId,

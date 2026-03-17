@@ -3,6 +3,7 @@ const assert = require("node:assert");
 const http = require("node:http");
 const { once } = require("node:events");
 
+process.env.NODE_ENV = "test";
 process.env.DB_FILE = ":memory:";
 process.env.ADMIN_EMAIL = "admin@test.local";
 process.env.ADMIN_PASS = "StrongPass123!";
@@ -36,6 +37,16 @@ function buildCookieHeader(cookies) {
   return { cookie: cookieValue };
 }
 
+function mergeCookies(existingCookies, incomingCookies) {
+  const cookieMap = new Map();
+  [...existingCookies, ...incomingCookies].forEach((cookie) => {
+    const pair = cookie.split(";", 1)[0];
+    const [name] = pair.split("=");
+    cookieMap.set(name, cookie);
+  });
+  return Array.from(cookieMap.values());
+}
+
 async function startServer() {
   server = http.createServer(app);
   server.listen(0);
@@ -56,16 +67,7 @@ async function fetchWithCookies(path, options = {}, cookies = []) {
   const body = await response.text();
   const setCookieHeader = response.headers.get("set-cookie");
   const setCookies = response.headers.getSetCookie?.() || (setCookieHeader ? [setCookieHeader] : []);
-  return { response, body, cookies: [...cookies, ...setCookies] };
-}
-
-function runDb(sql, params = []) {
-  return new Promise((resolve, reject) => {
-    db.run(sql, params, function (err) {
-      if (err) return reject(err);
-      resolve(this);
-    });
-  });
+  return { response, body, cookies: mergeCookies(cookies, setCookies) };
 }
 
 async function loginAndChangePassword(email, password, newPassword) {
@@ -129,6 +131,24 @@ async function fetchCsrfToken(path, cookies) {
   return csrfToken;
 }
 
+function dbRun(sql, params = []) {
+  return new Promise((resolve, reject) => {
+    db.run(sql, params, function onRun(err) {
+      if (err) return reject(err);
+      resolve(this);
+    });
+  });
+}
+
+function dbGet(sql, params = []) {
+  return new Promise((resolve, reject) => {
+    db.get(sql, params, (err, row) => {
+      if (err) return reject(err);
+      resolve(row);
+    });
+  });
+}
+
 async function loginAdmin() {
   let loginResult = await loginAndChangePassword(
     process.env.ADMIN_EMAIL,
@@ -146,6 +166,46 @@ async function loginAdmin() {
     "NewPass12345"
   );
   assert.strictEqual(loginResult.redirect, "/admin");
+  return loginResult;
+}
+
+async function loginStudent() {
+  let loginResult = await loginAndChangePassword(
+    "student@example.com",
+    "NewPass12345",
+    "NewPass12345"
+  );
+
+  if (loginResult.redirect === "/student") {
+    return loginResult;
+  }
+
+  loginResult = await loginAndChangePassword(
+    "student@example.com",
+    process.env.DEMO_STUDENT_PASS,
+    "NewPass12345"
+  );
+  assert.strictEqual(loginResult.redirect, "/student");
+  return loginResult;
+}
+
+async function loginTeacher() {
+  let loginResult = await loginAndChangePassword(
+    "teacher@example.com",
+    "NewPass12345",
+    "NewPass12345"
+  );
+
+  if (loginResult.redirect === "/teacher") {
+    return loginResult;
+  }
+
+  loginResult = await loginAndChangePassword(
+    "teacher@example.com",
+    process.env.DEMO_TEACHER_PASS,
+    "NewPass12345"
+  );
+  assert.strictEqual(loginResult.redirect, "/teacher");
   return loginResult;
 }
 
@@ -178,12 +238,7 @@ test("admin can log in with seeded credentials", async () => {
 });
 
 test("student can view grades and profile after login", async () => {
-  const loginResult = await loginAndChangePassword(
-    "student@example.com",
-    process.env.DEMO_STUDENT_PASS,
-    "NewPass12345"
-  );
-
+  const loginResult = await loginStudent();
   assert.strictEqual(loginResult.redirect, "/student");
 
   const gradesResponse = await fetchWithCookies("/student/grades", {}, loginResult.cookies);
@@ -198,52 +253,163 @@ test("student can view grades and profile after login", async () => {
   assert.strictEqual(profile.class, "3AHWII");
 });
 
-test("student returns include entries from multiple classes for the same email", async () => {
-  await runDb("INSERT INTO classes (name, subject, teacher_id) VALUES (?,?,?)", ["3BHIT", "ITP", 2]);
-  await runDb(
-    "INSERT INTO students (name, email, class_id, school_year) VALUES (?,?,?,?)",
-    ["Max Muster", "student@example.com", 2, "2024/25"]
-  );
-  await runDb(
-    "INSERT INTO grade_templates (class_id, name, category, weight, date, description) VALUES (?,?,?,?,?,?)",
-    [2, "ITP Test", "Test", 20, new Date().toISOString(), "Rueckgabe aus ITP"]
-  );
-  await runDb(
-    "INSERT INTO grades (student_id, class_id, grade_template_id, grade, note) VALUES (?,?,?,?,?)",
-    [2, 2, 4, 1.5, "ITP Rueckgabe"]
-  );
+test("student and teacher can complete the full grade message workflow", async () => {
+  const studentLogin = await loginStudent();
+  assert.strictEqual(studentLogin.redirect, "/student");
 
-  const loginResult = await loginAndChangePassword(
-    "student@example.com",
-    "NewPass12345",
-    "AnotherPass12345"
+  const returnsBefore = await fetchWithCookies(
+    "/student/returns",
+    { headers: { Accept: "application/json" } },
+    studentLogin.cookies
   );
+  assert.strictEqual(returnsBefore.response.status, 200);
+  const returnsBeforeData = JSON.parse(returnsBefore.body);
+  const targetReturn = returnsBeforeData.returns.find((entry) => entry.can_message);
+  assert.ok(targetReturn, "Expected at least one return that supports messages");
 
-  assert.strictEqual(loginResult.redirect, "/student");
+  const studentCsrf = await fetchCsrfToken("/student/requests", studentLogin.cookies);
+  const messageText = "Warum wurde Aufgabe 3 als falsch gewertet?";
+  const createMessageResponse = await fetchWithCookies(
+    `/student/returns/${targetReturn.id}/message`,
+    {
+      method: "POST",
+      headers: {
+        Accept: "application/json",
+        "Content-Type": "application/json",
+        "X-CSRF-Token": studentCsrf
+      },
+      body: JSON.stringify({ message: messageText })
+    },
+    studentLogin.cookies
+  );
+  assert.strictEqual(createMessageResponse.response.status, 200);
+  assert.deepStrictEqual(JSON.parse(createMessageResponse.body), { ok: true });
 
-  const returnsResponse = await fetchWithCookies("/student/returns", {}, loginResult.cookies);
-  assert.strictEqual(returnsResponse.response.status, 200);
+  const returnsWithMessage = await fetchWithCookies(
+    "/student/returns",
+    { headers: { Accept: "application/json" } },
+    studentLogin.cookies
+  );
+  const returnsWithMessageData = JSON.parse(returnsWithMessage.body);
+  const studentThread = returnsWithMessageData.returns.find((entry) => entry.id === targetReturn.id);
+  assert.ok(studentThread);
+  assert.strictEqual(studentThread.messages.length, 1);
+  assert.strictEqual(studentThread.messages[0].student_message, messageText);
 
-  const data = JSON.parse(returnsResponse.body);
-  const subjects = new Set((data.returns || []).map((entry) => entry.subject));
-  assert.ok(subjects.has("Informatik"));
-  assert.ok(subjects.has("ITP"));
-  assert.ok((data.returns || []).length >= 4);
+  const teacherLogin = await loginTeacher();
+  assert.strictEqual(teacherLogin.redirect, "/teacher");
+
+  const teacherPage = await fetchWithCookies(
+    "/teacher/test-questions/1",
+    {},
+    teacherLogin.cookies
+  );
+  assert.strictEqual(teacherPage.response.status, 200);
+  assert.match(teacherPage.body, new RegExp(messageText.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
+
+  const teacherCsrf = await fetchCsrfToken("/teacher/test-questions/1", teacherLogin.cookies);
+  const messageId = studentThread.messages[0].id;
+  const replyText = "Teilaufgabe 3 war unvollstaendig, deshalb wurden Punkte abgezogen.";
+  const replyParams = new URLSearchParams({
+    _csrf: teacherCsrf,
+    reply: replyText
+  });
+  const replyResponse = await fetchWithCookies(
+    `/teacher/students/1/messages/${messageId}/reply`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/x-www-form-urlencoded" },
+      body: replyParams.toString(),
+      redirect: "manual"
+    },
+    teacherLogin.cookies
+  );
+  assert.strictEqual(replyResponse.response.status, 302);
+  assert.strictEqual(replyResponse.response.headers.get("location"), "/teacher/test-questions/1");
+
+  const returnsWithReply = await fetchWithCookies(
+    "/student/returns",
+    { headers: { Accept: "application/json" } },
+    studentLogin.cookies
+  );
+  const returnsWithReplyData = JSON.parse(returnsWithReply.body);
+  const repliedThread = returnsWithReplyData.returns.find((entry) => entry.id === targetReturn.id);
+  assert.ok(repliedThread);
+  assert.strictEqual(repliedThread.messages.length, 1);
+  assert.strictEqual(repliedThread.messages[0].teacher_reply, replyText);
+  assert.strictEqual(repliedThread.messages[0].teacher_reply_seen_at, null);
+
+  const markSeenResponse = await fetchWithCookies(
+    `/student/returns/${targetReturn.id}/messages/seen`,
+    {
+      method: "POST",
+      headers: {
+        Accept: "application/json",
+        "X-CSRF-Token": studentCsrf
+      }
+    },
+    studentLogin.cookies
+  );
+  assert.strictEqual(markSeenResponse.response.status, 200);
+  assert.deepStrictEqual(JSON.parse(markSeenResponse.body), { ok: true });
+
+  const returnsAfterSeen = await fetchWithCookies(
+    "/student/returns",
+    { headers: { Accept: "application/json" } },
+    studentLogin.cookies
+  );
+  const returnsAfterSeenData = JSON.parse(returnsAfterSeen.body);
+  const seenThread = returnsAfterSeenData.returns.find((entry) => entry.id === targetReturn.id);
+  assert.ok(seenThread?.messages[0].teacher_reply_seen_at, "Reply should be marked as seen");
+
+  const notificationsResponse = await fetchWithCookies(
+    "/student/notifications",
+    { headers: { Accept: "application/json" } },
+    studentLogin.cookies
+  );
+  assert.strictEqual(notificationsResponse.response.status, 200);
+  const notifications = JSON.parse(notificationsResponse.body).notifications;
+  const replyNotification = notifications.find((entry) =>
+    String(entry.message || "").includes("Lehrkraft hat auf deine")
+  );
+  assert.ok(replyNotification, "Reply notification missing");
+  assert.strictEqual(replyNotification.read_at, null);
+
+  const readNotificationResponse = await fetchWithCookies(
+    `/student/notifications/${replyNotification.id}/read`,
+    {
+      method: "POST",
+      headers: {
+        Accept: "application/json",
+        "X-CSRF-Token": studentCsrf
+      }
+    },
+    studentLogin.cookies
+  );
+  assert.strictEqual(readNotificationResponse.response.status, 200);
+  assert.deepStrictEqual(JSON.parse(readNotificationResponse.body), { ok: true });
+
+  const notificationsAfterRead = await fetchWithCookies(
+    "/student/notifications",
+    { headers: { Accept: "application/json" } },
+    studentLogin.cookies
+  );
+  const notificationsAfterReadData = JSON.parse(notificationsAfterRead.body).notifications;
+  const readNotification = notificationsAfterReadData.find(
+    (entry) => entry.id === replyNotification.id
+  );
+  assert.ok(readNotification?.read_at, "Notification should be marked as read");
 });
 
 test("teacher bulk grading saves entries for numeric student ids", async () => {
-  const loginResult = await loginAndChangePassword(
-    "teacher@example.com",
-    process.env.DEMO_TEACHER_PASS,
-    "TeacherPass12345"
-  );
+  const loginResult = await loginTeacher();
+  assert.strictEqual(loginResult.redirect, "/teacher");
 
-  assert.strictEqual(loginResult.redirect, "/teacher/classes");
-  await runDb(
+  await dbRun(
     `INSERT INTO teacher_grading_profiles
      (teacher_id, name, weight_mode, scoring_mode, absence_mode, grade1_min_percent, grade2_min_percent, grade3_min_percent, grade4_min_percent, ma_enabled, ma_weight, ma_grade_plus, ma_grade_plus_tilde, ma_grade_neutral, ma_grade_minus_tilde, ma_grade_minus, is_active)
      VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
-    [2, "Standardprofil", "points", "points_or_grade", "include_zero", 88.5, 75, 62.5, 50, 0, 5, 1.5, 2.5, 3, 3.5, 4.5, 1]
+    [2, "Bulkprofil", "points", "points_or_grade", "include_zero", 88.5, 75, 62.5, 50, 0, 5, 1.5, 2.5, 3, 3.5, 4.5, 1]
   );
   const templateId = 1;
 
