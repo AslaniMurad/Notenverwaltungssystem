@@ -26,7 +26,14 @@ function extractCsrfToken(html) {
 
 function buildCookieHeader(cookies) {
   if (!cookies.length) return {};
-  const cookieValue = cookies.map((c) => c.split(";", 1)[0]).join("; ");
+  const latestCookiesByName = new Map();
+  cookies.forEach((cookie) => {
+    const cookiePair = cookie.split(";", 1)[0];
+    const separatorIndex = cookiePair.indexOf("=");
+    const cookieName = separatorIndex >= 0 ? cookiePair.slice(0, separatorIndex) : cookiePair;
+    latestCookiesByName.set(cookieName, cookiePair);
+  });
+  const cookieValue = [...latestCookiesByName.values()].join("; ");
   return { cookie: cookieValue };
 }
 
@@ -225,7 +232,7 @@ test("admin can log in with seeded credentials", async () => {
 
   assert.strictEqual(loginResult.redirect, "/admin");
 
-  const dashboard = await fetchWithCookies("/", {}, loginResult.cookies);
+  const dashboard = await fetchWithCookies("/admin", {}, loginResult.cookies);
   assert.strictEqual(dashboard.response.status, 200);
   assert.match(dashboard.body, /admin@test\.local/);
 });
@@ -288,15 +295,6 @@ test("student and teacher can complete the full grade message workflow", async (
   assert.ok(studentThread);
   assert.strictEqual(studentThread.messages.length, 1);
   assert.strictEqual(studentThread.messages[0].student_message, messageText);
-
-  const classRow = await dbGet("SELECT id, name, subject FROM classes WHERE id = ?", [1]);
-  assert.ok(classRow, "Seeded class missing");
-  await dbRun("UPDATE classes SET name = ?, subject = ?, teacher_id = ? WHERE id = ?", [
-    classRow.name,
-    classRow.subject,
-    1,
-    classRow.id
-  ]);
 
   const teacherLogin = await loginTeacher();
   assert.strictEqual(teacherLogin.redirect, "/teacher");
@@ -401,6 +399,61 @@ test("student and teacher can complete the full grade message workflow", async (
     (entry) => entry.id === replyNotification.id
   );
   assert.ok(readNotification?.read_at, "Notification should be marked as read");
+});
+
+test("teacher bulk grading saves entries for numeric student ids", async () => {
+  const loginResult = await loginTeacher();
+  assert.strictEqual(loginResult.redirect, "/teacher");
+
+  await dbRun(
+    `INSERT INTO teacher_grading_profiles
+     (teacher_id, name, weight_mode, scoring_mode, absence_mode, grade1_min_percent, grade2_min_percent, grade3_min_percent, grade4_min_percent, ma_enabled, ma_weight, ma_grade_plus, ma_grade_plus_tilde, ma_grade_neutral, ma_grade_minus_tilde, ma_grade_minus, is_active)
+     VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+    [2, "Bulkprofil", "points", "points_or_grade", "include_zero", 88.5, 75, 62.5, 50, 0, 5, 1.5, 2.5, 3, 3.5, 4.5, 1]
+  );
+  const templateId = 1;
+
+  const bulkPage = await fetchWithCookies(
+    `/teacher/bulk-grade-template/1/${templateId}`,
+    {},
+    loginResult.cookies
+  );
+  assert.strictEqual(bulkPage.response.status, 200);
+  assert.match(bulkPage.body, /name="grade\[s_1\]"/);
+
+  const csrfToken = extractCsrfToken(bulkPage.body);
+  assert.ok(csrfToken, "CSRF token missing in bulk grading form");
+
+  const params = new URLSearchParams({
+    _csrf: csrfToken,
+    "grade[s_1]": "2.5",
+    "note[s_1]": "Per Test gespeichert"
+  });
+
+  const submitResponse = await fetchWithCookies(
+    `/teacher/bulk-grade-template/1/${templateId}`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/x-www-form-urlencoded" },
+      body: params.toString(),
+      redirect: "manual"
+    },
+    bulkPage.cookies
+  );
+
+  assert.strictEqual(submitResponse.response.status, 302);
+  const location = submitResponse.response.headers.get("location");
+  assert.ok(location, "Bulk grading redirect missing");
+
+  const redirectUrl = new URL(location, baseUrl);
+  assert.strictEqual(redirectUrl.pathname, `/teacher/bulk-grade-template/1/${templateId}`);
+  assert.strictEqual(redirectUrl.searchParams.get("saved"), "0");
+  assert.strictEqual(redirectUrl.searchParams.get("updated"), "1");
+
+  const resultPage = await fetchWithCookies(location, {}, submitResponse.cookies);
+  assert.strictEqual(resultPage.response.status, 200);
+  assert.match(resultPage.body, /1 Bewertung aktualisiert\./);
+  assert.doesNotMatch(resultPage.body, /Keine neuen Bewertungen zum Speichern gefunden\./);
 });
 
 test("student routes redirect when unauthenticated", async () => {

@@ -63,6 +63,7 @@
     notifications: initialData.notifications || [],
     trend: initialData.trend || { direction: "steady", change: 0 },
     tasks: (initialData.tasks || []).map(normalizeTask),
+    archivedTasks: (initialData.archivedTasks || []).map(normalizeTask),
     returns: (initialData.returns || []).map(normalizeReturn),
     openReturnDetails: new Set()
   };
@@ -73,6 +74,7 @@
     document.getElementById("overview-recent-returns")
   );
   const needsTasks = Boolean(document.getElementById("task-list"));
+  const needsArchive = Boolean(document.getElementById("archive-list"));
   const needsReturns = Boolean(document.getElementById("return-list"));
   const needsRequests = Boolean(document.getElementById("request-list"));
   const needsGrades = Boolean(document.getElementById("grade-list"));
@@ -413,7 +415,7 @@
     const container = document.getElementById("task-list");
     if (!container) return;
     if (!state.tasks.length) {
-      container.innerHTML = '<p class="empty-state">Keine Aufgaben vorhanden.</p>';
+      container.innerHTML = '<p class="empty-state">Keine aktiven Pruefungen vorhanden.</p>';
       return;
     }
 
@@ -424,7 +426,7 @@
         matchesSubject(task, subject) && matchesQuery(task, query, ["title", "description"])
     );
     if (!filtered.length) {
-      container.innerHTML = '<p class="empty-state">Keine Aufgaben gefunden.</p>';
+      container.innerHTML = '<p class="empty-state">Keine aktiven Pruefungen gefunden.</p>';
       return;
     }
 
@@ -456,6 +458,62 @@
             </div>
             <div class="task-status">
               <span class="status-pill ${status.className}">${status.label}</span>
+              ${task.graded ? `<small>Note ${gradeText}</small>` : ""}
+            </div>
+          </div>
+        `;
+      })
+      .join("");
+  }
+
+  function renderArchive() {
+    const container = document.getElementById("archive-list");
+    if (!container) return;
+
+    if (!state.archivedTasks.length) {
+      container.innerHTML = '<p class="empty-state">Keine archivierten Pruefungen vorhanden.</p>';
+      return;
+    }
+
+    const subject = document.getElementById("archive-filter-subject")?.value || "";
+    const query = document.getElementById("archive-filter-query")?.value || "";
+    const filtered = state.archivedTasks.filter(
+      (task) =>
+        matchesSubject(task, subject) && matchesQuery(task, query, ["title", "description"])
+    );
+    if (!filtered.length) {
+      container.innerHTML = '<p class="empty-state">Keine archivierten Pruefungen gefunden.</p>';
+      return;
+    }
+
+    const ordered = [...filtered].sort((a, b) => {
+      const aTime = dateSortValue(a.due_at, 0);
+      const bTime = dateSortValue(b.due_at, 0);
+      return bTime - aTime;
+    });
+
+    container.innerHTML = ordered
+      .map((task) => {
+        const dueText = formatDate(task.due_at);
+        const weightText = Number.isFinite(task.weight) && task.weight ? `${task.weight}%` : "-";
+        const gradeText = Number.isFinite(task.grade) ? task.grade.toFixed(2) : "-";
+        const statusLabel = task.graded ? "Benotet" : "Archiviert";
+        return `
+          <div class="task-row">
+            <div>
+              <div class="task-title">
+                <strong>${escapeHtml(task.title)}</strong>
+                ${task.category ? `<span class="pill">${escapeHtml(task.category)}</span>` : ""}
+              </div>
+              <div class="task-meta">
+                <span>Pruefungsdatum: ${dueText}</span>
+                <span>Gewichtung: ${weightText}</span>
+              </div>
+              ${task.description ? `<div class="nav-note">${escapeHtml(task.description)}</div>` : ""}
+              ${task.note ? `<div class="nav-note">Kommentar: ${escapeHtml(task.note)}</div>` : ""}
+            </div>
+            <div class="task-status">
+              <span class="status-pill graded">${statusLabel}</span>
               ${task.graded ? `<small>Note ${gradeText}</small>` : ""}
             </div>
           </div>
@@ -852,10 +910,11 @@
 
   async function refreshGrades(skipRequest = false) {
     const form = document.getElementById("grade-filter");
-    const params = form ? new URLSearchParams(new FormData(form)).toString() : "";
+    const params = new URLSearchParams(form ? new FormData(form) : []);
+    params.set("format", "json");
     if (!skipRequest) {
       try {
-        const response = await fetch(`/student/grades?${params}`);
+        const response = await fetch(`/student/grades?${params.toString()}`);
         const data = await response.json();
         state.grades = (data.grades || []).map(normalizeGrade);
         state.averages = computeAveragesClient(state.grades);
@@ -870,7 +929,7 @@
 
   async function loadClassComparison() {
     try {
-      const response = await fetch("/student/class-averages");
+      const response = await fetch("/student/class-averages?format=json");
       const data = await response.json();
       state.classAverages = data.subjects || [];
       renderClassAverage();
@@ -881,7 +940,7 @@
 
   async function loadTasksFromServer() {
     try {
-      const response = await fetch("/student/tasks");
+      const response = await fetch("/student/tasks?format=json");
       const data = await response.json();
       state.tasks = (data.tasks || []).map(normalizeTask);
       renderTasks();
@@ -891,9 +950,20 @@
     }
   }
 
+  async function loadArchiveFromServer() {
+    try {
+      const response = await fetch("/student/archive?format=json");
+      const data = await response.json();
+      state.archivedTasks = (data.tasks || []).map(normalizeTask);
+      renderArchive();
+    } catch (err) {
+      console.error("Konnte Archiv nicht laden:", err);
+    }
+  }
+
   async function loadReturnsFromServer() {
     try {
-      const response = await fetch("/student/returns");
+      const response = await fetch("/student/returns?format=json");
       const data = await response.json();
       state.returns = (data.returns || []).map(normalizeReturn);
       renderReturns();
@@ -906,7 +976,7 @@
 
   async function loadNotificationsFromServer() {
     try {
-      const response = await fetch("/student/notifications");
+      const response = await fetch("/student/notifications?format=json");
       const data = await response.json();
       state.notifications = data.notifications || [];
       renderNotifications();
@@ -936,6 +1006,12 @@
   document
     .getElementById("request-filter")
     ?.addEventListener("change", () => renderRequests());
+  document
+    .getElementById("archive-filter")
+    ?.addEventListener("input", () => renderArchive());
+  document
+    .getElementById("archive-filter")
+    ?.addEventListener("change", () => renderArchive());
 
   if (needsGrades || needsOverview) {
     renderGrades();
@@ -946,6 +1022,11 @@
   if (needsTasks || needsOverview) {
     renderTasks();
     loadTasksFromServer();
+  }
+
+  if (needsArchive) {
+    renderArchive();
+    loadArchiveFromServer();
   }
 
   if (needsReturns || needsRequests || needsOverview) {

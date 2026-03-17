@@ -802,6 +802,36 @@
   font-size: 13px;
 }
 
+.bulk-grade-table td {
+  vertical-align: middle;
+}
+
+.bulk-grade-row-locked {
+  background: #f9fafb;
+}
+
+.bulk-grade-input,
+.bulk-grade-note {
+  width: 100%;
+  min-width: 110px;
+  padding: 8px 10px;
+  border: 1px solid var(--teacher-border);
+  border-radius: 8px;
+}
+
+.bulk-grade-note {
+  min-width: 220px;
+}
+
+.bulk-grade-errors {
+  margin: 8px 0 0;
+  padding-left: 18px;
+}
+
+.bulk-grade-errors li {
+  margin: 2px 0;
+}
+
 /* Stats Card */
 .stats-card {
   background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);

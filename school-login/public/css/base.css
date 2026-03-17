@@ -190,6 +190,17 @@ body {
   transform: translateY(-2px);
 }
 
+.btn-success {
+  background: linear-gradient(135deg, #15803d, #22c55e);
+  color: white;
+  box-shadow: 0 6px 16px rgba(21, 128, 61, 0.3);
+}
+
+.btn-success:hover {
+  box-shadow: 0 8px 22px rgba(21, 128, 61, 0.4);
+  transform: translateY(-2px);
+}
+
 .btn-danger {
   background: linear-gradient(135deg, #dc2626, #ef4444);
   color: var(--danger-contrast);

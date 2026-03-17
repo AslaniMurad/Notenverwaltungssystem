@@ -351,6 +351,16 @@ function createFakeDb() {
         for (let i = teachingAssignments.length - 1; i >= 0; i -= 1) {
           if (teachingAssignments[i].id === Number(id)) teachingAssignments.splice(i, 1);
         }
+      } else if (/DELETE FROM grade_notifications WHERE student_id IN \(SELECT id FROM students WHERE class_id = \?\)/i.test(sql)) {
+        const [classIdParam] = params;
+        const studentIds = new Set(
+          students
+            .filter((entry) => entry.class_id === Number(classIdParam))
+            .map((entry) => Number(entry.id))
+        );
+        for (let i = notifications.length - 1; i >= 0; i -= 1) {
+          if (studentIds.has(Number(notifications[i].student_id))) notifications.splice(i, 1);
+        }
       } else if (/DELETE FROM grade_notifications WHERE student_id = \?/i.test(sql)) {
         const [studentIdParam] = params;
         for (let i = notifications.length - 1; i >= 0; i -= 1) {
@@ -362,6 +372,9 @@ function createFakeDb() {
           if (students[i].id === Number(idParam) && students[i].class_id === Number(classIdParam)) {
             students.splice(i, 1);
           }
+        }
+        for (let i = notifications.length - 1; i >= 0; i -= 1) {
+          if (notifications[i].student_id === Number(idParam)) notifications.splice(i, 1);
         }
         for (let i = grades.length - 1; i >= 0; i -= 1) {
           if (grades[i].student_id === Number(idParam)) grades.splice(i, 1);
@@ -379,8 +392,21 @@ function createFakeDb() {
         }
       } else if (/DELETE FROM students WHERE class_id = \?/i.test(sql)) {
         const [classIdParam] = params;
+        const studentIds = new Set(
+          students
+            .filter((entry) => entry.class_id === Number(classIdParam))
+            .map((entry) => Number(entry.id))
+        );
         for (let i = students.length - 1; i >= 0; i -= 1) {
           if (students[i].class_id === Number(classIdParam)) students.splice(i, 1);
+        }
+        for (let i = notifications.length - 1; i >= 0; i -= 1) {
+          if (studentIds.has(Number(notifications[i].student_id))) notifications.splice(i, 1);
+        }
+        for (let i = grades.length - 1; i >= 0; i -= 1) {
+          if (studentIds.has(Number(grades[i].student_id)) || grades[i].class_id === Number(classIdParam)) {
+            grades.splice(i, 1);
+          }
         }
         for (let i = specialAssessments.length - 1; i >= 0; i -= 1) {
           if (specialAssessments[i].class_id === Number(classIdParam)) specialAssessments.splice(i, 1);
@@ -657,7 +683,8 @@ function createFakeDb() {
           max_points: max_points != null && max_points !== "" ? Number(max_points) : null,
           date: date || null,
           description: description || null,
-          created_at: new Date().toISOString()
+          created_at: new Date().toISOString(),
+          archived_at: null
         };
         gradeTemplates.push(template);
         lastID = template.id;
@@ -674,6 +701,47 @@ function createFakeDb() {
             max_points != null && max_points !== "" ? Number(max_points) : null;
           template.date = date || null;
           template.description = description || null;
+        }
+      } else if (/UPDATE grade_templates\s+SET archived_at = \?\s+WHERE class_id = \? AND archived_at IS NULL AND COALESCE\(date, created_at\) < \?/i.test(sql)) {
+        const [archivedAt, classId, cutoff] = params;
+        const cutoffTime = new Date(cutoff).getTime();
+        gradeTemplates.forEach((template) => {
+          const effectiveTime = new Date(template.date || template.created_at).getTime();
+          if (
+            template.class_id === Number(classId) &&
+            !template.archived_at &&
+            Number.isFinite(effectiveTime) &&
+            effectiveTime < cutoffTime
+          ) {
+            template.archived_at = archivedAt;
+          }
+        });
+      } else if (/UPDATE grade_templates\s+SET archived_at = \?\s+WHERE archived_at IS NULL AND COALESCE\(date, created_at\) < \?/i.test(sql)) {
+        const [archivedAt, cutoff] = params;
+        const cutoffTime = new Date(cutoff).getTime();
+        gradeTemplates.forEach((template) => {
+          const effectiveTime = new Date(template.date || template.created_at).getTime();
+          if (!template.archived_at && Number.isFinite(effectiveTime) && effectiveTime < cutoffTime) {
+            template.archived_at = archivedAt;
+          }
+        });
+      } else if (/DELETE FROM grade_templates WHERE archived_at IS NOT NULL AND archived_at <= \?/i.test(sql)) {
+        const [cutoff] = params;
+        const cutoffTime = new Date(cutoff).getTime();
+        const deletedTemplateIds = [];
+        for (let i = gradeTemplates.length - 1; i >= 0; i -= 1) {
+          const archivedTime = new Date(gradeTemplates[i].archived_at || "").getTime();
+          if (Number.isFinite(archivedTime) && archivedTime <= cutoffTime) {
+            deletedTemplateIds.push(gradeTemplates[i].id);
+            gradeTemplates.splice(i, 1);
+          }
+        }
+        if (deletedTemplateIds.length) {
+          for (let i = grades.length - 1; i >= 0; i -= 1) {
+            if (deletedTemplateIds.includes(grades[i].grade_template_id)) {
+              grades.splice(i, 1);
+            }
+          }
         }
       } else if (/INSERT INTO grades/i.test(sql)) {
         const student_id = params[0];
@@ -1065,7 +1133,10 @@ function createFakeDb() {
         const [id] = params;
         const classRow = classes.find((c) => c.id === Number(id));
         if (classRow) {
-          const teacherEmails = getTeacherEmailsForClassSubject(classRow.id, classRow.subject_id).join(", ");
+          const teacherEmails =
+            getTeacherEmailsForClassSubject(classRow.id, classRow.subject_id).join(", ") ||
+            users.find((u) => u.id === classRow.teacher_id)?.email ||
+            "";
           const alias = /AS teacher_emails/i.test(sql) ? "teacher_emails" : "teacher_email";
           row = {
             id: classRow.id,
@@ -1166,11 +1237,12 @@ function createFakeDb() {
                 )
               )
           );
-          if (assignment) {
+          const teacherId = assignment?.teacher_id ?? classRow.teacher_id;
+          if (teacherId != null) {
             const activeProfile = teacherGradingProfiles
               .filter(
                 (entry) =>
-                  entry.teacher_id === Number(assignment.teacher_id) &&
+                  entry.teacher_id === Number(teacherId) &&
                   Boolean(entry.is_active) === Boolean(is_active)
               )
               .sort((a, b) => {
@@ -1196,7 +1268,7 @@ function createFakeDb() {
             })[0];
           row = { absence_mode: activeProfile?.absence_mode || "include_zero" };
         }
-      } else if (/SELECT id, name, category, weight, max_points, date, description FROM grade_templates WHERE id = \? AND class_id = \?/i.test(sql)) {
+      } else if (/SELECT id, name, category, weight, (weight_mode, )?max_points, date, description FROM grade_templates WHERE id = \? AND class_id = \?/i.test(sql)) {
         const [templateId, clsId] = params;
         const template = gradeTemplates.find(
           (entry) => entry.id === Number(templateId) && entry.class_id === Number(clsId)
@@ -1207,6 +1279,7 @@ function createFakeDb() {
               name: template.name,
               category: template.category,
               weight: template.weight,
+              weight_mode: template.weight_mode || "points",
               max_points: template.max_points ?? null,
               date: template.date || null,
               description: template.description || null
@@ -1712,6 +1785,23 @@ function createFakeDb() {
               entry.class_id === Number(class_id) && entry.student_id === Number(student_id)
           )
           .map((entry) => ({ grade_template_id: entry.grade_template_id }));
+      } else if (/SELECT id, student_id, grade, points_achieved, points_max, note, is_absent\s+FROM grades\s+WHERE class_id = \? AND grade_template_id = \?/i.test(sql)) {
+        const [class_id, grade_template_id] = params;
+        rows = grades
+          .filter(
+            (entry) =>
+              entry.class_id === Number(class_id) &&
+              entry.grade_template_id === Number(grade_template_id)
+          )
+          .map((entry) => ({
+            id: entry.id,
+            student_id: entry.student_id,
+            grade: entry.grade,
+            points_achieved: entry.points_achieved ?? null,
+            points_max: entry.points_max ?? null,
+            note: entry.note || null,
+            is_absent: entry.is_absent ? 1 : 0
+          }));
       } else if (/FROM grades g[\s\S]*UNION ALL[\s\S]*special_assessments/i.test(sql) && /WHERE g\.student_id = \?/i.test(sql)) {
         const [student_id] = params;
         const baseRows = grades
@@ -1930,12 +2020,21 @@ function createFakeDb() {
         const [id] = params;
         const cls = classes.find((c) => c.id === Number(id));
         rows = cls ? [{ ...cls }] : [];
-      } else if (/SELECT id, name, category, weight, (weight_mode, )?(max_points, )?date, description FROM grade_templates WHERE class_id = \? ORDER BY date, name/i.test(sql)) {
+      } else if (/SELECT id, name, category, weight, .* FROM grade_templates WHERE class_id = \?/i.test(sql) && /ORDER BY date( DESC)?, name/i.test(sql)) {
         const [clsId] = params;
+        const wantsArchived = /archived_at IS NOT NULL/i.test(sql);
+        const wantsActiveOnly = /archived_at IS NULL/i.test(sql) && !wantsArchived;
+        const sortDescending = /ORDER BY date DESC, name/i.test(sql);
         rows = gradeTemplates
           .filter((t) => t.class_id === Number(clsId))
+          .filter((t) => (wantsArchived ? Boolean(t.archived_at) : wantsActiveOnly ? !t.archived_at : true))
           .sort((a, b) => {
-            if (a.date && b.date && a.date !== b.date) return new Date(a.date) - new Date(b.date);
+            if (a.date && b.date && a.date !== b.date) {
+              const delta = new Date(a.date) - new Date(b.date);
+              return sortDescending ? -delta : delta;
+            }
+            if (a.date && !b.date) return sortDescending ? -1 : 1;
+            if (!a.date && b.date) return sortDescending ? 1 : -1;
             return a.name.localeCompare(b.name);
           })
           .map((t) => ({
@@ -2385,6 +2484,78 @@ async function initializeDatabase() {
       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
     )
   `);
+  await pool.query(
+    "ALTER TABLE classes ADD COLUMN IF NOT EXISTS teacher_id INTEGER"
+  );
+  await pool.query(
+    "CREATE INDEX IF NOT EXISTS classes_teacher_id_idx ON classes (teacher_id)"
+  );
+
+  const legacyClassTeacherTable = await pool.query(`
+    SELECT EXISTS (
+      SELECT 1
+      FROM information_schema.tables
+      WHERE table_schema = 'public' AND table_name = 'class_subject_teacher'
+    ) AS exists
+  `);
+
+  if (legacyClassTeacherTable.rows[0]?.exists) {
+    const ambiguousTeacherAssignments = await pool.query(`
+      SELECT class_id
+      FROM class_subject_teacher
+      GROUP BY class_id
+      HAVING COUNT(DISTINCT teacher_id) > 1
+      LIMIT 1
+    `);
+
+    if (ambiguousTeacherAssignments.rowCount > 0) {
+      throw new Error(
+        `Legacy migration blocked: class_subject_teacher contains multiple teachers for class ${ambiguousTeacherAssignments.rows[0].class_id}.`
+      );
+    }
+
+    await pool.query(`
+      UPDATE classes c
+      SET teacher_id = legacy.teacher_id
+      FROM (
+        SELECT class_id, MIN(teacher_id) AS teacher_id
+        FROM class_subject_teacher
+        GROUP BY class_id
+      ) AS legacy
+      WHERE c.id = legacy.class_id AND c.teacher_id IS NULL
+    `);
+  }
+
+  const missingTeacherIds = await pool.query(
+    "SELECT id FROM classes WHERE teacher_id IS NULL LIMIT 1"
+  );
+  if (missingTeacherIds.rowCount > 0) {
+    throw new Error(
+      `Legacy migration blocked: classes.teacher_id is still NULL for class ${missingTeacherIds.rows[0].id}.`
+    );
+  }
+
+  await pool.query(`
+    DO $$
+    BEGIN
+      IF NOT EXISTS (
+        SELECT 1
+        FROM pg_constraint c
+        JOIN pg_class t ON t.oid = c.conrelid
+        JOIN pg_attribute a ON a.attrelid = t.oid AND a.attnum = ANY(c.conkey)
+        WHERE t.relname = 'classes'
+          AND c.contype = 'f'
+          AND a.attname = 'teacher_id'
+      ) THEN
+        ALTER TABLE classes
+        ADD CONSTRAINT classes_teacher_id_fkey
+        FOREIGN KEY (teacher_id) REFERENCES users(id);
+      END IF;
+    END $$;
+  `);
+  await pool.query(
+    "ALTER TABLE classes ALTER COLUMN teacher_id SET NOT NULL"
+  );
 
   await pool.query(`
     CREATE TABLE IF NOT EXISTS subjects (
@@ -2467,6 +2638,9 @@ async function initializeDatabase() {
     )
   `);
   await pool.query(
+    "ALTER TABLE class_subject_teacher ADD COLUMN IF NOT EXISTS school_year_id INTEGER"
+  );
+  await pool.query(
     "CREATE INDEX IF NOT EXISTS class_subject_teacher_teacher_idx ON class_subject_teacher (teacher_id)"
   );
   await pool.query(
@@ -2504,9 +2678,6 @@ async function initializeDatabase() {
       END IF;
     END $$;
   `);
-  await pool.query(
-    "ALTER TABLE class_subject_teacher ADD COLUMN IF NOT EXISTS school_year_id INTEGER"
-  );
   await pool.query(`
     UPDATE class_subject_teacher cst
     SET school_year_id = c.school_year_id
@@ -2883,6 +3054,9 @@ async function initializeDatabase() {
     "ALTER TABLE grade_templates ADD COLUMN IF NOT EXISTS max_points NUMERIC"
   );
   await pool.query(
+    "ALTER TABLE grade_templates ADD COLUMN IF NOT EXISTS archived_at TIMESTAMPTZ"
+  );
+  await pool.query(
     "UPDATE grade_templates SET weight_mode = 'points' WHERE weight_mode IS NULL"
   );
   await pool.query(
@@ -2910,6 +3084,9 @@ async function initializeDatabase() {
   );
   await pool.query(
     "ALTER TABLE grade_templates ADD CONSTRAINT grade_templates_max_points_check CHECK (max_points IS NULL OR max_points > 0)"
+  );
+  await pool.query(
+    "CREATE INDEX IF NOT EXISTS grade_templates_archived_at_idx ON grade_templates (archived_at)"
   );
 
   await pool.query(`
@@ -3064,13 +3241,24 @@ async function initializeDatabase() {
   await pool.query(`
     CREATE TABLE IF NOT EXISTS grade_notifications (
       id SERIAL PRIMARY KEY,
-      student_id INTEGER NOT NULL REFERENCES students(id),
+      student_id INTEGER NOT NULL REFERENCES students(id) ON DELETE CASCADE,
       message TEXT NOT NULL,
       type TEXT NOT NULL DEFAULT 'info',
       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
       read_at TIMESTAMPTZ
     )
   `);
+  await pool.query(
+    "ALTER TABLE grade_notifications DROP CONSTRAINT IF EXISTS grade_notifications_student_id_fkey"
+  );
+  await pool.query(`
+    ALTER TABLE grade_notifications
+    ADD CONSTRAINT grade_notifications_student_id_fkey
+    FOREIGN KEY (student_id) REFERENCES students(id) ON DELETE CASCADE
+  `);
+  await pool.query(
+    "CREATE INDEX IF NOT EXISTS grade_notifications_student_idx ON grade_notifications (student_id)"
+  );
 
   await pool.query(`
     CREATE TABLE IF NOT EXISTS audit_logs (
