@@ -722,10 +722,10 @@ body.app-modal-open {
 }
 
 .app-modal-card {
-  width: min(100%, 760px);
+  width: min(100%, 460px);
   background: var(--surface);
   border: 1px solid var(--border);
-  border-radius: 30px;
+  border-radius: 24px;
   box-shadow: 0 28px 70px rgba(15, 23, 42, 0.26);
   overflow: hidden;
   transform: translateY(18px) scale(0.98);
@@ -737,22 +737,22 @@ body.app-modal-open {
 }
 
 .app-modal-header {
-  padding: 34px 40px 28px;
+  padding: 24px 28px 18px;
   border-bottom: 1px solid var(--border);
 }
 
 .app-modal-title {
   margin: 0;
   color: var(--text);
-  font-size: clamp(2rem, 3.2vw, 3rem);
-  line-height: 1.05;
+  font-size: clamp(1.4rem, 2vw, 1.9rem);
+  line-height: 1.15;
   letter-spacing: -0.03em;
 }
 
 .app-modal-body {
   display: grid;
   gap: 14px;
-  padding: 34px 40px;
+  padding: 22px 28px 24px;
 }
 
 .app-modal-message,
@@ -762,8 +762,8 @@ body.app-modal-open {
 
 .app-modal-message {
   color: var(--text);
-  font-size: clamp(1.05rem, 1.5vw, 1.35rem);
-  line-height: 1.5;
+  font-size: clamp(1rem, 1.2vw, 1.1rem);
+  line-height: 1.45;
 }
 
 .app-modal-note {
@@ -775,17 +775,17 @@ body.app-modal-open {
 .app-modal-footer {
   display: flex;
   justify-content: flex-end;
-  gap: 16px;
-  padding: 28px 40px 34px;
+  gap: 12px;
+  padding: 18px 28px 24px;
   border-top: 1px solid var(--border);
   background: linear-gradient(180deg, rgba(148, 163, 184, 0.04), rgba(148, 163, 184, 0.08));
 }
 
 .app-modal-footer .btn.app-modal-button {
-  min-width: 180px;
-  min-height: 62px;
-  border-radius: 18px;
-  font-size: 1.1rem;
+  min-width: 140px;
+  min-height: 52px;
+  border-radius: 14px;
+  font-size: 1rem;
   font-weight: 800;
   box-shadow: none;
 }
@@ -810,30 +810,30 @@ body.app-modal-open {
   }
 
   .app-modal-card {
-    border-radius: 24px;
+    border-radius: 20px;
   }
 
   .app-modal-header,
   .app-modal-body,
   .app-modal-footer {
-    padding-left: 22px;
-    padding-right: 22px;
+    padding-left: 20px;
+    padding-right: 20px;
   }
 
   .app-modal-header {
-    padding-top: 24px;
-    padding-bottom: 20px;
+    padding-top: 20px;
+    padding-bottom: 16px;
   }
 
   .app-modal-body {
-    padding-top: 24px;
-    padding-bottom: 24px;
+    padding-top: 18px;
+    padding-bottom: 20px;
   }
 
   .app-modal-footer {
     flex-direction: column-reverse;
-    padding-top: 20px;
-    padding-bottom: 24px;
+    padding-top: 16px;
+    padding-bottom: 20px;
   }
 
   .app-modal-footer .btn.app-modal-button {

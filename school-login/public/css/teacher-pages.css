@@ -1291,7 +1291,7 @@
   background: var(--surface);
   border-radius: 16px;
   padding: 0;
-  max-width: 450px;
+  max-width: 380px;
   width: 90%;
   max-height: calc(100vh - 32px);
   display: flex;
@@ -1303,8 +1303,8 @@
 }
 
 .modal-content.modal-content-wide {
-  width: min(960px, calc(100vw - 32px));
-  max-width: 960px;
+  width: min(640px, calc(100vw - 32px));
+  max-width: 640px;
 }
 
 .modal-overlay.active .modal-content {
