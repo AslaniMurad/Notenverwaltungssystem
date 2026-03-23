@@ -26,9 +26,11 @@ function parseOptionalBoolean(value) {
 
 function printUsage() {
   console.log(`Usage:
-  node create_user.js --email <email> --password <password> [options]
+  node create_user.js --email <email> [options]
 
 Options:
+  --email <email>                    Required if CREATE_USER_EMAIL is not set
+  --password <password>              Optional; omit to enter it securely via prompt
   --role <admin|teacher|student>    Defaults to student
   --status <active|locked|deleted>  Defaults to active
   --must-change-password            Force password change on next login
@@ -36,8 +38,11 @@ Options:
   --help                            Show this message
 
 Examples:
-  node create_user.js --email admin@nvs.proj --password TempPass12345 --role admin
-  npm run create:admin -- --email admin@nvs.proj --password TempPass12345
+  node create_user.js --email admin@nvs.proj --role admin
+  npm run create:admin -- --email admin@nvs.proj
+
+Security:
+  Avoid passing passwords via --password when possible because shell history and process listings can expose them.
 `);
 }
 
