@@ -92,10 +92,10 @@ body {
 
 .htl-logo-img {
   display: inline-block;
-  width: 36px;
-  height: 36px;
+  width: 88px;
+  height: 58px;
   object-fit: contain;
-  border-radius: 6px;
+  border-radius: 0;
 }
 
 .site-header .brand-meta {
