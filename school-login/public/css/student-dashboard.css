@@ -127,14 +127,14 @@ header.dashboard-hero {
   color: #777;
 }
 .htl-small {
-  width: 48px;
-  height: 48px;
+  width: 96px;
+  height: 62px;
   object-fit: contain;
-  border-radius: 8px;
+  border-radius: 0;
   margin-right: 12px;
   vertical-align: middle;
-  background: var(--surface-alt);
-  padding: 4px;
+  background: transparent;
+  padding: 0;
 }
 
 .header-left {
@@ -652,6 +652,11 @@ header.dashboard-hero {
   .header-left {
     width: 100%;
     align-items: flex-start;
+  }
+
+  .htl-small {
+    width: 78px;
+    height: 50px;
   }
 
   .header-left > div {

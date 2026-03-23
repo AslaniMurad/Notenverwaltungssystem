@@ -646,7 +646,7 @@ body.mobile-view.page-login {
 }
 
 .mobile-view .login-mark {
-  background: var(--surface-3) !important;
+  background: transparent !important;
 }
 
 .mobile-view .login-eyebrow,

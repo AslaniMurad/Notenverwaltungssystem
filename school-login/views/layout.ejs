@@ -13,6 +13,7 @@
       const separator = assetPath.includes("?") ? "&" : "?";
       return `${assetPath}${separator}v=${encodeURIComponent(assetVersion)}`;
     };
+    const brandLogoPath = withAssetVersion("/images/nvs-logo.png");
   %>
   <style>
     html.css-loading body { visibility: hidden; }
@@ -38,6 +39,10 @@
   <!-- Inter font for improved typography -->
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="icon" href="/favicon.ico" sizes="any" type="image/x-icon">
+  <link rel="icon" href="/favicon-32x32.png" sizes="32x32" type="image/png">
+  <link rel="icon" href="/favicon-16x16.png" sizes="16x16" type="image/png">
+  <link rel="manifest" href="/site.webmanifest">
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="<%= withAssetVersion('/css/base.css') %>">
   <link rel="stylesheet" href="<%= withAssetVersion('/css/app-shell.css') %>">
@@ -96,7 +101,7 @@
   <button id="themeToggle" type="button" aria-label="Dark Mode umschalten" title="Dark Mode umschalten">Theme</button>
 
   <% if (!hideHeader) { %>
-    <%- include('partials/site-header', { headerTitle: headerTitle || title, headerActions: headerActions || [], isMobile: locals.isMobile }) %>
+    <%- include('partials/site-header', { headerTitle: headerTitle || title, headerActions: headerActions || [], isMobile: locals.isMobile, brandLogoSrc: brandLogoPath }) %>
   <% } %>
 
   <main class="page-shell app-container">
