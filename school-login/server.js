@@ -31,6 +31,14 @@ if (isProduction && !process.env.SESSION_SECRET) {
 
 const sessionStore = buildSessionStore({ pool, isFakeDb });
 
+function parseOptionalBoolean(value) {
+  if (value == null || value === "") return null;
+  const normalized = String(value).trim().toLowerCase();
+  if (["true", "1", "yes", "on"].includes(normalized)) return true;
+  if (["false", "0", "no", "off"].includes(normalized)) return false;
+  return null;
+}
+
 function isDbConnectionError(err) {
   if (!err) return false;
   if (Array.isArray(err.errors)) {
@@ -136,6 +144,8 @@ function renderLogin(res, req, options = {}) {
 
 // --- Session ---
 const sessionSecret = process.env.SESSION_SECRET || crypto.randomBytes(32).toString("hex");
+const secureCookieOverride = parseOptionalBoolean(process.env.SESSION_COOKIE_SECURE);
+const useSecureSessionCookie = secureCookieOverride ?? isProduction;
 app.use(
   session({
     name: "sid",
@@ -146,7 +156,7 @@ app.use(
     cookie: {
       httpOnly: true,
       sameSite: "lax",
-      secure: isProduction,
+      secure: useSecureSessionCookie,
       maxAge: 1000 * 60 * 60 // 1h
     }
   })
