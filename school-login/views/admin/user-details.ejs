@@ -25,7 +25,7 @@
           </div>
           <div class="admin-actions-row">
             <a class="btn btn-secondary" href="/admin/users/<%= user.id %>/edit">Bearbeiten</a>
-            <a class="btn" href="/admin/users">ZurÃ¼ck</a>
+            <a class="btn" href="/admin/users">Zurück</a>
           </div>
         </div>
 
@@ -73,17 +73,17 @@
         <div class="admin-card">
           <div class="admin-topbar">
             <p class="admin-eyebrow">Klassen</p>
-            <span class="admin-badge"><%= classes.length %> EintrÃ¤ge</span>
+            <span class="admin-badge"><%= classes.length %> Einträge</span>
           </div>
           <div class="admin-list">
             <% if (!classes || classes.length === 0) { %>
               <div class="admin-empty">
                 <% if (isStudent) { %>
-                  Keine Klassen fÃ¼r diesen SchÃ¼ler gefunden.
+                  Keine Klassen für diesen Schüler gefunden.
                 <% } else if (isTeacher) { %>
-                  Keine Klassen fÃ¼r diesen Lehrer gefunden.
+                  Keine Klassen für diesen Lehrer gefunden.
                 <% } else { %>
-                  Keine Klasseninfos fÃ¼r diese Rolle vorhanden.
+                  Keine Klasseninfos für diese Rolle vorhanden.
                 <% } %>
               </div>
             <% } else if (isTeacher) { %>
@@ -94,7 +94,7 @@
                     <p class="admin-muted">Fach: <%= entry.subject %></p>
                   </div>
                   <div class="admin-actions-row">
-                    <a class="btn btn-secondary" href="/admin/classes/<%= entry.id %>/students">SchÃ¼ler anzeigen</a>
+                    <a class="btn btn-secondary" href="/admin/classes/<%= entry.id %>/students">Schüler anzeigen</a>
                   </div>
                 </div>
               <% }) %>

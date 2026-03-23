@@ -878,7 +878,7 @@ async function requireClassAccessForTeacher(req, res, classId, backUrl = "/teach
     ? await teacherCanAccessClassSubject(req.session.user.id, classId, requestedSubjectId)
     : await teacherCanAccessClass(req.session.user.id, classId);
   if (!canAccess) {
-    renderError(res, req, "Keine Berechtigung fuer diese Klasse/Fach-Zuordnung.", 403, backUrl);
+    renderError(res, req, "Keine Berechtigung für diese Klasse/Fach-Zuordnung.", 403, backUrl);
     return null;
   }
 
@@ -888,7 +888,7 @@ async function requireClassAccessForTeacher(req, res, classId, backUrl = "/teach
     hasSubjectConstraint ? requestedSubjectId : null
   );
   if (!classData) {
-    renderError(res, req, "Keine Berechtigung fuer diese Klasse/Fach-Zuordnung.", 403, backUrl);
+    renderError(res, req, "Keine Berechtigung für diese Klasse/Fach-Zuordnung.", 403, backUrl);
     return null;
   }
   return classData;
@@ -2802,7 +2802,7 @@ router.post("/add-grade/:classId/:studentId", handleUpload, async (req, res, nex
     if (hasPoints && templateHasMaxPoints && pointsAchievedInput.value > templateMaxPointsRaw) {
       return renderValidationError(
         400,
-        `Erreichte Punkte duerfen die maximalen Punkte (${templateMaxPointsRaw}) nicht uebersteigen.`
+        `Erreichte Punkte dürfen die maximalen Punkte (${templateMaxPointsRaw}) nicht übersteigen.`
       );
     }
 

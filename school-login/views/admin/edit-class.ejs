@@ -1,6 +1,6 @@
 <%
   const page = {
-    title: 'Admin â€” Klasse bearbeiten',
+    title: 'Admin — Klasse bearbeiten',
     headerTitle: 'Adminbereich',
     styles: ['/css/admin.css'],
     scripts: ['/js/app.js'],
@@ -18,7 +18,7 @@
             <h1>Klasse bearbeiten</h1>
             <p class="admin-muted">Passe Name und Fach an.</p>
           </div>
-          <a class="btn btn-secondary" href="/admin/classes">ZurÃ¼ck</a>
+          <a class="btn btn-secondary" href="/admin/classes">Zurück</a>
         </div>
 
         <div class="admin-card-narrow">
@@ -31,7 +31,7 @@
             <label for="subject">Fach</label>
             <input id="subject" name="subject" value="<%= classData.subject %>" type="text" required>
 
-            <p class="admin-muted">Lehrer-Zuordnungen werden separat ueber die Unterrichtszuordnung gepflegt.</p>
+            <p class="admin-muted">Lehrer-Zuordnungen werden separat über die Unterrichtszuordnung gepflegt.</p>
 
             <button class="btn btn-primary" type="submit">Speichern</button>
           </form>

@@ -164,7 +164,7 @@
     if (stats.totalCount > 0) {
       return { label: "Beantwortet", className: "answered" };
     }
-    return { label: "Noch keine Rueckfrage", className: "idle" };
+    return { label: "Noch keine Rückfrage", className: "idle" };
   }
 
   function getTaskStatus(task) {
@@ -173,7 +173,7 @@
     }
     const due = task.due_at ? new Date(task.due_at) : null;
     if (due && !Number.isNaN(due.getTime()) && due < new Date()) {
-      return { label: "Ueberfaellig", className: "overdue" };
+      return { label: "Überfällig", className: "overdue" };
     }
     return { label: "Offen", className: "open" };
   }
@@ -480,7 +480,7 @@
       return bTime - aTime;
     });
 
-    const options = ['<option value="">Alle Rueckgaben</option>'];
+    const options = ['<option value="">Alle Rückgaben</option>'];
     ordered.forEach((entry) => {
       options.push(`<option value="${String(entry.id)}">${escapeHtml(entry.title)}</option>`);
     });
@@ -517,11 +517,11 @@
       const summary = document.createElement("summary");
       summary.className = "return-message-summary request-ticket-summary";
       const summaryLastActivity = stats.lastActivityAt
-        ? `Letzte Aktivitaet: ${formatDate(stats.lastActivityAt, true)}`
-        : "Noch keine Aktivitaet";
+        ? `Letzte Aktivität: ${formatDate(stats.lastActivityAt, true)}`
+        : "Noch keine Aktivität";
       summary.innerHTML = `
         <div class="return-summary-main">
-          <span>Rueckfragen</span>
+          <span>Rückfragen</span>
           <span class="return-status-pill ${status.className}">${status.label}</span>
         </div>
         <div class="return-summary-meta">
@@ -563,7 +563,7 @@
             `;
           })
           .join("")
-        : '<article class="return-message-row pending"><small>Noch keine Rueckfragen vorhanden.</small></article>';
+        : '<article class="return-message-row pending"><small>Noch keine Rückfragen vorhanden.</small></article>';
       details.appendChild(thread);
 
       if (entry.can_message) {
@@ -672,7 +672,7 @@
     const container = document.getElementById("return-list");
     if (!container) return;
     if (!state.returns.length) {
-      container.innerHTML = '<p class="empty-state">Keine Rueckgaben vorhanden.</p>';
+      container.innerHTML = '<p class="empty-state">Keine Rückgaben vorhanden.</p>';
       return;
     }
 
@@ -682,7 +682,7 @@
       (entry) => matchesSubject(entry, subject) && matchesQuery(entry, query, ["title", "note"])
     );
     if (!filtered.length) {
-      container.innerHTML = '<p class="empty-state">Keine Rueckgaben gefunden.</p>';
+      container.innerHTML = '<p class="empty-state">Keine Rückgaben gefunden.</p>';
       return;
     }
 
@@ -700,7 +700,7 @@
         const returnText = formatDate(entry.graded_at, true);
         const activityText = stats.lastActivityAt
           ? formatDate(stats.lastActivityAt, true)
-          : "Noch keine Rueckfragen";
+          : "Noch keine Rückfragen";
         const weightText =
           Number.isFinite(entry.weight) && entry.weight ? `${entry.weight}%` : "-";
         const downloadUrl = entry.attachment_download_url
@@ -709,7 +709,7 @@
         const externalLink = entry.external_link ? escapeHtml(entry.external_link) : "";
         const attachmentName = entry.attachment_name ? escapeHtml(entry.attachment_name) : "Datei";
         const attachmentHtml = externalLink
-          ? `<div class="return-actions"><a class="btn small secondary" href="${externalLink}" target="_blank" rel="noopener noreferrer">Link oeffnen</a></div>`
+          ? `<div class="return-actions"><a class="btn small secondary" href="${externalLink}" target="_blank" rel="noopener noreferrer">Link öffnen</a></div>`
           : downloadUrl
             ? `<div class="return-actions"><a class="btn small secondary" href="${downloadUrl}">Datei herunterladen</a><small>${attachmentName}</small></div>`
             : "";
@@ -724,13 +724,13 @@
                 ${entry.category ? `<span class="pill">${escapeHtml(entry.category)}</span>` : ""}
               </div>
               <div class="task-meta">
-                <span>Rueckgabe: ${returnText}</span>
+                <span>Rückgabe: ${returnText}</span>
                 <span>Gewichtung: ${weightText}</span>
               </div>
               <div class="return-insights">
                 <span class="return-status-pill ${status.className}">${status.label}</span>
                 <span>${stats.totalCount} Nachricht${stats.totalCount === 1 ? "" : "en"}</span>
-                <span>Letzte Aktivitaet: ${activityText}</span>
+                <span>Letzte Aktivität: ${activityText}</span>
               </div>
               ${entry.note ? `<div class="nav-note">${escapeHtml(entry.note)}</div>` : ""}
               ${attachmentHtml}
@@ -754,7 +754,7 @@
       (entry) => entry.can_message || (Array.isArray(entry.messages) && entry.messages.length > 0)
     );
     if (!sourceEntries.length) {
-      container.innerHTML = '<p class="empty-state">Noch keine moeglichen Anfragen vorhanden.</p>';
+      container.innerHTML = '<p class="empty-state">Noch keine möglichen Anfragen vorhanden.</p>';
       return;
     }
 
@@ -804,7 +804,7 @@
         const returnText = formatDate(entry.graded_at, true);
         const activityText = stats.lastActivityAt
           ? formatDate(stats.lastActivityAt, true)
-          : "Noch keine Rueckfragen";
+          : "Noch keine Rückfragen";
         const weightText = Number.isFinite(entry.weight) && entry.weight ? `${entry.weight}%` : "-";
 
         return `
@@ -817,7 +817,7 @@
                     ${entry.category ? `<span class="pill">${escapeHtml(entry.category)}</span>` : ""}
                   </div>
                   <div class="task-meta">
-                    <span>Rueckgabe: ${returnText}</span>
+                    <span>Rückgabe: ${returnText}</span>
                     <span>Gewichtung: ${weightText}</span>
                   </div>
                 </div>
@@ -829,7 +829,7 @@
               <div class="return-insights">
                 <span class="return-status-pill ${status.className}">${status.label}</span>
                 <span>${stats.totalCount} Nachricht${stats.totalCount === 1 ? "" : "en"}</span>
-                <span>Letzte Aktivitaet: ${activityText}</span>
+                <span>Letzte Aktivität: ${activityText}</span>
               </div>
               ${entry.note ? `<div class="nav-note request-note">${escapeHtml(entry.note)}</div>` : ""}
             </div>

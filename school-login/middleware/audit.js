@@ -22,7 +22,7 @@ const SUMMARY_LABELS = {
   profile_name: "Profil",
   scoring_mode: "Bewertung",
   absence_mode: "Abwesenheit",
-  student_id: "Schueler",
+  student_id: "Schüler",
   type: "Typ",
   category: "Kategorie",
   weight: "Gewichtung",
@@ -41,7 +41,7 @@ const SUMMARY_LABELS = {
   grade_template_id: "Vorlage",
   id: "ID",
   classId: "Klasse",
-  studentId: "Schueler",
+  studentId: "Schüler",
   profileId: "Profil",
   gradeId: "Note",
   templateId: "Vorlage",
@@ -51,10 +51,10 @@ const SUMMARY_LABELS = {
 const VALUE_LABELS = {
   admin: "Admin",
   teacher: "Lehrer",
-  student: "Schueler",
+  student: "Schüler",
   active: "Aktiv",
   locked: "Gesperrt",
-  deleted: "Geloescht",
+  deleted: "Gelöscht",
   points_or_grade: "Punkte oder Note",
   points_and_grade: "Punkte und Note",
   points_only: "Nur Punkte",
@@ -66,10 +66,10 @@ const VALUE_LABELS = {
   Wiederholung: "Wiederholung",
   Mitarbeit: "Mitarbeit",
   Projekt: "Projekt",
-  Hausuebung: "Hausuebung",
+  Hausuebung: "Hausübung",
   Hausaufgabe: "Hausaufgabe",
-  Praesentation: "Praesentation",
-  Wunschpruefung: "Wunschpruefung",
+  Praesentation: "Präsentation",
+  Wunschpruefung: "Wunschprüfung",
   Benutzerdefiniert: "Benutzerdefiniert",
   plus: "+",
   plus_tilde: "+/-",
@@ -158,7 +158,7 @@ function formatSummaryValue(key, value) {
   if (value == null || value === "") return null;
 
   if (Array.isArray(value)) {
-    return value.length ? `${value.length} Eintraege` : null;
+    return value.length ? `${value.length} Einträge` : null;
   }
 
   if (typeof value === "boolean") {
@@ -235,11 +235,11 @@ function buildAuditDescription(req, routePath) {
   }
   if (/^\/admin\/users\/[^/]+\/reset$/i.test(routePath)) {
     return body.useInitial === "1"
-      ? "Passwort wurde auf Initial-Passwort zurueckgesetzt"
-      : "Passwort wurde geaendert";
+      ? "Passwort wurde auf Initial-Passwort zurückgesetzt"
+      : "Passwort wurde geändert";
   }
   if (/^\/admin\/users\/[^/]+\/delete$/i.test(routePath)) {
-    return withSummary("Benutzer wurde geloescht", buildSummaryFromSource(params, ["id"]));
+    return withSummary("Benutzer wurde gelöscht", buildSummaryFromSource(params, ["id"]));
   }
   if (/^\/admin\/classes$/i.test(routePath) || /^\/teacher\/create-class$/i.test(routePath)) {
     return withSummary("Klasse wurde erstellt", buildSummaryFromSource(body, ["name", "subject"]));
@@ -251,14 +251,14 @@ function buildAuditDescription(req, routePath) {
     );
   }
   if (/^\/admin\/classes\/[^/]+\/delete$/i.test(routePath) || /^\/teacher\/delete-class\/[^/]+$/i.test(routePath)) {
-    return withSummary("Klasse wurde geloescht", buildSummaryFromSource(params, ["id"]));
+    return withSummary("Klasse wurde gelöscht", buildSummaryFromSource(params, ["id"]));
   }
   if (/^\/admin\/classes\/[^/]+\/students\/add$/i.test(routePath) || /^\/teacher\/add-student\/[^/]+$/i.test(routePath)) {
-    return withSummary("Schueler wurde hinzugefuegt", buildSummaryFromSource(body, ["name", "email"]));
+    return withSummary("Schüler wurde hinzugefügt", buildSummaryFromSource(body, ["name", "email"]));
   }
   if (/^\/admin\/classes\/[^/]+\/students\/add-bulk$/i.test(routePath)) {
     return withSummary(
-      "Schueler wurden gesammelt hinzugefuegt",
+      "Schüler wurden gesammelt hinzugefügt",
       buildSummaryFromSource(body, ["bulkEmails"])
     );
   }
@@ -267,7 +267,7 @@ function buildAuditDescription(req, routePath) {
     /^\/teacher\/delete-student\/[^/]+\/[^/]+$/i.test(routePath)
   ) {
     return withSummary(
-      "Schueler wurde entfernt",
+      "Schüler wurde entfernt",
       buildSummaryFromSource(params, ["classId", "studentId"])
     );
   }
@@ -284,7 +284,7 @@ function buildAuditDescription(req, routePath) {
     return withSummary("Benotungsprofil wurde geloescht", buildSummaryFromSource(params, ["profileId"]));
   }
   if (/^\/teacher\/students\/[^/]+\/messages\/[^/]+\/reply$/i.test(routePath)) {
-    return withSummary("Antwort auf Schuelernachricht wurde gesendet", buildSummaryFromSource(body, ["reply"]));
+    return withSummary("Antwort auf Schülernachricht wurde gesendet", buildSummaryFromSource(body, ["reply"]));
   }
   if (/^\/teacher\/grades\/[^/]+\/participation$/i.test(routePath)) {
     return withSummary(
@@ -294,12 +294,12 @@ function buildAuditDescription(req, routePath) {
   }
   if (/^\/teacher\/delete-participation\/[^/]+\/[^/]+\/[^/]+$/i.test(routePath)) {
     return withSummary(
-      "Mitarbeitsbewertung wurde geloescht",
+      "Mitarbeitsbewertung wurde gelöscht",
       buildSummaryFromSource(params, ["classId", "studentId", "markId"])
     );
   }
   if (/^\/teacher\/delete-grade\/[^/]+\/[^/]+$/i.test(routePath)) {
-    return withSummary("Note wurde geloescht", buildSummaryFromSource(params, ["classId", "gradeId"]));
+    return withSummary("Note wurde gelöscht", buildSummaryFromSource(params, ["classId", "gradeId"]));
   }
   if (/^\/teacher\/delete-grade-attachment\/[^/]+\/[^/]+$/i.test(routePath)) {
     return withSummary(
@@ -314,19 +314,19 @@ function buildAuditDescription(req, routePath) {
   }
   if (/^\/teacher\/create-template\/[^/]+$/i.test(routePath)) {
     return withSummary(
-      "Pruefungsvorlage wurde erstellt",
+      "Prüfungsvorlage wurde erstellt",
       buildSummaryFromSource(body, ["name", "category", "weight", "max_points", "date"])
     );
   }
   if (/^\/teacher\/edit-template\/[^/]+\/[^/]+$/i.test(routePath)) {
     return withSummary(
-      "Pruefungsvorlage wurde bearbeitet",
+      "Prüfungsvorlage wurde bearbeitet",
       buildSummaryFromSource(body, ["name", "category", "weight", "max_points", "date"])
     );
   }
   if (/^\/teacher\/delete-template\/[^/]+\/[^/]+$/i.test(routePath)) {
     return withSummary(
-      "Pruefungsvorlage wurde geloescht",
+      "Prüfungsvorlage wurde gelöscht",
       buildSummaryFromSource(params, ["classId", "templateId"])
     );
   }
@@ -338,15 +338,15 @@ function buildAuditDescription(req, routePath) {
   }
   if (/^\/teacher\/delete-special-assessment\/[^/]+\/[^/]+$/i.test(routePath)) {
     return withSummary(
-      "Sonderleistung wurde geloescht",
+      "Sonderleistung wurde gelöscht",
       buildSummaryFromSource(params, ["classId", "assessmentId"])
     );
   }
   if (/^\/student\/returns\/[^/]+\/message$/i.test(routePath)) {
-    return withSummary("Nachricht zur Rueckgabe wurde gesendet", buildSummaryFromSource(body, ["message"]));
+    return withSummary("Nachricht zur Rückgabe wurde gesendet", buildSummaryFromSource(body, ["message"]));
   }
   if (/^\/student\/returns\/[^/]+\/messages\/seen$/i.test(routePath)) {
-    return withSummary("Rueckgabe-Nachrichten wurden als gelesen markiert", buildSummaryFromSource(params, ["gradeId"]));
+    return withSummary("Rückgabe-Nachrichten wurden als gelesen markiert", buildSummaryFromSource(params, ["gradeId"]));
   }
   if (/^\/student\/notifications\/[^/]+\/read$/i.test(routePath)) {
     return withSummary("Benachrichtigung wurde als gelesen markiert", buildSummaryFromSource(params, ["id"]));
@@ -354,12 +354,12 @@ function buildAuditDescription(req, routePath) {
 
   const fallbackSummary = buildFallbackSummary(body);
   if (/delete|remove/i.test(routePath)) {
-    return withSummary("Eintrag wurde geloescht", fallbackSummary);
+    return withSummary("Eintrag wurde gelöscht", fallbackSummary);
   }
   if (/create|add|save/i.test(routePath)) {
     return withSummary("Eintrag wurde gespeichert", fallbackSummary);
   }
-  return withSummary("Eintrag wurde geaendert", fallbackSummary);
+  return withSummary("Eintrag wurde geändert", fallbackSummary);
 }
 
 function createAuditLogMiddleware() {
