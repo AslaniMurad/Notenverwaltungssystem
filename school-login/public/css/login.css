@@ -195,6 +195,58 @@ body.page-force-password {
   border-color: #003a99;
 }
 
+.btn-login-sso {
+  display: block;
+  width: 100%;
+  margin-top: 12px;
+  padding: 12px 16px;
+  border-radius: 8px;
+  border: 1px solid #0f172a;
+  background: #0f172a;
+  color: #fff;
+  font-size: 15px;
+  font-weight: 700;
+  text-align: center;
+  text-decoration: none;
+  transition: background-color 0.2s ease, border-color 0.2s ease;
+  min-height: 44px;
+}
+
+.btn-login-sso:hover {
+  background: #1e293b;
+  border-color: #1e293b;
+}
+
+.login-sso-note {
+  margin: 10px 0 0;
+  color: var(--login-muted);
+  font-size: 12px;
+  text-align: center;
+}
+
+.login-sso-separator {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 18px 0 8px;
+  color: var(--login-muted);
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+.login-sso-separator::before,
+.login-sso-separator::after {
+  content: "";
+  flex: 1 1 auto;
+  height: 1px;
+  background: #dbe3f1;
+}
+
+.login-mock-form + .login-mock-form {
+  margin-top: 14px;
+}
+
 .btn-login-back {
   flex: 0 0 auto;
   padding: 12px 18px;

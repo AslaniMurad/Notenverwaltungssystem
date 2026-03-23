@@ -9,7 +9,16 @@ const { db, verifyPassword, ready, hashPassword, pool, isFakeDb } = require("./d
 const { requireAuth } = require("./middleware/auth");
 const { detectDevice } = require("./middleware/deviceDetection");
 const { buildSessionStore } = require("./sessionStore");
+const { getAsync } = require("./utils/dbAsync");
 const { getPasswordValidationError } = require("./utils/password");
+const {
+  beginSsoAuthorization,
+  buildSsoLogoutUrl,
+  completeSsoAuthorization,
+  createMockOidcRouter,
+  getSsoLoginViewModel,
+  getSsoSettings
+} = require("./services/ssoService");
 
 const adminRouter = require("./routes/admin");
 const assignmentRouter = require("./routes/assignmentRoutes");
@@ -130,7 +139,8 @@ function renderLogin(res, req, options = {}) {
     csrfToken: req.csrfToken(),
     errorType,
     errorMessage,
-    email
+    email,
+    sso: getSsoLoginViewModel(req)
   });
 }
 
@@ -154,6 +164,7 @@ app.use(
 
 // --- CSRF ---
 const multipartAllowList = [/^\/teacher\/add-grade\/\d+\/\d+$/];
+const csrfBypassList = [/^\/dev\/mock-oidc\/token$/];
 const csrfProtection = csrf({
   value: (req) =>
     (req.body && req.body._csrf) ||
@@ -172,6 +183,9 @@ app.use((req, res, next) => {
     }
   }
   if (req.is("multipart/form-data")) {
+    return next();
+  }
+  if (csrfBypassList.some((entry) => entry.test(req.path))) {
     return next();
   }
   return csrfProtection(req, res, next);
@@ -197,6 +211,87 @@ function getRedirectForRole(role) {
   return redirectMap[role] || "/";
 }
 
+function buildSessionUser(user, options = {}) {
+  const authMethod = options.authMethod || "local";
+  return {
+    id: user.id,
+    email: user.email,
+    role: user.role,
+    status: user.status,
+    must_change_password: authMethod === "sso" ? false : Boolean(user.must_change_password),
+    auth_method: authMethod,
+    sso_provider: authMethod === "sso" ? options.providerKey || null : null
+  };
+}
+
+function persistLoginMetadata(userId, authMethod, callback) {
+  db.run("UPDATE users SET last_login = current_timestamp WHERE id = ?", [userId], () => {
+    if (authMethod !== "sso") return callback();
+    db.run("UPDATE users SET last_sso_login = current_timestamp WHERE id = ?", [userId], () => callback());
+  });
+}
+
+function determineRedirectTarget(sessionUser, options = {}) {
+  if (options.returnTo && options.returnTo.startsWith("/")) {
+    return options.returnTo;
+  }
+  return sessionUser.must_change_password
+    ? "/force-password-change"
+    : getRedirectForRole(sessionUser.role);
+}
+
+function logTeacherAssignmentsIfNeeded(user) {
+  return new Promise((resolve) => {
+    if (!user || user.role !== "teacher") return resolve();
+    db.get(
+      "SELECT COUNT(*) AS count FROM class_subject_teacher WHERE teacher_id = ?",
+      [user.id],
+      (assignmentErr, assignmentRow) => {
+        if (assignmentErr) {
+          console.error("Assignment count check failed:", assignmentErr);
+          console.log("Assignments found: 0");
+        } else {
+          console.log(`Assignments found: ${Number(assignmentRow?.count || 0)}`);
+        }
+        resolve();
+      }
+    );
+  });
+}
+
+function establishLoginSession(req, user, options = {}) {
+  return new Promise((resolve, reject) => {
+    req.session.regenerate((regenErr) => {
+      if (regenErr) return reject(regenErr);
+
+      const sessionUser = buildSessionUser(user, options);
+      req.session.user = sessionUser;
+
+      if (options.authMethod === "sso") {
+        req.session.sso = {
+          provider: options.providerKey || null,
+          idToken: options.idToken || null,
+          logoutUrl: options.logoutUrl || null
+        };
+      } else {
+        delete req.session.sso;
+      }
+
+      if (options.loginKey) {
+        resetLoginAttempts(options.loginKey);
+      }
+
+      persistLoginMetadata(user.id, options.authMethod, () => {
+        const redirectTarget = determineRedirectTarget(sessionUser, options);
+        req.session.save((saveErr) => {
+          if (saveErr) return reject(saveErr);
+          resolve(redirectTarget);
+        });
+      });
+    });
+  });
+}
+
 app.use((req, res, next) => {
   const user = req.session.user;
   if (!user || !user.must_change_password) return next();
@@ -206,16 +301,73 @@ app.use((req, res, next) => {
   return res.redirect("/force-password-change");
 });
 
+app.use("/dev/mock-oidc", createMockOidcRouter());
+
 // --- Startseite (nach Login) ---
 app.get("/", requireAuth, (req, res) => {
-  const { email, role } = req.session.user;
-  res.render("dashboard", { email, role, csrfToken: req.csrfToken() });
+  return res.redirect(getRedirectForRole(req.session.user.role));
 });
 
 // --- Login Seite ---
 app.get("/login", (req, res) => {
-  if (req.session.user) return res.redirect("/");
+  if (req.session.user) return res.redirect(getRedirectForRole(req.session.user.role));
   renderLogin(res, req);
+});
+
+app.get("/auth/sso/start", async (req, res, next) => {
+  if (req.session.user) return res.redirect("/");
+
+  try {
+    const redirectUrl = await beginSsoAuthorization(req);
+    return res.redirect(redirectUrl);
+  } catch (err) {
+    if (err?.exposeToLogin) {
+      return renderLogin(res, req, {
+        status: 400,
+        errorType: "invalid",
+        errorMessage: err.message
+      });
+    }
+    return next(err);
+  }
+});
+
+app.get("/auth/sso/callback", async (req, res, next) => {
+  if (req.query?.error) {
+    const providerMessage = String(
+      req.query.error_description || req.query.error || "SSO-Anmeldung fehlgeschlagen."
+    );
+    return renderLogin(res, req, {
+      status: 401,
+      errorType: "invalid",
+      errorMessage: providerMessage
+    });
+  }
+
+  try {
+    const ssoResult = await completeSsoAuthorization(req);
+    await logTeacherAssignmentsIfNeeded(ssoResult.user);
+    const redirectTarget = await establishLoginSession(req, ssoResult.user, {
+      authMethod: "sso",
+      providerKey: getSsoSettings(req).providerKey,
+      idToken: ssoResult.idToken,
+      logoutUrl: ssoResult.logoutUrl,
+      returnTo: ssoResult.returnTo
+    });
+    return res.redirect(redirectTarget);
+  } catch (err) {
+    if (req.session?.oidc) {
+      delete req.session.oidc;
+    }
+    if (err?.exposeToLogin) {
+      return renderLogin(res, req, {
+        status: 401,
+        errorType: "invalid",
+        errorMessage: err.message
+      });
+    }
+    return next(err);
+  }
 });
 
 // --- Passwortwechsel erzwingen ---
@@ -256,9 +408,20 @@ app.post("/force-password-change", requireAuth, (req, res, next) => {
 });
 
 // --- Login POST ---
-app.post("/login", (req, res, next) => {
+app.post("/login", async (req, res, next) => {
   const { email, password } = req.body || {};
   const loginKey = buildLoginKey(req, email);
+  const ssoSettings = getSsoSettings(req);
+
+  if (!ssoSettings.allowLocalLogin) {
+    return renderLogin(res, req, {
+      status: 400,
+      errorType: "invalid",
+      errorMessage: `Lokaler Login ist deaktiviert. Bitte ${ssoSettings.displayName} verwenden.`,
+      email
+    });
+  }
+
   if (isLoginRateLimited(loginKey)) {
     return renderLogin(res, req, {
       status: 429,
@@ -277,84 +440,60 @@ app.post("/login", (req, res, next) => {
     });
   }
 
-  db.get(
-    "SELECT id, email, password_hash, role, status, must_change_password FROM users WHERE email = ?",
-    [email],
-    (err, user) => {
-      if (err) {
-        return res.status(500).render("error", {
-          message: "DB-Fehler.",
-          status: 500,
-          backUrl: "/login"
-        });
-      }
-      if (!user || !verifyPassword(user.password_hash, password)) {
-        recordLoginFailure(loginKey);
-        return renderLogin(res, req, {
-          status: 401,
-          errorType: "invalid",
-          errorMessage: "Login fehlgeschlagen.",
-          email
-        });
-      }
-      if (user.status !== "active") {
-        recordLoginFailure(loginKey);
-        return renderLogin(res, req, {
-          status: 401,
-          errorType: "invalid",
-          errorMessage: "Login fehlgeschlagen.",
-          email
-        });
-      }
+  try {
+    const user = await getAsync(
+      "SELECT id, email, password_hash, role, status, must_change_password, local_login_enabled FROM users WHERE email = ?",
+      [email]
+    );
 
-      const completeLogin = () => {
-        req.session.regenerate((regenErr) => {
-          if (regenErr) return next(regenErr);
-
-          req.session.user = {
-            id: user.id,
-            email: user.email,
-            role: user.role,
-            status: user.status,
-            must_change_password: Boolean(user.must_change_password)
-          };
-
-          resetLoginAttempts(loginKey);
-          db.run("UPDATE users SET last_login = current_timestamp WHERE id = ?", [user.id], () => {});
-          const redirectTarget = user.must_change_password
-            ? "/force-password-change"
-            : getRedirectForRole(user.role);
-          req.session.save((saveErr) => {
-            if (saveErr) return next(saveErr);
-            res.redirect(redirectTarget);
-          });
-        });
-      };
-
-      if (user.role === "teacher") {
-        return db.get(
-          "SELECT COUNT(*) AS count FROM class_subject_teacher WHERE teacher_id = ?",
-          [user.id],
-          (assignmentErr, assignmentRow) => {
-            if (assignmentErr) {
-              console.error("Assignment count check failed:", assignmentErr);
-              console.log("Assignments found: 0");
-            } else {
-              console.log(`Assignments found: ${Number(assignmentRow?.count || 0)}`);
-            }
-            completeLogin();
-          }
-        );
-      }
-
-      completeLogin();
+    if (!user || !verifyPassword(user.password_hash, password)) {
+      recordLoginFailure(loginKey);
+      return renderLogin(res, req, {
+        status: 401,
+        errorType: "invalid",
+        errorMessage: "Login fehlgeschlagen.",
+        email
+      });
     }
-  );
+    if (user.local_login_enabled === false || user.local_login_enabled === 0) {
+      recordLoginFailure(loginKey);
+      return renderLogin(res, req, {
+        status: 401,
+        errorType: "invalid",
+        errorMessage: `Fuer dieses Konto ist nur ${ssoSettings.displayName}-SSO erlaubt.`,
+        email
+      });
+    }
+    if (user.status !== "active") {
+      recordLoginFailure(loginKey);
+      return renderLogin(res, req, {
+        status: 401,
+        errorType: "invalid",
+        errorMessage: "Login fehlgeschlagen.",
+        email
+      });
+    }
+
+    await logTeacherAssignmentsIfNeeded(user);
+    const redirectTarget = await establishLoginSession(req, user, {
+      authMethod: "local",
+      loginKey
+    });
+    return res.redirect(redirectTarget);
+  } catch (err) {
+    console.error("DB error during login:", err);
+    return res.status(500).render("error", {
+      message: "DB-Fehler.",
+      status: 500,
+      backUrl: "/login"
+    });
+  }
 });
 
 // --- Logout ---
 app.post("/logout", (req, res) => {
-  req.session.destroy(() => res.redirect("/login"));
+  const logoutUrl = buildSsoLogoutUrl(req) || "/login";
+  req.session.destroy(() => res.redirect(logoutUrl));
 });
 
 // --- Router Mounts ---

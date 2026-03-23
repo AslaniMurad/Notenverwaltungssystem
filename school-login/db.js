@@ -140,7 +140,13 @@ function createFakeDb() {
             role: resolvedRole,
             status: resolvedStatus,
             created_at: new Date().toISOString(),
-            must_change_password: must_change_password ? 1 : 0
+            must_change_password: must_change_password ? 1 : 0,
+            auth_provider: null,
+            auth_subject: null,
+            email_verified: false,
+            local_login_enabled: true,
+            last_login: null,
+            last_sso_login: null
           };
           users.push(newUser);
           lastID = newUser.id;
@@ -159,6 +165,43 @@ function createFakeDb() {
         if (user) {
           user.password_hash = password_hash;
           user.must_change_password = must_change_password;
+        }
+      } else if (/UPDATE users SET auth_provider = \?, auth_subject = \?, email_verified = \? WHERE id = \?/i.test(sql)) {
+        const [auth_provider, auth_subject, email_verified, id] = params;
+        const user = users.find((u) => u.id === Number(id));
+        if (user) {
+          user.auth_provider = auth_provider || null;
+          user.auth_subject = auth_subject || null;
+          user.email_verified = Boolean(email_verified);
+        }
+      } else if (/UPDATE users SET auth_provider = \?, auth_subject = \?, email_verified = \?, local_login_enabled = \?, last_sso_login = current_timestamp WHERE id = \?/i.test(sql)) {
+        const [auth_provider, auth_subject, email_verified, local_login_enabled, id] = params;
+        const user = users.find((u) => u.id === Number(id));
+        if (user) {
+          user.auth_provider = auth_provider || null;
+          user.auth_subject = auth_subject || null;
+          user.email_verified = Boolean(email_verified);
+          user.local_login_enabled = Boolean(local_login_enabled);
+          user.last_sso_login = new Date().toISOString();
+        }
+      } else if (/UPDATE users SET email_verified = \?, last_sso_login = current_timestamp WHERE id = \?/i.test(sql)) {
+        const [email_verified, id] = params;
+        const user = users.find((u) => u.id === Number(id));
+        if (user) {
+          user.email_verified = Boolean(email_verified);
+          user.last_sso_login = new Date().toISOString();
+        }
+      } else if (/UPDATE users SET last_login = current_timestamp WHERE id = \?/i.test(sql)) {
+        const [id] = params;
+        const user = users.find((u) => u.id === Number(id));
+        if (user) {
+          user.last_login = new Date().toISOString();
+        }
+      } else if (/UPDATE users SET last_sso_login = current_timestamp WHERE id = \?/i.test(sql)) {
+        const [id] = params;
+        const user = users.find((u) => u.id === Number(id));
+        if (user) {
+          user.last_sso_login = new Date().toISOString();
         }
       } else if (/UPDATE users SET status = 'deleted' WHERE id = \?/i.test(sql)) {
         const [id] = params;
@@ -957,7 +1000,7 @@ function createFakeDb() {
               Number(entry.school_year_id) === Number(school_year_id)
           )
           .sort((a, b) => new Date(b.created_at) - new Date(a.created_at) || b.id - a.id)[0];
-      } else if (/SELECT id, email, password_hash, role, status, must_change_password FROM users WHERE email = \?/i.test(sql)) {
+      } else if (/SELECT id, email, password_hash, role, status, must_change_password, local_login_enabled FROM users WHERE email = \?/i.test(sql)) {
         const [email] = params;
         const user = users.find((u) => u.email === email);
         row = user
@@ -967,7 +1010,42 @@ function createFakeDb() {
               password_hash: user.password_hash,
               role: user.role,
               status: user.status,
-              must_change_password: user.must_change_password || 0
+              must_change_password: user.must_change_password || 0,
+              local_login_enabled: user.local_login_enabled
+            }
+          : undefined;
+      } else if (/SELECT id, email, role, status, must_change_password, auth_provider, auth_subject, local_login_enabled FROM users WHERE auth_provider = \? AND auth_subject = \?/i.test(sql)) {
+        const [auth_provider, auth_subject] = params;
+        const user = users.find(
+          (entry) =>
+            String(entry.auth_provider || "") === String(auth_provider || "") &&
+            String(entry.auth_subject || "") === String(auth_subject || "")
+        );
+        row = user
+          ? {
+              id: user.id,
+              email: user.email,
+              role: user.role,
+              status: user.status,
+              must_change_password: user.must_change_password || 0,
+              auth_provider: user.auth_provider || null,
+              auth_subject: user.auth_subject || null,
+              local_login_enabled: user.local_login_enabled
+            }
+          : undefined;
+      } else if (/SELECT id, email, role, status, must_change_password, auth_provider, auth_subject, local_login_enabled FROM users WHERE email = \?/i.test(sql)) {
+        const [email] = params;
+        const user = users.find((u) => u.email === email);
+        row = user
+          ? {
+              id: user.id,
+              email: user.email,
+              role: user.role,
+              status: user.status,
+              must_change_password: user.must_change_password || 0,
+              auth_provider: user.auth_provider || null,
+              auth_subject: user.auth_subject || null,
+              local_login_enabled: user.local_login_enabled
             }
           : undefined;
       } else if (/SELECT id, role FROM users WHERE email = \?/i.test(sql)) {
@@ -1022,7 +1100,7 @@ function createFakeDb() {
               created_at: classRow.created_at
             }
           : undefined;
-      } else if (/SELECT .*FROM classes\s+WHERE id = \? AND school_year_id = \?/i.test(sql)) {
+      } else if (/SELECT[\s\S]*FROM classes\s+WHERE id = \? AND school_year_id = \?/i.test(sql)) {
         const [id, school_year_id] = params;
         const classRow = classes.find(
           (entry) => entry.id === Number(id) && Number(entry.school_year_id) === Number(school_year_id)
@@ -1761,7 +1839,7 @@ function createFakeDb() {
             };
           })
           .sort((a, b) => (a.class_name || "").localeCompare(b.class_name || ""));
-      } else if (/SELECT id, name, email FROM students WHERE class_id = \?/i.test(sql) && /ORDER BY name/i.test(sql)) {
+      } else if (/SELECT (DISTINCT )?id, name, email FROM students WHERE class_id = \?/i.test(sql) && /ORDER BY name/i.test(sql)) {
         const hasNameFilter = /LOWER\(name\) LIKE LOWER\(\?\)/i.test(sql);
         const hasEmailFilter = /LOWER\(email\) LIKE LOWER\(\?\)/i.test(sql);
         let index = 0;
@@ -2442,6 +2520,14 @@ async function initializeDatabase() {
       last_login TIMESTAMPTZ
     )
   `);
+  await pool.query("ALTER TABLE users ADD COLUMN IF NOT EXISTS auth_provider TEXT");
+  await pool.query("ALTER TABLE users ADD COLUMN IF NOT EXISTS auth_subject TEXT");
+  await pool.query("ALTER TABLE users ADD COLUMN IF NOT EXISTS email_verified BOOLEAN NOT NULL DEFAULT FALSE");
+  await pool.query("ALTER TABLE users ADD COLUMN IF NOT EXISTS local_login_enabled BOOLEAN NOT NULL DEFAULT TRUE");
+  await pool.query("ALTER TABLE users ADD COLUMN IF NOT EXISTS last_sso_login TIMESTAMPTZ");
+  await pool.query(
+    "CREATE UNIQUE INDEX IF NOT EXISTS users_auth_identity_idx ON users (auth_provider, auth_subject) WHERE auth_provider IS NOT NULL AND auth_subject IS NOT NULL"
+  );
 
   await pool.query(`
     CREATE TABLE IF NOT EXISTS school_years (

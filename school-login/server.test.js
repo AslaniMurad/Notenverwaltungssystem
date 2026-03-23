@@ -12,6 +12,11 @@ process.env.SEED_DEMO = "true";
 process.env.DEMO_TEACHER_PASS = "teacherDemo123!";
 process.env.DEMO_STUDENT_PASS = "studentDemo123!";
 process.env.USE_FAKE_DB = "true";
+process.env.SSO_ENABLED = "true";
+process.env.SSO_ALLOW_LOCAL_LOGIN = "true";
+process.env.SSO_SIMULATION_ENABLED = "true";
+process.env.SSO_DISPLAY_NAME = "LogoDIDACT";
+process.env.SSO_PROVIDER_KEY = "logodidact";
 
 const app = require("./server");
 const { db } = require("./db");
@@ -209,6 +214,36 @@ async function loginTeacher() {
   return loginResult;
 }
 
+async function loginViaMockSso(mockUserEmail) {
+  const startResponse = await fetchWithCookies("/auth/sso/start", { redirect: "manual" });
+  assert.strictEqual(startResponse.response.status, 302);
+
+  const authorizeUrl = new URL(startResponse.response.headers.get("location"), baseUrl);
+  authorizeUrl.searchParams.set("mock_user", mockUserEmail);
+  const authorizePath = `${authorizeUrl.pathname}${authorizeUrl.search}`;
+
+  const authorizeResponse = await fetchWithCookies(
+    authorizePath,
+    { redirect: "manual" },
+    startResponse.cookies
+  );
+  assert.strictEqual(authorizeResponse.response.status, 302);
+
+  const callbackUrl = new URL(authorizeResponse.response.headers.get("location"), baseUrl);
+  const callbackResponse = await fetchWithCookies(
+    `${callbackUrl.pathname}${callbackUrl.search}`,
+    { redirect: "manual" },
+    authorizeResponse.cookies
+  );
+
+  return {
+    response: callbackResponse.response,
+    body: callbackResponse.body,
+    cookies: callbackResponse.cookies,
+    redirect: callbackResponse.response.headers.get("location")
+  };
+}
+
 test.before(async () => {
   await startServer();
 });
@@ -221,6 +256,30 @@ test("GET /login renders the login form with a CSRF token", async () => {
   const { response, body } = await fetchWithCookies("/login");
   assert.strictEqual(response.status, 200);
   assert.ok(extractCsrfToken(body));
+  assert.match(body, /Mit LogoDIDACT anmelden/);
+});
+
+test("mock LogoDIDACT SSO logs in the teacher through the full OIDC flow", async () => {
+  const ssoResult = await loginViaMockSso("teacher@example.com");
+  assert.strictEqual(ssoResult.response.status, 302);
+  assert.strictEqual(ssoResult.redirect, "/teacher");
+
+  const teacherDashboard = await fetchWithCookies("/teacher", {}, ssoResult.cookies);
+  assert.strictEqual(teacherDashboard.response.status, 200);
+  assert.match(teacherDashboard.body, /teacher@example\.com/);
+});
+
+test("root redirects authenticated users to their role home", async () => {
+  const loginResult = await loginViaMockSso("teacher@example.com");
+  assert.strictEqual(loginResult.redirect, "/teacher");
+
+  const rootResponse = await fetchWithCookies("/", { redirect: "manual" }, loginResult.cookies);
+  assert.strictEqual(rootResponse.response.status, 302);
+  assert.strictEqual(rootResponse.response.headers.get("location"), "/teacher");
+
+  const loginPageResponse = await fetchWithCookies("/login", { redirect: "manual" }, loginResult.cookies);
+  assert.strictEqual(loginPageResponse.response.status, 302);
+  assert.strictEqual(loginPageResponse.response.headers.get("location"), "/teacher");
 });
 
 test("admin can log in with seeded credentials", async () => {
@@ -241,7 +300,11 @@ test("student can view grades and profile after login", async () => {
   const loginResult = await loginStudent();
   assert.strictEqual(loginResult.redirect, "/student");
 
-  const gradesResponse = await fetchWithCookies("/student/grades", {}, loginResult.cookies);
+  const gradesResponse = await fetchWithCookies(
+    "/student/grades",
+    { headers: { Accept: "application/json" } },
+    loginResult.cookies
+  );
   assert.strictEqual(gradesResponse.response.status, 200);
   const gradesData = JSON.parse(gradesResponse.body);
   assert.ok(Array.isArray(gradesData.grades));

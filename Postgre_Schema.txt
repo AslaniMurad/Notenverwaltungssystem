@@ -7,9 +7,18 @@ CREATE TABLE IF NOT EXISTS users (
   role TEXT NOT NULL CHECK (role IN ('admin','teacher','student')),
   status TEXT NOT NULL DEFAULT 'active' CHECK (status IN ('active','locked','deleted')),
   must_change_password BOOLEAN NOT NULL DEFAULT FALSE,
+  auth_provider TEXT,
+  auth_subject TEXT,
+  email_verified BOOLEAN NOT NULL DEFAULT FALSE,
+  local_login_enabled BOOLEAN NOT NULL DEFAULT TRUE,
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-  last_login TIMESTAMPTZ
+  last_login TIMESTAMPTZ,
+  last_sso_login TIMESTAMPTZ
 );
+
+CREATE UNIQUE INDEX IF NOT EXISTS users_auth_identity_idx
+  ON users (auth_provider, auth_subject)
+  WHERE auth_provider IS NOT NULL AND auth_subject IS NOT NULL;
 
 CREATE TABLE IF NOT EXISTS classes (
   id SERIAL PRIMARY KEY,

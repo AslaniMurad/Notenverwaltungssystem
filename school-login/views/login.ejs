@@ -3,6 +3,9 @@
   const _errorMessage = typeof errorMessage !== 'undefined' ? errorMessage : null;
   const _csrfToken = typeof csrfToken !== 'undefined' ? csrfToken : '';
   const _email = typeof email !== 'undefined' ? email : '';
+  const _sso = typeof sso !== 'undefined'
+    ? sso
+    : { enabled: false, allowLocalLogin: true, displayName: 'LogoDIDACT', startPath: '/auth/sso/start' };
 
   const page = {
     title: 'Login | Notenverwaltungssystem',
@@ -24,7 +27,13 @@
         <hr class="login-separator">
 
         <h1 class="login-welcome-title">Willkommen</h1>
-        <p class="login-subtitle">Melde dich mit deinen Schulzugangsdaten an</p>
+        <p class="login-subtitle">
+          <% if (_sso.enabled && !_sso.allowLocalLogin) { %>
+            Melde dich mit deinem <%= _sso.displayName %>-Konto an
+          <% } else { %>
+            Melde dich mit deinen Schulzugangsdaten an
+          <% } %>
+        </p>
         <p class="login-notice">
           Hinweis (freiwillig, in Anlehnung an &sect; 25 MedienG):
           Diese Website ist ein zeitlich befristetes Schulprojekt zu Demonstrationszwecken
@@ -43,22 +52,35 @@
           </div>
         <% } %>
 
-        <form method="POST" action="/login">
-          <input type="hidden" name="_csrf" value="<%= _csrfToken %>">
+        <% if (_sso.enabled) { %>
+          <a class="btn-login-sso" href="<%= _sso.startPath %>">Mit <%= _sso.displayName %> anmelden</a>
+          <p class="login-sso-note">
+            Der Single-Sign-On-Login verwendet dein zentrales Schulkonto.
+          </p>
+          <% if (_sso.allowLocalLogin) { %>
+            <div class="login-sso-separator" aria-hidden="true">
+              <span>oder</span>
+            </div>
+          <% } %>
+        <% } %>
 
-          <label class="login-label" for="email">E-Mail-Adresse</label>
-          <input class="login-input" id="email" name="email" type="email" placeholder="vorname.nachname@htlwy.at" required value="<%= _email %>">
+        <% if (_sso.allowLocalLogin) { %>
+          <form method="POST" action="/login">
+            <input type="hidden" name="_csrf" value="<%= _csrfToken %>">
 
-          <label class="login-label" for="password">Passwort</label>
-          <input class="login-input" id="password" name="password" type="password" placeholder="Dein Passwort" required>
+            <label class="login-label" for="email">E-Mail-Adresse</label>
+            <input class="login-input" id="email" name="email" type="email" placeholder="vorname.nachname@htlwy.at" required value="<%= _email %>">
 
-          <div class="login-hint-row">
-            <!-- TODO: Add a remeber me functionality -->
-            
-          </div>
+            <label class="login-label" for="password">Passwort</label>
+            <input class="login-input" id="password" name="password" type="password" placeholder="Dein Passwort" required>
 
-          <button class="btn-login-submit" type="submit">Login</button>
-        </form>
+            <div class="login-hint-row">
+              <!-- TODO: Add a remember me functionality -->
+            </div>
+
+            <button class="btn-login-submit" type="submit">Login</button>
+          </form>
+        <% } %>
 
         <div class="login-foot">
           <div class="login-foot-item">

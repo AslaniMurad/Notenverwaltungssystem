@@ -1,0 +1,53 @@
+<%
+  const _users = Array.isArray(users) ? users : [];
+  const _originalParams = originalParams || {};
+  const _issuer = typeof issuer !== 'undefined' ? issuer : '';
+  const _displayName = typeof displayName !== 'undefined' ? displayName : 'LogoDIDACT';
+
+  const page = {
+    title: `Mock ${_displayName} Login | Notenverwaltungssystem`,
+    styles: ['/css/login.css'],
+    scripts: ['/js/app.js'],
+    bodyClass: 'page-login',
+    hideHeader: true,
+    hideFooter: true,
+    content: function () { %>
+    <div class="login-card card">
+      <div class="login-brand">
+        <div>
+          <div class="login-eyebrow">Lokale Simulation</div>
+          <div class="login-title-inline">Mock <%= _displayName %> Login</div>
+        </div>
+      </div>
+
+      <hr class="login-separator">
+
+      <h1 class="login-welcome-title">Testbenutzer auswaehlen</h1>
+      <p class="login-subtitle">
+        Diese Seite simuliert den externen OIDC-Provider, damit du den kompletten SSO-Flow lokal testen kannst.
+      </p>
+      <p class="login-notice">
+        Issuer: <code><%= _issuer %></code>
+      </p>
+
+      <% _users.forEach(function (user) { %>
+        <form method="GET" action="/dev/mock-oidc/authorize" class="login-mock-form">
+          <% Object.keys(_originalParams).forEach(function (key) { %>
+            <input type="hidden" name="<%= key %>" value="<%= _originalParams[key] %>">
+          <% }) %>
+          <input type="hidden" name="mock_user" value="<%= user.email %>">
+          <button class="btn-login-sso" type="submit"><%= user.label %> anmelden</button>
+          <p class="login-sso-note"><%= user.email %> · Rolle <%= user.role %></p>
+        </form>
+      <% }) %>
+
+      <div class="login-foot">
+        <div class="login-foot-item">
+          <span class="login-foot-icon">ID</span>
+          <span>Nutze diese Seite nur lokal oder in einer Testumgebung.</span>
+        </div>
+      </div>
+    </div>
+<% } };
+%>
+<%- include('layout', page) %>

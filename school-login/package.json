@@ -3,7 +3,8 @@
   "version": "1.0.0",
   "main": "index.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "node --test --test-concurrency=1 server.test.js",
+    "migrate:sso": "node migrate_add_sso_columns.js"
   },
   "keywords": [],
   "author": "",
@@ -16,6 +17,7 @@
     "express": "^5.2.1",
     "express-session": "^1.18.2",
     "multer": "^1.4.5-lts.1",
+    "openid-client": "^6.8.2",
     "pg": "^8.16.3"
   }
 }
