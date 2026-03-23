@@ -56,7 +56,16 @@
             <button class="btn" type="submit">Passwort zurücksetzen</button>
           </form>
 
-          <form class="admin-edit-form" method="POST" action="/admin/users/<%= user.id %>/delete" onsubmit="return confirm('Nutzer wirklich löschen (soft-delete)?');">
+          <form
+            class="admin-edit-form"
+            method="POST"
+            action="/admin/users/<%= user.id %>/delete"
+            data-confirm-title="Nutzer loeschen"
+            data-confirm-message="Moechtest du diesen Nutzer wirklich loeschen?"
+            data-confirm-note="Der Nutzer wird per Soft-Delete deaktiviert."
+            data-confirm-action="Loeschen"
+            data-confirm-variant="danger"
+          >
             <input type="hidden" name="_csrf" value="<%= csrfToken %>">
             <button class="btn btn-danger" type="submit">Nutzer löschen</button>
           </form>

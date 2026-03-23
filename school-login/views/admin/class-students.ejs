@@ -55,7 +55,15 @@
                     <strong><%= student.name %></strong>
                     <p class="admin-muted"><%= student.email %></p>
                   </div>
-                  <form method="POST" action="/admin/classes/<%= classData.id %>/students/<%= student.id %>/delete" onsubmit="return confirm('SchÃ¼ler wirklich aus der Klasse entfernen?');">
+                  <form
+                    method="POST"
+                    action="/admin/classes/<%= classData.id %>/students/<%= student.id %>/delete"
+                    data-confirm-title="Schueler entfernen"
+                    data-confirm-message="Moechtest du diesen Schueler wirklich aus der Klasse entfernen?"
+                    data-confirm-note="Die Zuordnung des Schuelers zu dieser Klasse wird entfernt."
+                    data-confirm-action="Entfernen"
+                    data-confirm-variant="danger"
+                  >
                     <input type="hidden" name="_csrf" value="<%= csrfToken %>">
                     <button class="btn btn-danger" type="submit">Entfernen</button>
                   </form>

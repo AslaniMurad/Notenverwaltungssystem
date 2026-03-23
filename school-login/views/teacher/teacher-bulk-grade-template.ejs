@@ -237,7 +237,11 @@
 
         if (!hasAnyValue) {
           event.preventDefault();
-          window.alert('Bitte mindestens eine Bewertung eintragen (Note, Punkte, Abwesend oder Notiz).');
+          window.AppModal.alert({
+            title: 'Bewertung fehlt',
+            message: 'Bitte mindestens eine Bewertung eintragen.',
+            note: 'Trage mindestens Note, Punkte, Abwesend oder eine Notiz ein.'
+          });
           return;
         }
 

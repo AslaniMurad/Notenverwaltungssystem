@@ -94,7 +94,15 @@
                       <button class="btn" type="submit">Passwort reset</button>
                     </form>
 
-                    <form method="POST" action="/admin/users/<%= u.id %>/delete" onsubmit="return confirm('Nutzer wirklich löschen (soft-delete)?');">
+                    <form
+                      method="POST"
+                      action="/admin/users/<%= u.id %>/delete"
+                      data-confirm-title="Nutzer loeschen"
+                      data-confirm-message="Moechtest du diesen Nutzer wirklich loeschen?"
+                      data-confirm-note="Der Nutzer wird per Soft-Delete deaktiviert."
+                      data-confirm-action="Loeschen"
+                      data-confirm-variant="danger"
+                    >
                       <input type="hidden" name="_csrf" value="<%= csrfToken %>">
                       <button class="btn btn-danger" type="submit">Löschen</button>
                     </form>
