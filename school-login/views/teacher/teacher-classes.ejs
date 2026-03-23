@@ -98,7 +98,16 @@
                   </div>
                   <div class="teacher-card-actions">
                     <a class="btn btn-primary" href="/teacher/students/<%= cls.id %>">Schüler verwalten</a>
-                    <form class="inline" method="POST" action="/teacher/delete-class/<%= cls.id %>" onsubmit="return confirm('Klasse wirklich löschen? Alle Schüler werden entfernt.')">
+                    <form
+                      class="inline"
+                      method="POST"
+                      action="/teacher/delete-class/<%= cls.id %>"
+                      data-confirm-title="Klasse loeschen"
+                      data-confirm-message="Moechtest du diese Klasse wirklich loeschen?"
+                      data-confirm-note="Alle Schueler in dieser Klasse werden ebenfalls entfernt."
+                      data-confirm-action="Loeschen"
+                      data-confirm-variant="danger"
+                    >
                       <input type="hidden" name="_csrf" value="<%= csrfToken %>">
                       <button class="btn btn-danger" type="submit">Löschen</button>
                     </form>

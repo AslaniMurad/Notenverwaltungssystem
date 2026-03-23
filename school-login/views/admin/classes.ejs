@@ -54,7 +54,15 @@
                 <div class="admin-row wrap">
                   <a class="btn btn-primary" href="/admin/classes/<%= cls.id %>/students">Schüler</a>
                   <a class="btn btn-secondary" href="/admin/classes/<%= cls.id %>/edit">Bearbeiten</a>
-                  <form method="POST" action="/admin/classes/<%= cls.id %>/delete" onsubmit="return confirm('Klasse und Schüler l&ouml;schen?');">
+                  <form
+                    method="POST"
+                    action="/admin/classes/<%= cls.id %>/delete"
+                    data-confirm-title="Klasse loeschen"
+                    data-confirm-message="Moechtest du diese Klasse wirklich loeschen?"
+                    data-confirm-note="Alle Schuelerzuordnungen in dieser Klasse werden ebenfalls entfernt."
+                    data-confirm-action="Loeschen"
+                    data-confirm-variant="danger"
+                  >
                     <input type="hidden" name="_csrf" value="<%= csrfToken %>">
                     <button class="btn btn-danger" type="submit">Löschen</button>
                   </form>

@@ -198,7 +198,16 @@
 
               <div class="school-year-action-panel">
                 <% if (hasRollover) { %>
-                  <form class="admin-form vertical school-year-confirm-form" method="POST" action="/admin/rollover/execute" onsubmit="return confirm('Schuljahreswechsel wirklich ausfuehren?');">
+                  <form
+                    class="admin-form vertical school-year-confirm-form"
+                    method="POST"
+                    action="/admin/rollover/execute"
+                    data-confirm-title="Schuljahreswechsel"
+                    data-confirm-message="Moechtest du den Schuljahreswechsel wirklich ausfuehren?"
+                    data-confirm-note="Der Wechsel startet sofort und kann nicht automatisch rueckgaengig gemacht werden."
+                    data-confirm-action="Ausfuehren"
+                    data-confirm-variant="danger"
+                  >
                     <input type="hidden" name="_csrf" value="<%= csrfToken %>">
                     <label for="confirmation_text">Zielschuljahr bestaetigen</label>
                     <input

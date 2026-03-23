@@ -693,6 +693,155 @@ html[data-theme="dark"] .login-alert-panel {
   color: var(--text);
 }
 
+body.app-modal-open {
+  overflow: hidden;
+}
+
+.app-modal-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 2147483646;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  background: rgba(15, 23, 42, 0.48);
+  backdrop-filter: blur(8px);
+  opacity: 0;
+  visibility: hidden;
+  transition: opacity 0.18s ease, visibility 0.18s ease;
+}
+
+.app-modal-overlay[hidden] {
+  display: none;
+}
+
+.app-modal-overlay.is-active {
+  opacity: 1;
+  visibility: visible;
+}
+
+.app-modal-card {
+  width: min(100%, 460px);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 24px;
+  box-shadow: 0 28px 70px rgba(15, 23, 42, 0.26);
+  overflow: hidden;
+  transform: translateY(18px) scale(0.98);
+  transition: transform 0.18s ease;
+}
+
+.app-modal-overlay.is-active .app-modal-card {
+  transform: translateY(0) scale(1);
+}
+
+.app-modal-header {
+  padding: 24px 28px 18px;
+  border-bottom: 1px solid var(--border);
+}
+
+.app-modal-title {
+  margin: 0;
+  color: var(--text);
+  font-size: clamp(1.4rem, 2vw, 1.9rem);
+  line-height: 1.15;
+  letter-spacing: -0.03em;
+}
+
+.app-modal-body {
+  display: grid;
+  gap: 14px;
+  padding: 22px 28px 24px;
+}
+
+.app-modal-message,
+.app-modal-note {
+  margin: 0;
+}
+
+.app-modal-message {
+  color: var(--text);
+  font-size: clamp(1rem, 1.2vw, 1.1rem);
+  line-height: 1.45;
+}
+
+.app-modal-note {
+  color: var(--text-muted);
+  font-size: 1rem;
+  line-height: 1.55;
+}
+
+.app-modal-footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 12px;
+  padding: 18px 28px 24px;
+  border-top: 1px solid var(--border);
+  background: linear-gradient(180deg, rgba(148, 163, 184, 0.04), rgba(148, 163, 184, 0.08));
+}
+
+.app-modal-footer .btn.app-modal-button {
+  min-width: 140px;
+  min-height: 52px;
+  border-radius: 14px;
+  font-size: 1rem;
+  font-weight: 800;
+  box-shadow: none;
+}
+
+.app-modal-footer .btn.app-modal-button.btn-secondary {
+  background: var(--surface-2);
+}
+
+.app-modal-footer .btn.app-modal-button.btn-danger {
+  background: var(--danger);
+  color: var(--danger-contrast);
+}
+
+.app-modal-footer .btn.app-modal-button.btn-primary {
+  background: var(--primary);
+  color: var(--primary-contrast);
+}
+
+@media (max-width: 720px) {
+  .app-modal-overlay {
+    padding: 16px;
+  }
+
+  .app-modal-card {
+    border-radius: 20px;
+  }
+
+  .app-modal-header,
+  .app-modal-body,
+  .app-modal-footer {
+    padding-left: 20px;
+    padding-right: 20px;
+  }
+
+  .app-modal-header {
+    padding-top: 20px;
+    padding-bottom: 16px;
+  }
+
+  .app-modal-body {
+    padding-top: 18px;
+    padding-bottom: 20px;
+  }
+
+  .app-modal-footer {
+    flex-direction: column-reverse;
+    padding-top: 16px;
+    padding-bottom: 20px;
+  }
+
+  .app-modal-footer .btn.app-modal-button {
+    width: 100%;
+    min-width: 0;
+  }
+}
+
 body.mobile-view.page-login {
   background: linear-gradient(160deg, var(--bg) 0%, var(--surface-2) 55%, var(--surface-3) 100%) !important;
 }

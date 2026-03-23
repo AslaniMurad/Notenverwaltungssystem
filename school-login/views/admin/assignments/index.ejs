@@ -59,7 +59,15 @@
                       <td>
                         <div class="admin-row wrap">
                           <% assignmentGroup.rows.forEach((row) => { %>
-                            <form method="POST" action="/admin/assignments/delete" onsubmit="return confirm('Zuordnung entfernen?');">
+                            <form
+                              method="POST"
+                              action="/admin/assignments/delete"
+                              data-confirm-title="Zuordnung entfernen"
+                              data-confirm-message="Moechtest du diese Zuordnung wirklich entfernen?"
+                              data-confirm-note="Die Lehrerzuordnung fuer diese Klasse und dieses Fach wird geloescht."
+                              data-confirm-action="Entfernen"
+                              data-confirm-variant="danger"
+                            >
                               <input type="hidden" name="_csrf" value="<%= csrfToken %>">
                               <input type="hidden" name="assignment_id" value="<%= row.id %>">
                               <button class="btn btn-danger btn-sm" type="submit"><%= row.teacher_email %> entfernen</button>
