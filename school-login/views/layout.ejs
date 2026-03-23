@@ -1,10 +1,24 @@
 <!doctype html>
-<html lang="de" class="css-loading" data-theme="light">
+<html
+  lang="de"
+  class="css-loading"
+  data-theme="light"
+  data-consent-cookie="<%= (legal && legal.consentCookieName) || 'nvs_cookie_consent' %>"
+  data-consent-max-age-days="<%= (legal && legal.consentMaxAgeDays) || 180 %>"
+>
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title><%= title || "Notenverwaltungssystem" %></title>
   <%
+    const pageTitle = typeof title !== "undefined" ? title : "Notenverwaltungssystem";
+    const pageStyles = Array.isArray(typeof styles !== "undefined" ? styles : null) ? styles : [];
+    const pageScripts = Array.isArray(typeof scripts !== "undefined" ? scripts : null) ? scripts : [];
+    const pageBodyClass = typeof bodyClass !== "undefined" ? bodyClass : "";
+    const pageHideHeader = typeof hideHeader !== "undefined" ? hideHeader : false;
+    const pageHideFooter = typeof hideFooter !== "undefined" ? hideFooter : false;
+    const pageHeaderTitle = typeof headerTitle !== "undefined" ? headerTitle : pageTitle;
+    const pageHeaderActions =
+      Array.isArray(typeof headerActions !== "undefined" ? headerActions : null) ? headerActions : [];
     const assetVersion = locals.assetVersion || "";
     const withAssetVersion = (assetPath) => {
       if (!assetVersion || typeof assetPath !== "string" || !assetPath.startsWith("/")) {
@@ -14,20 +28,42 @@
       return `${assetPath}${separator}v=${encodeURIComponent(assetVersion)}`;
     };
   %>
+  <title><%= pageTitle %></title>
   <style>
     html.css-loading body { visibility: hidden; }
     html.css-ready body { visibility: visible; }
   </style>
   <script>
     (function () {
-      try {
-        var stored = localStorage.getItem("theme");
-        var valid = stored === "light" || stored === "dark";
-        var system = window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
-        document.documentElement.setAttribute("data-theme", valid ? stored : system);
-      } catch (err) {
-        document.documentElement.setAttribute("data-theme", "light");
+      var root = document.documentElement;
+      var consentCookieName = <%- JSON.stringify((legal && legal.consentCookieName) || "nvs_cookie_consent") %>;
+      function readCookie(name) {
+        var cookies = document.cookie ? document.cookie.split(";") : [];
+        for (var i = 0; i < cookies.length; i += 1) {
+          var entry = cookies[i].trim();
+          if (entry.indexOf(name + "=") === 0) {
+            return decodeURIComponent(entry.slice(name.length + 1));
+          }
+        }
+        return "";
       }
+
+      function resolveSystemTheme() {
+        return window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
+      }
+
+      var theme = resolveSystemTheme();
+      try {
+        if (readCookie(consentCookieName) === "all") {
+          var stored = localStorage.getItem("theme");
+          if (stored === "light" || stored === "dark") {
+            theme = stored;
+          }
+        }
+      } catch (err) {
+        theme = "light";
+      }
+      root.setAttribute("data-theme", theme);
     })();
   </script>
   <noscript>
@@ -35,13 +71,12 @@
       html.css-loading body { visibility: visible; }
     </style>
   </noscript>
-  <!-- Inter font for improved typography -->
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&display=swap" rel="stylesheet">
+  <link rel="icon" type="image/svg+xml" href="<%= withAssetVersion('/favicon.svg') %>">
+  <link rel="shortcut icon" href="<%= withAssetVersion('/favicon.svg') %>">
+  <meta name="theme-color" content="#0F2D5C">
   <link rel="stylesheet" href="<%= withAssetVersion('/css/base.css') %>">
   <link rel="stylesheet" href="<%= withAssetVersion('/css/app-shell.css') %>">
-  <% (styles || []).forEach(function(href){ %>
+  <% pageStyles.forEach(function(href){ %>
     <link rel="stylesheet" href="<%= withAssetVersion(href) %>">
   <% }) %>
   <% if (locals.isMobile) { %>
@@ -92,11 +127,11 @@
     })();
   </script>
 </head>
-<body class="<%= ['app-shell-body', bodyClass, locals.isMobile ? 'mobile-view' : 'desktop-view'].filter(Boolean).join(' ') %>">
+<body class="<%= ['app-shell-body', pageBodyClass, locals.isMobile ? 'mobile-view' : 'desktop-view'].filter(Boolean).join(' ') %>">
   <button id="themeToggle" type="button" aria-label="Dark Mode umschalten" title="Dark Mode umschalten">Theme</button>
 
-  <% if (!hideHeader) { %>
-    <%- include('partials/site-header', { headerTitle: headerTitle || title, headerActions: headerActions || [], isMobile: locals.isMobile }) %>
+  <% if (!pageHideHeader) { %>
+    <%- include('partials/site-header', { headerTitle: pageHeaderTitle, headerActions: pageHeaderActions, isMobile: locals.isMobile }) %>
   <% } %>
 
   <main class="page-shell app-container">
@@ -105,16 +140,17 @@
     <% } %>
   </main>
 
-  <% if (!hideFooter) { %>
-    <%- include('partials/site-footer') %>
-  <% } %>
+  <%- include('partials/site-footer') %>
+
+  <%- include('partials/cookie-banner') %>
 
   <% if (locals.isMobile) { %>
     <script src="<%= withAssetVersion('/js/mobile-nav.js') %>"></script>
     <script src="<%= withAssetVersion('/js/mobile-login.js') %>"></script>
   <% } %>
+  <script src="<%= withAssetVersion('/js/cookie-consent.js') %>"></script>
   <script src="<%= withAssetVersion('/js/theme.js') %>"></script>
-  <% (scripts || []).forEach(function(src){ %>
+  <% pageScripts.forEach(function(src){ %>
     <script src="<%= withAssetVersion(src) %>"></script>
   <% }) %>
 </body>

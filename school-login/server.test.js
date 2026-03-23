@@ -221,6 +221,54 @@ test("GET /login renders the login form with a CSRF token", async () => {
   const { response, body } = await fetchWithCookies("/login");
   assert.strictEqual(response.status, 200);
   assert.ok(extractCsrfToken(body));
+  assert.match(body, /Nutzungsbedingungen/);
+  assert.match(body, /Datenschutz/);
+  assert.match(body, /data-cookie-banner/);
+  assert.match(body, /https:\/\/htlwy\.at/);
+  assert.doesNotMatch(body, /fonts\.googleapis\.com/);
+});
+
+test("legal pages are public and describe terms plus privacy details", async () => {
+  const termsPage = await fetchWithCookies("/nutzungsbedingungen");
+  assert.strictEqual(termsPage.response.status, 200);
+  assert.match(termsPage.body, /Nutzungsbedingungen fuer das Notenverwaltungssystem/);
+  assert.match(termsPage.body, /Datenschutzerklaerung/);
+
+  const privacyPage = await fetchWithCookies("/datenschutz");
+  assert.strictEqual(privacyPage.response.status, 200);
+  assert.match(privacyPage.body, /Datenschutzerklaerung fuer das Notenverwaltungssystem/);
+  assert.match(privacyPage.body, /nvs_cookie_consent/);
+  assert.match(privacyPage.body, /theme/);
+});
+
+test("privacy page remains accessible while password change is required", async () => {
+  const loginPage = await fetchWithCookies("/login");
+  const csrfToken = extractCsrfToken(loginPage.body);
+  assert.ok(csrfToken, "CSRF token missing in login page");
+
+  const params = new URLSearchParams({
+    _csrf: csrfToken,
+    email: process.env.ADMIN_EMAIL,
+    password: process.env.ADMIN_PASS
+  });
+
+  const loginResponse = await fetchWithCookies(
+    "/login",
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/x-www-form-urlencoded" },
+      body: params.toString(),
+      redirect: "manual"
+    },
+    loginPage.cookies
+  );
+
+  assert.strictEqual(loginResponse.response.status, 302);
+  assert.strictEqual(loginResponse.response.headers.get("location"), "/force-password-change");
+
+  const privacyPage = await fetchWithCookies("/datenschutz", {}, loginResponse.cookies);
+  assert.strictEqual(privacyPage.response.status, 200);
+  assert.match(privacyPage.body, /Cookie-Einstellungen/);
 });
 
 test("admin can log in with seeded credentials", async () => {

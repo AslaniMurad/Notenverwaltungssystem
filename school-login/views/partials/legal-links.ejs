@@ -1,0 +1,10 @@
+<%
+  const current = typeof currentPath === "string" ? currentPath : "";
+  const classes = typeof navClass === "string" ? navClass : "legal-links";
+  const isTermsActive = current === "/nutzungsbedingungen" || current === "/terms";
+  const isPrivacyActive = current === "/datenschutz" || current === "/privacy";
+%>
+<nav class="<%= classes %>" aria-label="Rechtliches">
+  <a href="/nutzungsbedingungen" <%= isTermsActive ? 'aria-current="page"' : '' %>>Nutzungsbedingungen</a>
+  <a href="/datenschutz" <%= isPrivacyActive ? 'aria-current="page"' : '' %>>Datenschutz</a>
+</nav>

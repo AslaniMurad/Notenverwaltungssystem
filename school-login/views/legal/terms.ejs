@@ -1,0 +1,118 @@
+<%
+  const page = {
+    title: 'Nutzungsbedingungen | Notenverwaltungssystem',
+    headerTitle: 'Nutzungsbedingungen',
+    headerActions: Array.isArray(headerActions) ? headerActions : [],
+    styles: ['/css/legal.css'],
+    bodyClass: 'page-legal',
+    hideHeader: false,
+    hideFooter: false,
+    content: function () { %>
+    <article class="legal-page">
+      <section class="legal-hero card">
+        <p class="legal-eyebrow">Rechtliches</p>
+        <h1>Nutzungsbedingungen fuer das Notenverwaltungssystem</h1>
+        <p class="legal-lead">
+          Diese Anwendung dient der geschuetzten Verwaltung von Schul-, Klassen- und Leistungsdaten
+          im Rahmen des Projekts <%= legal.siteName %> an der <%= legal.schoolName %>.
+        </p>
+        <p class="legal-meta">Stand: <%= legal.lastUpdated %></p>
+      </section>
+
+      <div class="legal-sections">
+        <section class="legal-section card">
+          <h2>1. Geltungsbereich</h2>
+          <p>
+            Die Nutzungsbedingungen gelten fuer alle Personen, die auf dieses System zugreifen,
+            insbesondere fuer Administratorinnen und Administratoren, Lehrkraefte sowie Schuelerinnen
+            und Schueler mit einem freigegebenen Benutzerkonto.
+          </p>
+        </section>
+
+        <section class="legal-section card">
+          <h2>2. Zugangsberechtigung</h2>
+          <p>
+            Die Nutzung ist nur mit persoenlich zugewiesenen Zugangsdaten erlaubt. Zugangsdaten duerfen
+            nicht an Dritte weitergegeben werden. Bei Verdacht auf Missbrauch ist das Passwort sofort zu
+            aendern und die Schuladministration unverzueglich zu informieren.
+          </p>
+        </section>
+
+        <section class="legal-section card">
+          <h2>3. Zulaessige Nutzung</h2>
+          <ul class="legal-list">
+            <li>Die Anwendung darf nur fuer schulische und projektbezogene Zwecke verwendet werden.</li>
+            <li>Ein Zugriff ist nur auf Daten erlaubt, fuer die eine jeweilige Rolle berechtigt ist.</li>
+            <li>Eintraege, Bewertungen und Nachrichten sind sorgfaeltig und wahrheitsgemaess zu pflegen.</li>
+          </ul>
+        </section>
+
+        <section class="legal-section card">
+          <h2>4. Unzulaessige Nutzung</h2>
+          <ul class="legal-list">
+            <li>Verboten sind unberechtigte Zugriffsversuche, Umgehungen von Sicherheitsmechanismen und automatisierte Angriffe.</li>
+            <li>Ebenso unzulaessig sind Datenmanipulationen, das bewusste Verfaelschen von Noten oder die Nutzung fremder Konten.</li>
+            <li>Dateien, Anhaenge oder Nachrichten mit rechtswidrigen oder schaedlichen Inhalten duerfen nicht hochgeladen oder verbreitet werden.</li>
+          </ul>
+        </section>
+
+        <section class="legal-section card">
+          <h2>5. Datenqualitaet und Verantwortlichkeit</h2>
+          <p>
+            Personen, die Daten in das System eintragen oder freigeben, sind fuer deren sachliche
+            Richtigkeit im jeweiligen Aufgabenbereich verantwortlich. Fehlende oder fehlerhafte Inhalte
+            sind nach Bekanntwerden unverzueglich zu korrigieren.
+          </p>
+        </section>
+
+        <section class="legal-section card">
+          <h2>6. Verfuegbarkeit und Aenderungen</h2>
+          <p>
+            Das System wird mit angemessener Sorgfalt bereitgestellt. Ein Anspruch auf staendige,
+            stoerungsfreie oder unveraenderte Verfuegbarkeit besteht jedoch nicht. Funktionen,
+            Rollenrechte und Inhalte koennen aus organisatorischen, technischen oder sicherheitsrelevanten
+            Gruenden angepasst werden.
+          </p>
+        </section>
+
+        <section class="legal-section card">
+          <h2>7. Sicherheit</h2>
+          <p>
+            Zur Absicherung des Systems koennen Sitzungen, Rollenrechte, Eingaben und sicherheitsrelevante
+            Vorgaenge protokolliert werden. Diese Massnahmen dienen dem Schutz personenbezogener Daten,
+            der Missbrauchspraevention und der Nachvollziehbarkeit administrativer Aenderungen.
+          </p>
+        </section>
+
+        <section class="legal-section card">
+          <h2>8. Haftung</h2>
+          <p>
+            Fuer Schaeden aus missbraeuchlicher Nutzung, vorsetzlicher Manipulation oder einer Nutzung
+            ausserhalb der eingerichteten Berechtigungen haften die verursachenden Personen nach den
+            jeweils anwendbaren schulischen und gesetzlichen Vorgaben. Fuer kurzfristige Ausfaelle,
+            Wartungen oder unvermeidbare technische Stoerungen wird keine Gewaehr fuer unterbrechungsfreie
+            Nutzung uebernommen.
+          </p>
+        </section>
+
+        <section class="legal-section card">
+          <h2>9. Datenschutz</h2>
+          <p>
+            Informationen zur Verarbeitung personenbezogener Daten, zu Cookies und zu den Rechten der
+            betroffenen Personen sind in der <a href="/datenschutz">Datenschutzerklaerung</a> beschrieben.
+          </p>
+        </section>
+
+        <section class="legal-section card">
+          <h2>10. Kontakt</h2>
+          <p>
+            Verantwortlich fuer den organisatorischen Betrieb im Projektkontext ist
+            <strong><%= legal.operatorName %></strong>. Rueckfragen koennen
+            <strong><%= legal.operatorContact %></strong> gestellt werden.
+          </p>
+        </section>
+      </div>
+    </article>
+<% } };
+%>
+<%- include('../layout', page) %>

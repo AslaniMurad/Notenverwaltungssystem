@@ -14,6 +14,7 @@ const { getPasswordValidationError } = require("./utils/password");
 const adminRouter = require("./routes/admin");
 const assignmentRouter = require("./routes/assignmentRoutes");
 const archiveRouter = require("./routes/archiveRoutes");
+const legalRouter = require("./routes/legal");
 const rolloverRouter = require("./routes/rolloverRoutes");
 const studentRouter = require("./routes/student");
 const teacherRouter = require("./routes/teacher");
@@ -21,6 +22,21 @@ const teacherRouter = require("./routes/teacher");
 const app = express();
 const isProduction = process.env.NODE_ENV === "production";
 const assetVersion = process.env.ASSET_VERSION || (isProduction ? "1" : Date.now().toString(36));
+const legalConfig = {
+  siteName: "Notenverwaltungssystem",
+  schoolName: "HTL Waidhofen/Ybbs",
+  schoolUrl: "https://htlwy.at",
+  operatorName: process.env.LEGAL_OPERATOR_NAME || "Projektteam Notenverwaltungssystem",
+  operatorContact:
+    process.env.LEGAL_OPERATOR_CONTACT ||
+    "ueber die betreuende Lehrkraft beziehungsweise die Schuladministration",
+  lastUpdated: process.env.LEGAL_LAST_UPDATED || "23.03.2026",
+  sessionCookieName: "sid",
+  consentCookieName: "nvs_cookie_consent",
+  consentMaxAgeDays: Number(process.env.COOKIE_CONSENT_MAX_AGE_DAYS) || 180
+};
+
+app.locals.legal = legalConfig;
 
 if (isProduction) {
   app.set("trust proxy", 1);
@@ -115,6 +131,8 @@ app.use(
 app.locals.assetVersion = assetVersion;
 app.use((req, res, next) => {
   res.locals.assetVersion = assetVersion;
+  res.locals.legal = legalConfig;
+  res.locals.currentPath = req.path;
   next();
 });
 
@@ -200,7 +218,14 @@ function getRedirectForRole(role) {
 app.use((req, res, next) => {
   const user = req.session.user;
   if (!user || !user.must_change_password) return next();
-  if (req.path === "/force-password-change" || req.path === "/logout") {
+  if (
+    req.path === "/force-password-change" ||
+    req.path === "/logout" ||
+    req.path === "/datenschutz" ||
+    req.path === "/privacy" ||
+    req.path === "/nutzungsbedingungen" ||
+    req.path === "/terms"
+  ) {
     return next();
   }
   return res.redirect("/force-password-change");
@@ -363,6 +388,7 @@ app.use("/admin", assignmentRouter);
 app.use("/admin", rolloverRouter);
 app.use("/teacher", teacherRouter);
 app.use("/student", studentRouter);
+app.use("/", legalRouter);
 app.use("/", archiveRouter);
 
 app.use((req, res) => {

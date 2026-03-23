@@ -1,0 +1,33 @@
+<div
+  class="cookie-banner"
+  data-cookie-banner
+  hidden
+  role="dialog"
+  aria-modal="false"
+  aria-labelledby="cookie-banner-title"
+>
+  <div class="cookie-banner__content">
+    <p class="cookie-banner__eyebrow">Cookies und Browser-Speicher</p>
+    <h2 class="cookie-banner__title" id="cookie-banner-title" tabindex="-1">
+      Nur notwendige Cookies sind standardmaessig aktiv
+    </h2>
+    <p class="cookie-banner__text">
+      Fuer Login, Sicherheit und Session-Verwaltung werden die Cookies
+      <code><%= legal.sessionCookieName %></code> und
+      <code><%= legal.consentCookieName %></code> verwendet.
+      Die Speicherung des Themes im Browser erfolgt nur nach deiner Zustimmung.
+    </p>
+    <p class="cookie-banner__text cookie-banner__text-muted">
+      Analyse-, Marketing- oder Werbe-Cookies werden nicht eingesetzt.
+    </p>
+  </div>
+  <div class="cookie-banner__actions">
+    <button class="btn btn-secondary" type="button" data-cookie-action="necessary">
+      Nur notwendige
+    </button>
+    <button class="btn btn-primary" type="button" data-cookie-action="all">
+      Alle akzeptieren
+    </button>
+  </div>
+  <a class="cookie-banner__link" href="/datenschutz#cookies">Mehr zum Datenschutz</a>
+</div>

@@ -139,8 +139,9 @@ body {
   color: var(--muted);
   border-top: 2px solid var(--border);
   background: var(--bg-gray);
-  margin-top: 48px;
+  margin-top: 0;
   font-size: 13px;
+  flex-shrink: 0;
 }
 
 .site-footer a {
@@ -263,6 +264,11 @@ body {
   gap: 24px;
   padding: 28px 24px;
   background: transparent;
+}
+
+body.app-shell-body .page-shell {
+  flex: 1 0 auto;
+  padding-bottom: 48px;
 }
 
 /* Centering container used by layout.ejs to constrain content */

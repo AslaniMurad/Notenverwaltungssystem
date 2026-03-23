@@ -1,5 +1,9 @@
 <footer class="site-footer">
-  <p>
-    Notenverwaltungssystem der <a href="https://www.htl-waidhofen.at" target="_blank" rel="noopener noreferrer">HTL Waidhofen</a>
-  </p>
+  <div class="site-footer__inner">
+    <p>
+      Notenverwaltungssystem der
+      <a href="<%= (legal && legal.schoolUrl) || 'https://htlwy.at' %>" target="_blank" rel="noopener noreferrer"><%= (legal && legal.schoolName) || 'HTL Waidhofen/Ybbs' %></a>
+    </p>
+    <%- include('legal-links', { navClass: 'legal-links legal-links-footer' }) %>
+  </div>
 </footer>

@@ -1,22 +1,51 @@
-﻿(function () {
+(function () {
   const STORAGE_KEY = "theme";
   const root = document.documentElement;
+  const systemThemeQuery = window.matchMedia("(prefers-color-scheme: dark)");
+  let toggleButton = null;
 
   function isValidTheme(theme) {
     return theme === "light" || theme === "dark";
   }
 
+  function getConsentCookieName() {
+    return root.dataset.consentCookie || "nvs_cookie_consent";
+  }
+
+  function readCookie(name) {
+    const cookies = document.cookie ? document.cookie.split(";") : [];
+    for (const cookie of cookies) {
+      const entry = cookie.trim();
+      if (entry.startsWith(`${name}=`)) {
+        return decodeURIComponent(entry.slice(name.length + 1));
+      }
+    }
+    return "";
+  }
+
+  function canPersistPreference() {
+    return readCookie(getConsentCookieName()) === "all";
+  }
+
+  function resolveSystemTheme() {
+    return systemThemeQuery.matches ? "dark" : "light";
+  }
+
   function resolveInitialTheme() {
+    if (!canPersistPreference()) {
+      return resolveSystemTheme();
+    }
+
     try {
       const storedTheme = localStorage.getItem(STORAGE_KEY);
       if (isValidTheme(storedTheme)) {
         return storedTheme;
       }
     } catch (err) {
-      // Ignore storage failures and fall back to system preference.
+      // Ignore storage failures and fall back to the system preference.
     }
 
-    return window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
+    return resolveSystemTheme();
   }
 
   function applyTheme(theme) {
@@ -28,10 +57,15 @@
   }
 
   function labelForTheme(theme) {
-    return theme === "dark" ? "Auf Light Mode wechseln" : "Auf Dark Mode wechseln";
+    const label = theme === "dark" ? "Auf Light Mode wechseln" : "Auf Dark Mode wechseln";
+    return canPersistPreference() ? label : `${label} (ohne Speicherung)`;
   }
 
   function saveTheme(theme) {
+    if (!canPersistPreference()) {
+      return;
+    }
+
     try {
       localStorage.setItem(STORAGE_KEY, theme);
     } catch (err) {
@@ -39,7 +73,19 @@
     }
   }
 
+  function clearStoredTheme() {
+    try {
+      localStorage.removeItem(STORAGE_KEY);
+    } catch (err) {
+      // Ignore storage failures so consent changes still apply.
+    }
+  }
+
   function hasStoredPreference() {
+    if (!canPersistPreference()) {
+      return false;
+    }
+
     try {
       return isValidTheme(localStorage.getItem(STORAGE_KEY));
     } catch (err) {
@@ -76,10 +122,8 @@
     applyTheme(resolveInitialTheme());
   }
 
-  const systemThemeQuery = window.matchMedia("(prefers-color-scheme: dark)");
-
   document.addEventListener("DOMContentLoaded", function () {
-    const toggleButton = document.getElementById("themeToggle");
+    toggleButton = document.getElementById("themeToggle");
     const activeTheme = root.getAttribute("data-theme");
     updateToggleButton(toggleButton, isValidTheme(activeTheme) ? activeTheme : "light");
 
@@ -92,15 +136,28 @@
     }
 
     if (typeof systemThemeQuery.addEventListener === "function") {
-      systemThemeQuery.addEventListener("change", function (event) {
+      systemThemeQuery.addEventListener("change", function () {
         if (hasStoredPreference()) {
           return;
         }
 
-        const nextTheme = event.matches ? "dark" : "light";
-        setTheme(nextTheme, toggleButton, false);
+        setTheme(resolveSystemTheme(), toggleButton, false);
       });
     }
   });
-})();
 
+  document.addEventListener("app:cookie-consent-changed", function (event) {
+    const preferencesEnabled = Boolean(event.detail && event.detail.preferences);
+    if (!preferencesEnabled) {
+      clearStoredTheme();
+      setTheme(resolveSystemTheme(), toggleButton, false);
+      return;
+    }
+
+    const activeTheme = root.getAttribute("data-theme");
+    if (isValidTheme(activeTheme)) {
+      saveTheme(activeTheme);
+      updateToggleButton(toggleButton, activeTheme);
+    }
+  });
+})();
