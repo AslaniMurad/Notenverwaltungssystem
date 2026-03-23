@@ -10,6 +10,7 @@ const { requireAuth } = require("./middleware/auth");
 const { detectDevice } = require("./middleware/deviceDetection");
 const { buildSessionStore } = require("./sessionStore");
 const { getPasswordValidationError } = require("./utils/password");
+const userDisplay = require("./utils/userDisplay");
 
 const adminRouter = require("./routes/admin");
 const assignmentRouter = require("./routes/assignmentRoutes");
@@ -121,6 +122,7 @@ app.use(
 );
 
 app.locals.assetVersion = assetVersion;
+app.locals.userDisplay = userDisplay;
 app.use((req, res, next) => {
   res.locals.assetVersion = assetVersion;
   next();

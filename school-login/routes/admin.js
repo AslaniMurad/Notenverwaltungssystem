@@ -508,13 +508,45 @@ router.post("/users/:id/reset", async (req, res, next) => {
   const wantsInitial = useInitial === "1";
   const backUrl = wantsInitial ? "/admin/users" : `/admin/users/${id}/edit`;
 
-  if (!wantsInitial && !password)
+  if (!wantsInitial && !password) {
     return res.status(400).render("error", {
       message: "Kein Passwort angegeben.",
       status: 400,
       backUrl,
       csrfToken: req.csrfToken()
     });
+  }
+
+  if (wantsInitial) {
+    if (!INITIAL_PASSWORD) {
+      return res.status(400).render("error", {
+        message: "Initial-Passwort ist nicht konfiguriert (ENV INITIAL_PASSWORD).",
+        status: 400,
+        backUrl,
+        csrfToken: req.csrfToken()
+      });
+    }
+
+    const initialError = getPasswordValidationError(INITIAL_PASSWORD);
+    if (initialError) {
+      return res.status(400).render("error", {
+        message: `Initial-Passwort ist zu schwach: ${initialError}`,
+        status: 400,
+        backUrl,
+        csrfToken: req.csrfToken()
+      });
+    }
+  } else {
+    const passwordError = getPasswordValidationError(password);
+    if (passwordError) {
+      return res.status(400).render("error", {
+        message: passwordError,
+        status: 400,
+        backUrl,
+        csrfToken: req.csrfToken()
+      });
+    }
+  }
 
   const chosenPassword = wantsInitial ? INITIAL_PASSWORD : password;
   const mustChange = wantsInitial ? 1 : 0;

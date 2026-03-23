@@ -1,0 +1,10 @@
+<%
+  const sidebarUser = userDisplay.buildSidebarUser(user || {});
+%>
+<div class="sidebar-brand">
+  <div class="sidebar-brand-copy">
+    <div class="sidebar-title"><%= sidebarUser.displayName %></div>
+    <div class="sidebar-meta"><%= sidebarUser.roleLabel %></div>
+  </div>
+  <span class="sidebar-badge"><%= sidebarUser.badgeLabel %></span>
+</div>
