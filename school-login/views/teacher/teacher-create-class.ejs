@@ -10,13 +10,7 @@
     content: function () { %>
     <div class="app-shell teacher-shell">
       <aside class="teacher-sidebar" aria-label="Lehrer Navigation">
-        <div class="sidebar-brand">
-          <div>
-            <div class="sidebar-title">Teacher Panel</div>
-            <div class="sidebar-meta"><%= email %> · Lehrer</div>
-          </div>
-          <span class="sidebar-badge">Eingeloggt</span>
-        </div>
+        <%- include('../partials/sidebar-user-card', { user: { email, role: 'teacher' } }) %>
 
         <div class="app-nav">
           <div class="nav-section">

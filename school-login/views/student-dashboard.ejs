@@ -23,13 +23,7 @@
     <button class="mobile-nav-toggle" aria-label="Navigation oeffnen"></button>
     <div class="app-shell app-shell-wide">
       <aside class="app-sidebar" aria-label="Schuelernavigation">
-        <div class="sidebar-brand">
-          <div>
-            <div class="sidebar-title">Schueler-Dashboard</div>
-            <div class="sidebar-meta"><%= studentProfile.name %> &middot; <%= studentProfile.class %></div>
-          </div>
-          <span class="sidebar-badge">Aktiv</span>
-        </div>
+        <%- include('./partials/sidebar-user-card', { user: { email, role: 'student', name: studentProfile.name } }) %>
 
         <div class="app-nav">
           <div class="nav-section">

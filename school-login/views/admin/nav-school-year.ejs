@@ -1,15 +1,5 @@
-<% const resolvedActiveSchoolYear = (typeof activeSchoolYear !== "undefined" ? activeSchoolYear : locals.activeSchoolYear) || null; %>
 <aside class="app-sidebar" aria-label="Admin Navigation">
-  <div class="sidebar-brand">
-    <div>
-      <div class="sidebar-title">Admin-Konsole</div>
-      <div class="sidebar-meta"><%= currentUser?.email %> &middot; <%= currentUser?.role %></div>
-      <% if (resolvedActiveSchoolYear) { %>
-        <div class="sidebar-meta">Aktiv: <%= resolvedActiveSchoolYear.name %></div>
-      <% } %>
-    </div>
-    <span class="sidebar-badge">Eingeloggt</span>
-  </div>
+  <%- include('../partials/sidebar-user-card', { user: { email: currentUser?.email, role: currentUser?.role, name: currentUser?.name } }) %>
 
   <div class="app-nav">
     <div class="nav-section">

@@ -11,13 +11,7 @@
     content: function () { %>
     <div class="app-shell">
       <aside class="app-sidebar" aria-label="Admin Navigation">
-        <div class="sidebar-brand">
-          <div>
-            <div class="sidebar-title">Admin-Panel</div>
-            <div class="sidebar-meta"><%= currentUser?.email %> · <%= currentUser?.role %></div>
-          </div>
-          
-        </div>
+        <%- include('../partials/sidebar-user-card', { user: { email: currentUser?.email, role: currentUser?.role, name: currentUser?.name } }) %>
 
         <div class="app-nav">
           <div class="nav-section">
