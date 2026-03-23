@@ -128,6 +128,59 @@ html[data-theme="dark"] {
   --login-card-soft: var(--surface-alt);
 }
 
+@media (prefers-color-scheme: dark) {
+  html:not([data-theme="light"]) {
+    color-scheme: dark;
+    --bg: #0b1220;
+    --surface: #162033;
+    --surface-2: #1e2a40;
+    --surface-alt: var(--surface-2);
+    --border: #2a3a55;
+    --text: #e6edf7;
+    --text-muted: #94a3b8;
+    --primary: #6f8fff;
+    --danger: #fb7185;
+
+    --text-inverse: #ffffff;
+    --primary-hover: #8ca5ff;
+    --primary-contrast: #0b1220;
+    --danger-hover: #fda4af;
+    --danger-contrast: #210e14;
+    --placeholder: var(--text-muted);
+    --link: #a8bcff;
+    --link-hover: #c5d2ff;
+    --focus-color: #8aa3ff;
+
+    --surface-1: var(--surface);
+    --surface-3: #25344f;
+    --background: var(--bg);
+
+    --nav-item-bg: var(--surface);
+    --nav-item-hover-bg: var(--surface-alt);
+    --nav-item-active-bg: var(--surface-3);
+    --nav-item-text: var(--text);
+    --nav-item-active-text: var(--text);
+
+    --table-header-bg: var(--surface-alt);
+    --table-row-bg: var(--surface);
+    --table-row-alt-bg: var(--surface-alt);
+    --table-row-hover-bg: #25344f;
+    --table-row-hover-text: var(--text);
+
+    --input-bg: var(--surface-alt);
+    --input-bg-alt: var(--surface-alt);
+
+    --sidebar-bg: var(--surface-alt);
+    --card-bg: var(--surface);
+    --card-shadow: 0 20px 40px rgba(3, 8, 19, 0.52);
+    --shell-accent-muted: rgba(111, 143, 255, 0.24);
+
+    --shell-surface: var(--surface);
+    --login-card: var(--surface);
+    --login-card-soft: var(--surface-alt);
+  }
+}
+
 html,
 body {
   background: var(--bg);
@@ -615,6 +668,13 @@ tbody tr:hover {
 html[data-theme="dark"] .login-alert-panel {
   background: rgba(240, 107, 107, 0.18);
   border-color: rgba(240, 107, 107, 0.45);
+}
+
+@media (prefers-color-scheme: dark) {
+  html:not([data-theme="light"]) .login-alert-panel {
+    background: rgba(240, 107, 107, 0.18);
+    border-color: rgba(240, 107, 107, 0.45);
+  }
 }
 
 .login-alert-icon {

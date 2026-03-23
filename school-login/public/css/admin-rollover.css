@@ -30,6 +30,23 @@ html[data-theme="dark"] .school-year-rollover {
   --sy-shadow-soft: 0 18px 36px rgba(3, 8, 19, 0.42);
 }
 
+@media (prefers-color-scheme: dark) {
+  html:not([data-theme="light"]) .school-year-rollover {
+    --sy-accent-soft: rgba(111, 143, 255, 0.18);
+    --sy-accent-border: rgba(111, 143, 255, 0.3);
+    --sy-warning-bg: rgba(245, 158, 11, 0.16);
+    --sy-warning-border: rgba(245, 158, 11, 0.32);
+    --sy-warning-text: #fbbf24;
+    --sy-danger-bg: rgba(251, 113, 133, 0.16);
+    --sy-danger-border: rgba(251, 113, 133, 0.28);
+    --sy-danger-text: #fda4af;
+    --sy-success-bg: rgba(74, 222, 128, 0.16);
+    --sy-success-border: rgba(74, 222, 128, 0.28);
+    --sy-success-text: #86efac;
+    --sy-shadow-soft: 0 18px 36px rgba(3, 8, 19, 0.42);
+  }
+}
+
 .school-year-rollover .school-year-header {
   margin-bottom: 0;
   gap: 16px;

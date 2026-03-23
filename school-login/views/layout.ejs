@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="de" class="css-loading" data-theme="light">
+<html lang="de" class="css-loading">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -15,19 +15,26 @@
     };
   %>
   <style>
+    html {
+      background: #f4f6f9;
+      color-scheme: light;
+    }
+    html[data-theme="dark"] {
+      background: #0b1220;
+      color-scheme: dark;
+    }
+    @media (prefers-color-scheme: dark) {
+      html:not([data-theme="light"]) {
+        background: #0b1220;
+        color-scheme: dark;
+      }
+    }
     html.css-loading body { visibility: hidden; }
     html.css-ready body { visibility: visible; }
   </style>
   <script>
     (function () {
-      try {
-        var stored = localStorage.getItem("theme");
-        var valid = stored === "light" || stored === "dark";
-        var system = window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
-        document.documentElement.setAttribute("data-theme", valid ? stored : system);
-      } catch (err) {
-        document.documentElement.setAttribute("data-theme", "light");
-      }
+      document.documentElement.removeAttribute("data-theme");
     })();
   </script>
   <noscript>
