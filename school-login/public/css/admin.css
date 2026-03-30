@@ -783,6 +783,322 @@ body.page-admin-edit {
   background: rgba(148, 163, 184, 0.06);
 }
 
+/* ── Assignment chips (index page) ── */
+.assign-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.assign-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  background: #e0f2fe;
+  color: #0c4a6e;
+  border: 1px solid #bae6fd;
+  border-radius: 999px;
+  padding: 4px 10px;
+  font-size: 13px;
+  font-weight: 500;
+  line-height: 1.4;
+}
+
+.assign-chip-name {
+  white-space: nowrap;
+}
+
+.assign-chip-form {
+  display: inline-flex;
+  margin: 0;
+  padding: 0;
+}
+
+.assign-chip-remove {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: none;
+  border: none;
+  color: #0369a1;
+  cursor: pointer;
+  font-size: 16px;
+  line-height: 1;
+  padding: 0 2px;
+  border-radius: 50%;
+  transition: all 0.15s ease;
+}
+
+.assign-chip-remove:hover {
+  color: #dc2626;
+  background: rgba(220, 38, 38, 0.1);
+}
+
+/* ── Assignment form (new page) ── */
+.assign-class-info {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 16px;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  margin-bottom: 10px;
+}
+
+.assign-class-info-label {
+  font-weight: 600;
+  font-size: 13px;
+  color: var(--text-muted, #6b7280);
+}
+
+.assign-class-info-value {
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--text);
+}
+
+.assign-class-info-sep {
+  color: var(--text-muted, #6b7280);
+  margin: 0 2px;
+}
+
+.assign-teacher-section {
+  margin-top: 4px;
+}
+
+.assign-search-input {
+  width: 100%;
+  padding: 10px 14px;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: var(--surface-2);
+  color: var(--text);
+  font-size: 13px;
+  margin-bottom: 12px;
+  transition: all 0.2s ease;
+}
+
+.assign-search-input:focus {
+  outline: none;
+  border-color: #2563eb;
+  background: var(--surface);
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1);
+}
+
+.assign-group {
+  margin-bottom: 12px;
+}
+
+.assign-group-title {
+  font-size: 12px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: #6b7280;
+  margin: 0 0 8px;
+}
+
+/* ── Teacher table (new assignment page) ── */
+.assign-new-table-wrap {
+  overflow-x: auto;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+}
+
+.assign-new-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.assign-new-table thead {
+  background: var(--surface-2);
+}
+
+.assign-new-table th {
+  padding: 10px 16px;
+  text-align: left;
+  font-size: 12px;
+  font-weight: 700;
+  color: #6b7280;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  border-bottom: 2px solid var(--border);
+}
+
+.assign-new-table td {
+  padding: 12px 16px;
+  border-bottom: 1px solid rgba(226, 232, 240, 0.6);
+  font-size: 14px;
+  vertical-align: middle;
+  color: var(--text);
+}
+
+.assign-new-table tbody tr:last-child td {
+  border-bottom: none;
+}
+
+.assign-new-table tbody tr:hover td {
+  background: var(--surface-2);
+}
+
+.assign-new-table tbody tr.is-assigned td {
+  background: rgba(34, 197, 94, 0.04);
+}
+
+.assign-col-check {
+  width: 48px;
+}
+
+.assign-check-cell {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+}
+
+.assign-email-cell {
+  color: #6b7280;
+  font-size: 13px;
+}
+
+.assign-card-checkbox {
+  appearance: none;
+  -webkit-appearance: none;
+  width: 22px;
+  height: 22px;
+  min-width: 22px;
+  border: 2px solid #cbd5e1;
+  border-radius: 6px;
+  background: var(--surface);
+  cursor: pointer;
+  transition: all 0.15s ease;
+  position: relative;
+  margin: 0;
+}
+
+.assign-card-checkbox:checked {
+  background: #2563eb;
+  border-color: #2563eb;
+}
+
+.assign-card-checkbox:checked::after {
+  content: '';
+  position: absolute;
+  top: 3px;
+  left: 6px;
+  width: 5px;
+  height: 10px;
+  border: solid #fff;
+  border-width: 0 2px 2px 0;
+  transform: rotate(45deg);
+}
+
+.assign-badge-assigned {
+  background: rgba(34, 197, 94, 0.12);
+  color: #166534;
+  border: 1px solid rgba(34, 197, 94, 0.25);
+  padding: 3px 10px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.assign-no-results {
+  text-align: center;
+  padding: 16px;
+}
+
+.assign-selection-count {
+  display: inline-flex;
+  align-items: center;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+/* ── Assignment index table ── */
+.assign-index-toolbar {
+  margin-bottom: 16px;
+}
+
+.assign-index-table-wrap {
+  overflow-x: auto;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+}
+
+.assign-index-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.assign-index-table thead {
+  background: var(--surface-2);
+}
+
+.assign-index-table th {
+  padding: 12px 16px;
+  text-align: left;
+  font-size: 12px;
+  font-weight: 700;
+  color: #6b7280;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  border-bottom: 2px solid var(--border);
+}
+
+.assign-index-table td {
+  padding: 14px 16px;
+  border-bottom: 1px solid rgba(226, 232, 240, 0.6);
+  font-size: 14px;
+  vertical-align: middle;
+}
+
+.assign-index-table tbody tr:last-child td {
+  border-bottom: none;
+}
+
+.assign-index-table tbody tr:hover td {
+  background: var(--surface-2);
+}
+
+.assign-col-class {
+  width: 15%;
+  white-space: nowrap;
+}
+
+.assign-col-subject {
+  width: 15%;
+}
+
+.assign-col-teachers {
+  width: auto;
+}
+
+.assign-col-action {
+  width: 100px;
+  text-align: right;
+}
+
+.assign-btn-add {
+  white-space: nowrap;
+}
+
+.assign-class-badge {
+  display: inline-block;
+  background: #eef2ff;
+  color: #3730a3;
+  border: 1px solid #c7d2fe;
+  padding: 4px 12px;
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 700;
+}
+
 .rollover-log-col-time {
   width: 19%;
 }

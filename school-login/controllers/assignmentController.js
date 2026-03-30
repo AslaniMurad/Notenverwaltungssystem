@@ -1,4 +1,5 @@
 const assignmentModel = require("../models/assignmentModel");
+const { getDisplayName } = require("../utils/userDisplay");
 
 function toUniqueIds(values) {
   const rawValues = Array.isArray(values) ? values : [values].filter(Boolean);
@@ -14,7 +15,6 @@ function buildGroupKey(classId, subjectId) {
 }
 
 function groupAssignmentRows(rows) {
-  // Keep grouped table rows while still exposing single assignment ids for deletes.
   return rows.reduce((groupMap, row) => {
     const key = buildGroupKey(row.class_id, row.subject_id);
     const currentRows = groupMap.get(key) || [];
@@ -24,14 +24,25 @@ function groupAssignmentRows(rows) {
   }, new Map());
 }
 
-async function loadAssignmentFormData() {
-  const [classes, subjects, teachers] = await Promise.all([
-    assignmentModel.listClasses(),
-    assignmentModel.listSubjects(),
-    assignmentModel.listTeachers()
-  ]);
+function addDisplayNames(teachers) {
+  return teachers.map((t) => ({
+    ...t,
+    display_name: getDisplayName({ email: t.email }) || t.email
+  }));
+}
 
-  return { classes, subjects, teachers };
+function consumeFlash(req) {
+  const message = req.session._flash_message || "";
+  const error = req.session._flash_error || "";
+  delete req.session._flash_message;
+  delete req.session._flash_error;
+  return { message, error };
+}
+
+function flashAndRedirect(req, res, url, { message, error } = {}) {
+  if (message) req.session._flash_message = message;
+  if (error) req.session._flash_error = error;
+  req.session.save(() => res.redirect(url));
 }
 
 async function renderAssignmentList(req, res, next) {
@@ -40,19 +51,28 @@ async function renderAssignmentList(req, res, next) {
       assignmentModel.listAssignmentGroups(),
       assignmentModel.listAssignmentRows()
     ]);
-    const rowMap = groupAssignmentRows(rows);
+
+    const rowMap = groupAssignmentRows(
+      rows.map((row) => ({
+        ...row,
+        teacher_display_name: getDisplayName({ email: row.teacher_email }) || row.teacher_email
+      }))
+    );
+
     const assignments = groups.map((group) => ({
       ...group,
       rows: rowMap.get(buildGroupKey(group.class_id, group.subject_id)) || []
     }));
+
+    const flash = consumeFlash(req);
 
     res.render("admin/assignments/index", {
       assignments,
       csrfToken: req.csrfToken(),
       currentUser: req.session.user,
       activePath: req.originalUrl,
-      message: String(req.query.message || "").trim(),
-      error: String(req.query.error || "").trim()
+      message: flash.message,
+      error: flash.error
     });
   } catch (err) {
     console.error("DB error loading assignments:", err);
@@ -62,15 +82,36 @@ async function renderAssignmentList(req, res, next) {
 
 async function renderNewAssignmentForm(req, res, next) {
   try {
-    const formData = await loadAssignmentFormData();
+    const [classes, teachers] = await Promise.all([
+      assignmentModel.listClasses(),
+      assignmentModel.listTeachers()
+    ]);
+
+    const teachersWithNames = addDisplayNames(teachers);
+
+    const requestedClassId = Number(req.query.class) || null;
+    const initialClassId = (requestedClassId && classes.some((c) => c.id === requestedClassId))
+      ? requestedClassId
+      : (classes.length ? classes[0].id : null);
+
+    let assignedTeacherIds = [];
+    if (initialClassId) {
+      const assigned = await assignmentModel.listAssignedTeacherIdsForClass(initialClassId);
+      assignedTeacherIds = assigned.map((r) => r.teacher_id);
+    }
+
+    const flash = consumeFlash(req);
 
     res.render("admin/assignments/new", {
-      ...formData,
+      classes,
+      teachers: teachersWithNames,
+      assignedTeacherIds,
+      selectedClassId: initialClassId,
       csrfToken: req.csrfToken(),
       currentUser: req.session.user,
       activePath: req.originalUrl,
-      message: String(req.query.message || "").trim(),
-      error: String(req.query.error || "").trim()
+      message: flash.message,
+      error: flash.error
     });
   } catch (err) {
     console.error("DB error loading assignment form:", err);
@@ -78,33 +119,51 @@ async function renderNewAssignmentForm(req, res, next) {
   }
 }
 
+async function getClassTeachers(req, res, next) {
+  try {
+    const classId = Number(req.params.classId);
+    if (!Number.isInteger(classId) || classId <= 0) {
+      return res.status(400).json({ error: "Ungueltige Klasse." });
+    }
+    const rows = await assignmentModel.listAssignedTeacherIdsForClass(classId);
+    return res.json({ teacherIds: rows.map((r) => r.teacher_id) });
+  } catch (err) {
+    console.error("DB error loading class teachers:", err);
+    next(err);
+  }
+}
+
 async function createAssignment(req, res, next) {
   try {
     const classId = Number(req.body?.class_id);
-    const subjectId = Number(req.body?.subject_id);
     const teacherIds = toUniqueIds(req.body?.teacher_ids);
 
-    if (!Number.isInteger(classId) || !Number.isInteger(subjectId) || teacherIds.length === 0) {
-      return res.redirect("/admin/assignments/new?error=Bitte+Klasse%2C+Fach+und+mindestens+einen+Lehrer+waehlen.");
+    if (!Number.isInteger(classId) || teacherIds.length === 0) {
+      return flashAndRedirect(req, res, "/admin/assignments/new", {
+        error: "Bitte Klasse und mindestens einen Lehrer waehlen."
+      });
     }
 
-    const [classRow, subjectRow] = await Promise.all([
-      assignmentModel.getClassById(classId),
-      assignmentModel.getSubjectById(subjectId)
-    ]);
-
-    if (!classRow || !subjectRow) {
-      return res.redirect("/admin/assignments/new?error=Klasse+oder+Fach+nicht+gefunden.");
+    const classRow = await assignmentModel.getClassById(classId);
+    if (!classRow) {
+      return flashAndRedirect(req, res, "/admin/assignments/new", {
+        error: "Klasse nicht gefunden."
+      });
     }
 
-    if (Number(classRow.subject_id) !== subjectId) {
-      return res.redirect("/admin/assignments/new?error=Das+gewaehlte+Fach+passt+nicht+zur+Klasse.");
+    const subjectId = Number(classRow.subject_id);
+    if (!subjectId) {
+      return flashAndRedirect(req, res, "/admin/assignments/new", {
+        error: "Klasse hat kein zugeordnetes Fach."
+      });
     }
 
     const teacherRows = await assignmentModel.listValidTeacherIds(teacherIds);
     const validTeacherIds = teacherRows.map((row) => Number(row.id));
     if (!validTeacherIds.length) {
-      return res.redirect("/admin/assignments/new?error=Keine+gueltigen+Lehrer+ausgewaehlt.");
+      return flashAndRedirect(req, res, "/admin/assignments/new", {
+        error: "Keine gueltigen Lehrer ausgewaehlt."
+      });
     }
 
     const { created, duplicates } = await assignmentModel.createAssignments({
@@ -115,7 +174,7 @@ async function createAssignment(req, res, next) {
     });
 
     const message = `${created} Zuordnung(en) erstellt${duplicates ? `, ${duplicates} bereits vorhanden` : ""}.`;
-    return res.redirect(`/admin/assignments?message=${encodeURIComponent(message)}`);
+    return flashAndRedirect(req, res, "/admin/assignments", { message });
   } catch (err) {
     console.error("DB error creating assignment:", err);
     next(err);
@@ -126,11 +185,15 @@ async function deleteAssignment(req, res, next) {
   try {
     const assignmentId = Number(req.body?.assignment_id);
     if (!Number.isInteger(assignmentId) || assignmentId <= 0) {
-      return res.redirect("/admin/assignments?error=Ungueltige+Zuordnung.");
+      return flashAndRedirect(req, res, "/admin/assignments", {
+        error: "Ungueltige Zuordnung."
+      });
     }
 
     await assignmentModel.deleteAssignment(assignmentId);
-    return res.redirect("/admin/assignments?message=Zuordnung+entfernt.");
+    return flashAndRedirect(req, res, "/admin/assignments", {
+      message: "Zuordnung entfernt."
+    });
   } catch (err) {
     console.error("DB error deleting assignment:", err);
     next(err);
@@ -140,6 +203,7 @@ async function deleteAssignment(req, res, next) {
 module.exports = {
   createAssignment,
   deleteAssignment,
+  getClassTeachers,
   renderAssignmentList,
   renderNewAssignmentForm
 };
