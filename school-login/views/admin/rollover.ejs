@@ -1,41 +1,26 @@
 <%
-  const classRows = rollover?.classes || [];
-  const schoolYearRows = schoolYears || [];
-  const hasRollover = Boolean(rollover);
-  const activeYearName = rollover?.activeSchoolYear?.name || activeSchoolYear?.name || 'Nicht gesetzt';
-  const targetYearName = rollover?.nextSchoolYear?.name || 'Noch nicht verfuegbar';
-  const pageState = !hasRollover
-    ? {
-        title: 'Aktives Schuljahr fehlt',
-        tone: 'warning',
-        text: 'Kein aktives Schuljahr vorhanden.'
-      }
-    : rollover.nextSchoolYearExists
-      ? {
-          title: 'Zielschuljahr bereits vorhanden',
-          tone: 'blocked',
-          text: `Das Zielschuljahr ${targetYearName} existiert bereits.`
-        }
-      : {
-          title: 'Bereit fuer den Wechsel',
-          tone: 'success',
-          text: `Wechsel nach ${targetYearName} kann freigegeben werden.`
-        };
-  const conciseSteps = hasRollover
-    ? [
-        'Klassen und Zuordnungen werden uebernommen.',
-        'Noten bleiben im bisherigen Schuljahr archiviert.',
-        'Vor dem Wechsel wird ein Backup erstellt.'
-      ]
-    : [];
-  const impactStats = hasRollover
-    ? [
-        { label: 'Klassen', value: rollover.classCount, detail: 'im Zieljahr' },
-        { label: 'Zuordnungen', value: rollover.assignmentsCopied, detail: 'werden mitgenommen' },
-        { label: 'Lehrkraefte', value: rollover.teachersAffected, detail: 'bleiben verbunden' },
-        { label: 'Noten', value: rollover.gradeCount, detail: 'bleiben archiviert' }
-      ]
-    : [];
+  const preview = rolloverPreview || null;
+  const hasWizard = Boolean(wizardView && wizardView.draft);
+  const draft = wizardView?.draft || wizardDraft || null;
+  const baseClassPlans = wizardView?.baseClassPlans || [];
+  const extraClassPlans = wizardView?.extraClassPlans || [];
+  const sourceClassGroups = wizardView?.sourceClassGroups || [];
+  const intakeTargets = wizardView?.intakeTargets || [];
+  const reviewClassRows = wizardView?.reviewClassRows || [];
+  const validation = wizardView?.validation || { valid: false, errors: [], reviewStats: {} };
+  const targetOptions = wizardView?.targetOptions || [];
+  const sourceClasses = draft?.sourceClasses || [];
+  const sourceClassMap = new Map(sourceClasses.map((classRow) => [Number(classRow.id), classRow]));
+  const startValues = startForm || {};
+  const routeActiveName = draft?.activeSchoolYear?.name || preview?.activeSchoolYear?.name || activeSchoolYear?.name || 'Nicht gesetzt';
+  const routeNextName = draft?.nextSchoolYear?.name || preview?.nextSchoolYear?.name || startValues.schoolYearName || 'Nicht verfuegbar';
+  const routeActiveStart = draft?.activeSchoolYear?.start_date || preview?.activeSchoolYear?.start_date || activeSchoolYear?.start_date;
+  const routeActiveEnd = draft?.activeSchoolYear?.end_date || preview?.activeSchoolYear?.end_date || activeSchoolYear?.end_date;
+  const routeNextStart = draft?.nextSchoolYear?.startDate || preview?.nextSchoolYear?.startDate || startValues.startDate;
+  const routeNextEnd = draft?.nextSchoolYear?.endDate || preview?.nextSchoolYear?.endDate || startValues.endDate;
+  const currentStepIndex = wizardSteps.findIndex((step) => step.key === wizardStep);
+  const extraRowCount = Math.max(extraClassPlans.length + 4, 8);
+  const extraRows = Array.from({ length: extraRowCount }, (_, index) => extraClassPlans[index] || null);
   const shortDateFormatter = new Intl.DateTimeFormat('de-DE', {
     day: '2-digit',
     month: '2-digit',
@@ -59,38 +44,17 @@
     return Number.isNaN(parsed.getTime()) ? String(value) : dateTimeFormatter.format(parsed);
   };
   const formatDateRange = (start, end) => `${formatDate(start)} bis ${formatDate(end)}`;
-  const getLogStatusMeta = (value) => {
-    const normalized = String(value || '').trim().toLowerCase();
-    if (normalized === 'success') return { label: 'Erfolgreich', tone: 'success' };
-    if (normalized === 'failed') return { label: 'Fehlgeschlagen', tone: 'failed' };
-    if (normalized === 'test') return { label: 'Nicht produktiv', tone: 'neutral' };
-    return { label: normalized || '-', tone: 'neutral' };
+  const getPlanKindBadge = (kind) => {
+    if (kind === 'promote') return 'Hochstufung';
+    if (kind === 'intake') return 'Neueinstieg';
+    if (kind === 'extra') return 'Zusatz';
+    return 'Ziel';
   };
-  const getBackupFilename = (value) => {
-    const fullPath = String(value || '').trim();
-    if (!fullPath) return '';
-    const segments = fullPath.split(/[\\/]+/).filter(Boolean);
-    return segments.length ? segments[segments.length - 1] : fullPath;
-  };
-  const compactSchoolYears = schoolYearRows.map((schoolYear) => ({
-    ...schoolYear,
-    rangeLabel: formatDateRange(schoolYear.start_date, schoolYear.end_date)
-  }));
-  const logRows = (logs || []).map((logRow) => {
-    const statusMeta = getLogStatusMeta(logRow.status);
-    return {
-      ...logRow,
-      executed_at_compact: formatDateTime(logRow.executed_at),
-      backup_filename: getBackupFilename(logRow.backup_path),
-      status_label: statusMeta.label,
-      status_tone: statusMeta.tone
-    };
-  });
   const page = {
     title: 'Admin - Schuljahreswechsel',
     headerTitle: 'Adminbereich',
     styles: ['/css/admin.css', '/css/admin-rollover.css'],
-    scripts: ['/js/app.js'],
+    scripts: ['/js/app.js', '/js/rollover-wizard.js'],
     bodyClass: 'page-admin',
     hideHeader: true,
     hideFooter: true,
@@ -102,18 +66,20 @@
         <div class="app-main-header school-year-header">
           <div>
             <p class="app-main-subtitle">Schuljahresverwaltung</p>
-            <h1>Schuljahreswechsel</h1>
+            <h1>Schuljahreswechsel-Assistent</h1>
             <p class="admin-muted school-year-header-copy">
-              Aktives Schuljahr geordnet ins naechste Jahr ueberfuehren.
+              Mehrstufiger Wizard fuer Klassen, Lehrerzuordnungen und Schueleruebernahme.
             </p>
           </div>
           <div class="admin-actions-row school-year-header-actions">
-            <a class="btn btn-primary" href="#rollover-action">Zum Wechsel</a>
-            <a class="btn btn-secondary" href="/admin">Zurueck</a>
+            <% if (hasWizard) { %>
+              <a class="btn btn-primary" href="/admin/rollover?step=<%= wizardStep === 'start' ? 'classes' : wizardStep %>">Assistent oeffnen</a>
+            <% } %>
+            <a class="btn btn-secondary" href="/archive">Archiv</a>
           </div>
         </div>
 
-        <% if (message || error) { %>
+        <% if (message || error || intakeParseErrors.length) { %>
           <div class="school-year-alert-stack">
             <% if (message) { %>
               <div class="school-year-alert school-year-alert-info"><%= message %></div>
@@ -121,253 +87,548 @@
             <% if (error) { %>
               <div class="school-year-alert school-year-alert-error"><%= error %></div>
             <% } %>
+            <% if (intakeParseErrors.length) { %>
+              <div class="school-year-alert school-year-alert-error">
+                <strong>Import pruefen:</strong>
+                <ul class="school-year-inline-list">
+                  <% intakeParseErrors.forEach((entry) => { %>
+                    <li><%= entry %></li>
+                  <% }) %>
+                </ul>
+              </div>
+            <% } %>
           </div>
         <% } %>
 
-        <section class="school-year-flow school-year-flow-<%= pageState.tone %>">
-          <div class="school-year-flow-hero">
-            <p class="school-year-eyebrow">Schuljahr wechseln</p>
-            <div class="school-year-route">
-              <span class="school-year-route-year"><%= activeYearName %></span>
-              <% if (hasRollover) { %>
-                <span class="school-year-route-arrow">-&gt;</span>
-                <span class="school-year-route-year is-target"><%= targetYearName %></span>
-              <% } %>
-            </div>
+        <nav class="school-year-stepper" aria-label="Wizard Schritte">
+          <% wizardSteps.forEach((step, index) => { %>
+            <a
+              class="school-year-step <%= index === currentStepIndex ? 'is-current' : '' %> <%= index < currentStepIndex ? 'is-done' : '' %> <%= !hasWizard && step.key !== 'start' ? 'is-disabled' : '' %>"
+              href="/admin/rollover?step=<%= hasWizard || step.key === 'start' ? step.key : 'start' %>"
+            >
+              <span class="school-year-step-index"><%= index + 1 %></span>
+              <span class="school-year-step-label"><%= step.label %></span>
+            </a>
+          <% }) %>
+        </nav>
 
-            <div class="school-year-hero-meta">
-              <div class="school-year-state school-year-state-<%= pageState.tone %>">
-                <strong><%= pageState.title %></strong>
-                <span><%= pageState.text %></span>
-              </div>
-
-              <% if (hasRollover) { %>
-                <div class="school-year-route-date">
-                  <span><%= formatDateRange(rollover?.activeSchoolYear?.start_date, rollover?.activeSchoolYear?.end_date) %></span>
-                  <span class="school-year-route-date-separator">|</span>
-                  <span><%= formatDateRange(rollover?.nextSchoolYear?.startDate, rollover?.nextSchoolYear?.endDate) %></span>
-                </div>
-              <% } %>
-
-              <div class="school-year-hero-actions">
-                <a class="btn btn-primary" href="#rollover-action">Wechsel freigeben</a>
-                <a class="btn btn-secondary" href="#rollover-details">Details</a>
-              </div>
-            </div>
-          </div>
-
-          <% if (hasRollover) { %>
-            <div class="school-year-flow-section school-year-impact">
-              <div class="school-year-section-head">
-                <div>
-                  <p class="admin-eyebrow">Auswirkungen</p>
-                  <h2>Uebersicht des Wechsels</h2>
-                </div>
-              </div>
-
-              <div class="school-year-impact-strip">
-                <% impactStats.forEach((stat, index) => { %>
-                  <div class="school-year-impact-item <%= index === impactStats.length - 1 ? 'is-last' : '' %>">
-                    <span><%= stat.label %></span>
-                    <strong><%= stat.value %></strong>
-                    <small><%= stat.detail %></small>
-                  </div>
-                <% }) %>
-              </div>
-            </div>
-          <% } %>
-
-          <div class="school-year-flow-section school-year-safety" id="rollover-action">
-            <div class="school-year-section-head">
+        <% if (wizardStep === 'start') { %>
+          <section class="school-year-panel school-year-panel-start">
+            <div class="school-year-panel-head">
               <div>
-                <p class="admin-eyebrow">Sicherheit</p>
-                <h2>Wechsel bewusst freigeben</h2>
+                <p class="admin-eyebrow">Start</p>
+                <h2>Assistent vorbereiten</h2>
               </div>
+              <% if (hasWizard) { %>
+                <form method="POST" action="/admin/rollover/reset">
+                  <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+                  <button class="btn btn-secondary" type="submit">Assistent zuruecksetzen</button>
+                </form>
+              <% } %>
             </div>
 
-            <div class="school-year-safety-grid">
-              <div class="school-year-warning-panel">
-                <% if (hasRollover) { %>
-                  <p class="school-year-warning-title">Vor dem Start wird automatisch gesichert.</p>
-                <% } else { %>
-                  <div class="school-year-warning-panel-muted">
-                    Es fehlt ein aktives Schuljahr. Ohne gueltigen Ausgangspunkt kann kein neues Schuljahr angelegt oder aktiviert werden.
+            <% if (preview || hasWizard) { %>
+              <div class="school-year-hero-grid">
+                <div class="school-year-route-card">
+                  <span class="school-year-route-label">Route</span>
+                  <div class="school-year-route">
+                    <strong><%= routeActiveName %></strong>
+                    <span>&rarr;</span>
+                    <strong><%= routeNextName %></strong>
                   </div>
-                <% } %>
+                  <small>
+                    <%= formatDateRange(routeActiveStart, routeActiveEnd) %>
+                    |
+                    <%= formatDateRange(routeNextStart, routeNextEnd) %>
+                  </small>
+                </div>
+
+                <div class="school-year-metric-grid">
+                  <div class="school-year-metric"><span>Klassen</span><strong><%= draft?.sourceSummary?.classCount || preview?.classCount || 0 %></strong></div>
+                  <div class="school-year-metric"><span>Schueler</span><strong><%= draft?.sourceSummary?.studentCount || preview?.studentCount || 0 %></strong></div>
+                  <div class="school-year-metric"><span>Zuordnungen</span><strong><%= draft?.sourceSummary?.assignmentCount || preview?.assignmentsCopied || 0 %></strong></div>
+                  <div class="school-year-metric"><span>Archivierte Noten</span><strong><%= draft?.sourceSummary?.gradeCount || preview?.gradeCount || 0 %></strong></div>
+                </div>
               </div>
 
-              <div class="school-year-action-panel">
-                <% if (hasRollover) { %>
-                  <form
-                    class="admin-form vertical school-year-confirm-form"
-                    method="POST"
-                    action="/admin/rollover/execute"
-                    data-confirm-title="Schuljahreswechsel"
-                    data-confirm-message="Moechtest du den Schuljahreswechsel wirklich ausfuehren?"
-                    data-confirm-note="Der Wechsel startet sofort und kann nicht automatisch rueckgaengig gemacht werden."
-                    data-confirm-action="Ausfuehren"
-                    data-confirm-variant="danger"
-                  >
+              <% if (hasWizard) { %>
+                <section class="school-year-subpanel school-year-start-config">
+                  <div class="school-year-subpanel-head">
+                    <div>
+                      <p class="admin-eyebrow">Zielschuljahr</p>
+                      <h3>Aktueller Wizard</h3>
+                    </div>
+                    <small>Zum Aendern Assistent zuerst zuruecksetzen.</small>
+                  </div>
+
+                  <div class="school-year-start-readonly">
+                    <div class="school-year-readonly-field">
+                      <span>Bezeichnung</span>
+                      <strong><%= startValues.schoolYearName || '-' %></strong>
+                    </div>
+                    <div class="school-year-readonly-field">
+                      <span>Startdatum</span>
+                      <strong><%= formatDate(startValues.startDate) %></strong>
+                    </div>
+                    <div class="school-year-readonly-field">
+                      <span>Enddatum</span>
+                      <strong><%= formatDate(startValues.endDate) %></strong>
+                    </div>
+                  </div>
+                </section>
+
+                <div class="school-year-start-actions">
+                  <a class="btn btn-primary" href="/admin/rollover?step=classes">Mit Klassenplanung fortfahren</a>
+                </div>
+              <% } else { %>
+                <section class="school-year-subpanel school-year-start-config">
+                  <div class="school-year-subpanel-head">
+                    <div>
+                      <p class="admin-eyebrow">Zielschuljahr</p>
+                      <h3>Bezeichnung und Datum festlegen</h3>
+                    </div>
+                    <small>Standardwerte koennen vor dem Start angepasst werden.</small>
+                  </div>
+
+                  <form method="POST" action="/admin/rollover/start" class="school-year-form-stack school-year-start-form">
                     <input type="hidden" name="_csrf" value="<%= csrfToken %>">
-                    <label for="confirmation_text">Zielschuljahr bestaetigen</label>
-                    <input
-                      id="confirmation_text"
-                      class="form-input school-year-confirm-input"
-                      name="confirmation_text"
-                      type="text"
-                      placeholder="<%= targetYearName %>"
-                      autocomplete="off"
-                      required
-                    >
-                    <small class="admin-muted school-year-confirm-note">
-                      Gib exakt <strong><%= targetYearName %></strong> ein.
-                    </small>
 
-                    <label class="school-year-consent">
-                      <input type="checkbox" required <%= rollover.nextSchoolYearExists ? 'disabled' : '' %>>
-                      <span>Ich habe die Auswirkungen geprueft und moechte den Wechsel jetzt ausfuehren.</span>
-                    </label>
+                    <div class="school-year-start-grid">
+                      <label>
+                        <span>Bezeichnung</span>
+                        <input
+                          class="form-input"
+                          type="text"
+                          name="school_year_name"
+                          value="<%= startValues.schoolYearName || '' %>"
+                          placeholder="2026/2027"
+                          autocomplete="off"
+                          required
+                        >
+                      </label>
+                      <label>
+                        <span>Startdatum</span>
+                        <input
+                          class="form-input"
+                          type="date"
+                          name="start_date"
+                          value="<%= startValues.startDate || '' %>"
+                          required
+                        >
+                      </label>
+                      <label>
+                        <span>Enddatum</span>
+                        <input
+                          class="form-input"
+                          type="date"
+                          name="end_date"
+                          value="<%= startValues.endDate || '' %>"
+                          required
+                        >
+                      </label>
+                    </div>
 
-                    <div class="school-year-button-row">
-                      <button class="btn btn-danger" type="submit" <%= rollover.nextSchoolYearExists ? 'disabled' : '' %>>
-                        Schuljahreswechsel ausfuehren
-                      </button>
+                    <div class="school-year-start-actions">
+                      <button class="btn btn-primary" type="submit">Assistent starten</button>
+                      <% if (preview?.nextSchoolYearExists) { %>
+                        <div class="school-year-inline-note danger">Zielschuljahr existiert bereits. Bitte Bezeichnung oder Zeitraum anpassen.</div>
+                      <% } %>
                     </div>
                   </form>
-                <% } else { %>
-                  <div class="school-year-empty">
-                    Die Freigabe wird erst sichtbar, wenn ein aktives Schuljahr vorhanden ist.
-                  </div>
-                <% } %>
-              </div>
-            </div>
-          </div>
-        </section>
-
-        <section class="school-year-secondary" id="rollover-details">
-          <div class="school-year-section-head school-year-secondary-head">
-            <div>
-              <p class="admin-eyebrow">Weitere Details</p>
-              <h2>Nur bei Bedarf</h2>
-            </div>
-            <a class="school-year-secondary-link" href="/archive">Archiv oeffnen</a>
-          </div>
-
-          <details class="school-year-detail">
-            <summary>
-              <span>Was beim Wechsel passiert</span>
-              <small><%= conciseSteps.length %> Punkte</small>
-            </summary>
-            <div class="school-year-detail-body">
-              <% if (!hasRollover) { %>
-                <div class="school-year-empty">
-                  Sobald ein aktives Schuljahr vorhanden ist, erscheinen hier die wichtigsten Auswirkungen des Wechsels.
-                </div>
-              <% } else { %>
-                <ul class="school-year-detail-list">
-                  <% conciseSteps.forEach((item) => { %>
-                    <li><%= item %></li>
-                  <% }) %>
-                </ul>
+                </section>
               <% } %>
-            </div>
-          </details>
+            <% } else { %>
+              <div class="school-year-empty">Kein aktives Schuljahr vorhanden.</div>
+            <% } %>
+          </section>
+        <% } %>
 
-          <details class="school-year-detail">
-            <summary>
-              <span>Klassen im Zielschuljahr</span>
-              <small><%= classRows.length %> Eintraege</small>
-            </summary>
-            <div class="school-year-detail-body">
-              <% if (!hasRollover || !classRows.length) { %>
-                <div class="school-year-empty">
-                  <% if (hasRollover) { %>
-                    Keine Klassen im aktiven Schuljahr vorhanden.
-                  <% } else { %>
-                    Sobald ein aktives Schuljahr vorhanden ist, erscheinen hier die uebernommenen Klassen.
-                  <% } %>
+        <% if (hasWizard && wizardStep === 'classes') { %>
+          <section class="school-year-panel">
+            <div class="school-year-panel-head">
+              <div>
+                <p class="admin-eyebrow">Schritt 1</p>
+                <h2>Klassen planen</h2>
+              </div>
+              <form method="POST" action="/admin/rollover/reset">
+                <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+                <button class="btn btn-secondary" type="submit">Neu beginnen</button>
+              </form>
+            </div>
+
+            <div class="school-year-panel-meta">
+              <span><%= baseClassPlans.length %> automatische Zielklassen</span>
+              <span><%= extraClassPlans.length %> manuelle Zusatzklassen</span>
+              <span><%= targetOptions.length %> aktivierte Ziele</span>
+            </div>
+
+            <div class="school-year-filter-bar">
+              <label>
+                <span>Filter</span>
+                <input type="search" placeholder="Nach Klasse oder Fach filtern" data-rollover-class-filter-input>
+              </label>
+            </div>
+
+            <form method="POST" action="/admin/rollover/classes" class="school-year-form-stack">
+              <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+
+              <div class="school-year-table-wrap">
+                <table class="school-year-table school-year-class-table">
+                  <thead>
+                    <tr>
+                      <th>Typ</th>
+                      <th>Quelle</th>
+                      <th>Schueler</th>
+                      <th>Zielname</th>
+                      <th>Lehrer</th>
+                      <th>Aktiv</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <% baseClassPlans.forEach((plan) => { const sourceClass = sourceClassMap.get(Number(plan.templateSourceClassId)); %>
+                      <tr data-rollover-class-row data-search-text="<%= `${sourceClass?.name || ''} ${sourceClass?.subject || ''} ${plan.targetName || ''}`.toLowerCase() %>">
+                        <td><span class="school-year-badge"><%= getPlanKindBadge(plan.kind) %></span></td>
+                        <td>
+                          <strong><%= sourceClass?.name || '-' %></strong>
+                          <small><%= sourceClass?.subject || '-' %></small>
+                        </td>
+                        <td><%= sourceClass?.students?.length || 0 %></td>
+                        <td>
+                          <input type="text" name="class_plan[<%= plan.key %>][target_name]" value="<%= plan.targetName %>" class="form-input">
+                        </td>
+                        <td>
+                          <input type="hidden" name="class_plan[<%= plan.key %>][copy_teachers]" value="0">
+                          <label class="school-year-checkline">
+                            <input type="checkbox" name="class_plan[<%= plan.key %>][copy_teachers]" value="1" <%= plan.copyTeachers ? 'checked' : '' %>>
+                            <span><%= sourceClass?.assignments?.length || 0 %> Zuordnungen</span>
+                          </label>
+                        </td>
+                        <td>
+                          <input type="hidden" name="class_plan[<%= plan.key %>][enabled]" value="0">
+                          <label class="school-year-checkline">
+                            <input type="checkbox" name="class_plan[<%= plan.key %>][enabled]" value="1" <%= plan.enabled ? 'checked' : '' %>>
+                            <span>aktiv</span>
+                          </label>
+                        </td>
+                      </tr>
+                    <% }) %>
+                  </tbody>
+                </table>
+              </div>
+
+              <section class="school-year-subpanel">
+                <div class="school-year-subpanel-head">
+                  <div>
+                    <p class="admin-eyebrow">Zusatzklassen</p>
+                    <h3>Weitere Zielklassen anlegen</h3>
+                  </div>
+                  <small>Vorlage bestimmt Fach und Lehrerzuordnungen.</small>
                 </div>
-              <% } else { %>
                 <div class="school-year-table-wrap">
                   <table class="school-year-table">
                     <thead>
                       <tr>
-                        <th>Aktuell</th>
-                        <th>Zielklasse</th>
-                        <th>Fach</th>
-                        <th>Status</th>
+                        <th>Vorlage</th>
+                        <th>Zielname</th>
+                        <th>Lehrer</th>
+                        <th>Aktiv</th>
                       </tr>
                     </thead>
                     <tbody>
-                      <% classRows.forEach((row) => { %>
+                      <% extraRows.forEach((plan, index) => { %>
                         <tr>
-                          <td><%= row.current_name %></td>
-                          <td><%= row.next_name %></td>
-                          <td><%= row.subject %></td>
-                          <td><%= row.changed ? 'Hochstufung' : 'Unveraendert' %></td>
+                          <td>
+                            <input type="hidden" name="extra_rows[<%= index %>][plan_key]" value="<%= plan?.key || '' %>">
+                            <select name="extra_rows[<%= index %>][template_source_class_id]" class="form-select">
+                              <option value="">Vorlage waehlen</option>
+                              <% sourceClasses.forEach((classRow) => { %>
+                                <option value="<%= classRow.id %>" <%= Number(plan?.templateSourceClassId) === Number(classRow.id) ? 'selected' : '' %>>
+                                  <%= classRow.name %> / <%= classRow.subject %>
+                                </option>
+                              <% }) %>
+                            </select>
+                          </td>
+                          <td><input type="text" name="extra_rows[<%= index %>][target_name]" value="<%= plan?.targetName || '' %>" class="form-input"></td>
+                          <td>
+                            <input type="hidden" name="extra_rows[<%= index %>][copy_teachers]" value="0">
+                            <label class="school-year-checkline">
+                              <input type="checkbox" name="extra_rows[<%= index %>][copy_teachers]" value="1" <%= plan?.copyTeachers ? 'checked' : '' %>>
+                              <span>kopieren</span>
+                            </label>
+                          </td>
+                          <td>
+                            <input type="hidden" name="extra_rows[<%= index %>][enabled]" value="0">
+                            <label class="school-year-checkline">
+                              <input type="checkbox" name="extra_rows[<%= index %>][enabled]" value="1" <%= plan?.enabled ? 'checked' : '' %>>
+                              <span>aktiv</span>
+                            </label>
+                          </td>
                         </tr>
                       <% }) %>
                     </tbody>
                   </table>
                 </div>
-              <% } %>
-            </div>
-          </details>
+              </section>
 
-          <details class="school-year-detail">
-            <summary>
-              <span>Verfuegbare Schuljahre</span>
-              <small><%= compactSchoolYears.length %> Eintraege</small>
-            </summary>
-            <div class="school-year-detail-body">
-              <% if (!compactSchoolYears.length) { %>
-                <div class="school-year-empty">Noch keine Schuljahre vorhanden.</div>
-              <% } else { %>
-                <div class="school-year-list">
-                  <% compactSchoolYears.forEach((schoolYear) => { %>
-                    <div class="school-year-list-row">
-                      <div>
-                        <strong><%= schoolYear.name %></strong>
-                        <small><%= schoolYear.rangeLabel %></small>
-                      </div>
-                      <span class="school-year-inline-state <%= schoolYear.is_active ? 'is-active' : '' %>">
-                        <%= schoolYear.is_active ? 'Aktiv' : 'Archiv' %>
-                      </span>
-                    </div>
-                  <% }) %>
-                </div>
-              <% } %>
-            </div>
-          </details>
+              <div class="school-year-button-row">
+                <button class="btn btn-secondary" type="submit" name="intent" value="stay">Speichern</button>
+                <button class="btn btn-primary" type="submit" name="intent" value="next">Weiter zu Schuelern</button>
+              </div>
+            </form>
+          </section>
+        <% } %>
 
-          <details class="school-year-detail">
-            <summary>
-              <span>Letzte Wechsel</span>
-              <small><%= logRows.length %> Eintraege</small>
-            </summary>
-            <div class="school-year-detail-body">
-              <% if (!logRows.length) { %>
-                <div class="school-year-empty">Noch keine Rollover-Logs vorhanden.</div>
-              <% } else { %>
-                <div class="school-year-log-list">
-                  <% logRows.forEach((logRow) => { %>
-                    <div class="school-year-log-row">
-                      <div class="school-year-log-main">
-                        <strong><%= logRow.old_school_year || '-' %> -&gt; <%= logRow.new_school_year || '-' %></strong>
-                        <small><%= logRow.executed_at_compact %></small>
-                      </div>
-                      <div class="school-year-log-side">
-                        <span class="school-year-log-status school-year-log-status-<%= logRow.status_tone %>"><%= logRow.status_label %></span>
-                        <% if (logRow.backup_filename) { %>
-                          <code><%= logRow.backup_filename %></code>
-                        <% } %>
-                      </div>
-                    </div>
-                  <% }) %>
-                </div>
-              <% } %>
+        <% if (hasWizard && wizardStep === 'students') { %>
+          <section class="school-year-panel">
+            <div class="school-year-panel-head">
+              <div>
+                <p class="admin-eyebrow">Schritt 2</p>
+                <h2>Schueler planen</h2>
+              </div>
+              <div class="school-year-panel-meta">
+                <span><%= sourceClassGroups.length %> Ausgangsklassen</span>
+                <span><%= validation.reviewStats.promotedStudentCount || 0 %> Uebernahmen</span>
+                <span><%= validation.reviewStats.intakeStudentCount || 0 %> neue Schueler</span>
+              </div>
             </div>
-          </details>
+
+            <div class="school-year-filter-bar">
+              <label>
+                <span>Filter</span>
+                <input type="search" placeholder="Nach Klasse, Name oder E-Mail filtern" data-rollover-student-filter-input>
+              </label>
+            </div>
+
+            <form method="POST" action="/admin/rollover/students" class="school-year-form-stack">
+              <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+
+              <% sourceClassGroups.forEach((group, index) => { %>
+                <details class="school-year-student-group" data-rollover-student-group <%= index < 3 ? 'open' : '' %>>
+                  <summary>
+                    <span><strong><%= group.classRow.name %></strong> / <%= group.classRow.subject %></span>
+                    <small><%= group.students.length %> Schueler | <%= group.promoteCount %> uebernehmen | <%= group.graduateCount %> beenden</small>
+                  </summary>
+                  <div class="school-year-group-body">
+                    <div class="school-year-group-defaults">
+                      <label>
+                        <span>Standardaktion</span>
+                        <select name="student_defaults[<%= group.classRow.id %>][default_action]" class="form-select">
+                          <option value="promote" <%= group.defaults.defaultAction === 'promote' ? 'selected' : '' %>>In Zielklasse uebernehmen</option>
+                          <option value="graduate" <%= group.defaults.defaultAction === 'graduate' ? 'selected' : '' %>>Nicht uebernehmen</option>
+                        </select>
+                      </label>
+                      <label>
+                        <span>Standard-Zielklasse</span>
+                        <select name="student_defaults[<%= group.classRow.id %>][default_target_class_key]" class="form-select">
+                          <option value="">Keine Zielklasse</option>
+                          <% group.targetOptions.forEach((option) => { %>
+                            <option value="<%= option.key %>" <%= option.key === group.defaults.defaultTargetClassKey ? 'selected' : '' %>><%= option.label %></option>
+                          <% }) %>
+                        </select>
+                      </label>
+                    </div>
+
+                    <div class="school-year-table-wrap">
+                      <table class="school-year-table school-year-student-table">
+                        <thead>
+                          <tr>
+                            <th>Name</th>
+                            <th>E-Mail</th>
+                            <th>Override</th>
+                            <th>Aktion</th>
+                            <th>Zielklasse</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          <% group.students.forEach((studentPlan) => { %>
+                            <tr data-rollover-student-row data-search-text="<%= `${studentPlan.studentName} ${studentPlan.studentEmail} ${group.classRow.name} ${group.classRow.subject}`.toLowerCase() %>">
+                              <td><strong><%= studentPlan.studentName %></strong></td>
+                              <td><%= studentPlan.studentEmail %></td>
+                              <td>
+                                <select name="student_overrides[<%= studentPlan.sourceStudentId %>][mode]" class="form-select">
+                                  <option value="inherit" <%= studentPlan.mode !== 'manual' ? 'selected' : '' %>>Standard</option>
+                                  <option value="manual" <%= studentPlan.mode === 'manual' ? 'selected' : '' %>>Manuell</option>
+                                </select>
+                              </td>
+                              <td>
+                                <select name="student_overrides[<%= studentPlan.sourceStudentId %>][action]" class="form-select">
+                                  <option value="promote" <%= studentPlan.action === 'promote' ? 'selected' : '' %>>Uebernehmen</option>
+                                  <option value="graduate" <%= studentPlan.action === 'graduate' ? 'selected' : '' %>>Nicht uebernehmen</option>
+                                </select>
+                              </td>
+                              <td>
+                                <select name="student_overrides[<%= studentPlan.sourceStudentId %>][target_class_key]" class="form-select">
+                                  <option value="">Keine Zielklasse</option>
+                                  <% group.targetOptions.forEach((option) => { %>
+                                    <option value="<%= option.key %>" <%= option.key === studentPlan.targetClassKey ? 'selected' : '' %>><%= option.label %></option>
+                                  <% }) %>
+                                </select>
+                              </td>
+                            </tr>
+                          <% }) %>
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                </details>
+              <% }) %>
+
+              <% if (intakeTargets.length) { %>
+                <section class="school-year-subpanel">
+                  <div class="school-year-subpanel-head">
+                    <div>
+                      <p class="admin-eyebrow">Neue Schueler</p>
+                      <h3>Intake und Zusatzklassen fuellen</h3>
+                    </div>
+                    <small>Format pro Zeile: <code>Name;E-Mail</code> oder <code>E-Mail</code></small>
+                  </div>
+
+                  <div class="school-year-intake-grid">
+                    <% intakeTargets.forEach((target) => { %>
+                      <label class="school-year-intake-card">
+                        <span class="school-year-intake-title"><%= target.label %></span>
+                        <textarea
+                          name="intake_students[<%= target.plan.key %>][raw_text]"
+                          rows="6"
+                          placeholder="Max Mustermann;max.mustermann@schule.at"
+                        ><%= target.rawText %></textarea>
+                        <small><%= target.students.length %> neue Schueler erkannt</small>
+                      </label>
+                    <% }) %>
+                  </div>
+                </section>
+              <% } %>
+
+              <div class="school-year-button-row">
+                <button class="btn btn-secondary" type="submit" name="intent" value="back">Zurueck zu Klassen</button>
+                <button class="btn btn-primary" type="submit" name="intent" value="next">Weiter zur Pruefung</button>
+              </div>
+            </form>
+          </section>
+        <% } %>
+
+        <% if (hasWizard && wizardStep === 'review') { %>
+          <section class="school-year-panel">
+            <div class="school-year-panel-head">
+              <div>
+                <p class="admin-eyebrow">Schritt 3</p>
+                <h2>Pruefen und ausfuehren</h2>
+              </div>
+              <div class="school-year-panel-meta">
+                <span><%= validation.reviewStats.targetClassCount || 0 %> Zielklassen</span>
+                <span><%= validation.reviewStats.promotedStudentCount || 0 %> Schueler uebernehmen</span>
+                <span><%= validation.reviewStats.intakeStudentCount || 0 %> neue Schueler</span>
+              </div>
+            </div>
+
+            <% if (!validation.valid) { %>
+              <div class="school-year-inline-note danger">
+                <strong>Bitte zuerst korrigieren:</strong>
+                <ul class="school-year-inline-list">
+                  <% validation.errors.forEach((entry) => { %>
+                    <li><%= entry %></li>
+                  <% }) %>
+                </ul>
+              </div>
+            <% } %>
+
+            <div class="school-year-metric-grid">
+              <div class="school-year-metric"><span>Hochstufungen</span><strong><%= validation.reviewStats.promotedClassCount || 0 %></strong></div>
+              <div class="school-year-metric"><span>Neueinstiege</span><strong><%= validation.reviewStats.intakeClassCount || 0 %></strong></div>
+              <div class="school-year-metric"><span>Zusatzklassen</span><strong><%= validation.reviewStats.extraClassCount || 0 %></strong></div>
+              <div class="school-year-metric"><span>Lehrerzuordnungen</span><strong><%= validation.reviewStats.teacherAssignmentCount || 0 %></strong></div>
+            </div>
+
+            <div class="school-year-table-wrap">
+              <table class="school-year-table">
+                <thead>
+                  <tr>
+                    <th>Typ</th>
+                    <th>Quelle</th>
+                    <th>Zielklasse</th>
+                    <th>Lehrer</th>
+                    <th>Uebernahmen</th>
+                    <th>Neue Schueler</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <% reviewClassRows.forEach((row) => { %>
+                    <tr>
+                      <td><span class="school-year-badge"><%= getPlanKindBadge(row.plan.kind) %></span></td>
+                      <td><%= row.sourceLabel %></td>
+                      <td><strong><%= row.targetLabel %></strong></td>
+                      <td><%= row.teacherCount %></td>
+                      <td><%= row.promotedStudents %></td>
+                      <td><%= row.intakeStudents %></td>
+                    </tr>
+                  <% }) %>
+                </tbody>
+              </table>
+            </div>
+
+            <form method="POST" action="/admin/rollover/execute" class="school-year-confirm-form">
+              <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+              <label for="confirmation_text">Zielschuljahr bestaetigen</label>
+              <input
+                id="confirmation_text"
+                class="form-input school-year-confirm-input"
+                name="confirmation_text"
+                type="text"
+                placeholder="<%= draft?.nextSchoolYear?.name || '' %>"
+                autocomplete="off"
+                required
+              >
+              <small class="admin-muted school-year-confirm-note">
+                Gib exakt <strong><%= draft?.nextSchoolYear?.name || '-' %></strong> ein. Vor der Ausfuehrung wird ein Backup erzeugt.
+              </small>
+
+              <div class="school-year-button-row">
+                <a class="btn btn-secondary" href="/admin/rollover?step=students">Zurueck zu Schuelern</a>
+                <button class="btn btn-danger" type="submit" <%= validation.valid ? '' : 'disabled' %>>Schuljahreswechsel ausfuehren</button>
+              </div>
+            </form>
+          </section>
+        <% } %>
+
+        <section class="school-year-panel school-year-panel-logs">
+          <div class="school-year-panel-head">
+            <div>
+              <p class="admin-eyebrow">Historie</p>
+              <h2>Letzte Wechsel</h2>
+            </div>
+          </div>
+          <% if (!logs.length) { %>
+            <div class="school-year-empty">Noch keine Rollover-Logs vorhanden.</div>
+          <% } else { %>
+            <div class="school-year-log-list">
+              <% logs.forEach((logRow) => { %>
+                <% const canRestore = String(logRow.status || '').toLowerCase() === 'success' && Boolean(logRow.backup_path) && activeSchoolYear?.name === logRow.new_school_year; %>
+                <div class="school-year-log-row">
+                  <div>
+                    <strong><%= logRow.old_school_year || '-' %> &rarr; <%= logRow.new_school_year || '-' %></strong>
+                    <small><%= formatDateTime(logRow.executed_at) %></small>
+                  </div>
+                  <div class="school-year-log-actions">
+                    <span class="school-year-badge"><%= logRow.status || '-' %></span>
+                    <% if (canRestore) { %>
+                      <form
+                        method="POST"
+                        action="/admin/rollover/restore"
+                        data-rollover-restore-form
+                        data-restore-label="<%= `${logRow.new_school_year} -> ${logRow.old_school_year}` %>"
+                      >
+                        <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+                        <input type="hidden" name="log_id" value="<%= logRow.id %>">
+                        <button class="btn btn-secondary" type="submit">Schuljahr wiederherstellen</button>
+                      </form>
+                    <% } else if (String(logRow.status || '').toLowerCase() === 'success' && logRow.backup_path) { %>
+                      <small>Restore nur moeglich, wenn <%= logRow.new_school_year %> aktiv ist.</small>
+                    <% } %>
+                  </div>
+                </div>
+              <% }) %>
+            </div>
+          <% } %>
         </section>
       </section>
     </div>

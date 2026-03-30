@@ -47,6 +47,16 @@ async function listClassesBySchoolYear(schoolYearId) {
   );
 }
 
+async function listStudentsByClassId(classId) {
+  return allAsync(
+    `SELECT id, name, email
+     FROM students
+     WHERE class_id = ?
+     ORDER BY name ASC, email ASC, id ASC`,
+    [classId]
+  );
+}
+
 async function listAssignmentRowsBySchoolYear(schoolYearId) {
   return allAsync(
     `SELECT cst.id,
@@ -139,6 +149,7 @@ module.exports = {
   listArchivesBySchoolYear,
   listAssignmentRowsBySchoolYear,
   listClassesBySchoolYear,
+  listStudentsByClassId,
   listGradesBySchoolYear,
   listRolloverLogs,
   listSchoolYears

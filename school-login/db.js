@@ -204,6 +204,11 @@ function createFakeDb() {
         if (schoolYear) {
           schoolYear.is_active = Boolean(is_active);
         }
+      } else if (/DELETE FROM school_years WHERE id = \?/i.test(sql)) {
+        const [id] = params;
+        for (let i = schoolYears.length - 1; i >= 0; i -= 1) {
+          if (schoolYears[i].id === Number(id)) schoolYears.splice(i, 1);
+        }
       } else if (/INSERT INTO archives/i.test(sql)) {
         const [school_year_id, archive_type, entity_count] = params;
         const archiveEntry = {
@@ -215,6 +220,11 @@ function createFakeDb() {
         };
         archives.push(archiveEntry);
         lastID = archiveEntry.id;
+      } else if (/DELETE FROM archives WHERE id = \?/i.test(sql)) {
+        const [id] = params;
+        for (let i = archives.length - 1; i >= 0; i -= 1) {
+          if (archives[i].id === Number(id)) archives.splice(i, 1);
+        }
       } else if (/INSERT INTO rollover_logs/i.test(sql)) {
         const [executed_by, old_school_year, new_school_year, status, backup_path] = params;
         const logEntry = {
