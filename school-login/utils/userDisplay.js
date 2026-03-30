@@ -69,10 +69,15 @@ function getDisplayName({ email, name } = {}) {
 }
 
 function buildSidebarUser({ email, role, name } = {}) {
+  const displayName = getDisplayName({ email, name });
+  const roleLabel = getRoleLabel(role);
+
   return {
     badgeLabel: SCHOOL_BADGE_LABEL,
-    displayName: getDisplayName({ email, name }),
-    roleLabel: getRoleLabel(role)
+    displayName,
+    roleLabel,
+    titleLine: [displayName, roleLabel].filter(Boolean).join(" - "),
+    email: String(email || "").trim()
   };
 }
 
