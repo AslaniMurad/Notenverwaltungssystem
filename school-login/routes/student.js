@@ -166,18 +166,21 @@ function mapGradeRow(row, classInfo) {
   const subject = row.class_subject || classInfo?.subject || row.name || "Fach";
   const gradedAt = row.date || row.created_at;
   const isSpecial = Boolean(row.is_special);
-  const baseComment = row.note || row.name || "";
-  let comment = baseComment;
+  const title = row.name || row.category || "Leistung";
+  const category = row.category || (isSpecial ? "Sonderleistung" : "");
+  let comment = row.note || "";
   if (isSpecial) {
     const displayName = row.name || row.category || "Sonderleistung";
     const description = row.description || row.note || "";
-    comment = description && description !== displayName ? `${displayName} – ${description}` : displayName;
+    comment = description && description !== displayName ? `${displayName} - ${description}` : displayName;
   }
   return {
     id: row.id,
     value: row.grade == null ? null : Number(row.grade),
     weight: row.weight == null ? 1 : Number(row.weight),
     is_absent: Boolean(row.is_absent),
+    title,
+    category,
     subject,
     teacher: classInfo?.teacher_email || null,
     comment,
@@ -437,7 +440,8 @@ async function buildStudentDashboardViewModel(req) {
   const studentProfile = {
     name: student.name,
     class: student.class_name || classInfo?.name || "Unbekannt",
-    subject: student.class_subject || classInfo?.subject || ""
+    subject: student.class_subject || classInfo?.subject || "",
+    schoolYear: req.res?.locals?.activeSchoolYear?.name || student.school_year || ""
   };
 
   return {
@@ -475,6 +479,7 @@ async function renderStudentDashboardPage(req, res, activePage) {
 
   return res.render("student-dashboard", {
     activePage,
+    activeSchoolYear: req.res?.locals?.activeSchoolYear || null,
     email: req.session.user.email,
     studentProfile: viewModel.studentProfile,
     subjects: viewModel.subjects,
@@ -539,6 +544,7 @@ router.get("/grades", async (req, res, next) => {
     let grades = gradeRows.map((row) => mapGradeRow(row, classInfo));
 
     const subject = String(req.query.subject || "").trim();
+    const query = String(req.query.query || "").trim().toLowerCase();
     const startDate = req.query.startDate ? new Date(req.query.startDate) : null;
     const endDate = req.query.endDate ? new Date(req.query.endDate) : null;
 
@@ -548,6 +554,13 @@ router.get("/grades", async (req, res, next) => {
 
     if (subject) {
       grades = grades.filter((grade) => grade.subject === subject);
+    }
+    if (query) {
+      grades = grades.filter((grade) =>
+        [grade.subject, grade.title, grade.category, grade.comment, grade.teacher]
+          .map((value) => String(value || "").toLowerCase())
+          .some((value) => value.includes(query))
+      );
     }
     if (startDate && !Number.isNaN(startDate.getTime())) {
       grades = grades.filter((grade) => {

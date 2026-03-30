@@ -11,6 +11,10 @@
   const currentPage = pageMeta[requestedPage] ? requestedPage : "overview";
   const currentMeta = pageMeta[currentPage];
   const safeSubjects = Array.isArray(subjects) ? subjects : [];
+  const resolvedActiveSchoolYear = (typeof activeSchoolYear !== "undefined"
+    ? activeSchoolYear
+    : (typeof locals !== "undefined" ? locals.activeSchoolYear : null)) || null;
+  const schoolYearLabel = studentProfile.schoolYear || resolvedActiveSchoolYear?.name || "-";
   const page = {
     title: currentMeta.title,
     headerTitle: "Schuelerbereich",
@@ -54,9 +58,15 @@
             </div>
           </div>
           <div class="header-right">
-            <div>
-              <strong><%= studentProfile.name %></strong><br>
-              <small>Klasse <%= studentProfile.class %></small><br>
+            <div class="dashboard-identity">
+              <strong><%= studentProfile.name %></strong>
+              <div class="dashboard-identity-meta">
+                <span>Klasse <%= studentProfile.class %></span>
+                <span>Schuljahr <%= schoolYearLabel %></span>
+                <% if (studentProfile.subject) { %>
+                  <span>Standardfach <%= studentProfile.subject %></span>
+                <% } %>
+              </div>
               <small><%= email %></small>
             </div>
             <form class="logout-form" method="POST" action="/logout">
@@ -72,11 +82,20 @@
           <% if (currentPage === "overview") { %>
             <section id="overview">
               <div class="card">
-                <h3>Uebersicht</h3>
+                <div class="dataset-head">
+                  <div>
+                    <h3>Uebersicht</h3>
+                    <p class="dataset-copy">Schneller Einstieg fuer aktuelle Noten, Aufgaben und Rueckmeldungen.</p>
+                  </div>
+                </div>
                 <div class="info-grid">
                   <div class="stat-tile">
                     <h4>Durchschnitt</h4>
                     <strong id="overview-average">-</strong>
+                  </div>
+                  <div class="stat-tile">
+                    <h4>Faecher</h4>
+                    <strong id="overview-subject-count"><%= safeSubjects.length %></strong>
                   </div>
                   <div class="stat-tile">
                     <h4>Offene Aufgaben</h4>
@@ -86,16 +105,43 @@
                     <h4>Rueckgaben</h4>
                     <strong id="overview-return-count">-</strong>
                   </div>
+                  <div class="stat-tile">
+                    <h4>Offene Rueckfragen</h4>
+                    <strong id="overview-open-requests">-</strong>
+                  </div>
                 </div>
               </div>
 
               <div class="card">
-                <h3>Naechste Aufgaben</h3>
+                <div class="dataset-head">
+                  <div>
+                    <h3>Naechste Aufgaben</h3>
+                    <p class="dataset-copy">Die naechsten faelligen Leistungen mit Fachbezug.</p>
+                  </div>
+                  <span class="dataset-count" id="overview-upcoming-count">-</span>
+                </div>
                 <div id="overview-upcoming" class="overview-list"></div>
               </div>
 
               <div class="card">
-                <h3>Letzte Rueckgaben</h3>
+                <div class="dataset-head">
+                  <div>
+                    <h3>Letzte Benotungen</h3>
+                    <p class="dataset-copy">Die zuletzt eingetragenen Bewertungen ueber alle Faecher.</p>
+                  </div>
+                  <span class="dataset-count" id="overview-latest-grade-count">-</span>
+                </div>
+                <div id="overview-latest-grades" class="overview-list"></div>
+              </div>
+
+              <div class="card">
+                <div class="dataset-head">
+                  <div>
+                    <h3>Letzte Rueckgaben</h3>
+                    <p class="dataset-copy">Rueckgaben mit Notenstand und Aktivitaet.</p>
+                  </div>
+                  <span class="dataset-count" id="overview-recent-return-count">-</span>
+                </div>
                 <div id="overview-recent-returns" class="overview-list"></div>
               </div>
             </section>
@@ -104,7 +150,13 @@
           <% if (currentPage === "tasks") { %>
             <section id="tasks">
               <div class="card">
-                <h3>Aufgaben</h3>
+                <div class="dataset-head">
+                  <div>
+                    <h3>Aufgaben</h3>
+                    <p class="dataset-copy">Filterbar und kompakte Liste fuer viele Eintraege.</p>
+                  </div>
+                  <span class="dataset-count" id="task-count">-</span>
+                </div>
                 <form id="task-filter" class="filter-grid" aria-label="Aufgaben filtern">
                   <label>Fach
                     <select name="subject" id="task-filter-subject">
@@ -126,7 +178,13 @@
           <% if (currentPage === "returns") { %>
             <section id="returns">
               <div class="card">
-                <h3>Rueckgaben</h3>
+                <div class="dataset-head">
+                  <div>
+                    <h3>Rueckgaben</h3>
+                    <p class="dataset-copy">Alle Rueckgaben mit Fach, Status und direktem Zugriff auf Rueckfragen.</p>
+                  </div>
+                  <span class="dataset-count" id="return-count">-</span>
+                </div>
                 <form id="return-filter" class="filter-grid" aria-label="Rueckgaben filtern">
                   <label>Fach
                     <select name="subject" id="return-filter-subject">
@@ -148,7 +206,13 @@
           <% if (currentPage === "requests") { %>
             <section id="requests">
               <div class="card">
-                <h3>Anfragen</h3>
+                <div class="dataset-head">
+                  <div>
+                    <h3>Anfragen</h3>
+                    <p class="dataset-copy">Konversationen nach Rueckgabe, Fach und letzter Aktivitaet sortiert.</p>
+                  </div>
+                  <span class="dataset-count" id="request-count">-</span>
+                </div>
                 <form id="request-filter" class="filter-grid" aria-label="Anfragen filtern">
                   <label>Rueckgabe
                     <select name="gradeId" id="request-filter-grade">
@@ -167,14 +231,20 @@
           <% if (currentPage === "grades") { %>
             <section id="grades">
               <div class="card">
-                <div class="grades-header" style="display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;">
-                  <h3>Noten</h3>
+                <div class="dataset-head grades-header">
+                  <div>
+                    <h3>Noten</h3>
+                    <p class="dataset-copy">Jede Bewertung zeigt Fach, Leistung, Datum, Lehrkraft und Gewichtung.</p>
+                  </div>
                   <div class="button-row">
                     <a class="btn small secondary" href="/student/grades.csv">CSV Export</a>
                     <a class="btn small secondary" href="/student/grades.pdf">PDF Export</a>
                   </div>
                 </div>
                 <form id="grade-filter" class="filter-grid" aria-label="Noten filtern">
+                  <label>Suche
+                    <input type="search" name="query" id="filter-query" placeholder="Fach, Leistung, Kommentar oder Lehrkraft">
+                  </label>
                   <label>Fach
                     <select name="subject" id="filter-subject">
                       <option value="">Alle</option>
@@ -210,18 +280,34 @@
                     <h4>Letzte Aktualisierung</h4>
                     <small id="avg-updated">-</small>
                   </div>
+                  <div class="stat-tile">
+                    <h4>Sichtbare Eintraege</h4>
+                    <strong id="grade-count">-</strong>
+                  </div>
                 </div>
 
-                <div id="grade-list" aria-live="polite" style="margin-top:10px;"></div>
+                <div id="grade-subject-averages" class="subject-average-list" aria-live="polite"></div>
+                <div id="grade-list" aria-live="polite" class="dataset-block"></div>
               </div>
 
               <div class="card">
-                <h3>Klassenvergleich</h3>
+                <div class="dataset-head">
+                  <div>
+                    <h3>Klassenvergleich</h3>
+                    <p class="dataset-copy">Durchschnittswerte pro Fach im Vergleich zur Klasse.</p>
+                  </div>
+                </div>
                 <div id="class-average" class="chart-row"></div>
               </div>
 
               <div class="card">
-                <h3>Benachrichtigungen</h3>
+                <div class="dataset-head">
+                  <div>
+                    <h3>Benachrichtigungen</h3>
+                    <p class="dataset-copy">Neue Bewertungen und Statusaenderungen kompakt zusammengefasst.</p>
+                  </div>
+                  <span class="dataset-count" id="notification-count">-</span>
+                </div>
                 <div id="notification-list" class="notifications"></div>
               </div>
             </section>
@@ -230,7 +316,13 @@
           <% if (currentPage === "archive") { %>
             <section id="archive">
               <div class="card">
-                <h3>Archivierte Pruefungen</h3>
+                <div class="dataset-head">
+                  <div>
+                    <h3>Archivierte Pruefungen</h3>
+                    <p class="dataset-copy">Historische Leistungen mit denselben Filtern wie im Live-Bereich.</p>
+                  </div>
+                  <span class="dataset-count" id="archive-count">-</span>
+                </div>
                 <form id="archive-filter" class="filter-grid" aria-label="Archiv filtern">
                   <label>Fach
                     <select name="subject" id="archive-filter-subject">
