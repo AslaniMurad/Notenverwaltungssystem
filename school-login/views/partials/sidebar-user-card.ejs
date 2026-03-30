@@ -1,10 +1,22 @@
 <%
-  const sidebarUser = userDisplay.buildSidebarUser(user || {});
+  const resolvedActiveSchoolYear = typeof activeSchoolYear !== "undefined"
+    ? activeSchoolYear
+    : (typeof locals !== "undefined" ? locals.activeSchoolYear : null);
+  const resolvedSidebarStudentClass = typeof sidebarStudentClass !== "undefined"
+    ? sidebarStudentClass
+    : (typeof locals !== "undefined" ? locals.sidebarStudentClass : null);
+  const sidebarUser = userDisplay.buildSidebarUser({
+    ...(user || {}),
+    activeSchoolYearName: resolvedActiveSchoolYear?.name || "",
+    className: resolvedSidebarStudentClass || ""
+  });
 %>
 <div class="sidebar-brand">
   <div class="sidebar-brand-copy">
     <div class="sidebar-title"><%= sidebarUser.titleLine %></div>
-    <div class="sidebar-meta"><%= sidebarUser.email %></div>
+    <% sidebarUser.metaLines.forEach((line) => { %>
+      <div class="sidebar-meta"><%= line %></div>
+    <% }) %>
   </div>
   <span class="sidebar-badge"><%= sidebarUser.badgeLabel %></span>
 </div>

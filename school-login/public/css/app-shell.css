@@ -51,6 +51,8 @@
 }
 
 .sidebar-brand-copy {
+  display: grid;
+  gap: 4px;
   flex: 1;
   min-width: 0;
 }
@@ -77,7 +79,7 @@
 .sidebar-meta {
   font-size: 12px;
   color: var(--shell-muted);
-  margin-top: 4px;
+  margin-top: 0;
   line-height: 1.4;
   word-break: break-word;
 }

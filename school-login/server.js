@@ -11,6 +11,7 @@ const { detectDevice } = require("./middleware/deviceDetection");
 const { buildSessionStore } = require("./sessionStore");
 const { getPasswordValidationError } = require("./utils/password");
 const userDisplay = require("./utils/userDisplay");
+const schoolYearModel = require("./models/schoolYearModel");
 
 const adminRouter = require("./routes/admin");
 const assignmentRouter = require("./routes/assignmentRoutes");
@@ -128,6 +129,15 @@ app.use((req, res, next) => {
   next();
 });
 
+function getAsync(sql, params = []) {
+  return new Promise((resolve, reject) => {
+    db.get(sql, params, (err, row) => {
+      if (err) return reject(err);
+      resolve(row);
+    });
+  });
+}
+
 function renderLogin(res, req, options = {}) {
   const {
     status = 200,
@@ -216,6 +226,47 @@ app.use((req, res, next) => {
     return next();
   }
   return res.redirect("/force-password-change");
+});
+
+app.use(async (req, res, next) => {
+  res.locals.activeSchoolYear = res.locals.activeSchoolYear || null;
+  res.locals.sidebarStudentClass = null;
+
+  const sessionUser = req.session?.user;
+  if (!sessionUser) {
+    return next();
+  }
+
+  try {
+    if (!res.locals.activeSchoolYear) {
+      res.locals.activeSchoolYear = await schoolYearModel.getActiveSchoolYear();
+    }
+  } catch (err) {
+    res.locals.activeSchoolYear = null;
+  }
+
+  if (sessionUser.role !== "student") {
+    return next();
+  }
+
+  try {
+    if (!res.locals.activeSchoolYear?.id) {
+      return next();
+    }
+
+    const studentContext = await getAsync(
+      `SELECT c.name AS class_name
+       FROM students s
+       JOIN classes c ON c.id = s.class_id
+       WHERE s.email = ? AND c.school_year_id = ?`,
+      [sessionUser.email, res.locals.activeSchoolYear.id]
+    );
+    res.locals.sidebarStudentClass = studentContext?.class_name || null;
+  } catch (err) {
+    res.locals.sidebarStudentClass = null;
+  }
+
+  return next();
 });
 
 // --- Startseite (nach Login) ---
