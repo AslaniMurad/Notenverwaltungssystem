@@ -7,6 +7,7 @@ const multer = require("multer");
 const csrf = require("csurf");
 const { db } = require("../db");
 const schoolYearModel = require("../models/schoolYearModel");
+const { listClasses: listAssignableClasses } = require("../models/assignmentModel");
 const { requireAuth, requireRole } = require("../middleware/auth");
 const { createAuditLogMiddleware } = require("../middleware/audit");
 const { deriveNameFromEmail } = require("../utils/studentName");
@@ -650,7 +651,10 @@ async function renderAddGradeForm(req, res, payload) {
   const scoringMode = normalizeScoringMode(activeProfile?.scoring_mode);
   const absenceMode = normalizeAbsenceMode(activeProfile?.absence_mode);
   const thresholds = normalizeThresholds(activeProfile?.thresholds || activeProfile || {});
-  const openMessageCount = classData?.id ? await loadClassOpenMessageCount(classData.id) : 0;
+  const openMessageCount =
+    classData?.id && Number.isFinite(classData?.subject_id)
+      ? await loadClassOpenMessageCount(classData.id, classData.subject_id)
+      : 0;
 
   return res.status(status).render("teacher/teacher-add-grade", {
     email: req.session.user.email,
@@ -732,8 +736,12 @@ function handleUpload(req, res, next) {
       if (!student) {
         return renderError(res, req, "Schüler nicht gefunden.", 404, `/teacher/students/${classId}`);
       }
-      const templates = await loadTemplates(classId);
-      const gradedTemplateIds = await loadGradedTemplateIdsForStudent(classId, student.id);
+      const templates = await loadTemplates(classId, classData.subject_id);
+      const gradedTemplateIds = await loadGradedTemplateIdsForStudent(
+        classId,
+        classData.subject_id,
+        student.id
+      );
       const errorMessage =
         uploadErr.code === "LIMIT_FILE_SIZE"
           ? `Datei ist zu groß. Maximal ${MAX_GRADE_FILE_MB} MB erlaubt.`
@@ -762,6 +770,16 @@ function renderError(res, req, message, status, backUrl) {
     message,
     status,
     backUrl,
+    csrfToken: req.csrfToken()
+  });
+}
+
+function renderTeacherAssignmentForm(res, req, options = {}) {
+  return res.status(options.status || 200).render("teacher/teacher-create-class", {
+    email: req.session.user.email,
+    classes: options.classes || [],
+    formData: options.formData || { class_id: "", subject: "" },
+    error: options.error || null,
     csrfToken: req.csrfToken()
   });
 }
@@ -844,15 +862,15 @@ async function loadClassForTeacher(classId, teacherId, requestedSubjectId = null
       .map((row) => String(row.subject_name || "").trim())
       .filter(Boolean)
   )];
-  const subjectLabel = subjectNames.length ? subjectNames.join(", ") : String(classRow.subject || "");
+  const selectedSubjectLabel = String(selectedSubject.subject_name || classRow.subject || "").trim();
 
   return {
     id: classRow.id,
     name: classRow.name,
     subject_id: Number(selectedSubject.subject_id),
     school_year_id: Number(classRow.school_year_id),
-    subject: subjectLabel,
-    selected_subject: selectedSubject.subject_name || classRow.subject || "",
+    subject: selectedSubjectLabel,
+    selected_subject: selectedSubjectLabel,
     subject_names: subjectNames,
     created_at: classRow.created_at
   };
@@ -865,10 +883,13 @@ async function requireClassAccessForTeacher(req, res, classId, backUrl = "/teach
     return null;
   }
 
+  const rememberedSubjectId =
+    req.session?.teacherSubjectSelections?.[String(classId)] ?? null;
   const subjectIdRaw =
     req.params?.subjectId ??
     req.query?.subject_id ??
-    req.body?.subject_id;
+    req.body?.subject_id ??
+    rememberedSubjectId;
   const hasSubjectConstraint = subjectIdRaw != null && String(subjectIdRaw).trim() !== "";
   const requestedSubjectId = hasSubjectConstraint ? Number(subjectIdRaw) : null;
   if (hasSubjectConstraint && !Number.isFinite(requestedSubjectId)) {
@@ -893,6 +914,10 @@ async function requireClassAccessForTeacher(req, res, classId, backUrl = "/teach
     renderError(res, req, "Keine Berechtigung fuer diese Klasse/Fach-Zuordnung.", 403, backUrl);
     return null;
   }
+  req.session.teacherSubjectSelections = {
+    ...(req.session.teacherSubjectSelections || {}),
+    [String(classId)]: classData.subject_id
+  };
   return classData;
 }
 
@@ -904,53 +929,64 @@ async function loadStudents(classId) {
   return deduplicateStudents(rows);
 }
 
-async function loadTemplates(classId) {
+async function loadTemplates(classId, subjectId) {
   const templates = await allAsync(
-    "SELECT id, name, category, weight, weight_mode, max_points, date, description FROM grade_templates WHERE class_id = ? ORDER BY date, name",
-    [classId]
+    `SELECT id, name, category, weight, weight_mode, max_points, date, description, subject_id
+     FROM grade_templates
+     WHERE class_id = ? AND subject_id = ?
+     ORDER BY date, name`,
+    [classId, subjectId]
   );
   return templates.map((template) => enrichWeightData(template));
 }
 
-async function loadStudentGrades(studentId) {
+async function loadStudentGrades(studentId, classId, subjectId) {
   return allAsync(
-    `SELECT g.id, g.grade, g.points_achieved, g.points_max, g.note, g.created_at, g.grade_template_id as template_id, gt.name, gt.category, gt.weight, gt.weight_mode, gt.max_points as template_max_points, gt.date, gt.description, c.subject as class_subject, g.attachment_path, g.attachment_original_name, g.attachment_mime, g.attachment_size, g.external_link, g.is_absent, 0 as is_special
+    `SELECT g.id, g.grade, g.points_achieved, g.points_max, g.note, g.created_at, g.grade_template_id as template_id, gt.name, gt.category, gt.weight, gt.weight_mode, gt.max_points as template_max_points, gt.date, gt.description, COALESCE(s.name, c.subject) as class_subject, g.attachment_path, g.attachment_original_name, g.attachment_mime, g.attachment_size, g.external_link, g.is_absent, 0 as is_special
      FROM grades g
      JOIN grade_templates gt ON gt.id = g.grade_template_id
      JOIN classes c ON c.id = g.class_id
-     WHERE g.student_id = ?
+     LEFT JOIN subjects s ON s.id = gt.subject_id
+     WHERE g.student_id = ? AND g.class_id = ? AND gt.subject_id = ?
      UNION ALL
-     SELECT sa.id, sa.grade, NULL as points_achieved, NULL as points_max, sa.description as note, sa.created_at, NULL as template_id, sa.name, sa.type as category, sa.weight, NULL as weight_mode, NULL as template_max_points, sa.created_at as date, sa.description, c.subject as class_subject, NULL as attachment_path, NULL as attachment_original_name, NULL as attachment_mime, NULL as attachment_size, NULL as external_link, false as is_absent, 1 as is_special
+     SELECT sa.id, sa.grade, NULL as points_achieved, NULL as points_max, sa.description as note, sa.created_at, NULL as template_id, sa.name, sa.type as category, sa.weight, NULL as weight_mode, NULL as template_max_points, sa.created_at as date, sa.description, COALESCE(ss.name, c.subject) as class_subject, NULL as attachment_path, NULL as attachment_original_name, NULL as attachment_mime, NULL as attachment_size, NULL as external_link, false as is_absent, 1 as is_special
      FROM special_assessments sa
      JOIN classes c ON c.id = sa.class_id
-     WHERE sa.student_id = ?
+     LEFT JOIN subjects ss ON ss.id = sa.subject_id
+     WHERE sa.student_id = ? AND sa.class_id = ? AND sa.subject_id = ?
      ORDER BY created_at DESC`,
-    [studentId, studentId]
+    [studentId, classId, subjectId, studentId, classId, subjectId]
   );
 }
 
-async function loadGradedTemplateIdsForStudent(classId, studentId) {
+async function loadGradedTemplateIdsForStudent(classId, subjectId, studentId) {
   const rows = await allAsync(
-    "SELECT grade_template_id FROM grades WHERE class_id = ? AND student_id = ?",
-    [classId, studentId]
+    `SELECT g.grade_template_id
+     FROM grades g
+     JOIN grade_templates gt ON gt.id = g.grade_template_id
+     WHERE g.class_id = ? AND gt.subject_id = ? AND g.student_id = ?`,
+    [classId, subjectId, studentId]
   );
   return rows.map((row) => String(row.grade_template_id));
 }
 
-async function loadTemplateForClass(classId, templateId) {
+async function loadTemplateForClass(classId, subjectId, templateId) {
   const template = await getAsync(
-    "SELECT id, name, category, weight, weight_mode, max_points, date, description FROM grade_templates WHERE id = ? AND class_id = ?",
-    [templateId, classId]
+    `SELECT id, name, category, weight, weight_mode, max_points, date, description, subject_id
+     FROM grade_templates
+     WHERE id = ? AND class_id = ? AND subject_id = ?`,
+    [templateId, classId, subjectId]
   );
   return template ? enrichWeightData(template) : null;
 }
 
-async function loadExistingGradesForTemplate(classId, templateId) {
+async function loadExistingGradesForTemplate(classId, subjectId, templateId) {
   const rows = await allAsync(
     `SELECT id, student_id, grade, points_achieved, points_max, note, is_absent
-     FROM grades
-     WHERE class_id = ? AND grade_template_id = ?`,
-    [classId, templateId]
+     FROM grades g
+     JOIN grade_templates gt ON gt.id = g.grade_template_id
+     WHERE g.class_id = ? AND gt.subject_id = ? AND g.grade_template_id = ?`,
+    [classId, subjectId, templateId]
   );
   const map = new Map();
   rows.forEach((row) => {
@@ -966,7 +1002,7 @@ async function loadExistingGradesForTemplate(classId, templateId) {
   return map;
 }
 
-async function loadTemplateGradeStatsForClass(classId) {
+async function loadTemplateGradeStatsForClass(classId, subjectId) {
   const studentCountRow = await getAsync(
     "SELECT COUNT(*) AS total FROM students WHERE class_id = ?",
     [classId]
@@ -974,10 +1010,11 @@ async function loadTemplateGradeStatsForClass(classId) {
   const gradeRows = await allAsync(
     `SELECT g.grade_template_id, COUNT(DISTINCT g.student_id) AS graded_count
      FROM grades g
+     JOIN grade_templates gt ON gt.id = g.grade_template_id
      JOIN students s ON s.id = g.student_id
-     WHERE g.class_id = ? AND s.class_id = ?
+     WHERE g.class_id = ? AND s.class_id = ? AND gt.subject_id = ?
      GROUP BY g.grade_template_id`,
-    [classId, classId]
+    [classId, classId, subjectId]
   );
   const gradedCountByTemplate = new Map();
   gradeRows.forEach((row) => {
@@ -1099,18 +1136,18 @@ async function renderBulkGradeTemplateForm(req, res, payload = {}) {
   });
 }
 
-async function loadSpecialAssessments(classId) {
+async function loadSpecialAssessments(classId, subjectId) {
   return allAsync(
     `SELECT sa.id, sa.student_id, s.name AS student_name, sa.type, sa.name, sa.description, sa.weight, sa.grade, sa.created_at
      FROM special_assessments sa
      JOIN students s ON s.id = sa.student_id
-     WHERE sa.class_id = ?
+     WHERE sa.class_id = ? AND sa.subject_id = ?
      ORDER BY sa.created_at DESC`,
-    [classId]
+    [classId, subjectId]
   );
 }
 
-async function loadClassGradeMessages(classId) {
+async function loadClassGradeMessages(classId, subjectId) {
   return allAsync(
     `SELECT gm.id, gm.grade_id, gm.student_id, gm.student_message, gm.teacher_reply, gm.teacher_reply_by_email, gm.student_hidden_at, gm.created_at, gm.replied_at,
             s.name AS student_name, s.email AS student_email, gt.name AS test_name, g.grade AS grade_value
@@ -1118,20 +1155,21 @@ async function loadClassGradeMessages(classId) {
      JOIN grades g ON g.id = gm.grade_id
      JOIN students s ON s.id = gm.student_id
      LEFT JOIN grade_templates gt ON gt.id = g.grade_template_id
-     WHERE g.class_id = ? AND s.class_id = ?
+     WHERE g.class_id = ? AND s.class_id = ? AND gt.subject_id = ?
      ORDER BY gm.created_at ASC`,
-    [classId, classId]
+    [classId, classId, subjectId]
   );
 }
 
-async function loadStudentGradeMessages(classId, studentId) {
+async function loadStudentGradeMessages(classId, subjectId, studentId) {
   return allAsync(
     `SELECT gm.id, gm.grade_id, gm.student_message, gm.teacher_reply, gm.teacher_reply_by_email, gm.student_hidden_at, gm.created_at, gm.replied_at
      FROM grade_messages gm
      JOIN grades g ON g.id = gm.grade_id
-     WHERE g.class_id = ? AND g.student_id = ? AND gm.student_id = ?
+     JOIN grade_templates gt ON gt.id = g.grade_template_id
+     WHERE g.class_id = ? AND gt.subject_id = ? AND g.student_id = ? AND gm.student_id = ?
      ORDER BY gm.created_at ASC`,
-    [classId, studentId, studentId]
+    [classId, subjectId, studentId, studentId]
   );
 }
 
@@ -1201,25 +1239,33 @@ function groupClassMessageThreads(rows) {
   return { messageThreads, openMessageCount };
 }
 
-async function loadClassOpenMessageCount(classId) {
-  const messages = await loadClassGradeMessages(classId);
+async function loadClassOpenMessageCount(classId, subjectId) {
+  const messages = await loadClassGradeMessages(classId, subjectId);
   const { openMessageCount } = groupClassMessageThreads(messages);
   return openMessageCount;
 }
 
-async function loadMessageForTeacher(classId, messageId, teacherId) {
+async function loadMessageForTeacher(classId, messageId, teacherId, subjectId = null) {
+  const resolvedSubjectId = Number(subjectId);
+  const hasSubjectScope = Number.isFinite(resolvedSubjectId);
+
   return getAsync(
     `SELECT gm.id, gm.student_id, gm.student_hidden_at
      FROM grade_messages gm
      JOIN grades g ON g.id = gm.grade_id
+     JOIN grade_templates gt ON gt.id = g.grade_template_id
      WHERE gm.id = ? AND g.class_id = ?
+       ${hasSubjectScope ? "AND gt.subject_id = ?" : ""}
        AND EXISTS (
          SELECT 1
-         FROM classes c
-         JOIN class_subject_teacher cst ON cst.class_id = c.id AND cst.subject_id = c.subject_id
-         WHERE c.id = g.class_id AND cst.teacher_id = ?
+         FROM class_subject_teacher cst
+         WHERE cst.class_id = g.class_id
+           AND cst.teacher_id = ?
+           ${hasSubjectScope ? "AND cst.subject_id = ?" : ""}
        )`,
-    [messageId, classId, teacherId]
+    hasSubjectScope
+      ? [messageId, classId, resolvedSubjectId, teacherId, resolvedSubjectId]
+      : [messageId, classId, teacherId]
   );
 }
 function shouldSkipGradeForAbsence(grade, absenceMode) {
@@ -1323,13 +1369,13 @@ function computePointTotalsWithParticipation(entries, options = {}) {
   );
 }
 
-async function loadParticipationMarks(classId, studentId) {
+async function loadParticipationMarks(classId, subjectId, studentId) {
   return allAsync(
-    `SELECT id, student_id, class_id, symbol, note, created_at
+    `SELECT id, student_id, class_id, subject_id, symbol, note, created_at
      FROM participation_marks
-     WHERE class_id = ? AND student_id = ?
+     WHERE class_id = ? AND subject_id = ? AND student_id = ?
      ORDER BY created_at DESC`,
-    [classId, studentId]
+    [classId, subjectId, studentId]
   );
 }
 
@@ -1411,7 +1457,7 @@ router.get("/", async (req, res, next) => {
     if (!latestAssignment) {
       return res.redirect("/teacher/classes?empty=1");
     }
-    res.redirect(`/teacher/students/${latestAssignment.class_id}`);
+    res.redirect(`/teacher/students/${latestAssignment.class_id}?subject_id=${latestAssignment.subject_id}`);
   } catch (err) {
     next(err);
   }
@@ -1434,27 +1480,12 @@ router.get("/classes", async (req, res, next) => {
       ? String(req.query.sort)
       : "newest";
 
-    const assignments = await getTeacherAssignments(req.session.user.id);
-    const classMap = new Map();
-    assignments.forEach((entry) => {
-      const classId = Number(entry.class_id);
-      if (!classMap.has(classId)) {
-        classMap.set(classId, {
-          id: classId,
-          name: entry.class_name,
-          subjectSet: new Set(),
-          created_at: entry.created_at
-        });
-      }
-      const classEntry = classMap.get(classId);
-      if (entry.subject_name) {
-        classEntry.subjectSet.add(entry.subject_name);
-      }
-    });
-    const classesAll = [...classMap.values()].map((entry) => ({
-      id: entry.id,
-      name: entry.name,
-      subject: [...entry.subjectSet].sort((a, b) => a.localeCompare(b, "de", { sensitivity: "base" })).join(", "),
+    const classesAll = (await getTeacherAssignments(req.session.user.id)).map((entry) => ({
+      assignment_id: Number(entry.id),
+      id: Number(entry.class_id),
+      name: entry.class_name,
+      subject: entry.subject_name,
+      subject_id: Number(entry.subject_id),
       created_at: entry.created_at
     }));
     let classes = classesAll.filter((entry) => {
@@ -1497,7 +1528,9 @@ router.get("/classes", async (req, res, next) => {
       search: { q, sort },
       setupComplete: Boolean(activeProfile),
       activeProfile,
-      emptyStateMessage: req.query.empty ? "No class assignments yet." : "No class assignments yet.",
+      emptyStateMessage: req.query.empty
+        ? "Noch keine Fachzuordnungen vorhanden."
+        : "Noch keine Fachzuordnungen vorhanden.",
       csrfToken: req.csrfToken()
     });
   } catch (err) {
@@ -1505,11 +1538,95 @@ router.get("/classes", async (req, res, next) => {
   }
 });
 
-router.get("/create-class", (req, res) => {
-  res.render("teacher/teacher-create-class", {
-    email: req.session.user.email,
-    csrfToken: req.csrfToken()
-  });
+router.get("/create-class", async (req, res, next) => {
+  try {
+    const classes = await listAssignableClasses();
+    return renderTeacherAssignmentForm(res, req, { classes });
+  } catch (err) {
+    next(err);
+  }
+});
+
+router.post("/create-class", async (req, res, next) => {
+  try {
+    const classes = await listAssignableClasses();
+    const selectedClassId = Number(req.body?.class_id);
+    const subjectName = String(req.body?.subject || "").trim();
+    const formData = {
+      class_id: String(req.body?.class_id || "").trim(),
+      subject: subjectName
+    };
+
+    if (!formData.class_id || !subjectName) {
+      return renderTeacherAssignmentForm(res, req, {
+        status: 400,
+        classes,
+        formData,
+        error: "Bitte Klasse und Fach angeben."
+      });
+    }
+
+    if (!Number.isFinite(selectedClassId)) {
+      return renderTeacherAssignmentForm(res, req, {
+        status: 400,
+        classes,
+        formData,
+        error: "Ungueltige Klasse."
+      });
+    }
+
+    const selectedClass = await getAsync(
+      "SELECT id, name, subject, subject_id, school_year_id, created_at FROM classes WHERE id = ?",
+      [selectedClassId]
+    );
+    if (!selectedClass) {
+      return renderTeacherAssignmentForm(res, req, {
+        status: 404,
+        classes,
+        formData,
+        error: "Klasse nicht gefunden."
+      });
+    }
+
+    const subjectId = await ensureSubjectIdByName(subjectName);
+    if (!subjectId) {
+      return renderTeacherAssignmentForm(res, req, {
+        status: 400,
+        classes,
+        formData,
+        error: "Fach konnte nicht verarbeitet werden."
+      });
+    }
+
+    const activeSchoolYear = await schoolYearModel.getActiveSchoolYear();
+    if (!activeSchoolYear) {
+      return renderError(res, req, "Kein aktives Schuljahr vorhanden.", 400, "/teacher/create-class");
+    }
+
+    const existingAssignments = await getTeacherAssignments(req.session.user.id);
+    if (
+      existingAssignments.some(
+        (entry) =>
+          Number(entry.class_id) === selectedClassId &&
+          Number(entry.subject_id) === Number(subjectId)
+      )
+    ) {
+      return renderTeacherAssignmentForm(res, req, {
+        status: 400,
+        classes,
+        formData,
+        error: "Diese Fachzuordnung ist bereits vorhanden."
+      });
+    }
+
+    await runAsync(
+      "INSERT INTO class_subject_teacher (class_id, subject_id, teacher_id, school_year_id) VALUES (?,?,?,?)",
+      [selectedClassId, subjectId, req.session.user.id, activeSchoolYear.id]
+    );
+    return res.redirect("/teacher/classes");
+  } catch (err) {
+    next(err);
+  }
 });
 
 router.post("/create-class", async (req, res, next) => {
@@ -1544,6 +1661,30 @@ router.post("/create-class", async (req, res, next) => {
       ]);
     }
     res.redirect("/teacher/classes");
+  } catch (err) {
+    next(err);
+  }
+});
+
+router.post("/delete-class/:id", async (req, res, next) => {
+  try {
+    const classId = Number(req.params.id);
+    const subjectId = Number(req.body?.subject_id || req.query?.subject_id);
+    if (!Number.isFinite(classId) || !Number.isFinite(subjectId)) {
+      return renderError(res, req, "Ungueltige Fachzuordnung.", 400, "/teacher/classes");
+    }
+
+    const assignments = await getTeacherAssignments(req.session.user.id);
+    const assignment = assignments.find(
+      (entry) =>
+        Number(entry.class_id) === classId && Number(entry.subject_id) === Number(subjectId)
+    );
+    if (!assignment) {
+      return renderError(res, req, "Fachzuordnung nicht gefunden.", 404, "/teacher/classes");
+    }
+
+    await runAsync("DELETE FROM class_subject_teacher WHERE id = ?", [assignment.id]);
+    return res.redirect("/teacher/classes");
   } catch (err) {
     next(err);
   }
@@ -1976,7 +2117,7 @@ router.get("/students/:classId", async (req, res, next) => {
           return compareText(a.name, b.name);
       }
     });
-    const openMessageCount = await loadClassOpenMessageCount(classId);
+    const openMessageCount = await loadClassOpenMessageCount(classId, classData.subject_id);
     res.render("teacher/teacher-students", {
       email: req.session.user.email,
       classData,
@@ -1999,7 +2140,7 @@ router.get("/test-questions/:classId", async (req, res, next) => {
       return renderError(res, req, "Klasse nicht gefunden.", 404, "/teacher/classes");
     }
 
-    const messages = await loadClassGradeMessages(classId);
+    const messages = await loadClassGradeMessages(classId, classData.subject_id);
     const { messageThreads, openMessageCount } = groupClassMessageThreads(messages);
     res.render("teacher/teacher-test-questions", {
       email: req.session.user.email,
@@ -2025,7 +2166,12 @@ router.post("/students/:classId/messages/:messageId/reply", async (req, res, nex
       return renderError(res, req, "Ungültige Nachrichten-ID.", 400, `/teacher/test-questions/${classId}`);
     }
 
-    const messageRow = await loadMessageForTeacher(classId, messageId, req.session.user.id);
+    const messageRow = await loadMessageForTeacher(
+      classId,
+      messageId,
+      req.session.user.id,
+      classData.subject_id
+    );
     if (!messageRow) {
       return renderError(res, req, "Nachricht nicht gefunden.", 404, `/teacher/test-questions/${classId}`);
     }
@@ -2061,7 +2207,7 @@ router.get("/add-student/:classId", async (req, res, next) => {
     const classData = await requireClassAccessForTeacher(req, res, classId);
     if (!classData) return;
 
-    const openMessageCount = await loadClassOpenMessageCount(classId);
+    const openMessageCount = await loadClassOpenMessageCount(classId, classData.subject_id);
     res.render("teacher/teacher-add-student", {
       email: req.session.user.email,
       classData,
@@ -2178,19 +2324,23 @@ router.get("/grades/:classId", async (req, res, next) => {
       const haystack = foldText(`${entry.name || ""} ${entry.email || ""}`);
       return haystack.includes(qFolded);
     });
-    const templates = await loadTemplates(classId);
+    const templates = await loadTemplates(classId, classData.subject_id);
     const activeProfile = await loadActiveTeacherProfile(req.session.user.id);
     const participation = normalizeParticipationConfig(
       activeProfile?.participation || activeProfile || {}
     );
     const absenceMode = normalizeAbsenceMode(activeProfile?.absence_mode);
     const thresholds = normalizeThresholds(activeProfile?.thresholds || activeProfile || {});
-    const openMessageCount = await loadClassOpenMessageCount(classId);
+    const openMessageCount = await loadClassOpenMessageCount(classId, classData.subject_id);
     const possibleCount = templates.length;
     const studentsWithGrades = await Promise.all(
       studentsBase.map(async (student) => {
-        const grades = await loadStudentGrades(student.id);
-        const participationMarks = await loadParticipationMarks(classId, student.id);
+        const grades = await loadStudentGrades(student.id, classId, classData.subject_id);
+        const participationMarks = await loadParticipationMarks(
+          classId,
+          classData.subject_id,
+          student.id
+        );
         const participationAverageRows = buildParticipationAverageRows(participationMarks, participation);
         const average = computeWeightedAverage([
           ...grades,
@@ -2300,8 +2450,8 @@ router.post("/grades/:classId/participation", async (req, res, next) => {
     }
 
     await runAsync(
-      "INSERT INTO participation_marks (student_id, class_id, teacher_id, symbol, note) VALUES (?,?,?,?,?)",
-      [student.id, classId, req.session.user.id, symbol, note || null]
+      "INSERT INTO participation_marks (student_id, class_id, subject_id, teacher_id, symbol, note) VALUES (?,?,?,?,?,?)",
+      [student.id, classId, classData.subject_id, req.session.user.id, symbol, note || null]
     );
     await runAsync("INSERT INTO grade_notifications (student_id, message, type) VALUES (?,?,?)", [
       student.id,
@@ -2329,7 +2479,11 @@ router.post("/delete-participation/:classId/:studentId/:markId", async (req, res
       return renderError(res, req, "Schüler nicht gefunden.", 404, `/teacher/students/${classId}`);
     }
 
-    const participationMarks = await loadParticipationMarks(classId, student.id);
+    const participationMarks = await loadParticipationMarks(
+      classId,
+      classData.subject_id,
+      student.id
+    );
     const targetMark = participationMarks.find((entry) => String(entry.id) === String(markId));
     if (!targetMark) {
       return renderError(
@@ -2342,8 +2496,8 @@ router.post("/delete-participation/:classId/:studentId/:markId", async (req, res
     }
 
     await runAsync(
-      "DELETE FROM participation_marks WHERE id = ? AND class_id = ? AND student_id = ?",
-      [markId, classId, student.id]
+      "DELETE FROM participation_marks WHERE id = ? AND class_id = ? AND subject_id = ? AND student_id = ?",
+      [markId, classId, classData.subject_id, student.id]
     );
     res.redirect(`/teacher/student-grades/${classId}/${studentId}`);
   } catch (err) {
@@ -2364,9 +2518,13 @@ router.get("/student-grades/:classId/:studentId", async (req, res, next) => {
       return renderError(res, req, "Schüler nicht gefunden.", 404, `/teacher/students/${classId}`);
     }
 
-    const gradeRows = await loadStudentGrades(student.id);
-    const openMessageCount = await loadClassOpenMessageCount(classId);
-    const gradeMessages = await loadStudentGradeMessages(classId, student.id);
+    const gradeRows = await loadStudentGrades(student.id, classId, classData.subject_id);
+    const openMessageCount = await loadClassOpenMessageCount(classId, classData.subject_id);
+    const gradeMessages = await loadStudentGradeMessages(
+      classId,
+      classData.subject_id,
+      student.id
+    );
     const messagesByGrade = new Map();
     gradeMessages.forEach((message) => {
       const key = String(message.grade_id);
@@ -2388,7 +2546,11 @@ router.get("/student-grades/:classId/:studentId", async (req, res, next) => {
     );
     const absenceMode = normalizeAbsenceMode(activeProfile?.absence_mode);
     const thresholds = normalizeThresholds(activeProfile?.thresholds || activeProfile || {});
-    const participationMarks = await loadParticipationMarks(classId, student.id);
+    const participationMarks = await loadParticipationMarks(
+      classId,
+      classData.subject_id,
+      student.id
+    );
     const fallbackMode = resolveWeightMode(activeProfile?.weight_mode);
     const grades = gradeRows.map((row) => {
       const hasAttachment = Boolean(row.attachment_path);
@@ -2520,13 +2682,17 @@ router.get("/student-grades/:classId/:studentId/details", async (req, res, next)
       return renderError(res, req, "Schüler nicht gefunden.", 404, `/teacher/students/${classId}`);
     }
 
-    const gradeRows = await loadStudentGrades(student.id);
-    const templates = await loadTemplates(classId);
+    const gradeRows = await loadStudentGrades(student.id, classId, classData.subject_id);
+    const templates = await loadTemplates(classId, classData.subject_id);
     const activeProfile = await loadActiveTeacherProfile(req.session.user.id);
     const participationConfig = normalizeParticipationConfig(
       activeProfile?.participation || activeProfile || {}
     );
-    const participationMarks = await loadParticipationMarks(classId, student.id);
+    const participationMarks = await loadParticipationMarks(
+      classId,
+      classData.subject_id,
+      student.id
+    );
     const absenceMode = normalizeAbsenceMode(activeProfile?.absence_mode);
     const thresholds = normalizeThresholds(activeProfile?.thresholds || activeProfile || {});
     const scoringMode = normalizeScoringMode(activeProfile?.scoring_mode);
@@ -2858,9 +3024,15 @@ router.post("/delete-grade/:classId/:gradeId", async (req, res, next) => {
     if (!classData) return;
 
     const gradeRow = await getAsync(
-      "SELECT attachment_path FROM grades WHERE id = ? AND class_id = ?",
-      [gradeId, classId]
+      `SELECT g.attachment_path
+       FROM grades g
+       JOIN grade_templates gt ON gt.id = g.grade_template_id
+       WHERE g.id = ? AND g.class_id = ? AND gt.subject_id = ?`,
+      [gradeId, classId, classData.subject_id]
     );
+    if (!gradeRow) {
+      return renderError(res, req, "Note nicht gefunden.", 404, `/teacher/student-grades/${classId}`);
+    }
     await runAsync("DELETE FROM grades WHERE id = ? AND class_id = ?", [gradeId, classId]);
     await removeStoredAttachment(gradeRow?.attachment_path);
     const backUrl = req.get("referer") || `/teacher/grades/${classId}`;
@@ -2878,8 +3050,11 @@ router.post("/delete-grade-attachment/:classId/:gradeId", async (req, res, next)
     if (!classData) return;
 
     const gradeRow = await getAsync(
-      "SELECT attachment_path FROM grades WHERE id = ? AND class_id = ?",
-      [gradeId, classId]
+      `SELECT g.attachment_path
+       FROM grades g
+       JOIN grade_templates gt ON gt.id = g.grade_template_id
+       WHERE g.id = ? AND g.class_id = ? AND gt.subject_id = ?`,
+      [gradeId, classId, classData.subject_id]
     );
     if (!gradeRow) {
       return renderError(res, req, "Note nicht gefunden.", 404, `/teacher/student-grades/${classId}`);
@@ -2911,8 +3086,12 @@ router.get("/add-grade/:classId/:studentId", async (req, res, next) => {
       return renderError(res, req, "Schüler nicht gefunden.", 404, `/teacher/students/${classId}`);
     }
 
-    const templates = await loadTemplates(classId);
-    const gradedTemplateIds = await loadGradedTemplateIdsForStudent(classId, student.id);
+    const templates = await loadTemplates(classId, classData.subject_id);
+    const gradedTemplateIds = await loadGradedTemplateIdsForStudent(
+      classId,
+      classData.subject_id,
+      student.id
+    );
     return renderAddGradeForm(req, res, {
       classData,
       student,
@@ -2950,8 +3129,12 @@ router.post("/add-grade/:classId/:studentId", handleUpload, async (req, res, nex
       return renderError(res, req, "Schüler nicht gefunden.", 404, `/teacher/students/${classId}`);
     }
 
-    const templates = await loadTemplates(classId);
-    const gradedTemplateIds = await loadGradedTemplateIdsForStudent(classId, student.id);
+    const templates = await loadTemplates(classId, classData.subject_id);
+    const gradedTemplateIds = await loadGradedTemplateIdsForStudent(
+      classId,
+      classData.subject_id,
+      student.id
+    );
     const activeProfile = await loadActiveTeacherProfile(req.session.user.id);
     if (!activeProfile) {
       await removeUploadedFile(req.file);
@@ -2999,8 +3182,8 @@ router.post("/add-grade/:classId/:studentId", handleUpload, async (req, res, nex
     }
 
     const templateRow = await getAsync(
-      "SELECT id, max_points FROM grade_templates WHERE id = ? AND class_id = ?",
-      [grade_template_id, classId]
+      "SELECT id, max_points FROM grade_templates WHERE id = ? AND class_id = ? AND subject_id = ?",
+      [grade_template_id, classId, classData.subject_id]
     );
     if (!templateRow) {
       return renderValidationError(400, "Prüfungsvorlage nicht gefunden.");
@@ -3181,8 +3364,11 @@ router.get("/grade-templates/:classId", async (req, res, next) => {
       ? String(req.query.sort)
       : "date_desc";
 
-    const { studentCount, gradedCountByTemplate } = await loadTemplateGradeStatsForClass(classId);
-    const templatesAll = (await loadTemplates(classId)).map((template) => {
+    const { studentCount, gradedCountByTemplate } = await loadTemplateGradeStatsForClass(
+      classId,
+      classData.subject_id
+    );
+    const templatesAll = (await loadTemplates(classId, classData.subject_id)).map((template) => {
       const categoryKey = normalizeCategoryKey(template.category);
       const categorySlug = categoryKey
         ? (CATEGORY_BY_KEY.get(categoryKey)?.slug || "")
@@ -3256,7 +3442,7 @@ router.get("/grade-templates/:classId", async (req, res, next) => {
       }
     });
 
-    const openMessageCount = await loadClassOpenMessageCount(classId);
+    const openMessageCount = await loadClassOpenMessageCount(classId, classData.subject_id);
     const activeProfile = await loadActiveTeacherProfile(req.session.user.id);
     const totalPointWeight = Number(
       templatesAll.reduce((sum, template) => sum + Number(template.weight || 0), 0).toFixed(2)
@@ -3292,7 +3478,7 @@ router.get("/bulk-grade-template/:classId/:templateId", async (req, res, next) =
       return renderError(res, req, "Klasse nicht gefunden.", 404, "/teacher/classes");
     }
 
-    const template = await loadTemplateForClass(classId, templateId);
+    const template = await loadTemplateForClass(classId, classData.subject_id, templateId);
     if (!template) {
       return renderError(res, req, "Pruefung nicht gefunden.", 404, `/teacher/grade-templates/${classId}`);
     }
@@ -3303,7 +3489,11 @@ router.get("/bulk-grade-template/:classId/:templateId", async (req, res, next) =
     }
 
     const students = await loadStudents(classId);
-    const existingGradesByStudent = await loadExistingGradesForTemplate(classId, templateId);
+    const existingGradesByStudent = await loadExistingGradesForTemplate(
+      classId,
+      classData.subject_id,
+      templateId
+    );
 
     const saved = Number(req.query.saved);
     const updated = Number(req.query.updated);
@@ -3353,7 +3543,7 @@ router.post("/bulk-grade-template/:classId/:templateId", async (req, res, next) 
       return renderError(res, req, "Klasse nicht gefunden.", 404, "/teacher/classes");
     }
 
-    const template = await loadTemplateForClass(classId, templateId);
+    const template = await loadTemplateForClass(classId, classData.subject_id, templateId);
     if (!template) {
       return renderError(res, req, "Pruefung nicht gefunden.", 404, `/teacher/grade-templates/${classId}`);
     }
@@ -3364,7 +3554,11 @@ router.post("/bulk-grade-template/:classId/:templateId", async (req, res, next) 
     }
 
     const students = await loadStudents(classId);
-    const existingGradesByStudent = await loadExistingGradesForTemplate(classId, templateId);
+    const existingGradesByStudent = await loadExistingGradesForTemplate(
+      classId,
+      classData.subject_id,
+      templateId
+    );
     const rows = buildBulkGradeRows(students, existingGradesByStudent, req.body || {});
 
     const scoringMode = normalizeScoringMode(activeProfile.scoring_mode);
@@ -3592,7 +3786,7 @@ router.get("/create-template/:classId", async (req, res, next) => {
       return res.redirect("/teacher/settings?setup=1");
     }
 
-    const openMessageCount = await loadClassOpenMessageCount(classId);
+    const openMessageCount = await loadClassOpenMessageCount(classId, classData.subject_id);
     res.render("teacher/teacher-create-template", {
       email: req.session.user.email,
       classData,
@@ -3695,9 +3889,10 @@ router.post("/create-template/:classId", async (req, res, next) => {
     }
 
     await runAsync(
-      "INSERT INTO grade_templates (class_id, name, category, weight, weight_mode, max_points, date, description) VALUES (?,?,?,?,?,?,?,?)",
+      "INSERT INTO grade_templates (class_id, subject_id, name, category, weight, weight_mode, max_points, date, description) VALUES (?,?,?,?,?,?,?,?,?)",
       [
         classId,
+        classData.subject_id,
         String(name).trim(),
         normalizedCategory,
         weightValue,
@@ -3725,8 +3920,8 @@ router.get("/edit-template/:classId/:templateId", async (req, res, next) => {
     }
 
     const template = await getAsync(
-      "SELECT id, name, category, weight, max_points, date, description FROM grade_templates WHERE id = ? AND class_id = ?",
-      [templateId, classId]
+      "SELECT id, name, category, weight, max_points, date, description FROM grade_templates WHERE id = ? AND class_id = ? AND subject_id = ?",
+      [templateId, classId, classData.subject_id]
     );
     if (!template) {
       return renderError(res, req, "Prüfung nicht gefunden.", 404, `/teacher/grade-templates/${classId}`);
@@ -3773,8 +3968,8 @@ router.post("/edit-template/:classId/:templateId", async (req, res, next) => {
     }
 
     const existingTemplate = await getAsync(
-      "SELECT id, max_points FROM grade_templates WHERE id = ? AND class_id = ?",
-      [templateId, classId]
+      "SELECT id, max_points FROM grade_templates WHERE id = ? AND class_id = ? AND subject_id = ?",
+      [templateId, classId, classData.subject_id]
     );
     if (!existingTemplate) {
       return renderError(res, req, "Prüfung nicht gefunden.", 404, `/teacher/grade-templates/${classId}`);
@@ -3853,7 +4048,7 @@ router.post("/edit-template/:classId/:templateId", async (req, res, next) => {
     }
 
     await runAsync(
-      "UPDATE grade_templates SET name = ?, category = ?, weight = ?, max_points = ?, date = ?, description = ? WHERE id = ? AND class_id = ?",
+      "UPDATE grade_templates SET name = ?, category = ?, weight = ?, max_points = ?, date = ?, description = ? WHERE id = ? AND class_id = ? AND subject_id = ?",
       [
         String(name).trim(),
         normalizedCategory,
@@ -3862,7 +4057,8 @@ router.post("/edit-template/:classId/:templateId", async (req, res, next) => {
         date || null,
         description || null,
         templateId,
-        classId
+        classId,
+        classData.subject_id
       ]
     );
 
@@ -3880,14 +4076,18 @@ router.post("/delete-template/:classId/:templateId", async (req, res, next) => {
     if (!classData) return;
 
     const templateRow = await getAsync(
-      "SELECT id FROM grade_templates WHERE id = ? AND class_id = ?",
-      [templateId, classId]
+      "SELECT id FROM grade_templates WHERE id = ? AND class_id = ? AND subject_id = ?",
+      [templateId, classId, classData.subject_id]
     );
     if (!templateRow) {
       return renderError(res, req, "Prüfung nicht gefunden.", 404, `/teacher/grade-templates/${classId}`);
     }
 
-    await runAsync("DELETE FROM grade_templates WHERE id = ? AND class_id = ?", [templateId, classId]);
+    await runAsync("DELETE FROM grade_templates WHERE id = ? AND class_id = ? AND subject_id = ?", [
+      templateId,
+      classId,
+      classData.subject_id
+    ]);
     res.redirect(`/teacher/grade-templates/${classId}`);
   } catch (err) {
     next(err);
@@ -3901,10 +4101,10 @@ router.get("/special-assessments/:classId", async (req, res, next) => {
     if (!classData) return;
 
     const students = await loadStudents(classId);
-    const assessments = await loadSpecialAssessments(classId);
+    const assessments = await loadSpecialAssessments(classId, classData.subject_id);
     const activeProfile = await loadActiveTeacherProfile(req.session.user.id);
     const weightMode = resolveWeightMode(activeProfile?.weight_mode);
-    const openMessageCount = await loadClassOpenMessageCount(classId);
+    const openMessageCount = await loadClassOpenMessageCount(classId, classData.subject_id);
     const selectedStudent = req.query.student_id ? String(req.query.student_id) : "";
 
     res.render("teacher/teacher-special-assessments", {
@@ -3955,7 +4155,7 @@ router.post("/special-assessments/:classId", async (req, res, next) => {
       trimmedName || (trimmedType && trimmedType !== "Benutzerdefiniert" ? trimmedType : "");
 
     if (!selectedStudent || !isTypeValid || !Number.isFinite(weightValue) || !Number.isFinite(gradeValue)) {
-      const assessments = await loadSpecialAssessments(classId);
+      const assessments = await loadSpecialAssessments(classId, classData.subject_id);
       return res.status(400).render("teacher/teacher-special-assessments", {
         email: req.session.user.email,
         classData,
@@ -3979,7 +4179,7 @@ router.post("/special-assessments/:classId", async (req, res, next) => {
     }
 
     if (trimmedType === "Benutzerdefiniert" && !resolvedName) {
-      const assessments = await loadSpecialAssessments(classId);
+      const assessments = await loadSpecialAssessments(classId, classData.subject_id);
       return res.status(400).render("teacher/teacher-special-assessments", {
         email: req.session.user.email,
         classData,
@@ -4003,7 +4203,7 @@ router.post("/special-assessments/:classId", async (req, res, next) => {
     }
 
     if (weightValue < 0) {
-      const assessments = await loadSpecialAssessments(classId);
+      const assessments = await loadSpecialAssessments(classId, classData.subject_id);
       return res.status(400).render("teacher/teacher-special-assessments", {
         email: req.session.user.email,
         classData,
@@ -4027,7 +4227,7 @@ router.post("/special-assessments/:classId", async (req, res, next) => {
     }
 
     if (gradeValue < 1 || gradeValue > 5) {
-      const assessments = await loadSpecialAssessments(classId);
+      const assessments = await loadSpecialAssessments(classId, classData.subject_id);
       return res.status(400).render("teacher/teacher-special-assessments", {
         email: req.session.user.email,
         classData,
@@ -4051,10 +4251,11 @@ router.post("/special-assessments/:classId", async (req, res, next) => {
     }
 
     await runAsync(
-      "INSERT INTO special_assessments (student_id, class_id, type, name, description, weight, grade) VALUES (?,?,?,?,?,?,?)",
+      "INSERT INTO special_assessments (student_id, class_id, subject_id, type, name, description, weight, grade) VALUES (?,?,?,?,?,?,?,?)",
       [
         selectedStudent.id,
         classId,
+        classData.subject_id,
         trimmedType,
         resolvedName,
         trimmedDescription || null,
@@ -4082,14 +4283,18 @@ router.post("/delete-special-assessment/:classId/:assessmentId", async (req, res
     if (!classData) return;
 
     const assessmentRow = await getAsync(
-      "SELECT id FROM special_assessments WHERE id = ? AND class_id = ?",
-      [assessmentId, classId]
+      "SELECT id FROM special_assessments WHERE id = ? AND class_id = ? AND subject_id = ?",
+      [assessmentId, classId, classData.subject_id]
     );
     if (!assessmentRow) {
       return renderError(res, req, "Sonderleistung nicht gefunden.", 404, `/teacher/special-assessments/${classId}`);
     }
 
-    await runAsync("DELETE FROM special_assessments WHERE id = ? AND class_id = ?", [assessmentId, classId]);
+    await runAsync("DELETE FROM special_assessments WHERE id = ? AND class_id = ? AND subject_id = ?", [
+      assessmentId,
+      classId,
+      classData.subject_id
+    ]);
     const backUrl = req.get("referer") || `/teacher/special-assessments/${classId}`;
     res.redirect(backUrl);
   } catch (err) {
@@ -4104,19 +4309,23 @@ router.get("/class-statistics/:classId", async (req, res, next) => {
     if (!classData) return;
 
     const students = await loadStudents(classId);
-    const templates = await loadTemplates(classId);
+    const templates = await loadTemplates(classId, classData.subject_id);
     const activeProfile = await loadActiveTeacherProfile(req.session.user.id);
     const participationConfig = normalizeParticipationConfig(
       activeProfile?.participation || activeProfile || {}
     );
     const absenceMode = normalizeAbsenceMode(activeProfile?.absence_mode);
-    const openMessageCount = await loadClassOpenMessageCount(classId);
+    const openMessageCount = await loadClassOpenMessageCount(classId, classData.subject_id);
     const studentMap = new Map(students.map((student) => [String(student.id), student]));
     const gradesByStudent = new Map();
 
     for (const student of students) {
-      const grades = await loadStudentGrades(student.id);
-      const participationMarks = await loadParticipationMarks(classId, student.id);
+      const grades = await loadStudentGrades(student.id, classId, classData.subject_id);
+      const participationMarks = await loadParticipationMarks(
+        classId,
+        classData.subject_id,
+        student.id
+      );
       gradesByStudent.set(String(student.id), [
         ...grades,
         ...buildParticipationAverageRows(participationMarks, participationConfig)

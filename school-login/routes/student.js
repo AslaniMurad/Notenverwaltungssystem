@@ -58,12 +58,24 @@ async function loadClassInfo(classId) {
                 SELECT DISTINCT u.email
                 FROM class_subject_teacher cst
                 JOIN users u ON u.id = cst.teacher_id
-                WHERE cst.class_id = c.id AND cst.subject_id = c.subject_id
+                WHERE cst.class_id = c.id
                 ORDER BY u.email
               ) AS teacher_rows
             ), '') AS teacher_email
      FROM classes c
      WHERE c.id = ?`,
+    [classId]
+  );
+}
+
+async function loadClassSubjects(classId) {
+  return allAsync(
+    `SELECT cst.subject_id, COALESCE(s.name, c.subject) AS subject_name
+     FROM class_subject_teacher cst
+     JOIN classes c ON c.id = cst.class_id
+     LEFT JOIN subjects s ON s.id = cst.subject_id
+     WHERE cst.class_id = ? AND cst.school_year_id = c.school_year_id
+     ORDER BY subject_name ASC`,
     [classId]
   );
 }
@@ -90,7 +102,7 @@ async function loadClassAbsenceMode(classId) {
      FROM class_subject_teacher cst
      JOIN classes c ON c.id = cst.class_id
      LEFT JOIN teacher_grading_profiles gp ON gp.teacher_id = cst.teacher_id AND gp.is_active = ?
-     WHERE c.id = ? AND cst.subject_id = c.subject_id
+     WHERE c.id = ?
      ORDER BY gp.created_at ASC, gp.id ASC
      LIMIT 1`,
     [true, classId]
@@ -100,15 +112,39 @@ async function loadClassAbsenceMode(classId) {
 
 async function loadStudentGrades(studentId) {
   return allAsync(
-    `SELECT g.id, g.grade, g.note, g.created_at, g.is_absent, gt.id as template_id, gt.name, gt.category, gt.weight, gt.date, gt.description, c.subject as class_subject, g.attachment_path, g.attachment_original_name, g.attachment_mime, g.attachment_size, g.external_link, 0 as is_special
+    `SELECT g.id, g.grade, g.note, g.created_at, g.is_absent, gt.id as template_id, gt.name, gt.category, gt.weight, gt.date, gt.description, COALESCE(s.name, c.subject) as subject_name, c.subject as class_subject,
+            COALESCE((
+              SELECT STRING_AGG(teacher_rows.email, ', ')
+              FROM (
+                SELECT DISTINCT u.email
+                FROM class_subject_teacher cst
+                JOIN users u ON u.id = cst.teacher_id
+                WHERE cst.class_id = g.class_id AND cst.subject_id = gt.subject_id
+                ORDER BY u.email
+              ) AS teacher_rows
+            ), '') AS teacher_email,
+            g.attachment_path, g.attachment_original_name, g.attachment_mime, g.attachment_size, g.external_link, 0 as is_special
      FROM grades g
      JOIN grade_templates gt ON gt.id = g.grade_template_id
      JOIN classes c ON c.id = g.class_id
+     LEFT JOIN subjects s ON s.id = gt.subject_id
      WHERE g.student_id = ?
      UNION ALL
-     SELECT sa.id, sa.grade, sa.description as note, sa.created_at, false as is_absent, NULL as template_id, sa.name, sa.type as category, sa.weight, sa.created_at as date, sa.description, c.subject as class_subject, NULL as attachment_path, NULL as attachment_original_name, NULL as attachment_mime, NULL as attachment_size, NULL as external_link, 1 as is_special
+     SELECT sa.id, sa.grade, sa.description as note, sa.created_at, false as is_absent, NULL as template_id, sa.name, sa.type as category, sa.weight, sa.created_at as date, sa.description, COALESCE(ss.name, c.subject) as subject_name, c.subject as class_subject,
+            COALESCE((
+              SELECT STRING_AGG(teacher_rows.email, ', ')
+              FROM (
+                SELECT DISTINCT u.email
+                FROM class_subject_teacher cst
+                JOIN users u ON u.id = cst.teacher_id
+                WHERE cst.class_id = sa.class_id AND cst.subject_id = sa.subject_id
+                ORDER BY u.email
+              ) AS teacher_rows
+            ), '') AS teacher_email,
+            NULL as attachment_path, NULL as attachment_original_name, NULL as attachment_mime, NULL as attachment_size, NULL as external_link, 1 as is_special
      FROM special_assessments sa
      JOIN classes c ON c.id = sa.class_id
+     LEFT JOIN subjects ss ON ss.id = sa.subject_id
      WHERE sa.student_id = ?
      ORDER BY created_at DESC`,
     [studentId, studentId]
@@ -117,28 +153,42 @@ async function loadStudentGrades(studentId) {
 
 async function loadTemplates(classId) {
   return allAsync(
-    "SELECT id, name, category, weight, date, description FROM grade_templates WHERE class_id = ? AND archived_at IS NULL ORDER BY date, name",
+    `SELECT gt.id, gt.name, gt.category, gt.weight, gt.date, gt.description, COALESCE(s.name, c.subject) AS subject_name, gt.subject_id
+     FROM grade_templates gt
+     JOIN classes c ON c.id = gt.class_id
+     LEFT JOIN subjects s ON s.id = gt.subject_id
+     WHERE gt.class_id = ? AND gt.archived_at IS NULL
+     ORDER BY subject_name ASC, gt.date, gt.name`,
     [classId]
   );
 }
 
 async function loadArchivedTemplates(classId) {
   return allAsync(
-    "SELECT id, name, category, weight, date, description FROM grade_templates WHERE class_id = ? AND archived_at IS NOT NULL ORDER BY date DESC, name",
+    `SELECT gt.id, gt.name, gt.category, gt.weight, gt.date, gt.description, COALESCE(s.name, c.subject) AS subject_name, gt.subject_id
+     FROM grade_templates gt
+     JOIN classes c ON c.id = gt.class_id
+     LEFT JOIN subjects s ON s.id = gt.subject_id
+     WHERE gt.class_id = ? AND gt.archived_at IS NOT NULL
+     ORDER BY subject_name ASC, gt.date DESC, gt.name`,
     [classId]
   );
 }
 
 async function loadClassGradeRows(classId) {
   return allAsync(
-    `SELECT gt.name as subject, g.grade as value, gt.weight, g.is_absent
+    `SELECT COALESCE(subj.name, c.subject) as subject, g.grade as value, gt.weight, g.is_absent
      FROM grades g
-     JOIN students s ON s.id = g.student_id
+     JOIN students student ON student.id = g.student_id
      JOIN grade_templates gt ON gt.id = g.grade_template_id
-     WHERE s.class_id = ?
+     JOIN classes c ON c.id = g.class_id
+     LEFT JOIN subjects subj ON subj.id = gt.subject_id
+     WHERE student.class_id = ?
      UNION ALL
-     SELECT sa.name as subject, sa.grade as value, sa.weight, false as is_absent
+     SELECT COALESCE(subj.name, c.subject) as subject, sa.grade as value, sa.weight, false as is_absent
      FROM special_assessments sa
+     JOIN classes c ON c.id = sa.class_id
+     LEFT JOIN subjects subj ON subj.id = sa.subject_id
      WHERE sa.class_id = ?`,
     [classId, classId]
   );
@@ -163,7 +213,7 @@ async function loadGradeMessages(studentId) {
 }
 
 function mapGradeRow(row, classInfo) {
-  const subject = row.class_subject || classInfo?.subject || row.name || "Fach";
+  const subject = row.subject_name || row.class_subject || classInfo?.subject || row.name || "Fach";
   const gradedAt = row.date || row.created_at;
   const isSpecial = Boolean(row.is_special);
   const title = row.name || row.category || "Leistung";
@@ -182,7 +232,7 @@ function mapGradeRow(row, classInfo) {
     title,
     category,
     subject,
-    teacher: classInfo?.teacher_email || null,
+    teacher: row.teacher_email || classInfo?.teacher_email || null,
     comment,
     graded_at: gradedAt
   };
@@ -196,7 +246,7 @@ function mapTaskRow(template, gradeRow, classInfo) {
     weight: Number(template.weight || 0),
     due_at: template.date || null,
     description: template.description || "",
-    subject: classInfo?.subject || "",
+    subject: template.subject_name || classInfo?.subject || "",
     graded: Boolean(gradeRow && gradeRow.id),
     grade: gradeRow ? Number(gradeRow.grade) : null,
     graded_at: gradeRow?.created_at || null,
@@ -205,7 +255,7 @@ function mapTaskRow(template, gradeRow, classInfo) {
 }
 
 function mapReturnRow(row, classInfo, messagesByGrade = new Map()) {
-  const subject = row.class_subject || classInfo?.subject || row.name || "";
+  const subject = row.subject_name || row.class_subject || classInfo?.subject || row.name || "";
   const hasFile = Boolean(row.attachment_path);
   const hasLink = Boolean(row.external_link);
   const canMessage = Boolean(row.template_id && !row.is_special);
@@ -398,18 +448,22 @@ async function buildStudentDashboardViewModel(req) {
   if (!context) return null;
 
   const { student, classInfo, classAbsenceMode } = context;
-  const [gradeRows, templates, archivedTemplates, classRows, notifications] = await Promise.all([
+  const [gradeRows, templates, archivedTemplates, classRows, notifications, classSubjects] = await Promise.all([
     loadStudentGrades(student.id),
     loadTemplates(student.class_id),
     loadArchivedTemplates(student.class_id),
     loadClassGradeRows(student.class_id),
-    loadNotifications(student.id)
+    loadNotifications(student.id),
+    loadClassSubjects(student.class_id)
   ]);
 
   const grades = gradeRows.map((row) => mapGradeRow(row, classInfo));
-  const subjectSet = new Set(grades.map((grade) => grade.subject));
-  if (classInfo?.subject) subjectSet.add(classInfo.subject);
-  if (student.class_subject) subjectSet.add(student.class_subject);
+  const subjectSet = new Set(
+    classSubjects.map((entry) => String(entry.subject_name || "").trim()).filter(Boolean)
+  );
+  grades.forEach((grade) => {
+    if (grade.subject) subjectSet.add(grade.subject);
+  });
 
   const subjects = Array.from(subjectSet).filter(Boolean);
   const averages = computeAverages(grades, { absenceMode: classAbsenceMode });
@@ -449,7 +503,6 @@ async function buildStudentDashboardViewModel(req) {
   const studentProfile = {
     name: student.name,
     class: student.class_name || classInfo?.name || "Unbekannt",
-    subject: student.class_subject || classInfo?.subject || "",
     schoolYear: req.res?.locals?.activeSchoolYear?.name || student.school_year || ""
   };
 
@@ -487,6 +540,18 @@ async function renderStudentDashboardPage(req, res, activePage) {
     });
   }
 
+  const requestedGradeSubject =
+    activePage === "grades" ? String(req.query.subject || "").trim() : "";
+  const selectedGradeSubject = viewModel.subjects.includes(requestedGradeSubject)
+    ? requestedGradeSubject
+    : "";
+  const gradeFilters = {
+    query: String(req.query.query || "").trim(),
+    startDate: String(req.query.startDate || "").trim(),
+    endDate: String(req.query.endDate || "").trim(),
+    sort: String(req.query.sort || "date").trim().toLowerCase() === "value" ? "value" : "date"
+  };
+
   return res.render("student-dashboard", {
     activePage,
     activeSchoolYear: req.res?.locals?.activeSchoolYear || null,
@@ -498,6 +563,8 @@ async function renderStudentDashboardPage(req, res, activePage) {
     returns: viewModel.returns,
     materials: [],
     messages: [],
+    gradeSubject: selectedGradeSubject,
+    gradeFilters,
     initialData: viewModel.initialData,
     csrfToken: viewModel.csrfToken
   });
@@ -526,11 +593,15 @@ router.get("/profile", async (req, res, next) => {
     }
 
     const { student, classInfo } = context;
+    const classSubjects = await loadClassSubjects(student.class_id);
+    const subjects = classSubjects
+      .map((entry) => String(entry.subject_name || "").trim())
+      .filter(Boolean);
     res.json({
       name: student.name,
       class: student.class_name || classInfo?.name || "",
       classId: student.class_id,
-      subject: student.class_subject || classInfo?.subject || "",
+      subjects,
       schoolYear: student.school_year || null
     });
   } catch (err) {
@@ -959,7 +1030,6 @@ router.get("/grades.pdf", async (req, res, next) => {
       "Notenuebersicht",
       `Schueler: ${student.name}`,
       `Klasse: ${student.class_name || classInfo?.name || ""}`,
-      `Fach: ${student.class_subject || classInfo?.subject || ""}`,
       "",
       "Fach | Datum | Note | Gewicht | Kommentar"
     ];

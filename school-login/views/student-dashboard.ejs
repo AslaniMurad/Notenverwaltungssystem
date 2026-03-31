@@ -63,9 +63,6 @@
               <div class="dashboard-identity-meta">
                 <span>Klasse <%= studentProfile.class %></span>
                 <span>Schuljahr <%= schoolYearLabel %></span>
-                <% if (studentProfile.subject) { %>
-                  <span>Standardfach <%= studentProfile.subject %></span>
-                <% } %>
               </div>
               <small><%= email %></small>
             </div>
@@ -229,87 +226,89 @@
           <% } %>
 
           <% if (currentPage === "grades") { %>
+            <% const selectedGradeSubject = typeof gradeSubject === "string" ? gradeSubject : ""; %>
+            <% const gradeFilterValues = (typeof gradeFilters !== "undefined" && gradeFilters) ? gradeFilters : {}; %>
             <section id="grades">
-              <div class="card">
-                <div class="dataset-head grades-header">
-                  <div>
-                    <h3>Noten</h3>
-                    <p class="dataset-copy">Jede Bewertung zeigt Fach, Leistung, Datum, Lehrkraft und Gewichtung.</p>
+              <% if (!selectedGradeSubject) { %>
+                <div class="card">
+                  <div class="dataset-head grades-header">
+                    <div>
+                      <h3>Fach auswaehlen</h3>
+                      <p class="dataset-copy">Waehle ein Fach. Danach oeffnet sich die Detailansicht mit deinem aktuellen Stand und dem Beurteilungsprotokoll.</p>
+                    </div>
+                    <div class="button-row">
+                      <a class="btn small secondary" href="/student/grades.csv">CSV Export</a>
+                      <a class="btn small secondary" href="/student/grades.pdf">PDF Export</a>
+                    </div>
                   </div>
-                  <div class="button-row">
-                    <a class="btn small secondary" href="/student/grades.csv">CSV Export</a>
-                    <a class="btn small secondary" href="/student/grades.pdf">PDF Export</a>
-                  </div>
+                  <div id="grade-subject-overview" class="grade-subject-grid" aria-live="polite"></div>
                 </div>
-                <form id="grade-filter" class="filter-grid" aria-label="Noten filtern">
-                  <label>Suche
-                    <input type="search" name="query" id="filter-query" placeholder="Fach, Leistung, Kommentar oder Lehrkraft">
-                  </label>
-                  <label>Fach
-                    <select name="subject" id="filter-subject">
-                      <option value="">Alle</option>
-                      <% safeSubjects.forEach(function(sub){ %>
-                        <option value="<%= sub %>"><%= sub %></option>
-                      <% }) %>
-                    </select>
-                  </label>
-                  <label>Von
-                    <input type="date" name="startDate" id="filter-start">
-                  </label>
-                  <label>Bis
-                    <input type="date" name="endDate" id="filter-end">
-                  </label>
-                  <label>Sortierung
-                    <select name="sort" id="filter-sort">
-                      <option value="date">Datum (neueste zuerst)</option>
-                      <option value="value">Beste Note zuerst</option>
-                    </select>
-                  </label>
-                </form>
+              <% } else { %>
+                <div class="card">
+                  <div class="dataset-head grades-header">
+                    <div>
+                      <div class="grade-back-link-row">
+                        <a class="btn small secondary" href="/student/grades">Zur Faecheruebersicht</a>
+                      </div>
+                      <h3><%= selectedGradeSubject %></h3>
+                      <p class="dataset-copy">Beurteilungsprotokoll und aktueller Stand fuer dieses Fach.</p>
+                    </div>
+                    <div class="button-row">
+                      <a class="btn small secondary" href="/student/grades.csv">CSV Export</a>
+                      <a class="btn small secondary" href="/student/grades.pdf">PDF Export</a>
+                    </div>
+                  </div>
 
-                <div class="info-grid" id="grade-insights">
-                  <div class="stat-tile">
-                    <h4>Gesamtdurchschnitt</h4>
-                    <strong id="avg-overall">-</strong>
+                  <div id="grade-subject-detail" class="grade-subject-detail" aria-live="polite"></div>
+
+                  <form id="grade-filter" class="filter-grid" aria-label="Noten filtern">
+                    <input type="hidden" name="subject" id="filter-subject" value="<%= selectedGradeSubject %>" data-grade-subject-locked="true">
+                    <label>Suche
+                      <input type="search" name="query" id="filter-query" value="<%= gradeFilterValues.query || '' %>" placeholder="Leistung, Kommentar oder Lehrkraft">
+                    </label>
+                    <label>Von
+                      <input type="date" name="startDate" id="filter-start" value="<%= gradeFilterValues.startDate || '' %>">
+                    </label>
+                    <label>Bis
+                      <input type="date" name="endDate" id="filter-end" value="<%= gradeFilterValues.endDate || '' %>">
+                    </label>
+                    <label>Sortierung
+                      <select name="sort" id="filter-sort">
+                        <option value="date" <%= (gradeFilterValues.sort || 'date') === 'date' ? 'selected' : '' %>>Datum (neueste zuerst)</option>
+                        <option value="value" <%= gradeFilterValues.sort === 'value' ? 'selected' : '' %>>Beste Note zuerst</option>
+                      </select>
+                    </label>
+                  </form>
+
+                  <div class="dataset-head grade-protocol-head">
+                    <div>
+                      <h3 id="grade-protocol-title">Beurteilungsprotokoll</h3>
+                      <p class="dataset-copy" id="grade-protocol-copy">Alle sichtbaren Eintraege nach deinen Filtern.</p>
+                    </div>
                   </div>
-                  <div class="stat-tile">
-                    <h4>Trend</h4>
-                    <div id="avg-trend" class="badge-inline">-</div>
+
+                  <div class="info-grid" id="grade-insights">
+                    <div class="stat-tile">
+                      <h4>Fachdurchschnitt</h4>
+                      <strong id="avg-overall">-</strong>
+                    </div>
+                    <div class="stat-tile">
+                      <h4>Trend</h4>
+                      <div id="avg-trend" class="badge-inline">-</div>
+                    </div>
+                    <div class="stat-tile">
+                      <h4>Letzte Aktualisierung</h4>
+                      <small id="avg-updated">-</small>
+                    </div>
+                    <div class="stat-tile">
+                      <h4>Sichtbare Eintraege</h4>
+                      <strong id="grade-count">-</strong>
+                    </div>
                   </div>
-                  <div class="stat-tile">
-                    <h4>Letzte Aktualisierung</h4>
-                    <small id="avg-updated">-</small>
-                  </div>
-                  <div class="stat-tile">
-                    <h4>Sichtbare Eintraege</h4>
-                    <strong id="grade-count">-</strong>
-                  </div>
+
+                  <div id="grade-list" aria-live="polite" class="dataset-block"></div>
                 </div>
-
-                <div id="grade-subject-averages" class="subject-average-list" aria-live="polite"></div>
-                <div id="grade-list" aria-live="polite" class="dataset-block"></div>
-              </div>
-
-              <div class="card">
-                <div class="dataset-head">
-                  <div>
-                    <h3>Klassenvergleich</h3>
-                    <p class="dataset-copy">Durchschnittswerte pro Fach im Vergleich zur Klasse.</p>
-                  </div>
-                </div>
-                <div id="class-average" class="chart-row"></div>
-              </div>
-
-              <div class="card">
-                <div class="dataset-head">
-                  <div>
-                    <h3>Benachrichtigungen</h3>
-                    <p class="dataset-copy">Neue Bewertungen und Statusaenderungen kompakt zusammengefasst.</p>
-                  </div>
-                  <span class="dataset-count" id="notification-count">-</span>
-                </div>
-                <div id="notification-list" class="notifications"></div>
-              </div>
+              <% } %>
             </section>
           <% } %>
 

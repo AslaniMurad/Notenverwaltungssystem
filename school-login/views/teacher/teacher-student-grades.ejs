@@ -1,4 +1,4 @@
-ï»¿<%
+<%
   const page = {
     title: `Lehrer - Noten von ${student.name}`,
     headerTitle: "Lehrerbereich",
@@ -21,11 +21,11 @@
           "wunschpr-fung": "wunschprufung"
         })[
           String(value || "")
-            .replace(/ÃƒÂ¤/g, "Ã¤")
-            .replace(/ÃƒÂ¶/g, "Ã¶")
-            .replace(/ÃƒÂ¼/g, "Ã¼")
-            .replace(/ÃƒÅ¸/g, "ÃŸ")
-            .replace(/Ã‚/g, "")
+            .replace(/Ã¤/g, "ä")
+            .replace(/Ã¶/g, "ö")
+            .replace(/Ã¼/g, "ü")
+            .replace(/ÃŸ/g, "ß")
+            .replace(/Â/g, "")
             .normalize("NFD")
             .replace(/[\u0300-\u036f]/g, "")
             .toLowerCase()
@@ -33,11 +33,11 @@
             .replace(/^-+|-+$/g, "")
         ] ||
         String(value || "")
-          .replace(/ÃƒÂ¤/g, "Ã¤")
-          .replace(/ÃƒÂ¶/g, "Ã¶")
-          .replace(/ÃƒÂ¼/g, "Ã¼")
-          .replace(/ÃƒÅ¸/g, "ÃŸ")
-          .replace(/Ã‚/g, "")
+          .replace(/Ã¤/g, "ä")
+          .replace(/Ã¶/g, "ö")
+          .replace(/Ã¼/g, "ü")
+          .replace(/ÃŸ/g, "ß")
+          .replace(/Â/g, "")
           .normalize("NFD")
           .replace(/[\u0300-\u036f]/g, "")
           .toLowerCase()
@@ -50,16 +50,16 @@
 
         <div class="app-nav">
           <div class="nav-section">
-            <div class="nav-section-title">MenÃ¼</div>
-            <a href="/teacher/classes">Meine Klassen</a>
-            <a href="/teacher/create-class">Klasse erstellen</a>
+            <div class="nav-section-title">Menü</div>
+            <a href="/teacher/classes">Meine Fachzuordnungen</a>
+            <a href="/teacher/create-class">Fach zuordnen</a>
             <a href="/teacher/settings">Einstellungen</a>
             <div class="nav-section-title">Klasse: <%= classData.name %> / <%= classData.subject %></div>
             <a href="/teacher/students/<%= classData.id %>">Schueler</a>
             <a class="<%= (typeof openMessageCount !== 'undefined' && openMessageCount > 0) ? 'is-alert' : '' %>" href="/teacher/test-questions/<%= classData.id %>">Fragen zu Tests<% if (typeof openMessageCount !== 'undefined' && openMessageCount > 0) { %><span class="nav-notification-badge"><%= openMessageCount %></span><% } %></a>
             <a href="/teacher/grades/<%= classData.id %>">Noten</a>
             <a href="/teacher/special-assessments/<%= classData.id %>">Sonderleistungen</a>
-            <a href="/teacher/grade-templates/<%= classData.id %>">PrÃ¼fungen</a>
+            <a href="/teacher/grade-templates/<%= classData.id %>">Prüfungen</a>
             <a href="/teacher/class-statistics/<%= classData.id %>">Statistiken</a>
             <form class="logout-form" method="POST" action="/logout">
               <input type="hidden" name="_csrf" value="<%= csrfToken %>">
@@ -72,14 +72,14 @@
       <section class="teacher-main">
         <header class="teacher-main-header">
           <div>
-            <p class="teacher-eyebrow">SchÃ¼ler: <%= student.name %></p>
+            <p class="teacher-eyebrow">Schüler: <%= student.name %></p>
             <h1>Notendetails</h1>
             <p class="teacher-muted">Klasse: <%= classData.name %> (<%= classData.subject %>)</p>
           </div>
           <div class="teacher-actions-inline">
-            <a class="btn btn-primary" href="/teacher/add-grade/<%= classData.id %>/<%= student.id %>">+ Bewertung hinzufÃ¼gen</a>
+            <a class="btn btn-primary" href="/teacher/add-grade/<%= classData.id %>/<%= student.id %>">+ Bewertung hinzufügen</a>
             <a class="btn btn-secondary" href="/teacher/student-grades/<%= classData.id %>/<%= student.id %>/details">Details</a>
-            <a class="btn btn-secondary" href="/teacher/grades/<%= classData.id %>">ZurÃ¼ck</a>
+            <a class="btn btn-secondary" href="/teacher/grades/<%= classData.id %>">Zurück</a>
           </div>
         </header>
 
@@ -117,7 +117,7 @@
           <div class="teacher-card-header">
             <div>
               <p class="teacher-eyebrow">Wunschnote</p>
-              <h3>Welche Note wÃ¼rde helfen?</h3>
+              <h3>Welche Note würde helfen?</h3>
             </div>
             <button
               class="btn btn-secondary"
@@ -125,13 +125,13 @@
               id="openWishGradeModal"
               <%= (wishGradeRows || []).length === 0 ? "disabled" : "" %>
             >
-              Rechner Ã¶ffnen
+              Rechner öffnen
             </button>
           </div>
           <% if ((wishGradeRows || []).length === 0) { %>
-            <p class="teacher-muted">Noch keine gewichteten EintrÃ¤ge vorhanden.</p>
+            <p class="teacher-muted">Noch keine gewichteten Einträge vorhanden.</p>
           <% } else { %>
-            <p class="teacher-muted">Der Rechner berÃ¼cksichtigt Noten und Mitarbeit aus der Gesamtnote.</p>
+            <p class="teacher-muted">Der Rechner berücksichtigt Noten und Mitarbeit aus der Gesamtnote.</p>
           <% } %>
         </div>
 
@@ -142,7 +142,7 @@
               <h3>MA-Verlauf</h3>
             </div>
             <% if (participationEnabled) { %>
-              <div class="teacher-meta-chip"><%= (participationEntries || []).length %> EintrÃ¤ge</div>
+              <div class="teacher-meta-chip"><%= (participationEntries || []).length %> Einträge</div>
             <% } %>
           </div>
 
@@ -154,7 +154,7 @@
           <% } else if ((participationEntries || []).length === 0) { %>
             <div class="teacher-empty">
               <h4>Noch keine Mitarbeit</h4>
-              <p>In der NotenÃ¼bersicht kannst du mit dem MA-Button EintrÃ¤ge erfassen.</p>
+              <p>In der Notenübersicht kannst du mit dem MA-Button Einträge erfassen.</p>
             </div>
           <% } else { %>
             <div class="grades-table-wrapper">
@@ -199,15 +199,15 @@
               <p class="teacher-eyebrow">Alle Noten</p>
               <h3>Notenliste</h3>
             </div>
-            <div class="teacher-meta-chip"><%= grades.length %> EintrÃ¤ge</div>
+            <div class="teacher-meta-chip"><%= grades.length %> Einträge</div>
           </div>
 
           <div class="grades-list">
             <% if (grades.length === 0) { %>
               <div class="teacher-empty">
                 <h4>Noch keine Noten</h4>
-                <p>FÃ¼ge die erste Note fÃ¼r diesen SchÃ¼ler hinzu.</p>
-                <a class="btn btn-primary" href="/teacher/add-grade/<%= classData.id %>/<%= student.id %>">Bewertung hinzufÃ¼gen</a>
+                <p>Füge die erste Note für diesen Schüler hinzu.</p>
+                <a class="btn btn-primary" href="/teacher/add-grade/<%= classData.id %>/<%= student.id %>">Bewertung hinzufügen</a>
               </div>
             <% } else { %>
               <% grades.forEach((grade) => { %>
@@ -233,7 +233,7 @@
                       <% } %>
                       <form class="inline delete-grade-form" method="POST" action="<%= grade.delete_action %>" data-grade-info="<%= grade.template_name %> (<%= grade.grade %>)">
                         <input type="hidden" name="_csrf" value="<%= csrfToken %>">
-                        <button class="btn btn-danger btn-sm" type="button">LÃ¶schen</button>
+                        <button class="btn btn-danger btn-sm" type="button">Löschen</button>
                       </form>
                     </div>
                   </div>
@@ -256,7 +256,7 @@
                       <span class="teacher-muted">Anhang: <%= grade.attachment_name || "Datei" %></span>
                       <form class="inline delete-attachment-form" method="POST" action="<%= grade.attachment_delete_action %>">
                         <input type="hidden" name="_csrf" value="<%= csrfToken %>">
-                        <button class="btn btn-secondary btn-sm" type="submit">Anhang lÃ¶schen</button>
+                        <button class="btn btn-secondary btn-sm" type="submit">Anhang löschen</button>
                       </form>
                     </div>
                   <% } %>
@@ -315,7 +315,7 @@
     <div id="wishGradeModal" class="modal-overlay wish-grade-modal">
       <div class="modal-content modal-content-wide">
         <div class="modal-header">
-          <h3>Welche Note wÃ¼rde helfen?</h3>
+          <h3>Welche Note würde helfen?</h3>
         </div>
         <div class="modal-body">
           <form class="teacher-form" onsubmit="return false;">
@@ -330,7 +330,7 @@
               value="<%= average != null ? average : '' %>"
               placeholder="z.B. 2.0"
             >
-            <small class="form-hint">Berechnung fÃ¼r eine zusÃ¤tzliche Leistung mit frei wÃ¤hlbarer Gewichtung.</small>
+            <small class="form-hint">Berechnung für eine zusätzliche Leistung mit frei wählbarer Gewichtung.</small>
           </form>
 
           <p class="teacher-muted" id="wish-grade-info"></p>
@@ -340,7 +340,7 @@
               <thead>
                 <tr>
                   <th>Gewichtung (Punkte)</th>
-                  <th>BenÃ¶tigte Note</th>
+                  <th>Benötigte Note</th>
                   <th>Hinweis</th>
                 </tr>
               </thead>
@@ -357,15 +357,15 @@
     <div id="deleteGradeModal" class="modal-overlay">
       <div class="modal-content">
         <div class="modal-header">
-          <h3>Note lÃ¶schen</h3>
+          <h3>Note löschen</h3>
         </div>
         <div class="modal-body">
-          <p>MÃ¶chtest du die Note <strong id="deleteGradeInfo"></strong> wirklich lÃ¶schen?</p>
-          <p class="teacher-muted">Diese Aktion kann nicht rÃ¼ckgÃ¤ngig gemacht werden.</p>
+          <p>Möchtest du die Note <strong id="deleteGradeInfo"></strong> wirklich löschen?</p>
+          <p class="teacher-muted">Diese Aktion kann nicht rückgängig gemacht werden.</p>
         </div>
         <div class="modal-footer">
           <button class="btn btn-secondary" id="cancelDeleteGrade" type="button">Abbrechen</button>
-          <button class="btn btn-danger" id="confirmDeleteGrade" type="button">LÃ¶schen</button>
+          <button class="btn btn-danger" id="confirmDeleteGrade" type="button">Löschen</button>
         </div>
       </div>
     </div>
@@ -408,27 +408,27 @@
 
         function formatRequiredGrade(required, currentAverage, targetGrade) {
           if (!Number.isFinite(required)) {
-            return { display: "-", hint: "Keine Berechnung mÃ¶glich", badgeClass: null };
+            return { display: "-", hint: "Keine Berechnung möglich", badgeClass: null };
           }
           if (required < 1) {
             return {
               display: "Nicht erreichbar",
-              hint: "Mit nur einer zusÃ¤tzlichen Bewertung dieses Gewichts reicht selbst Note 1 nicht.",
+              hint: "Mit nur einer zusätzlichen Bewertung dieses Gewichts reicht selbst Note 1 nicht.",
               badgeClass: null
             };
           }
           if (required > 5) {
             const alreadyReached = Number.isFinite(currentAverage) && currentAverage <= targetGrade;
             return {
-              display: "Bis 5.00 mÃ¶glich",
-              hint: alreadyReached ? "Ziel ist bereits erreicht." : "Auch eine schwache zusÃ¤tzliche Note wÃ¤re ausreichend.",
+              display: "Bis 5.00 möglich",
+              hint: alreadyReached ? "Ziel ist bereits erreicht." : "Auch eine schwache zusätzliche Note wäre ausreichend.",
               badgeClass: null
             };
           }
           const roundedClass = Math.min(5, Math.max(1, Math.round(required)));
           return {
             display: required.toFixed(2),
-            hint: "BenÃ¶tigte Note fÃ¼r genau diese Wunschnote.",
+            hint: "Benötigte Note für genau diese Wunschnote.",
             badgeClass: `grade-${roundedClass}`
           };
         }
@@ -438,7 +438,7 @@
 
           const baseline = computeWishGradeBaseline();
           if (!baseline.weightTotal) {
-            wishGradeInfo.textContent = "Noch keine gewichteten Noten oder MA-EintrÃ¤ge vorhanden.";
+            wishGradeInfo.textContent = "Noch keine gewichteten Noten oder MA-Einträge vorhanden.";
             wishGradeTable.innerHTML = "";
             return;
           }

@@ -80,6 +80,7 @@
   }
 
   const state = {
+    allGrades: (initialData.grades || []).map(normalizeGrade),
     grades: (initialData.grades || []).map(normalizeGrade),
     averages: initialData.averages || { subjects: [], overall: null },
     classAverages: initialData.classAverages || [],
@@ -101,6 +102,7 @@
   const needsArchive = Boolean(document.getElementById("archive-list"));
   const needsReturns = Boolean(document.getElementById("return-list"));
   const needsRequests = Boolean(document.getElementById("request-list"));
+  const needsGradeOverview = Boolean(document.getElementById("grade-subject-overview"));
   const needsGrades = Boolean(document.getElementById("grade-list"));
   const needsClassAverages = Boolean(document.getElementById("class-average"));
   const needsNotifications = Boolean(document.getElementById("notification-list"));
@@ -260,6 +262,271 @@
     };
   }
 
+  function getGradeFilterValues() {
+    return {
+      query: document.getElementById("filter-query")?.value.trim() || "",
+      subject: document.getElementById("filter-subject")?.value || "",
+      startDate: document.getElementById("filter-start")?.value || "",
+      endDate: document.getElementById("filter-end")?.value || "",
+      sort: document.getElementById("filter-sort")?.value || "date"
+    };
+  }
+
+  function sortGrades(grades, sort) {
+    const ordered = [...grades];
+    if (sort === "value") {
+      ordered.sort((a, b) => {
+        const aValue = Number.isFinite(a.value) ? a.value : Number.POSITIVE_INFINITY;
+        const bValue = Number.isFinite(b.value) ? b.value : Number.POSITIVE_INFINITY;
+        if (aValue !== bValue) return aValue - bValue;
+        return dateSortValue(b.graded_at, 0) - dateSortValue(a.graded_at, 0);
+      });
+      return ordered;
+    }
+    ordered.sort((a, b) => dateSortValue(b.graded_at, 0) - dateSortValue(a.graded_at, 0));
+    return ordered;
+  }
+
+  function getBaseFilteredGrades() {
+    const { query, startDate, endDate } = getGradeFilterValues();
+    let items = [...state.allGrades];
+
+    if (query) {
+      items = items.filter((grade) =>
+        [grade.subject, grade.title, grade.category, grade.comment, grade.teacher]
+          .map((value) => String(value || "").toLowerCase())
+          .some((value) => value.includes(query.toLowerCase()))
+      );
+    }
+
+    if (startDate) {
+      const start = new Date(startDate);
+      if (!Number.isNaN(start.getTime())) {
+        items = items.filter((grade) => grade.graded_at && new Date(grade.graded_at) >= start);
+      }
+    }
+
+    if (endDate) {
+      const end = new Date(endDate);
+      if (!Number.isNaN(end.getTime())) {
+        end.setHours(23, 59, 59, 999);
+        items = items.filter((grade) => grade.graded_at && new Date(grade.graded_at) <= end);
+      }
+    }
+
+    return items;
+  }
+
+  function getVisibleGrades(baseGrades = getBaseFilteredGrades()) {
+    const { subject, sort } = getGradeFilterValues();
+    const filtered = subject
+      ? baseGrades.filter((grade) => String(grade.subject || "") === subject)
+      : baseGrades;
+    return sortGrades(filtered, sort);
+  }
+
+  function getSubjectStandingLabel(average) {
+    if (!Number.isFinite(average)) return "Noch keine Bewertung";
+    if (average <= 1.5) return "Sehr guter Stand";
+    if (average <= 2.5) return "Guter Stand";
+    if (average <= 3.5) return "Stabiler Stand";
+    return "Kritischer Stand";
+  }
+
+  function getClassAverageForSubject(subject) {
+    return (state.classAverages || []).find((item) => String(item.subject || "") === String(subject));
+  }
+
+  function getSubjectOverviewItems(baseGrades = getBaseFilteredGrades()) {
+    const subjectMap = new Map();
+
+    baseGrades.forEach((grade) => {
+      const key = String(grade.subject || "Ohne Fach");
+      const bucket = subjectMap.get(key) || {
+        subject: key,
+        count: 0,
+        weightedSum: 0,
+        weightTotal: 0,
+        latestAt: null,
+        latestTitle: "",
+        latestValue: null
+      };
+      bucket.count += 1;
+      if (!grade.is_absent && Number.isFinite(grade.value) && Number.isFinite(grade.weight)) {
+        bucket.weightedSum += grade.value * grade.weight;
+        bucket.weightTotal += grade.weight;
+      }
+      if (
+        !bucket.latestAt ||
+        dateSortValue(grade.graded_at, 0) > dateSortValue(bucket.latestAt, 0)
+      ) {
+        bucket.latestAt = grade.graded_at || null;
+        bucket.latestTitle = grade.title || "";
+        bucket.latestValue = grade.value;
+      }
+      subjectMap.set(key, bucket);
+    });
+
+    return Array.from(subjectMap.values())
+      .map((item) => {
+        const average = item.weightTotal
+          ? Number((item.weightedSum / item.weightTotal).toFixed(2))
+          : null;
+        return {
+          ...item,
+          average,
+          standingLabel: getSubjectStandingLabel(average),
+          classAverage: getClassAverageForSubject(item.subject)?.average ?? null
+        };
+      })
+      .sort((a, b) => String(a.subject || "").localeCompare(String(b.subject || "")));
+  }
+
+  function syncGradeSubjectSelection(baseGrades = getBaseFilteredGrades()) {
+    const select = document.getElementById("filter-subject");
+    if (!select) return "";
+    if (select.dataset.gradeSubjectLocked === "true") {
+      return select.value || "";
+    }
+
+    const availableSubjects = new Set(
+      getSubjectOverviewItems(baseGrades).map((item) => String(item.subject || ""))
+    );
+    if (select.value && !availableSubjects.has(String(select.value))) {
+      select.value = "";
+    }
+    return select.value || "";
+  }
+
+  function renderGradeSubjectOverview(baseGrades = getBaseFilteredGrades()) {
+    const container = document.getElementById("grade-subject-overview");
+    if (!container) return;
+
+    const items = getSubjectOverviewItems(baseGrades);
+
+    if (!items.length) {
+      container.innerHTML =
+        '<p class="empty-state">Keine Fachdaten fuer die aktuellen Filter vorhanden.</p>';
+      return;
+    }
+
+    container.innerHTML = items
+      .map((item) => {
+        const avgText = item.average == null ? "-" : Number(item.average).toFixed(2);
+        const classAvgText =
+          item.classAverage == null ? "Kein Vergleich" : `Klasse ${Number(item.classAverage).toFixed(2)}`;
+        const latestText = item.latestAt ? formatDate(item.latestAt) : "-";
+        const subjectUrl = `/student/grades?subject=${encodeURIComponent(item.subject)}`;
+        return `
+          <a
+            class="grade-subject-card"
+            href="${subjectUrl}"
+          >
+            <div class="grade-subject-card-head">
+              ${buildSubjectBadge(item.subject)}
+              <span class="grade-subject-card-count">${item.count} Eintrag${item.count === 1 ? "" : "e"}</span>
+            </div>
+            <div class="grade-subject-card-value">${avgText}</div>
+            <div class="grade-subject-card-copy">${escapeHtml(item.standingLabel)}</div>
+            <div class="grade-subject-card-meta">
+              <span>Letzte Note: ${item.latestValue == null ? "-" : formatGradeValue(item.latestValue)}</span>
+              <span>Letztes Update: ${latestText}</span>
+              <span>${escapeHtml(classAvgText)}</span>
+            </div>
+          </a>
+        `;
+      })
+      .join("");
+  }
+
+  function renderGradeSubjectDetail(baseGrades = getBaseFilteredGrades()) {
+    const container = document.getElementById("grade-subject-detail");
+    if (!container) return;
+
+    const selectedSubject = syncGradeSubjectSelection(baseGrades);
+    if (!selectedSubject) {
+      container.innerHTML = `
+        <div class="grade-subject-detail-empty">
+          <strong>Fach auswaehlen</strong>
+          <p>Waehle oben ein Fach, um den aktuellen Stand und das Beurteilungsprotokoll im Detail zu sehen.</p>
+        </div>
+      `;
+      return;
+    }
+
+    const subjectGrades = baseGrades.filter(
+      (grade) => String(grade.subject || "") === String(selectedSubject)
+    );
+    const averages = computeAveragesClient(subjectGrades);
+    const latest = sortGrades(subjectGrades, "date")[0] || null;
+    const classAverage = getClassAverageForSubject(selectedSubject)?.average ?? null;
+    const delta =
+      averages.overall != null && classAverage != null
+        ? Number((averages.overall - classAverage).toFixed(2))
+        : null;
+    const standing = getSubjectStandingLabel(averages.overall);
+
+    container.innerHTML = `
+      <div class="grade-subject-detail-shell">
+        <div class="grade-subject-detail-head">
+          ${buildSubjectBadge(selectedSubject)}
+          <div>
+            <strong>${escapeHtml(standing)}</strong>
+            <p>Aktueller Stand basierend auf allen sichtbaren Bewertungen in diesem Fach.</p>
+          </div>
+        </div>
+        <div class="grade-subject-detail-grid">
+          <div class="stat-tile">
+            <h4>Fachdurchschnitt</h4>
+            <strong>${averages.overall == null ? "-" : Number(averages.overall).toFixed(2)}</strong>
+          </div>
+          <div class="stat-tile">
+            <h4>Eintraege</h4>
+            <strong>${subjectGrades.length}</strong>
+          </div>
+          <div class="stat-tile">
+            <h4>Letzte Bewertung</h4>
+            <strong>${latest?.value == null ? "-" : formatGradeValue(latest.value)}</strong>
+            <small>${latest?.title ? escapeHtml(latest.title) : "-"}</small>
+          </div>
+          <div class="stat-tile">
+            <h4>Klassenvergleich</h4>
+            <strong>${classAverage == null ? "-" : Number(classAverage).toFixed(2)}</strong>
+            <small>${delta == null ? "Kein Vergleich verfuegbar" : delta <= 0 ? `${Math.abs(delta).toFixed(2)} besser/gleich als Klasse` : `${delta.toFixed(2)} ueber Klassenschnitt`}</small>
+          </div>
+        </div>
+      </div>
+    `;
+  }
+
+  function renderGradeProtocolHeader(baseGrades = getBaseFilteredGrades()) {
+    const selectedSubject = syncGradeSubjectSelection(baseGrades);
+    const visibleGrades = getVisibleGrades(baseGrades);
+    const title = document.getElementById("grade-protocol-title");
+    const copy = document.getElementById("grade-protocol-copy");
+    if (!title || !copy) return;
+
+    if (!selectedSubject) {
+      const subjectCount = getSubjectOverviewItems(baseGrades).length;
+      const subjectLabel = subjectCount === 1 ? "Fach" : "Faecher";
+      title.textContent = "Beurteilungsprotokoll";
+      copy.textContent = !visibleGrades.length
+        ? "Keine sichtbaren Eintraege fuer die aktuellen Filter."
+        : `${visibleGrades.length} sichtbare Eintraege ueber ${subjectCount} ${subjectLabel}. Waehle oben ein Fach fuer Details und deinen aktuellen Stand.`;
+      return;
+    }
+
+    const averages = computeAveragesClient(visibleGrades);
+    const classAverage = getClassAverageForSubject(selectedSubject)?.average ?? null;
+    const averageText = averages.overall == null ? "-" : Number(averages.overall).toFixed(2);
+    const classAverageText =
+      classAverage == null ? "kein Klassenschnitt verfuegbar" : `Klassenschnitt ${Number(classAverage).toFixed(2)}`;
+    title.textContent = `Beurteilungsprotokoll: ${selectedSubject}`;
+    copy.textContent = !visibleGrades.length
+      ? `Keine sichtbaren Eintraege fuer ${selectedSubject}.`
+      : `${visibleGrades.length} sichtbare Eintraege, aktueller Stand ${averageText}, ${classAverageText}.`;
+  }
+
   function setText(id, value) {
     const element = document.getElementById(id);
     if (element) {
@@ -327,41 +594,26 @@
     return subjectSet.size;
   }
 
-  function renderSubjectAverages() {
-    const container = document.getElementById("grade-subject-averages");
-    if (!container) return;
-
-    const subjects = Array.isArray(state.averages?.subjects) ? state.averages.subjects : [];
-    if (!subjects.length) {
-      container.innerHTML = "";
-      return;
-    }
-
-    container.innerHTML = subjects
-      .map((item) => {
-        const avgText = item.average == null ? "-" : Number(item.average).toFixed(2);
-        return `
-          <div class="subject-average-card">
-            <div class="subject-average-label">
-              ${buildSubjectBadge(item.subject)}
-              <span>Fachdurchschnitt</span>
-            </div>
-            <strong class="subject-average-value">${avgText}</strong>
-          </div>
-        `;
-      })
-      .join("");
-  }
-
   function renderGrades() {
+    const baseGrades = getBaseFilteredGrades();
+    syncGradeSubjectSelection(baseGrades);
+    state.grades = getVisibleGrades(baseGrades);
+    state.averages = computeAveragesClient(state.grades);
+
     const container = document.getElementById("grade-list");
     if (!container) return;
 
     setCount("grade-count", state.grades.length);
-    renderSubjectAverages();
+    renderGradeSubjectDetail(baseGrades);
+    renderGradeProtocolHeader(baseGrades);
 
     if (!state.grades.length) {
-      container.innerHTML = '<p class="empty-state">Keine Noten vorhanden.</p>';
+      const selectedSubject = getGradeFilterValues().subject;
+      container.innerHTML = `<p class="empty-state">${
+        selectedSubject
+          ? `Keine Noten fuer ${escapeHtml(selectedSubject)} mit den aktuellen Filtern vorhanden.`
+          : "Keine Noten vorhanden."
+      }</p>`;
       return;
     }
 
@@ -639,31 +891,99 @@
       if (aTime !== bTime) return aTime - bTime;
       return String(a.title || "").localeCompare(String(b.title || ""));
     });
+    const now = new Date();
+    const upcomingLimit = new Date(now.getTime() + 14 * 24 * 60 * 60 * 1000);
+    const groups = {
+      past: [],
+      upcoming: [],
+      later: []
+    };
 
-    container.innerHTML = ordered
-      .map((task) => {
-        const status = getTaskStatus(task);
-        const gradeText = formatGradeValue(task.grade);
-        return `
-          <article class="task-row dataset-row">
-            <div class="row-main">
-              ${buildRowHead(task.title, task.subject, task.category)}
-              ${buildMetaLine([
-                `Faellig: ${formatDate(task.due_at)}`,
-                `Gewichtung: ${formatWeight(task.weight)}`,
-                task.graded_at ? `Benotet: ${formatDate(task.graded_at)}` : ""
-              ])}
-              ${task.description ? `<div class="nav-note">${escapeHtml(task.description)}</div>` : ""}
-              ${task.note ? `<div class="nav-note">Kommentar: ${escapeHtml(task.note)}</div>` : ""}
-            </div>
-            <div class="row-side task-status">
-              <span class="status-pill ${status.className}">${status.label}</span>
-              ${task.graded ? `<span class="grade-pill ${gradeColor(task.grade)}">Note ${gradeText}</span>` : ""}
-            </div>
-          </article>
-        `;
-      })
-      .join("");
+    ordered.forEach((task) => {
+      if (!task.due_at) {
+        groups.later.push(task);
+        return;
+      }
+
+      const dueAt = new Date(task.due_at);
+      if (Number.isNaN(dueAt.getTime())) {
+        groups.later.push(task);
+        return;
+      }
+
+      if (dueAt < now) {
+        groups.past.push(task);
+        return;
+      }
+      if (dueAt <= upcomingLimit) {
+        groups.upcoming.push(task);
+        return;
+      }
+      groups.later.push(task);
+    });
+
+    const renderTaskRow = (task) => {
+      const status = getTaskStatus(task);
+      const gradeText = formatGradeValue(task.grade);
+      return `
+        <article class="task-row dataset-row">
+          <div class="row-main">
+            ${buildRowHead(task.title, task.subject, task.category)}
+            ${buildMetaLine([
+              `Faellig: ${formatDate(task.due_at)}`,
+              `Gewichtung: ${formatWeight(task.weight)}`,
+              task.graded_at ? `Benotet: ${formatDate(task.graded_at)}` : ""
+            ])}
+            ${task.description ? `<div class="nav-note">${escapeHtml(task.description)}</div>` : ""}
+            ${task.note ? `<div class="nav-note">Kommentar: ${escapeHtml(task.note)}</div>` : ""}
+          </div>
+          <div class="row-side task-status">
+            <span class="status-pill ${status.className}">${status.label}</span>
+            ${task.graded ? `<span class="grade-pill ${gradeColor(task.grade)}">Note ${gradeText}</span>` : ""}
+          </div>
+        </article>
+      `;
+    };
+
+    const renderTaskGroup = (title, copy, tasks) => `
+      <section class="task-group">
+        <div class="task-group-head">
+          <div>
+            <h4>${title}</h4>
+            <p>${copy}</p>
+          </div>
+          <span class="dataset-count">${tasks.length}</span>
+        </div>
+        <div class="task-group-rule" aria-hidden="true"></div>
+        <div class="dataset-block">
+          ${
+            tasks.length
+              ? tasks.map((task) => renderTaskRow(task)).join("")
+              : '<p class="empty-state">Keine Eintraege in diesem Bereich.</p>'
+          }
+        </div>
+      </section>
+    `;
+
+    container.innerHTML = [
+      renderTaskGroup(
+        "Bevorstehend",
+        "Aufgaben mit Termin in den naechsten 14 Tagen.",
+        groups.upcoming
+      ),
+      renderTaskGroup(
+        "Weiter anstehend",
+        "Aufgaben mit spaeterem Termin. Eintraege ohne Datum stehen ebenfalls hier.",
+        groups.later
+      ),
+      renderTaskGroup(
+        "Vergangene",
+        "Aufgaben mit Termin vor dem aktuellen Zeitpunkt.",
+        [...groups.past].sort(
+          (a, b) => dateSortValue(b.due_at, 0) - dateSortValue(a.due_at, 0)
+        )
+      )
+    ].join("");
   }
 
   function renderArchive() {
@@ -1174,19 +1494,19 @@
   }
 
   async function refreshGrades(skipRequest = false) {
-    const form = document.getElementById("grade-filter");
-    const params = new URLSearchParams(form ? new FormData(form) : []);
-    params.set("format", "json");
     if (!skipRequest) {
       try {
-        const response = await fetch(`/student/grades?${params.toString()}`);
+        const response = await fetch("/student/grades?format=json");
         const data = await response.json();
-        state.grades = (data.grades || []).map(normalizeGrade);
-        state.averages = computeAveragesClient(state.grades);
+        state.allGrades = (data.grades || []).map(normalizeGrade);
       } catch (err) {
         console.error("Konnte Noten nicht aktualisieren:", err);
       }
     }
+    const baseGrades = getBaseFilteredGrades();
+    syncGradeSubjectSelection(baseGrades);
+    state.grades = getVisibleGrades(baseGrades);
+    state.averages = computeAveragesClient(state.grades);
     renderGrades();
     renderAverages();
     renderOverview();
@@ -1205,6 +1525,13 @@
       const data = await response.json();
       state.classAverages = data.subjects || [];
       renderClassAverage();
+      if (needsGrades) {
+        renderGrades();
+        renderAverages();
+      }
+      if (needsGradeOverview && !needsGrades) {
+        renderGradeSubjectOverview();
+      }
     } catch (err) {
       console.error("Konnte Klassenvergleich nicht laden:", err);
     }
@@ -1275,6 +1602,10 @@
   document.getElementById("archive-filter")?.addEventListener("input", () => renderArchive());
   document.getElementById("archive-filter")?.addEventListener("change", () => renderArchive());
 
+  if (needsGradeOverview && !needsGrades) {
+    renderGradeSubjectOverview();
+  }
+
   if (needsGrades || needsOverview) {
     renderGrades();
     renderAverages();
@@ -1297,12 +1628,12 @@
     loadReturnsFromServer();
   }
 
-  if (needsClassAverages || needsGrades) {
+  if (needsClassAverages || needsGrades || needsGradeOverview) {
     renderClassAverage();
     loadClassComparison();
   }
 
-  if (needsNotifications || needsGrades) {
+  if (needsNotifications) {
     renderNotifications();
     loadNotificationsFromServer();
   }

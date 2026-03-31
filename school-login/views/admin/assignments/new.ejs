@@ -1,8 +1,11 @@
 <%
   const selClassId = selectedClassId ? String(selectedClassId) : (classes.length ? String(classes[0].id) : '');
+  const selSubjectId = selectedSubjectId ? String(selectedSubjectId) : (subjects.length ? String(subjects[0].id) : '');
   const selectedClass = classes.find((entry) => String(entry.id) === selClassId) || null;
-  const selectedSubjectName = selectedClass ? selectedClass.subject : '';
+  const selectedSubject = subjects.find((entry) => String(entry.id) === selSubjectId) || null;
   const assignedSet = new Set(assignedTeacherIds.map(Number));
+  const newSubjectName = formData && formData.new_subject ? String(formData.new_subject) : '';
+  const canAssign = Boolean(selectedClass && (createSubjectMode || selectedSubject));
   const page = {
     title: 'Admin - Lehrer zuordnen',
     headerTitle: 'Adminbereich',
@@ -19,8 +22,8 @@
         <div class="app-main-header">
           <div>
             <p class="app-main-subtitle">Unterrichtszuordnungen</p>
-            <h1>Lehrer einer Klasse zuordnen</h1>
-            <p class="admin-muted">Ordne beliebig viele Lehrer dieser Klasse zu.</p>
+            <h1>Lehrer einem Klassenfach zuordnen</h1>
+            <p class="admin-muted">Klassen koennen ohne Fach starten. Hier wird das Fach pro Zuordnung festgelegt.</p>
           </div>
           <a class="btn btn-secondary" href="/admin/assignments">Zur Uebersicht</a>
         </div>
@@ -33,73 +36,126 @@
         <% } %>
 
         <div class="admin-card">
-          <form class="admin-form vertical" id="assignment-form" method="POST" action="/admin/assignments">
-            <input type="hidden" name="_csrf" value="<%= csrfToken %>">
-            <input type="hidden" name="class_id" value="<%= selClassId %>">
-
-            <div class="assign-class-info">
-              <span class="assign-class-info-label">Klasse:</span>
-              <span class="assign-class-info-value"><%= selectedClass ? selectedClass.name : '' %></span>
-              <span class="assign-class-info-sep">&mdash;</span>
-              <span class="assign-class-info-label">Fach:</span>
-              <span class="assign-class-info-value"><%= selectedSubjectName %></span>
-            </div>
-
-            <div class="assign-teacher-section">
-              <label>Lehrer auswaehlen</label>
-              <input
-                type="text"
-                id="teacher-search"
-                class="assign-search-input"
-                placeholder="Lehrer suchen..."
-                autocomplete="off"
-              >
-
-              <div id="assigned-section" class="assign-group" style="<%= assignedSet.size ? '' : 'display:none' %>">
-                <p class="assign-group-title">Bereits zugeordnet (<span id="assigned-count"><%= assignedSet.size %></span>)</p>
-                <div class="assign-new-table-wrap">
-                  <table class="assign-new-table" id="assigned-list">
-                    <thead><tr><th>Name</th><th>E-Mail</th><th>Status</th></tr></thead>
-                    <tbody>
-                      <% teachers.filter((t) => assignedSet.has(t.id)).forEach((teacher) => { %>
-                        <tr data-teacher-id="<%= teacher.id %>" data-search="<%= teacher.display_name.toLowerCase() %> <%= teacher.email.toLowerCase() %>" class="is-assigned">
-                          <td><%= teacher.display_name %></td>
-                          <td class="assign-email-cell"><%= teacher.email %></td>
-                          <td><span class="assign-badge-assigned">Zugeordnet</span></td>
-                        </tr>
-                      <% }) %>
-                    </tbody>
-                  </table>
-                </div>
-              </div>
-
-              <div id="available-section" class="assign-group">
-                <p class="assign-group-title">Verfuegbare Lehrer (<span id="available-count"><%= teachers.filter((t) => !assignedSet.has(t.id)).length %></span>)</p>
-                <div class="assign-new-table-wrap">
-                  <table class="assign-new-table" id="available-list">
-                    <thead><tr><th class="assign-col-check"></th><th>Name</th><th>E-Mail</th></tr></thead>
-                    <tbody>
-                      <% teachers.filter((t) => !assignedSet.has(t.id)).forEach((teacher) => { %>
-                        <tr data-teacher-id="<%= teacher.id %>" data-search="<%= teacher.display_name.toLowerCase() %> <%= teacher.email.toLowerCase() %>">
-                          <td><label class="assign-check-cell"><input type="checkbox" class="assign-card-checkbox" name="teacher_ids" value="<%= teacher.id %>"></label></td>
-                          <td><%= teacher.display_name %></td>
-                          <td class="assign-email-cell"><%= teacher.email %></td>
-                        </tr>
-                      <% }) %>
-                    </tbody>
-                  </table>
-                </div>
-              </div>
-
-              <p class="admin-muted assign-no-results" id="no-results" style="display:none">Keine Lehrer gefunden.</p>
-            </div>
-
-            <div class="admin-row wrap" style="margin-top: 8px">
-              <button class="btn btn-primary" type="submit" id="submit-btn">Lehrer zuordnen</button>
-              <span class="admin-muted assign-selection-count" id="selection-count"></span>
-            </div>
-          </form>
+          <% if (createSubjectMode) { %>
+            <form class="admin-form" method="GET" action="/admin/assignments/new">
+              <select name="class">
+                <% (classes || []).forEach((entry) => { %>
+                  <option value="<%= entry.id %>" <%= selClassId === String(entry.id) ? 'selected' : '' %>><%= entry.name %></option>
+                <% }) %>
+              </select>
+              <input type="hidden" name="create_subject" value="1">
+              <button class="btn btn-secondary" type="submit">Klasse laden</button>
+              <a class="btn" href="/admin/assignments/new?class=<%= encodeURIComponent(selClassId) %>">Bestehendes Fach waehlen</a>
+            </form>
+          <% } else { %>
+            <form class="admin-form" method="GET" action="/admin/assignments/new">
+              <select name="class">
+                <% (classes || []).forEach((entry) => { %>
+                  <option value="<%= entry.id %>" <%= selClassId === String(entry.id) ? 'selected' : '' %>><%= entry.name %></option>
+                <% }) %>
+              </select>
+              <select name="subject">
+                <% (subjects || []).forEach((entry) => { %>
+                  <option value="<%= entry.id %>" <%= selSubjectId === String(entry.id) ? 'selected' : '' %>><%= entry.name %></option>
+                <% }) %>
+              </select>
+              <button class="btn btn-secondary" type="submit">Ansicht laden</button>
+              <a class="btn" href="/admin/assignments/new?class=<%= encodeURIComponent(selClassId) %>&create_subject=1">Neues Fach anlegen</a>
+            </form>
+          <% } %>
+          <% if (!classes.length) { %>
+            <p class="admin-muted">Es gibt noch keine Klassen im aktiven Schuljahr.</p>
+          <% } else if (!subjects.length) { %>
+            <p class="admin-muted">Es gibt noch keine Faecher. Lege unten ein neues Fach an und ordne es direkt Lehrern zu.</p>
+          <% } %>
         </div>
+
+        <% if (canAssign) { %>
+          <div class="admin-card">
+            <form class="admin-form vertical" id="assignment-form" method="POST" action="/admin/assignments">
+              <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+              <input type="hidden" name="class_id" value="<%= selClassId %>">
+              <input type="hidden" name="create_subject" value="<%= createSubjectMode ? '1' : '0' %>">
+
+              <div class="assign-class-info">
+                <span class="assign-class-info-label">Klasse:</span>
+                <span class="assign-class-info-value"><%= selectedClass.name %></span>
+                <span class="assign-class-info-sep">&mdash;</span>
+                <span class="assign-class-info-label">Fach:</span>
+                <span class="assign-class-info-value"><%= createSubjectMode ? 'Neues Fach' : selectedSubject.name %></span>
+              </div>
+
+              <% if (createSubjectMode) { %>
+                <label for="new_subject">Neues Fach</label>
+                <input
+                  type="text"
+                  id="new_subject"
+                  name="new_subject"
+                  value="<%= newSubjectName %>"
+                  placeholder="z.B. Mathematik"
+                  required
+                >
+                <p class="admin-muted">Dieses Fach wird angelegt und direkt der gewaehlten Klasse mit den markierten Lehrern zugeordnet.</p>
+              <% } else { %>
+                <input type="hidden" name="subject_id" value="<%= selSubjectId %>">
+              <% } %>
+
+              <div class="assign-teacher-section">
+                <label>Lehrer auswaehlen</label>
+                <input
+                  type="text"
+                  id="teacher-search"
+                  class="assign-search-input"
+                  placeholder="Lehrer suchen..."
+                  autocomplete="off"
+                >
+
+                <div id="assigned-section" class="assign-group" style="<%= assignedSet.size ? '' : 'display:none' %>">
+                  <p class="assign-group-title">Bereits zugeordnet (<span id="assigned-count"><%= assignedSet.size %></span>)</p>
+                  <div class="assign-new-table-wrap">
+                    <table class="assign-new-table" id="assigned-list">
+                      <thead><tr><th>Name</th><th>E-Mail</th><th>Status</th></tr></thead>
+                      <tbody>
+                        <% teachers.filter((t) => assignedSet.has(t.id)).forEach((teacher) => { %>
+                          <tr data-teacher-id="<%= teacher.id %>" data-search="<%= teacher.display_name.toLowerCase() %> <%= teacher.email.toLowerCase() %>" class="is-assigned">
+                            <td><%= teacher.display_name %></td>
+                            <td class="assign-email-cell"><%= teacher.email %></td>
+                            <td><span class="assign-badge-assigned">Zugeordnet</span></td>
+                          </tr>
+                        <% }) %>
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+
+                <div id="available-section" class="assign-group">
+                  <p class="assign-group-title">Verfuegbare Lehrer (<span id="available-count"><%= teachers.filter((t) => !assignedSet.has(t.id)).length %></span>)</p>
+                  <div class="assign-new-table-wrap">
+                    <table class="assign-new-table" id="available-list">
+                      <thead><tr><th class="assign-col-check"></th><th>Name</th><th>E-Mail</th></tr></thead>
+                      <tbody>
+                        <% teachers.filter((t) => !assignedSet.has(t.id)).forEach((teacher) => { %>
+                          <tr data-teacher-id="<%= teacher.id %>" data-search="<%= teacher.display_name.toLowerCase() %> <%= teacher.email.toLowerCase() %>">
+                            <td><label class="assign-check-cell"><input type="checkbox" class="assign-card-checkbox" name="teacher_ids" value="<%= teacher.id %>"></label></td>
+                            <td><%= teacher.display_name %></td>
+                            <td class="assign-email-cell"><%= teacher.email %></td>
+                          </tr>
+                        <% }) %>
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+
+                <p class="admin-muted assign-no-results" id="no-results" style="display:none">Keine Lehrer gefunden.</p>
+              </div>
+
+              <div class="admin-row wrap" style="margin-top: 8px">
+                <button class="btn btn-primary" type="submit" id="submit-btn">Lehrer zuordnen</button>
+                <span class="admin-muted assign-selection-count" id="selection-count"></span>
+              </div>
+            </form>
+          </div>
+        <% } %>
       </section>
     </div>
 
@@ -110,6 +166,9 @@
         var availableSection = document.getElementById('available-section');
         var noResults = document.getElementById('no-results');
         var selectionCount = document.getElementById('selection-count');
+        var assignmentForm = document.getElementById('assignment-form');
+
+        if (!searchInput || !assignedSection || !availableSection || !selectionCount || !assignmentForm) return;
 
         function filterTeachers() {
           var query = searchInput.value.trim().toLowerCase();
@@ -132,21 +191,16 @@
 
           assignedSection.style.display = (assignedRows.length && visibleAssigned > 0) ? '' : 'none';
           availableSection.style.display = visibleAvailable > 0 ? '' : 'none';
-          noResults.style.display = (visibleAvailable + visibleAssigned === 0) ? '' : 'none';
+          if (noResults) noResults.style.display = (visibleAvailable + visibleAssigned === 0) ? '' : 'none';
         }
 
         function updateSelectionCount() {
           var checked = document.querySelectorAll('#available-list input[type="checkbox"]:checked');
-          if (checked.length) {
-            selectionCount.textContent = checked.length + ' Lehrer ausgewaehlt';
-          } else {
-            selectionCount.textContent = '';
-          }
+          selectionCount.textContent = checked.length ? checked.length + ' Lehrer ausgewaehlt' : '';
         }
 
         searchInput.addEventListener('input', filterTeachers);
-
-        document.getElementById('assignment-form').addEventListener('change', function(e) {
+        assignmentForm.addEventListener('change', function(e) {
           if (e.target.type === 'checkbox') updateSelectionCount();
         });
       })();

@@ -6,7 +6,7 @@ const { requireAuth, requireRole } = require("../middleware/auth");
 const { createAuditLogMiddleware } = require("../middleware/audit");
 const { getPasswordValidationError } = require("../utils/password");
 const { deriveNameFromEmail } = require("../utils/studentName");
-const { ensureSubjectIdByName } = require("../utils/subjects");
+const { getDisplayName } = require("../utils/userDisplay");
 
 const INITIAL_PASSWORD = process.env.INITIAL_PASSWORD || null;
 
@@ -118,6 +118,138 @@ async function getActiveClassById(classId, columns = "id, name") {
      WHERE id = ? AND school_year_id = ?`,
     [classId, activeSchoolYear.id]
   );
+}
+
+async function listActiveTeachers() {
+  return allAsync(
+    "SELECT id, email FROM users WHERE role = 'teacher' AND status = 'active' ORDER BY email ASC"
+  );
+}
+
+function buildTeacherDirectory(rows = []) {
+  const map = new Map();
+  rows.forEach((row) => {
+    map.set(Number(row.id), {
+      id: Number(row.id),
+      email: String(row.email || "").trim(),
+      display_name: getDisplayName({ email: row.email }) || String(row.email || "").trim()
+    });
+  });
+  return map;
+}
+
+function normalizeOptionalTeacherId(value) {
+  if (value == null || String(value).trim() === "") return null;
+  const numeric = Number(value);
+  return Number.isInteger(numeric) && numeric > 0 ? numeric : null;
+}
+
+function summarizeAssignmentsByClass(rows = []) {
+  const map = new Map();
+  rows.forEach((row) => {
+    const classId = Number(row.class_id);
+    if (!map.has(classId)) {
+      map.set(classId, {
+        subjectSet: new Set(),
+        teacherSet: new Set(),
+        assignmentCount: 0
+      });
+    }
+    const entry = map.get(classId);
+    if (row.subject_name) entry.subjectSet.add(String(row.subject_name));
+    if (row.teacher_email) entry.teacherSet.add(String(row.teacher_email));
+    entry.assignmentCount += 1;
+  });
+  return map;
+}
+
+function decorateClassWithAssignments(classRow, assignmentSummary, teacherDirectory = new Map()) {
+  const summary = assignmentSummary.get(Number(classRow.id));
+  const assignedSubjects = summary ? [...summary.subjectSet].sort((a, b) => a.localeCompare(b)) : [];
+  const teacherEmails = summary ? [...summary.teacherSet].sort((a, b) => a.localeCompare(b)) : [];
+  const headTeacher = teacherDirectory.get(Number(classRow.head_teacher_id));
+
+  return {
+    ...classRow,
+    assigned_subjects: assignedSubjects,
+    assigned_subjects_label: assignedSubjects.length ? assignedSubjects.join(", ") : "Keine Fachzuordnungen",
+    teacher_emails: teacherEmails.length ? teacherEmails.join(", ") : "",
+    head_teacher_email: headTeacher?.email || "",
+    head_teacher_display_name: headTeacher?.display_name || "",
+    teacher_count: teacherEmails.length,
+    assignment_count: summary ? summary.assignmentCount : 0
+  };
+}
+
+function buildClassDetailTables(classId, assignmentRows = [], students = [], teacherDirectory = new Map()) {
+  const subjectMap = new Map();
+  const teacherMap = new Map();
+
+  assignmentRows
+    .filter((row) => Number(row.class_id) === Number(classId))
+    .forEach((row) => {
+      const subjectName = String(row.subject_name || "").trim();
+      const teacherEmail = String(row.teacher_email || "").trim();
+      if (!subjectName || !teacherEmail) return;
+
+      if (!subjectMap.has(subjectName)) {
+        subjectMap.set(subjectName, {
+          name: subjectName,
+          teacherSet: new Set()
+        });
+      }
+      subjectMap.get(subjectName).teacherSet.add(teacherEmail);
+
+      if (!teacherMap.has(teacherEmail)) {
+        teacherMap.set(teacherEmail, {
+          email: teacherEmail,
+          display_name: getDisplayName({ email: teacherEmail }) || teacherEmail,
+          subjectSet: new Set()
+        });
+      }
+      teacherMap.get(teacherEmail).subjectSet.add(subjectName);
+    });
+
+  const subjectRows = [...subjectMap.values()]
+    .map((entry) => {
+      const teachers = [...entry.teacherSet].sort((a, b) => a.localeCompare(b));
+      return {
+        name: entry.name,
+        teacher_count: teachers.length,
+        teacher_emails: teachers.join(", ")
+      };
+    })
+    .sort((a, b) => a.name.localeCompare(b.name));
+
+  const teacherRows = [...teacherMap.values()]
+    .map((entry) => {
+      const subjects = [...entry.subjectSet].sort((a, b) => a.localeCompare(b));
+      return {
+        email: entry.email,
+        display_name: entry.display_name,
+        subject_count: subjects.length,
+        subjects_label: subjects.join(", "),
+        is_head_teacher: false
+      };
+    })
+    .sort((a, b) => a.email.localeCompare(b.email));
+
+  const studentRows = [...students].sort((a, b) => {
+    const nameResult = String(a.name || "").localeCompare(String(b.name || ""));
+    if (nameResult !== 0) return nameResult;
+    return String(a.email || "").localeCompare(String(b.email || ""));
+  });
+
+  return {
+    subjectRows,
+    teacherRows,
+    studentRows,
+    stats: {
+      teacher_count: teacherRows.length,
+      student_count: studentRows.length,
+      subject_count: subjectRows.length
+    }
+  };
 }
 
 router.use(requireAuth, requireRole("admin"));
@@ -423,7 +555,7 @@ router.get("/users/:id", async (req, res, next) => {
                   SELECT STRING_AGG(u2.email, ', ' ORDER BY u2.email)
                   FROM class_subject_teacher cst2
                   JOIN users u2 ON u2.id = cst2.teacher_id
-                  WHERE cst2.class_id = c.id AND cst2.subject_id = c.subject_id
+                  WHERE cst2.class_id = c.id
                 ), '') AS teacher_emails
          FROM students s
          JOIN classes c ON c.id = s.class_id
@@ -573,46 +705,35 @@ router.post("/users/:id/delete", async (req, res, next) => {
 });
 
 router.get("/classes", async (req, res, next) => {
-  const q = req.query.q;
-  const activeSchoolYear = await schoolYearModel.getActiveSchoolYear().catch(() => null);
-  const params = [activeSchoolYear?.id || 0];
-  let whereClause = "WHERE c.school_year_id = ?";
-  if (q) {
-    whereClause += ` AND (
-      c.name LIKE ? OR c.subject LIKE ? OR EXISTS (
-        SELECT 1
-        FROM class_subject_teacher cst_s
-        JOIN users u_s ON u_s.id = cst_s.teacher_id
-        WHERE cst_s.class_id = c.id AND cst_s.subject_id = c.subject_id AND u_s.email LIKE ?
-      )
-    )`;
-    const like = `%${q}%`;
-    params.push(like, like, like);
-  }
-
   try {
-    const classes = await allAsync(
-      `SELECT c.id, c.name, c.subject, c.created_at,
-              (
-                SELECT STRING_AGG(u2.email, ', ' ORDER BY u2.email)
-                FROM class_subject_teacher cst2
-                JOIN users u2 ON u2.id = cst2.teacher_id
-                WHERE cst2.class_id = c.id AND cst2.subject_id = c.subject_id
-              ) AS teacher_emails,
-              (
-                SELECT COUNT(*)
-                FROM class_subject_teacher cst3
-                WHERE cst3.class_id = c.id AND cst3.subject_id = c.subject_id
-              ) AS teacher_count
-       FROM classes c
-       ${whereClause}
-       ORDER BY c.created_at DESC`,
-      params
-    );
+    const queryValue = String(req.query.q || "").trim();
+    const queryNormalized = queryValue.toLowerCase();
+    const activeSchoolYear = await getActiveSchoolYearOrThrow();
+    const [classRows, assignmentRows, teachers] = await Promise.all([
+      schoolYearModel.listClassesBySchoolYear(activeSchoolYear.id),
+      schoolYearModel.listAssignmentRowsBySchoolYear(activeSchoolYear.id),
+      listActiveTeachers()
+    ]);
+    const teacherDirectory = buildTeacherDirectory(teachers);
+    const assignmentSummary = summarizeAssignmentsByClass(assignmentRows);
+    const classes = classRows
+      .map((row) => decorateClassWithAssignments(row, assignmentSummary, teacherDirectory))
+      .filter((row) => {
+        if (!queryNormalized) return true;
+        return [
+          row.name,
+          row.assigned_subjects_label,
+          row.teacher_emails,
+          row.head_teacher_email,
+          row.head_teacher_display_name
+        ]
+          .filter(Boolean)
+          .some((value) => String(value).toLowerCase().includes(queryNormalized));
+      });
 
     res.render("admin/classes", {
       classes,
-      query: q || "",
+      query: queryValue,
       csrfToken: req.csrfToken(),
       currentUser: req.session.user,
       activePath: req.originalUrl
@@ -623,17 +744,24 @@ router.get("/classes", async (req, res, next) => {
   }
 });
 
-router.get("/classes/new", async (req, res) => {
-  res.render("admin/create-class", {
-    csrfToken: req.csrfToken(),
-    currentUser: req.session.user,
-    activePath: req.originalUrl
-  });
+router.get("/classes/new", async (req, res, next) => {
+  try {
+    const teachers = await listActiveTeachers();
+    res.render("admin/create-class", {
+      teachers,
+      csrfToken: req.csrfToken(),
+      currentUser: req.session.user,
+      activePath: req.originalUrl
+    });
+  } catch (err) {
+    next(err);
+  }
 });
 
 router.post("/classes", async (req, res, next) => {
-  const { name, subject } = req.body || {};
-  if (!name || !subject) {
+  const name = String(req.body?.name || "").trim();
+  const headTeacherId = normalizeOptionalTeacherId(req.body?.head_teacher_id);
+  if (!name) {
     return res.status(400).render("error", {
       message: "Bitte alle Pflichtfelder ausfüllen.",
       status: 400,
@@ -642,22 +770,23 @@ router.post("/classes", async (req, res, next) => {
     });
   }
   try {
-    const activeSchoolYear = await getActiveSchoolYearOrThrow();
-    const subjectId = await ensureSubjectIdByName(subject);
-    if (!subjectId) {
+    const teacherDirectory = buildTeacherDirectory(await listActiveTeachers());
+    if (headTeacherId && !teacherDirectory.has(Number(headTeacherId))) {
       return res.status(400).render("error", {
-        message: "Fach konnte nicht verarbeitet werden.",
+        message: "Klassenvorstand nicht gefunden.",
         status: 400,
         backUrl: "/admin/classes/new",
         csrfToken: req.csrfToken()
       });
     }
 
-    await runAsync("INSERT INTO classes (name, subject, subject_id, school_year_id) VALUES (?,?,?,?)", [
+    const activeSchoolYear = await getActiveSchoolYearOrThrow();
+    await runAsync("INSERT INTO classes (name, subject, subject_id, school_year_id, head_teacher_id) VALUES (?,?,?,?,?)", [
       name,
-      subject,
-      subjectId,
-      activeSchoolYear.id
+      null,
+      null,
+      activeSchoolYear.id,
+      headTeacherId
     ]);
     res.redirect("/admin/classes");
   } catch (err) {
@@ -666,10 +795,64 @@ router.post("/classes", async (req, res, next) => {
   }
 });
 
+router.get("/classes/:id", async (req, res, next) => {
+  const classId = req.params.id;
+  try {
+    const activeSchoolYear = await getActiveSchoolYearOrThrow();
+    const [classRow, assignmentRows, students, teachers] = await Promise.all([
+      getActiveClassById(classId, "id, name, head_teacher_id, created_at"),
+      schoolYearModel.listAssignmentRowsBySchoolYear(activeSchoolYear.id),
+      schoolYearModel.listStudentsByClassId(classId),
+      listActiveTeachers()
+    ]);
+
+    if (!classRow) {
+      return res.status(404).render("error", {
+        message: "Klasse nicht gefunden.",
+        status: 404,
+        backUrl: "/admin/classes",
+        csrfToken: req.csrfToken()
+      });
+    }
+
+    const teacherDirectory = buildTeacherDirectory(teachers);
+    const classAssignments = assignmentRows.filter((row) => Number(row.class_id) === Number(classId));
+    const classData = decorateClassWithAssignments(
+      classRow,
+      summarizeAssignmentsByClass(classAssignments),
+      teacherDirectory
+    );
+    const detailData = buildClassDetailTables(classId, classAssignments, students, teacherDirectory);
+    const teacherRows = detailData.teacherRows.map((row) => ({
+      ...row,
+      is_head_teacher: classData.head_teacher_email
+        ? row.email.toLowerCase() === classData.head_teacher_email.toLowerCase()
+        : false
+    }));
+
+    res.render("admin/class-detail", {
+      classData,
+      stats: detailData.stats,
+      subjectRows: detailData.subjectRows,
+      teacherRows,
+      students: detailData.studentRows,
+      csrfToken: req.csrfToken(),
+      currentUser: req.session.user,
+      activePath: req.originalUrl
+    });
+  } catch (err) {
+    console.error("DB error loading class detail:", err);
+    next(err);
+  }
+});
+
 router.get("/classes/:id/edit", async (req, res, next) => {
   const classId = req.params.id;
   try {
-    const classData = await getActiveClassById(classId, "id, name, subject, subject_id");
+    const [classData, teachers] = await Promise.all([
+      getActiveClassById(classId, "id, name, head_teacher_id"),
+      listActiveTeachers()
+    ]);
 
     if (!classData) {
       return res.status(404).render("error", {
@@ -682,6 +865,7 @@ router.get("/classes/:id/edit", async (req, res, next) => {
 
     res.render("admin/edit-class", {
       classData,
+      teachers,
       csrfToken: req.csrfToken(),
       currentUser: req.session.user,
       activePath: req.originalUrl
@@ -694,8 +878,9 @@ router.get("/classes/:id/edit", async (req, res, next) => {
 
 router.post("/classes/:id", async (req, res, next) => {
   const classId = req.params.id;
-  const { name, subject } = req.body || {};
-  if (!name || !subject) {
+  const name = String(req.body?.name || "").trim();
+  const headTeacherId = normalizeOptionalTeacherId(req.body?.head_teacher_id);
+  if (!name) {
     return res.status(400).render("error", {
       message: "Bitte alle Pflichtfelder ausfüllen.",
       status: 400,
@@ -705,6 +890,16 @@ router.post("/classes/:id", async (req, res, next) => {
   }
 
   try {
+    const teacherDirectory = buildTeacherDirectory(await listActiveTeachers());
+    if (headTeacherId && !teacherDirectory.has(Number(headTeacherId))) {
+      return res.status(400).render("error", {
+        message: "Klassenvorstand nicht gefunden.",
+        status: 400,
+        backUrl: `/admin/classes/${classId}/edit`,
+        csrfToken: req.csrfToken()
+      });
+    }
+
     const classData = await getActiveClassById(classId, "id");
     if (!classData) {
       return res.status(404).render("error", {
@@ -715,20 +910,11 @@ router.post("/classes/:id", async (req, res, next) => {
       });
     }
 
-    const subjectId = await ensureSubjectIdByName(subject);
-    if (!subjectId) {
-      return res.status(400).render("error", {
-        message: "Fach konnte nicht verarbeitet werden.",
-        status: 400,
-        backUrl: `/admin/classes/${classId}/edit`,
-        csrfToken: req.csrfToken()
-      });
-    }
-
-    await runAsync("UPDATE classes SET name = ?, subject = ?, subject_id = ? WHERE id = ?", [
+    await runAsync("UPDATE classes SET name = ?, subject = ?, subject_id = ?, head_teacher_id = ? WHERE id = ?", [
       name,
-      subject,
-      subjectId,
+      null,
+      null,
+      headTeacherId,
       classId
     ]);
     res.redirect("/admin/classes");
@@ -770,18 +956,16 @@ router.get("/classes/:id/students", async (req, res, next) => {
     const emailQuery = String(req.query.email || "").trim();
 
     const activeSchoolYear = await getActiveSchoolYearOrThrow();
-    const classData = await getAsync(
-      `SELECT c.id, c.name, c.subject,
-              COALESCE((
-                SELECT STRING_AGG(u.email, ', ' ORDER BY u.email)
-                FROM class_subject_teacher cst
-                JOIN users u ON u.id = cst.teacher_id
-                WHERE cst.class_id = c.id AND cst.subject_id = c.subject_id AND cst.school_year_id = c.school_year_id
-              ), '') AS teacher_emails
-       FROM classes c
-       WHERE c.id = ? AND c.school_year_id = ?`,
-      [classId, activeSchoolYear.id]
-    );
+    const [classRow, assignmentRows] = await Promise.all([
+      getActiveClassById(classId, "id, name"),
+      schoolYearModel.listAssignmentRowsBySchoolYear(activeSchoolYear.id)
+    ]);
+    const classData = classRow
+      ? decorateClassWithAssignments(
+          classRow,
+          summarizeAssignmentsByClass(assignmentRows.filter((row) => Number(row.class_id) === Number(classId)))
+        )
+      : null;
 
     if (!classData) {
       return res.status(404).render("error", {
@@ -828,7 +1012,7 @@ router.get("/classes/:id/students", async (req, res, next) => {
 router.post("/classes/:classId/students/:studentId/delete", async (req, res, next) => {
   const { classId, studentId } = req.params;
   try {
-    const classData = await getActiveClassById(classId, "id, name, subject");
+    const classData = await getActiveClassById(classId, "id, name");
     if (!classData) {
       return res.status(404).render("error", {
         message: "Klasse nicht gefunden.",

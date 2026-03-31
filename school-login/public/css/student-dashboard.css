@@ -330,6 +330,125 @@ header.dashboard-hero {
   align-items: center;
 }
 
+.grade-subject-header,
+.grade-protocol-head {
+  margin-top: 4px;
+}
+
+.grade-subject-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.grade-back-link-row {
+  margin-bottom: 10px;
+}
+
+.grade-subject-card {
+  display: grid;
+  gap: 10px;
+  width: 100%;
+  padding: 14px;
+  border: 1px solid var(--student-border);
+  border-radius: 14px;
+  background: var(--student-surface-2);
+  color: var(--student-text);
+  text-align: left;
+  text-decoration: none;
+  cursor: pointer;
+  transition:
+    border-color 0.16s ease,
+    background 0.16s ease,
+    box-shadow 0.16s ease,
+    transform 0.16s ease;
+}
+
+.grade-subject-card:hover {
+  border-color: var(--student-accent);
+  background: var(--student-surface);
+  transform: translateY(-1px);
+}
+
+.grade-subject-card:focus-visible {
+  outline: 2px solid var(--focus-color);
+  outline-offset: 1px;
+}
+
+.grade-subject-card.is-active {
+  border-color: var(--student-accent);
+  background: var(--student-surface);
+  box-shadow: 0 0 0 3px var(--student-accent-soft);
+}
+
+.grade-subject-card-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.grade-subject-card-count,
+.grade-subject-card-meta {
+  color: var(--student-muted);
+  font-size: 0.82rem;
+}
+
+.grade-subject-card-value {
+  font-size: 1.65rem;
+  line-height: 1;
+  font-weight: 800;
+}
+
+.grade-subject-card-copy {
+  font-size: 0.92rem;
+  font-weight: 700;
+}
+
+.grade-subject-card-meta {
+  display: grid;
+  gap: 4px;
+}
+
+.grade-subject-detail {
+  margin-bottom: 18px;
+}
+
+.grade-subject-detail-shell,
+.grade-subject-detail-empty {
+  border: 1px solid var(--student-border);
+  border-radius: 14px;
+  background: var(--student-surface-2);
+  padding: 14px;
+}
+
+.grade-subject-detail-empty {
+  display: grid;
+  gap: 6px;
+}
+
+.grade-subject-detail-empty p,
+.grade-subject-detail-head p {
+  margin: 0;
+  color: var(--student-muted);
+}
+
+.grade-subject-detail-head {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 12px;
+  align-items: start;
+  margin-bottom: 12px;
+}
+
+.grade-subject-detail-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 10px;
+}
+
 .subject-badge,
 .pill {
   display: inline-flex;
@@ -426,6 +545,38 @@ header.dashboard-hero {
   margin: 0;
   font-size: 0.87rem;
   line-height: 1.45;
+}
+
+.task-group {
+  display: grid;
+  gap: 12px;
+}
+
+.task-group + .task-group {
+  margin-top: 18px;
+}
+
+.task-group-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.task-group-head h4,
+.task-group-head p {
+  margin: 0;
+}
+
+.task-group-head p {
+  color: var(--student-muted);
+  font-size: 0.84rem;
+}
+
+.task-group-rule {
+  height: 1px;
+  background: var(--student-border);
 }
 
 .grade-row {
@@ -874,7 +1025,9 @@ header.dashboard-hero {
 
   .filter-grid,
   .info-grid,
-  .subject-average-list {
+  .subject-average-list,
+  .grade-subject-grid,
+  .grade-subject-detail-grid {
     grid-template-columns: 1fr;
   }
 
@@ -882,8 +1035,13 @@ header.dashboard-hero {
     grid-template-columns: 1fr;
   }
 
+  .grade-subject-detail-head {
+    grid-template-columns: 1fr;
+  }
+
   .request-ticket-summary,
-  .return-message-head {
+  .return-message-head,
+  .task-group-head {
     flex-direction: column;
     align-items: flex-start;
   }

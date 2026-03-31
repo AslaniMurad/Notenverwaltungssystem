@@ -6,7 +6,7 @@ async function listClasses() {
      FROM classes c
      JOIN school_years sy ON sy.id = c.school_year_id
      WHERE sy.is_active = ?
-     ORDER BY c.name ASC, c.subject ASC`
+     ORDER BY c.name ASC, c.id ASC`
     ,
     [true]
   );
