@@ -11,6 +11,7 @@
   }
 
   const csrfToken = initialData.csrfToken;
+  const currentUserEmail = initialData.currentUserEmail || "";
 
   function escapeHtml(value) {
     return String(value ?? "")
@@ -56,6 +57,7 @@
       category: entry.category || "",
       subject: entry.subject || "",
       note: entry.note || "",
+      thread_closed_at: entry.thread_closed_at || null,
       weight: Number(entry.weight || 0),
       grade: entry.grade == null ? null : Number(entry.grade),
       attachment_download_url: entry.attachment_download_url || null,
@@ -67,7 +69,9 @@
             id: message.id,
             student_message: message.student_message || "",
             teacher_reply: message.teacher_reply || null,
+            teacher_reply_by_email: message.teacher_reply_by_email || null,
             teacher_reply_seen_at: message.teacher_reply_seen_at || null,
+            student_hidden_at: message.student_hidden_at || null,
             created_at: message.created_at || null,
             replied_at: message.replied_at || null
           }))
@@ -152,11 +156,23 @@
     );
   }
 
+  function getThreadClosedAt(entry) {
+    if (entry?.thread_closed_at) return entry.thread_closed_at;
+    const messages = Array.isArray(entry?.messages) ? entry.messages : [];
+    return messages.reduce((latest, message) => {
+      const hiddenAt = message?.student_hidden_at || null;
+      if (!hiddenAt) return latest;
+      if (!latest) return hiddenAt;
+      return new Date(hiddenAt) > new Date(latest) ? hiddenAt : latest;
+    }, null);
+  }
+
   function getReturnMessageStats(entry) {
     const messages = Array.isArray(entry?.messages) ? entry.messages : [];
     let unansweredCount = 0;
     let unreadReplyCount = 0;
     let lastActivityTs = 0;
+    const closedAt = getThreadClosedAt(entry);
 
     messages.forEach((message) => {
       const studentTs = dateSortValue(message.created_at, 0);
@@ -169,15 +185,25 @@
       }
     });
 
+    if (closedAt) {
+      lastActivityTs = Math.max(lastActivityTs, dateSortValue(closedAt, 0));
+      unansweredCount = 0;
+      unreadReplyCount = 0;
+    }
+
     return {
       totalCount: messages.length,
       unansweredCount,
       unreadReplyCount,
+      closedAt,
       lastActivityAt: lastActivityTs ? new Date(lastActivityTs).toISOString() : null
     };
   }
 
   function getReturnStatus(stats) {
+    if (stats.closedAt) {
+      return { label: "Geschlossen", className: "closed" };
+    }
     if (stats.unreadReplyCount > 0) {
       return { label: "Neue Antwort", className: "new" };
     }
@@ -698,6 +724,18 @@
     await fetch(`/student/returns/${gradeId}/messages/seen`, { method: "POST", headers });
   }
 
+  async function hideRequestThread(gradeId) {
+    const headers = csrfToken ? { "X-CSRF-Token": csrfToken } : {};
+    const response = await fetch(`/student/returns/${gradeId}/messages/hide`, {
+      method: "POST",
+      headers
+    });
+    const payload = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      throw new Error(payload.error || "Ticket konnte nicht ausgeblendet werden.");
+    }
+  }
+
   function syncRequestGradeFilterOptions(entries) {
     const select = document.getElementById("request-filter-grade");
     if (!select) return "";
@@ -750,6 +788,9 @@
       const summaryLastActivity = stats.lastActivityAt
         ? `Letzte Aktivitaet: ${formatDate(stats.lastActivityAt, true)}`
         : "Noch keine Aktivitaet";
+      const closedMeta = stats.closedAt
+        ? `<span>Geschlossen: ${formatDate(stats.closedAt, true)}</span>`
+        : "";
       summary.innerHTML = `
         <div class="return-summary-main">
           <span>Rueckfragen</span>
@@ -758,6 +799,7 @@
         <div class="return-summary-meta">
           <span>${stats.totalCount} Nachricht${stats.totalCount === 1 ? "" : "en"}</span>
           <span>${summaryLastActivity}</span>
+          ${closedMeta}
           ${stats.unreadReplyCount ? `<span class="badge-inline return-unread-badge">${stats.unreadReplyCount} neu</span>` : ""}
         </div>
       `;
@@ -765,14 +807,29 @@
 
       const thread = document.createElement("div");
       thread.className = "return-message-thread request-ticket-thread";
+      const closedMessageHtml = stats.closedAt
+        ? `
+          <article class="return-message-row system">
+            <div class="return-message-head">
+              <strong>Status</strong>
+              <span class="ticket-tag system">Geschlossen</span>
+              <small>${formatDate(stats.closedAt, true)}</small>
+            </div>
+            <p>Du hast die Anfrage geschlossen.</p>
+          </article>
+        `
+        : "";
       thread.innerHTML = entry.messages.length
-        ? entry.messages
+        ? `${entry.messages
             .map((message) => {
+              const studentAuthor = currentUserEmail || "Schueler";
+              const teacherAuthor =
+                message.teacher_reply_by_email || entry.teacher || "Lehrkraft";
               const teacherPart = message.teacher_reply
                 ? `
                   <article class="return-message-row teacher ${message.teacher_reply_seen_at ? "" : "unseen"}">
                     <div class="return-message-head">
-                      <strong>Lehrkraft</strong>
+                      <strong>${escapeHtml(teacherAuthor)}</strong>
                       <span class="ticket-tag teacher">Antwort</span>
                       <small>${formatDate(message.replied_at, true)}</small>
                     </div>
@@ -784,7 +841,7 @@
               return `
                 <article class="return-message-row student">
                   <div class="return-message-head">
-                    <strong>Du</strong>
+                    <strong>${escapeHtml(studentAuthor)}</strong>
                     <span class="ticket-tag student">Anfrage</span>
                     <small>${formatDate(message.created_at, true)}</small>
                   </div>
@@ -793,7 +850,7 @@
                 ${teacherPart}
               `;
             })
-            .join("")
+            .join("")}${closedMessageHtml}`
         : '<article class="return-message-row pending"><small>Noch keine Rueckfragen vorhanden.</small></article>';
       details.appendChild(thread);
 
@@ -946,7 +1003,7 @@
             ? `<div class="return-actions"><a class="btn small secondary" href="${downloadUrl}">Datei herunterladen</a><small>${attachmentName}</small></div>`
             : "";
         const requestActionHtml = entry.can_message
-          ? `<div class="return-actions"><a class="btn small" href="/student/requests?gradeId=${encodeURIComponent(String(entry.id))}">${stats.totalCount > 0 ? "Anfragen ansehen" : "Anfrage erstellen"}</a></div>`
+          ? `<div class="return-actions"><a class="btn small" href="/student/requests?gradeId=${encodeURIComponent(String(entry.id))}">${stats.closedAt ? "Neue Anfrage starten" : stats.totalCount > 0 ? "Anfragen ansehen" : "Anfrage erstellen"}</a></div>`
           : "";
 
         return `
@@ -963,6 +1020,7 @@
                 <span>Letzte Aktivitaet: ${
                   stats.lastActivityAt ? formatDate(stats.lastActivityAt, true) : "Noch keine Rueckfragen"
                 }</span>
+                ${stats.closedAt ? `<span>Geschlossen: ${formatDate(stats.closedAt, true)}</span>` : ""}
               </div>
               ${entry.note ? `<div class="nav-note">${escapeHtml(entry.note)}</div>` : ""}
               ${attachmentHtml}
@@ -984,13 +1042,19 @@
     if (!container) return;
     container.classList.add("request-list");
 
-    const sourceEntries = state.returns.filter(
-      (entry) => entry.can_message || (Array.isArray(entry.messages) && entry.messages.length > 0)
-    );
+    const sourceEntries = state.returns.filter((entry) => {
+      const hasMessages = Array.isArray(entry.messages) && entry.messages.length > 0;
+      const isClosed = Boolean(getThreadClosedAt(entry));
+      if (hasMessages && !isClosed) return true;
+      return Boolean(requestFocusGradeId) &&
+        String(entry.id) === String(requestFocusGradeId) &&
+        entry.can_message;
+    });
 
     if (!sourceEntries.length) {
       setCount("request-count", 0);
-      container.innerHTML = '<p class="empty-state">Noch keine moeglichen Anfragen vorhanden.</p>';
+      container.innerHTML =
+        '<p class="empty-state">Noch keine Tickets vorhanden. Neue Anfragen startest du direkt bei der jeweiligen Rueckgabe.</p>';
       return;
     }
 
@@ -1042,6 +1106,10 @@
       .map((entry) => {
         const stats = getReturnMessageStats(entry);
         const status = getReturnStatus(stats);
+        const deleteButtonHtml =
+          Array.isArray(entry.messages) && entry.messages.length > 0 && !stats.closedAt
+            ? `<button class="btn small secondary request-delete-button" type="button" data-request-delete="${String(entry.id)}">Anfrage schliessen</button>`
+            : "";
         return `
           <article class="request-card request-row" data-grade-id="${String(entry.id)}">
             <div class="request-card-body">
@@ -1066,6 +1134,7 @@
                 }</span>
               </div>
               ${entry.note ? `<div class="nav-note request-note">${escapeHtml(entry.note)}</div>` : ""}
+              ${deleteButtonHtml ? `<div class="request-actions">${deleteButtonHtml}</div>` : ""}
             </div>
           </article>
         `;
@@ -1073,6 +1142,24 @@
       .join("");
 
     decorateReturnRows(ordered, container);
+
+    container.querySelectorAll("[data-request-delete]").forEach((button) => {
+      button.addEventListener("click", async () => {
+        const gradeId = button.getAttribute("data-request-delete");
+        if (!gradeId) return;
+        button.setAttribute("disabled", "disabled");
+        try {
+          await hideRequestThread(gradeId);
+          state.openReturnDetails.delete(String(gradeId));
+          requestFocusGradeId = null;
+          await loadReturnsFromServer();
+        } catch (err) {
+          console.error(err);
+          window.alert(err.message || "Ticket konnte nicht geloescht werden.");
+          button.removeAttribute("disabled");
+        }
+      });
+    });
 
     if (requestFocusGradeId) {
       const focusRow = container.querySelector(

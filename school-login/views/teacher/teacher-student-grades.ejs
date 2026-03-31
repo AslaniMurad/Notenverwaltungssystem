@@ -266,18 +266,29 @@
                         <p class="teacher-muted">Keine Fragen zu dieser Note vorhanden.</p>
                       <% } else { %>
                         <div class="teacher-list">
+                          <% if (grade.thread_closed_at) { %>
+                            <div class="teacher-message-item">
+                              <div class="teacher-message-bubble system">
+                                <p class="teacher-message-author">Status</p>
+                                <p><%= student.name %> hat die Anfrage geschlossen.</p>
+                                <small class="teacher-muted"><%= new Date(grade.thread_closed_at).toLocaleString('de-DE') %></small>
+                              </div>
+                            </div>
+                          <% } %>
                           <% grade.messages.forEach(message => { %>
                             <div class="teacher-message-item">
                               <div class="teacher-message-bubble student">
+                                <p class="teacher-message-author"><%= student.email || 'Schueler' %></p>
                                 <p><%= message.student_message %></p>
                                 <small class="teacher-muted"><%= new Date(message.created_at).toLocaleString('de-DE') %></small>
                               </div>
                               <% if (message.teacher_reply) { %>
                                 <div class="teacher-message-bubble teacher">
+                                  <p class="teacher-message-author"><%= message.teacher_reply_by_email || 'Lehrkraft' %></p>
                                   <p><%= message.teacher_reply %></p>
                                   <small class="teacher-muted">Beantwortet: <%= message.replied_at ? new Date(message.replied_at).toLocaleString('de-DE') : '-' %></small>
                                 </div>
-                              <% } else { %>
+                              <% } else if (!grade.thread_closed_at) { %>
                                 <form class="teacher-form teacher-reply-form" method="POST" action="/teacher/students/<%= classData.id %>/messages/<%= message.id %>/reply">
                                   <input type="hidden" name="_csrf" value="<%= csrfToken %>">
                                   <label for="reply-grade-<%= grade.id %>-<%= message.id %>">Antwort</label>

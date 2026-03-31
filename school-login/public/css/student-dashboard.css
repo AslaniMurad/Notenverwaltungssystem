@@ -500,6 +500,11 @@ header.dashboard-hero {
   color: var(--student-success-text);
 }
 
+.return-status-pill.closed {
+  background: var(--student-info-bg);
+  color: var(--student-info-text);
+}
+
 .return-status-pill.idle {
   background: var(--student-surface-2);
   color: var(--student-muted);
@@ -592,6 +597,22 @@ header.dashboard-hero {
 .request-row-focus {
   border-color: var(--student-accent);
   box-shadow: 0 0 0 3px var(--student-accent-soft);
+}
+
+.request-actions {
+  display: flex;
+  justify-content: flex-end;
+}
+
+.page-student .btn.request-delete-button {
+  background: var(--student-danger-bg);
+  color: var(--student-danger-text);
+  border-color: transparent;
+}
+
+.page-student .btn.request-delete-button:hover {
+  background: var(--student-danger-bg);
+  filter: brightness(0.97);
 }
 
 .return-actions,
@@ -713,6 +734,20 @@ header.dashboard-hero {
   color: var(--student-success-text);
 }
 
+.ticket-tag.system {
+  background: var(--student-info-bg);
+  color: var(--student-info-text);
+}
+
+.return-message-row.system {
+  border-left: 3px solid var(--student-accent);
+  background: var(--student-surface);
+}
+
+.request-ticket-thread .return-message-row.system::before {
+  background: var(--student-accent);
+}
+
 .return-message-row p {
   margin: 8px 0 0;
 }
@@ -828,7 +863,8 @@ header.dashboard-hero {
 
   .header-left,
   .header-right,
-  .button-row {
+  .button-row,
+  .request-actions {
     width: 100%;
   }
 

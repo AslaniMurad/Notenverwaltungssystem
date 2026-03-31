@@ -99,7 +99,7 @@
 
             <div class="teacher-list" data-thread-list>
               <% messageThreads.forEach(thread => { %>
-                <% const openMessages = (thread.messages || []).filter(message => !message.teacher_reply).length; %>
+                <% const openMessages = Number(thread.open_message_count || 0); %>
                 <% const hasOpenMessages = openMessages > 0; %>
                 <div
                   class="teacher-message-item teacher-thread-card"
@@ -128,7 +128,9 @@
                         </div>
                       </div>
                       <div class="teacher-thread-summary-right">
-                        <% if (hasOpenMessages) { %>
+                        <% if (thread.student_closed_at) { %>
+                          <span class="teacher-meta-chip teacher-meta-chip-status-student-closed">vom Schueler geschlossen</span>
+                        <% } else if (hasOpenMessages) { %>
                           <span class="teacher-meta-chip teacher-meta-chip-status-open"><%= openMessages %> offen</span>
                         <% } else { %>
                           <span class="teacher-meta-chip teacher-meta-chip-status-closed">beantwortet</span>
@@ -141,22 +143,29 @@
                         <small class="teacher-muted">Letzte Aktivitaet: <%= new Date(thread.latest_at).toLocaleString('de-DE') %></small>
                         <a class="btn btn-secondary btn-sm" href="/teacher/student-grades/<%= classData.id %>/<%= thread.student_id %>">Zum Schueler-Detail</a>
                       </div>
+                      <% if (thread.student_closed_at) { %>
+                        <div class="teacher-message-bubble system">
+                          <p class="teacher-message-author">Status</p>
+                          <p><%= thread.student_name %> hat die Anfrage geschlossen.</p>
+                          <small class="teacher-muted"><%= new Date(thread.student_closed_at).toLocaleString('de-DE') %></small>
+                        </div>
+                      <% } %>
                       <% thread.messages.forEach(message => { %>
                         <div class="teacher-message-bubble student">
-                          <p class="teacher-message-author">Schueler</p>
+                          <p class="teacher-message-author"><%= thread.student_email || 'Schueler' %></p>
                           <p><%= message.student_message %></p>
                           <small class="teacher-muted"><%= new Date(message.created_at).toLocaleString('de-DE') %></small>
                         </div>
 
                         <% if (message.teacher_reply) { %>
                           <div class="teacher-message-bubble teacher">
-                            <p class="teacher-message-author">Lehrkraft</p>
+                            <p class="teacher-message-author"><%= message.teacher_reply_by_email || 'Lehrkraft' %></p>
                             <p><%= message.teacher_reply %></p>
                             <small class="teacher-muted">
                               Beantwortet: <%= message.replied_at ? new Date(message.replied_at).toLocaleString('de-DE') : '-' %>
                             </small>
                           </div>
-                        <% } else { %>
+                        <% } else if (!thread.student_closed_at) { %>
                           <form class="teacher-form teacher-reply-form" method="POST" action="/teacher/students/<%= classData.id %>/messages/<%= message.id %>/reply">
                             <input type="hidden" name="_csrf" value="<%= csrfToken %>">
                             <label for="reply-<%= message.id %>">Antwort</label>

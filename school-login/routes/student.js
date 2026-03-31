@@ -153,7 +153,7 @@ async function loadNotifications(studentId) {
 
 async function loadGradeMessages(studentId) {
   return allAsync(
-    `SELECT gm.id, gm.grade_id, gm.student_message, gm.teacher_reply, gm.teacher_reply_seen_at, gm.created_at, gm.replied_at
+    `SELECT gm.id, gm.grade_id, gm.student_message, gm.teacher_reply, gm.teacher_reply_by_email, gm.teacher_reply_seen_at, gm.student_hidden_at, gm.created_at, gm.replied_at
      FROM grade_messages gm
      JOIN grades g ON g.id = gm.grade_id
      WHERE gm.student_id = ? AND g.student_id = ?
@@ -210,6 +210,12 @@ function mapReturnRow(row, classInfo, messagesByGrade = new Map()) {
   const hasLink = Boolean(row.external_link);
   const canMessage = Boolean(row.template_id && !row.is_special);
   const messages = canMessage ? messagesByGrade.get(String(row.id)) || [] : [];
+  const threadClosedAt = messages.reduce((latest, message) => {
+    const hiddenAt = message.student_hidden_at || null;
+    if (!hiddenAt) return latest;
+    if (!latest) return hiddenAt;
+    return new Date(hiddenAt) > new Date(latest) ? hiddenAt : latest;
+  }, null);
   return {
     id: row.id,
     template_id: row.template_id,
@@ -226,6 +232,7 @@ function mapReturnRow(row, classInfo, messagesByGrade = new Map()) {
     attachment_size: hasFile ? row.attachment_size || null : null,
     external_link: hasLink ? row.external_link : null,
     can_message: canMessage,
+    thread_closed_at: threadClosedAt,
     messages
   };
 }
@@ -426,7 +433,9 @@ async function buildStudentDashboardViewModel(req) {
       id: message.id,
       student_message: message.student_message,
       teacher_reply: message.teacher_reply || null,
+      teacher_reply_by_email: message.teacher_reply_by_email || null,
       teacher_reply_seen_at: message.teacher_reply_seen_at || null,
+      student_hidden_at: message.student_hidden_at || null,
       created_at: message.created_at,
       replied_at: message.replied_at || null
     });
@@ -452,6 +461,7 @@ async function buildStudentDashboardViewModel(req) {
     archivedTasks,
     returns,
     initialData: {
+      currentUserEmail: req.session.user.email,
       grades,
       averages,
       tasks,
@@ -667,7 +677,9 @@ router.get("/returns", async (req, res, next) => {
         id: message.id,
         student_message: message.student_message,
         teacher_reply: message.teacher_reply || null,
+        teacher_reply_by_email: message.teacher_reply_by_email || null,
         teacher_reply_seen_at: message.teacher_reply_seen_at || null,
+        student_hidden_at: message.student_hidden_at || null,
         created_at: message.created_at,
         replied_at: message.replied_at || null
       });
@@ -722,9 +734,51 @@ router.post("/returns/:gradeId/message", async (req, res, next) => {
     }
 
     await runAsync(
+      `UPDATE grade_messages
+       SET student_hidden_at = NULL
+       WHERE grade_id = ? AND student_id = ? AND student_hidden_at IS NOT NULL`,
+      [gradeId, context.student.id]
+    );
+    await runAsync(
       "INSERT INTO grade_messages (grade_id, student_id, student_message) VALUES (?,?,?)",
       [gradeId, context.student.id, message]
     );
+    return res.json({ ok: true });
+  } catch (err) {
+    next(err);
+  }
+});
+
+router.post("/returns/:gradeId/messages/hide", async (req, res, next) => {
+  try {
+    const context = await getStudentContext(req);
+    if (!context) {
+      return res.status(404).json({ error: "Student nicht gefunden." });
+    }
+
+    const gradeId = Number(req.params.gradeId);
+    if (!gradeId) {
+      return res.status(400).json({ error: "Ungueltige Rueckgabe-ID." });
+    }
+
+    const grade = await getAsync(
+      "SELECT id, grade_template_id FROM grades WHERE id = ? AND student_id = ?",
+      [gradeId, context.student.id]
+    );
+    if (!grade) {
+      return res.status(404).json({ error: "Rueckgabe nicht gefunden." });
+    }
+    if (!grade.grade_template_id) {
+      return res.status(400).json({ error: "Tickets sind nur fuer Rueckgaben aus Pruefungen verfuegbar." });
+    }
+
+    await runAsync(
+      `UPDATE grade_messages
+       SET student_hidden_at = current_timestamp
+       WHERE grade_id = ? AND student_id = ? AND student_hidden_at IS NULL`,
+      [gradeId, context.student.id]
+    );
+
     return res.json({ ok: true });
   } catch (err) {
     next(err);

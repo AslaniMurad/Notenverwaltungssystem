@@ -1112,7 +1112,7 @@ async function loadSpecialAssessments(classId) {
 
 async function loadClassGradeMessages(classId) {
   return allAsync(
-    `SELECT gm.id, gm.grade_id, gm.student_id, gm.student_message, gm.teacher_reply, gm.created_at, gm.replied_at,
+    `SELECT gm.id, gm.grade_id, gm.student_id, gm.student_message, gm.teacher_reply, gm.teacher_reply_by_email, gm.student_hidden_at, gm.created_at, gm.replied_at,
             s.name AS student_name, s.email AS student_email, gt.name AS test_name, g.grade AS grade_value
      FROM grade_messages gm
      JOIN grades g ON g.id = gm.grade_id
@@ -1126,7 +1126,7 @@ async function loadClassGradeMessages(classId) {
 
 async function loadStudentGradeMessages(classId, studentId) {
   return allAsync(
-    `SELECT gm.id, gm.grade_id, gm.student_message, gm.teacher_reply, gm.created_at, gm.replied_at
+    `SELECT gm.id, gm.grade_id, gm.student_message, gm.teacher_reply, gm.teacher_reply_by_email, gm.student_hidden_at, gm.created_at, gm.replied_at
      FROM grade_messages gm
      JOIN grades g ON g.id = gm.grade_id
      WHERE g.class_id = ? AND g.student_id = ? AND gm.student_id = ?
@@ -1147,11 +1147,11 @@ function pickLatestTimestamp(...values) {
 
 function groupClassMessageThreads(rows) {
   const threadMap = new Map();
-  let openMessageCount = 0;
 
   rows.forEach((row) => {
     const key = `${row.grade_id}:${row.student_id}`;
-    const rowLatestAt = pickLatestTimestamp(row.created_at, row.replied_at) || row.created_at;
+    const rowLatestAt =
+      pickLatestTimestamp(row.created_at, row.replied_at, row.student_hidden_at) || row.created_at;
     if (!threadMap.has(key)) {
       threadMap.set(key, {
         grade_id: row.grade_id,
@@ -1161,6 +1161,7 @@ function groupClassMessageThreads(rows) {
         test_name: row.test_name,
         grade_value: row.grade_value,
         latest_at: rowLatestAt,
+        student_closed_at: null,
         messages: []
       });
     }
@@ -1170,15 +1171,31 @@ function groupClassMessageThreads(rows) {
       id: row.id,
       student_message: row.student_message,
       teacher_reply: row.teacher_reply || null,
+      teacher_reply_by_email: row.teacher_reply_by_email || null,
+      student_hidden_at: row.student_hidden_at || null,
       created_at: row.created_at,
       replied_at: row.replied_at || null
     });
+    thread.student_closed_at =
+      pickLatestTimestamp(thread.student_closed_at, row.student_hidden_at) || thread.student_closed_at;
     thread.latest_at = pickLatestTimestamp(thread.latest_at, rowLatestAt) || thread.latest_at;
-    if (!row.teacher_reply) openMessageCount += 1;
   });
 
-  const messageThreads = Array.from(threadMap.values()).sort(
-    (a, b) => new Date(b.latest_at) - new Date(a.latest_at)
+  const messageThreads = Array.from(threadMap.values())
+    .map((thread) => {
+      const openThreadMessageCount = thread.student_closed_at
+        ? 0
+        : (thread.messages || []).filter((message) => !message.teacher_reply).length;
+      return {
+        ...thread,
+        open_message_count: openThreadMessageCount
+      };
+    })
+    .sort((a, b) => new Date(b.latest_at) - new Date(a.latest_at));
+
+  const openMessageCount = messageThreads.reduce(
+    (sum, thread) => sum + Number(thread.open_message_count || 0),
+    0
   );
 
   return { messageThreads, openMessageCount };
@@ -1192,7 +1209,7 @@ async function loadClassOpenMessageCount(classId) {
 
 async function loadMessageForTeacher(classId, messageId, teacherId) {
   return getAsync(
-    `SELECT gm.id, gm.student_id
+    `SELECT gm.id, gm.student_id, gm.student_hidden_at
      FROM grade_messages gm
      JOIN grades g ON g.id = gm.grade_id
      WHERE gm.id = ? AND g.class_id = ?
@@ -2012,6 +2029,9 @@ router.post("/students/:classId/messages/:messageId/reply", async (req, res, nex
     if (!messageRow) {
       return renderError(res, req, "Nachricht nicht gefunden.", 404, `/teacher/test-questions/${classId}`);
     }
+    if (messageRow.student_hidden_at) {
+      return renderError(res, req, "Ticket wurde vom Schueler geschlossen.", 400, `/teacher/test-questions/${classId}`);
+    }
 
     const reply = String(req.body?.reply || "").trim();
     if (!reply) {
@@ -2022,8 +2042,8 @@ router.post("/students/:classId/messages/:messageId/reply", async (req, res, nex
     }
 
     await runAsync(
-      "UPDATE grade_messages SET teacher_reply = ?, replied_at = current_timestamp, teacher_reply_seen_at = NULL WHERE id = ?",
-      [reply, messageId]
+      "UPDATE grade_messages SET teacher_reply = ?, teacher_reply_by_email = ?, replied_at = current_timestamp, teacher_reply_seen_at = NULL WHERE id = ?",
+      [reply, req.session.user.email, messageId]
     );
     await runAsync(
       "INSERT INTO grade_notifications (student_id, message, type) VALUES (?,?,?)",
@@ -2355,6 +2375,8 @@ router.get("/student-grades/:classId/:studentId", async (req, res, next) => {
         id: message.id,
         student_message: message.student_message,
         teacher_reply: message.teacher_reply || null,
+        teacher_reply_by_email: message.teacher_reply_by_email || null,
+        student_hidden_at: message.student_hidden_at || null,
         created_at: message.created_at,
         replied_at: message.replied_at || null
       });
@@ -2376,6 +2398,9 @@ router.get("/student-grades/:classId/:studentId", async (req, res, next) => {
       const hasPoints = Number.isFinite(pointsAchieved) && Number.isFinite(pointsMax) && pointsMax > 0;
       const pointsPercent = hasPoints ? Number(((pointsAchieved / pointsMax) * 100).toFixed(2)) : null;
       const messages = row.is_special ? [] : messagesByGrade.get(String(row.id)) || [];
+      const threadClosedAt = messages.reduce((latest, message) => {
+        return pickLatestTimestamp(latest, message.student_hidden_at) || latest;
+      }, null);
       return {
         id: row.id,
         grade: row.grade,
@@ -2397,7 +2422,10 @@ router.get("/student-grades/:classId/:studentId", async (req, res, next) => {
           ? `/teacher/delete-grade-attachment/${classId}/${row.id}`
           : null,
         messages,
-        open_message_count: messages.filter((message) => !message.teacher_reply).length,
+        thread_closed_at: threadClosedAt,
+        open_message_count: threadClosedAt
+          ? 0
+          : messages.filter((message) => !message.teacher_reply).length,
         delete_action: row.is_special
           ? `/teacher/delete-special-assessment/${classId}/${row.id}`
           : `/teacher/delete-grade/${classId}/${row.id}`

@@ -858,17 +858,20 @@ function createFakeDb() {
           student_id: Number(student_id),
           student_message: String(student_message || ""),
           teacher_reply: null,
+          teacher_reply_by_email: null,
           teacher_reply_seen_at: null,
+          student_hidden_at: null,
           created_at: new Date().toISOString(),
           replied_at: null
         };
         gradeMessages.push(message);
         lastID = message.id;
-      } else if (/UPDATE grade_messages SET teacher_reply = \?, replied_at = current_timestamp, teacher_reply_seen_at = NULL WHERE id = \?/i.test(sql)) {
-        const [teacher_reply, id] = params;
+      } else if (/UPDATE grade_messages SET teacher_reply = \?, teacher_reply_by_email = \?, replied_at = current_timestamp, teacher_reply_seen_at = NULL WHERE id = \?/i.test(sql)) {
+        const [teacher_reply, teacher_reply_by_email, id] = params;
         const message = gradeMessages.find((entry) => entry.id === Number(id));
         if (message) {
           message.teacher_reply = String(teacher_reply || "");
+          message.teacher_reply_by_email = String(teacher_reply_by_email || "") || null;
           message.replied_at = new Date().toISOString();
           message.teacher_reply_seen_at = null;
         }
@@ -883,6 +886,29 @@ function createFakeDb() {
             !entry.teacher_reply_seen_at
           ) {
             entry.teacher_reply_seen_at = seenAt;
+          }
+        });
+      } else if (/UPDATE grade_messages\s+SET student_hidden_at = NULL\s+WHERE grade_id = \? AND student_id = \? AND student_hidden_at IS NOT NULL/i.test(sql)) {
+        const [grade_id, student_id] = params;
+        gradeMessages.forEach((entry) => {
+          if (
+            entry.grade_id === Number(grade_id) &&
+            entry.student_id === Number(student_id) &&
+            entry.student_hidden_at
+          ) {
+            entry.student_hidden_at = null;
+          }
+        });
+      } else if (/UPDATE grade_messages\s+SET student_hidden_at = current_timestamp\s+WHERE grade_id = \? AND student_id = \? AND student_hidden_at IS NULL/i.test(sql)) {
+        const [grade_id, student_id] = params;
+        const hiddenAt = new Date().toISOString();
+        gradeMessages.forEach((entry) => {
+          if (
+            entry.grade_id === Number(grade_id) &&
+            entry.student_id === Number(student_id) &&
+            !entry.student_hidden_at
+          ) {
+            entry.student_hidden_at = hiddenAt;
           }
         });
       } else if (/INSERT INTO grade_notifications/i.test(sql)) {
@@ -1389,7 +1415,7 @@ function createFakeDb() {
               attachment_mime: grade.attachment_mime || null
             }
           : undefined;
-      } else if (/SELECT gm\.id, gm\.student_id\s+FROM grade_messages gm\s+JOIN grades g ON g\.id = gm\.grade_id\s+WHERE gm\.id = \? AND g\.class_id = \?/i.test(sql)) {
+      } else if (/SELECT gm\.id, gm\.student_id, gm\.student_hidden_at\s+FROM grade_messages gm\s+JOIN grades g ON g\.id = gm\.grade_id\s+WHERE gm\.id = \? AND g\.class_id = \?/i.test(sql)) {
         const [messageId, classIdParam] = params;
         const message = gradeMessages.find((entry) => entry.id === Number(messageId));
         if (message) {
@@ -1400,7 +1426,8 @@ function createFakeDb() {
           row = grade
             ? {
                 id: message.id,
-                student_id: message.student_id
+                student_id: message.student_id,
+                student_hidden_at: message.student_hidden_at || null
               }
             : undefined;
         }
@@ -1913,7 +1940,7 @@ function createFakeDb() {
             note: entry.note,
             created_at: entry.created_at
           }));
-      } else if (/SELECT gm\.id, gm\.grade_id, gm\.student_message, gm\.teacher_reply, gm\.teacher_reply_seen_at, gm\.created_at, gm\.replied_at\s+FROM grade_messages gm\s+JOIN grades g ON g\.id = gm\.grade_id\s+WHERE gm\.student_id = \? AND g\.student_id = \?\s+ORDER BY gm\.created_at ASC/i.test(sql)) {
+      } else if (/SELECT gm\.id, gm\.grade_id, gm\.student_message, gm\.teacher_reply, gm\.teacher_reply_by_email, gm\.teacher_reply_seen_at, gm\.student_hidden_at, gm\.created_at, gm\.replied_at\s+FROM grade_messages gm\s+JOIN grades g ON g\.id = gm\.grade_id\s+WHERE gm\.student_id = \? AND g\.student_id = \?\s+ORDER BY gm\.created_at ASC/i.test(sql)) {
         const [student_id, gradeStudentId] = params;
         rows = gradeMessages
           .filter((entry) => entry.student_id === Number(student_id))
@@ -1927,11 +1954,13 @@ function createFakeDb() {
             grade_id: entry.grade_id,
             student_message: entry.student_message,
             teacher_reply: entry.teacher_reply,
+            teacher_reply_by_email: entry.teacher_reply_by_email || null,
             teacher_reply_seen_at: entry.teacher_reply_seen_at,
+            student_hidden_at: entry.student_hidden_at || null,
             created_at: entry.created_at,
             replied_at: entry.replied_at
           }));
-      } else if (/SELECT gm\.id, gm\.grade_id, gm\.student_id, gm\.student_message, gm\.teacher_reply, gm\.created_at, gm\.replied_at,\s+s\.name AS student_name, s\.email AS student_email, gt\.name AS test_name, g\.grade AS grade_value\s+FROM grade_messages gm\s+JOIN grades g ON g\.id = gm\.grade_id\s+JOIN students s ON s\.id = gm\.student_id\s+LEFT JOIN grade_templates gt ON gt\.id = g\.grade_template_id\s+WHERE g\.class_id = \? AND s\.class_id = \?\s+ORDER BY gm\.created_at ASC/i.test(sql)) {
+      } else if (/SELECT gm\.id, gm\.grade_id, gm\.student_id, gm\.student_message, gm\.teacher_reply, gm\.teacher_reply_by_email, gm\.student_hidden_at, gm\.created_at, gm\.replied_at,\s+s\.name AS student_name, s\.email AS student_email, gt\.name AS test_name, g\.grade AS grade_value\s+FROM grade_messages gm\s+JOIN grades g ON g\.id = gm\.grade_id\s+JOIN students s ON s\.id = gm\.student_id\s+LEFT JOIN grade_templates gt ON gt\.id = g\.grade_template_id\s+WHERE g\.class_id = \? AND s\.class_id = \?\s+ORDER BY gm\.created_at ASC/i.test(sql)) {
         const [class_id, studentClassId] = params;
         rows = gradeMessages
           .filter((entry) => {
@@ -1957,6 +1986,8 @@ function createFakeDb() {
               student_id: entry.student_id,
               student_message: entry.student_message,
               teacher_reply: entry.teacher_reply,
+              teacher_reply_by_email: entry.teacher_reply_by_email || null,
+              student_hidden_at: entry.student_hidden_at || null,
               created_at: entry.created_at,
               replied_at: entry.replied_at,
               student_name: student?.name || "",
@@ -1965,7 +1996,7 @@ function createFakeDb() {
               grade_value: grade?.grade ?? null
             };
           });
-      } else if (/SELECT gm\.id, gm\.grade_id, gm\.student_message, gm\.teacher_reply, gm\.created_at, gm\.replied_at\s+FROM grade_messages gm\s+JOIN grades g ON g\.id = gm\.grade_id\s+WHERE g\.class_id = \? AND g\.student_id = \? AND gm\.student_id = \?\s+ORDER BY gm\.created_at ASC/i.test(sql)) {
+      } else if (/SELECT gm\.id, gm\.grade_id, gm\.student_message, gm\.teacher_reply, gm\.teacher_reply_by_email, gm\.student_hidden_at, gm\.created_at, gm\.replied_at\s+FROM grade_messages gm\s+JOIN grades g ON g\.id = gm\.grade_id\s+WHERE g\.class_id = \? AND g\.student_id = \? AND gm\.student_id = \?\s+ORDER BY gm\.created_at ASC/i.test(sql)) {
         const [class_id, gradeStudentId, messageStudentId] = params;
         rows = gradeMessages
           .filter((entry) => entry.student_id === Number(messageStudentId))
@@ -1983,6 +2014,8 @@ function createFakeDb() {
             grade_id: entry.grade_id,
             student_message: entry.student_message,
             teacher_reply: entry.teacher_reply,
+            teacher_reply_by_email: entry.teacher_reply_by_email || null,
+            student_hidden_at: entry.student_hidden_at || null,
             created_at: entry.created_at,
             replied_at: entry.replied_at
           }));
@@ -3185,13 +3218,21 @@ async function initializeDatabase() {
       student_id INTEGER NOT NULL REFERENCES students(id) ON DELETE CASCADE,
       student_message TEXT NOT NULL,
       teacher_reply TEXT,
+      teacher_reply_by_email TEXT,
       teacher_reply_seen_at TIMESTAMPTZ,
+      student_hidden_at TIMESTAMPTZ,
       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
       replied_at TIMESTAMPTZ
     )
   `);
   await pool.query(
+    "ALTER TABLE grade_messages ADD COLUMN IF NOT EXISTS teacher_reply_by_email TEXT"
+  );
+  await pool.query(
     "ALTER TABLE grade_messages ADD COLUMN IF NOT EXISTS teacher_reply_seen_at TIMESTAMPTZ"
+  );
+  await pool.query(
+    "ALTER TABLE grade_messages ADD COLUMN IF NOT EXISTS student_hidden_at TIMESTAMPTZ"
   );
   await pool.query(
     "CREATE INDEX IF NOT EXISTS grade_messages_student_idx ON grade_messages (student_id)"
