@@ -1,4 +1,4 @@
-<%
+﻿<%
   const page = {
     title: `Lehrer - Schueler (${classData.name})`,
     headerTitle: 'Lehrerbereich',
@@ -14,9 +14,9 @@
 
         <div class="app-nav">
           <div class="nav-section">
-            <div class="nav-section-title">Menü</div>
-            <a href="/teacher/classes">Meine Fachzuordnungen</a>
-            <a href="/teacher/create-class">Fach zuordnen</a>
+            <div class="nav-section-title">MenÃ¼</div>
+            <a href="/teacher/classes">Fächer</a>
+            <a href="/teacher/create-class">Fach erstellen</a>
             <a href="/teacher/settings">Einstellungen</a>
             <div class="nav-section-title">Klasse: <%= classData.name %> / <%= classData.subject %></div>
             <a class="is-active" href="/teacher/students/<%= classData.id %>">Schueler</a>
@@ -51,7 +51,7 @@
             class="form-input teacher-search-input"
             type="search"
             name="q"
-            placeholder="Schüler nach Name oder E-Mail suchen"
+            placeholder="SchÃ¼ler nach Name oder E-Mail suchen"
             value="<%= (search && search.q) || '' %>"
           >
           <select class="form-select teacher-search-select" name="sort" aria-label="Sortierung">
@@ -70,6 +70,9 @@
               <p class="teacher-eyebrow">Schueler</p>
               <h3><%= students.length %> / <%= totalStudentCount %> Schueler in dieser Klasse</h3>
             </div>
+            <% if (excludedStudentCount > 0) { %>
+              <div class="teacher-meta-chip"><%= excludedStudentCount %> ausgeschlossen</div>
+            <% } %>
           </div>
 
           <div class="teacher-list">
@@ -81,13 +84,28 @@
               </div>
             <% } else { %>
               <% students.forEach(student => { %>
-                <div class="teacher-student-card">
+                <div class="teacher-student-card <%= student.is_excluded ? 'is-excluded' : '' %>">
                   <div>
                     <p class="teacher-eyebrow">Schueler</p>
                     <h4><%= student.name %></h4>
                     <p class="teacher-muted"><%= student.email %></p>
+                    <% if (student.is_excluded) { %>
+                      <p class="teacher-excluded-note">
+                        <span class="teacher-exclusion-badge">Ausgeschlossen</span>
+                        Nicht Teil dieses Fachs
+                        <% if (student.excluded_at) { %>
+                          seit <%= new Date(student.excluded_at).toLocaleDateString('de-DE') %>
+                        <% } %>
+                      </p>
+                    <% } %>
                   </div>
                   <div class="teacher-card-actions">
+                    <form class="inline" method="POST" action="/teacher/student-exclusion/<%= classData.id %>/<%= student.id %>">
+                      <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+                      <input type="hidden" name="subject_id" value="<%= classData.subject_id %>">
+                      <input type="hidden" name="action" value="<%= student.is_excluded ? 'include' : 'exclude' %>">
+                      <button class="btn btn-secondary" type="submit"><%= student.is_excluded ? 'Einschließen' : 'Ausschließen' %></button>
+                    </form>
                     <form class="inline delete-student-form" method="POST" action="/teacher/delete-student/<%= classData.id %>/<%= student.id %>" data-student-name="<%= student.name %>">
                       <input type="hidden" name="_csrf" value="<%= csrfToken %>">
                       <button class="btn btn-danger" type="button">Entfernen</button>

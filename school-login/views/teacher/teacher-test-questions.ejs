@@ -1,4 +1,4 @@
-<%
+﻿<%
   const page = {
     title: `Lehrer - Fragen zu Tests (${classData.name})`,
     headerTitle: 'Lehrerbereich',
@@ -15,8 +15,8 @@
         <div class="app-nav">
           <div class="nav-section">
             <div class="nav-section-title">Navigation</div>
-            <a href="/teacher/classes">Meine Fachzuordnungen</a>
-            <a href="/teacher/create-class">Fach zuordnen</a>
+            <a href="/teacher/classes">Fächer</a>
+            <a href="/teacher/create-class">Fach erstellen</a>
             <div class="nav-section-title">Klasse: <%= classData.name %> / <%= classData.subject %></div>
             <a href="/teacher/students/<%= classData.id %>">Schueler</a>
             <a class="is-active <%= (typeof openMessageCount !== 'undefined' && openMessageCount > 0) ? 'is-alert' : '' %>" href="/teacher/test-questions/<%= classData.id %>">Fragen zu Tests<% if (typeof openMessageCount !== 'undefined' && openMessageCount > 0) { %><span class="nav-notification-badge"><%= openMessageCount %></span><% } %></a>

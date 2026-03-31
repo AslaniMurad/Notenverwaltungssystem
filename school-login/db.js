@@ -60,6 +60,7 @@ function createFakeDb() {
   const notifications = [];
   const auditLogs = [];
   const participationMarks = [];
+  const teacherStudentExclusions = [];
   const subjects = [];
   const teachingAssignments = [];
   const archives = [];
@@ -77,6 +78,7 @@ function createFakeDb() {
   let notificationId = 1;
   let auditLogId = 1;
   let participationMarkId = 1;
+  let teacherStudentExclusionId = 1;
   let subjectId = 1;
   let teachingAssignmentId = 1;
   let archiveId = 1;
@@ -392,6 +394,41 @@ function createFakeDb() {
         for (let i = teachingAssignments.length - 1; i >= 0; i -= 1) {
           if (teachingAssignments[i].id === Number(id)) teachingAssignments.splice(i, 1);
         }
+      } else if (/INSERT INTO teacher_student_exclusions/i.test(sql)) {
+        const [teacher_id, class_id, subject_id, student_id, school_year_id] = params;
+        const duplicate = teacherStudentExclusions.find(
+          (entry) =>
+            entry.teacher_id === Number(teacher_id) &&
+            entry.class_id === Number(class_id) &&
+            entry.subject_id === Number(subject_id) &&
+            entry.student_id === Number(student_id)
+        );
+        if (!duplicate) {
+          const newExclusion = {
+            id: teacherStudentExclusionId++,
+            teacher_id: Number(teacher_id),
+            class_id: Number(class_id),
+            subject_id: Number(subject_id),
+            student_id: Number(student_id),
+            school_year_id: Number(school_year_id),
+            excluded_at: new Date().toISOString()
+          };
+          teacherStudentExclusions.push(newExclusion);
+          lastID = newExclusion.id;
+        }
+      } else if (/DELETE FROM teacher_student_exclusions WHERE teacher_id = \? AND class_id = \? AND subject_id = \? AND student_id = \?/i.test(sql)) {
+        const [teacher_id, class_id, subject_id, student_id] = params;
+        for (let i = teacherStudentExclusions.length - 1; i >= 0; i -= 1) {
+          const entry = teacherStudentExclusions[i];
+          if (
+            entry.teacher_id === Number(teacher_id) &&
+            entry.class_id === Number(class_id) &&
+            entry.subject_id === Number(subject_id) &&
+            entry.student_id === Number(student_id)
+          ) {
+            teacherStudentExclusions.splice(i, 1);
+          }
+        }
       } else if (/DELETE FROM grade_notifications WHERE student_id IN \(SELECT id FROM students WHERE class_id = \?\)/i.test(sql)) {
         const [classIdParam] = params;
         const studentIds = new Set(
@@ -431,6 +468,14 @@ function createFakeDb() {
             participationMarks.splice(i, 1);
           }
         }
+        for (let i = teacherStudentExclusions.length - 1; i >= 0; i -= 1) {
+          if (
+            teacherStudentExclusions[i].student_id === Number(idParam) &&
+            teacherStudentExclusions[i].class_id === Number(classIdParam)
+          ) {
+            teacherStudentExclusions.splice(i, 1);
+          }
+        }
       } else if (/DELETE FROM students WHERE class_id = \?/i.test(sql)) {
         const [classIdParam] = params;
         const studentIds = new Set(
@@ -457,6 +502,11 @@ function createFakeDb() {
             participationMarks.splice(i, 1);
           }
         }
+        for (let i = teacherStudentExclusions.length - 1; i >= 0; i -= 1) {
+          if (teacherStudentExclusions[i].class_id === Number(classIdParam)) {
+            teacherStudentExclusions.splice(i, 1);
+          }
+        }
       } else if (/DELETE FROM classes WHERE id = \?/i.test(sql)) {
         const [id] = params;
         for (let i = classes.length - 1; i >= 0; i -= 1) {
@@ -467,6 +517,11 @@ function createFakeDb() {
         }
         for (let i = specialAssessments.length - 1; i >= 0; i -= 1) {
           if (specialAssessments[i].class_id === Number(id)) specialAssessments.splice(i, 1);
+        }
+        for (let i = teacherStudentExclusions.length - 1; i >= 0; i -= 1) {
+          if (teacherStudentExclusions[i].class_id === Number(id)) {
+            teacherStudentExclusions.splice(i, 1);
+          }
         }
         for (let i = participationMarks.length - 1; i >= 0; i -= 1) {
           if (participationMarks[i].class_id === Number(id)) {
@@ -1922,6 +1977,19 @@ function createFakeDb() {
             };
           })
           .sort((a, b) => (a.class_name || "").localeCompare(b.class_name || ""));
+      } else if (/SELECT student_id,\s*excluded_at\s+FROM teacher_student_exclusions\s+WHERE teacher_id = \? AND class_id = \? AND subject_id = \?/i.test(sql)) {
+        const [teacher_id, class_id, subject_id] = params;
+        rows = teacherStudentExclusions
+          .filter(
+            (entry) =>
+              entry.teacher_id === Number(teacher_id) &&
+              entry.class_id === Number(class_id) &&
+              entry.subject_id === normalizeOptionalId(subject_id)
+          )
+          .map((entry) => ({
+            student_id: entry.student_id,
+            excluded_at: entry.excluded_at
+          }));
       } else if (/SELECT id, name, email FROM students WHERE class_id = \?/i.test(sql) && /ORDER BY name/i.test(sql)) {
         const hasNameFilter = /LOWER\(name\) LIKE LOWER\(\?\)/i.test(sql);
         const hasEmailFilter = /LOWER\(email\) LIKE LOWER\(\?\)/i.test(sql);
@@ -3603,6 +3671,48 @@ async function initializeDatabase() {
   );
   await pool.query(
     "CREATE INDEX IF NOT EXISTS participation_marks_class_subject_student_idx ON participation_marks (class_id, subject_id, student_id, created_at)"
+  );
+
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS teacher_student_exclusions (
+      id SERIAL PRIMARY KEY,
+      teacher_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      class_id INTEGER NOT NULL REFERENCES classes(id) ON DELETE CASCADE,
+      subject_id INTEGER NOT NULL REFERENCES subjects(id) ON DELETE CASCADE,
+      student_id INTEGER NOT NULL REFERENCES students(id) ON DELETE CASCADE,
+      school_year_id INTEGER REFERENCES school_years(id) ON DELETE RESTRICT,
+      excluded_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      UNIQUE (teacher_id, class_id, subject_id, student_id)
+    )
+  `);
+  await pool.query(
+    "ALTER TABLE teacher_student_exclusions ADD COLUMN IF NOT EXISTS school_year_id INTEGER"
+  );
+  await pool.query(`
+    UPDATE teacher_student_exclusions tse
+    SET school_year_id = c.school_year_id
+    FROM classes c
+    WHERE c.id = tse.class_id AND tse.school_year_id IS NULL
+  `);
+  await pool.query(`
+    DO $$
+    BEGIN
+      IF NOT EXISTS (
+        SELECT 1
+        FROM pg_constraint
+        WHERE conname = 'teacher_student_exclusions_school_year_id_fkey'
+      ) THEN
+        ALTER TABLE teacher_student_exclusions
+        ADD CONSTRAINT teacher_student_exclusions_school_year_id_fkey
+        FOREIGN KEY (school_year_id) REFERENCES school_years(id) ON DELETE RESTRICT;
+      END IF;
+    END $$;
+  `);
+  await pool.query(
+    "CREATE INDEX IF NOT EXISTS teacher_student_exclusions_lookup_idx ON teacher_student_exclusions (teacher_id, class_id, subject_id, student_id)"
+  );
+  await pool.query(
+    "CREATE INDEX IF NOT EXISTS teacher_student_exclusions_class_subject_idx ON teacher_student_exclusions (class_id, subject_id)"
   );
 
   await pool.query(`

@@ -1,6 +1,6 @@
 <%
   const page = {
-    title: 'Lehrer - Fachzuordnungen',
+    title: 'Lehrer - Fächer',
     headerTitle: 'Lehrerbereich',
     styles: ['/css/teacher-pages.css'],
     scripts: ['/js/app.js'],
@@ -16,8 +16,8 @@
         <div class="app-nav">
           <div class="nav-section">
             <div class="nav-section-title">Menue</div>
-            <a class="is-active" href="/teacher/classes">Meine Fachzuordnungen</a>
-            <a href="/teacher/create-class">Fach zuordnen</a>
+            <a class="is-active" href="/teacher/classes">Fächer</a>
+            <a href="/teacher/create-class">Fach erstellen</a>
             <a href="/teacher/settings">Einstellungen</a>
             <form class="logout-form" method="POST" action="/logout">
               <input type="hidden" name="_csrf" value="<%= csrfToken %>">
@@ -31,11 +31,11 @@
         <header class="teacher-main-header">
           <div>
             <p class="teacher-eyebrow">Uebersicht</p>
-            <h1>Meine Fachzuordnungen</h1>
+            <h1>Fächer</h1>
             <p class="teacher-muted">Rolle: Lehrer · <%= email %></p>
           </div>
           <div class="teacher-actions-inline">
-            <a class="btn btn-primary" href="/teacher/create-class">+ Fach zuordnen</a>
+            <a class="btn btn-primary" href="/teacher/create-class">+ Fach erstellen</a>
             <a class="btn btn-secondary" href="/">Dashboard</a>
           </div>
         </header>
@@ -86,7 +86,7 @@
               <div class="teacher-empty">
                 <h4>Noch keine Fachzuordnungen</h4>
                 <p><%= emptyStateMessage || 'Noch keine Fachzuordnungen vorhanden.' %></p>
-                <a class="btn btn-primary" href="/teacher/create-class">Fach zuordnen</a>
+                <a class="btn btn-primary" href="/teacher/create-class">Fach erstellen</a>
               </div>
             <% } else { %>
               <% classes.forEach((cls) => { %>
@@ -97,7 +97,7 @@
                     <p class="teacher-muted">Klasse: <%= cls.name %></p>
                   </div>
                   <div class="teacher-card-actions">
-                    <a class="btn btn-primary" href="/teacher/students/<%= cls.id %>?subject_id=<%= cls.subject_id %>">Schueler verwalten</a>
+                    <a class="btn btn-primary" href="/teacher/students/<%= cls.id %>?subject_id=<%= cls.subject_id %>">Öffnen</a>
                     <form
                       class="inline"
                       method="POST"
@@ -110,7 +110,7 @@
                     >
                       <input type="hidden" name="_csrf" value="<%= csrfToken %>">
                       <input type="hidden" name="subject_id" value="<%= cls.subject_id %>">
-                      <button class="btn btn-danger" type="submit">Zuordnung entfernen</button>
+                      <button class="btn btn-danger" type="submit">Verlassen</button>
                     </form>
                   </div>
                 </div>

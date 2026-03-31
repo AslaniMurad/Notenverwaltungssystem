@@ -1,4 +1,4 @@
-<%
+﻿<%
   const page = {
     title: `Lehrer - Transparenzdetails (${student.name})`,
     headerTitle: "Lehrerbereich",
@@ -17,15 +17,15 @@
 
         <div class="app-nav">
           <div class="nav-section">
-            <div class="nav-section-title">Menü</div>
-            <a href="/teacher/classes">Meine Fachzuordnungen</a>
-            <a href="/teacher/create-class">Fach zuordnen</a>
+            <div class="nav-section-title">MenÃ¼</div>
+            <a href="/teacher/classes">Fächer</a>
+            <a href="/teacher/create-class">Fach erstellen</a>
             <a href="/teacher/settings">Einstellungen</a>
             <div class="nav-section-title">Klasse: <%= classData.name %> / <%= classData.subject %></div>
-            <a href="/teacher/students/<%= classData.id %>">Schüler</a>
+            <a href="/teacher/students/<%= classData.id %>">SchÃ¼ler</a>
             <a href="/teacher/grades/<%= classData.id %>">Noten</a>
             <a href="/teacher/special-assessments/<%= classData.id %>">Sonderleistungen</a>
-            <a href="/teacher/grade-templates/<%= classData.id %>">Prüfungen</a>
+            <a href="/teacher/grade-templates/<%= classData.id %>">PrÃ¼fungen</a>
             <a href="/teacher/class-statistics/<%= classData.id %>">Statistiken</a>
             <form class="logout-form" method="POST" action="/logout">
               <input type="hidden" name="_csrf" value="<%= csrfToken %>">
@@ -50,9 +50,13 @@
             </p>
           </div>
           <div class="teacher-actions-inline">
-            <a class="btn btn-secondary" href="/teacher/student-grades/<%= classData.id %>/<%= student.id %>">Zurück zu Notendetails</a>
+            <a class="btn btn-secondary" href="/teacher/student-grades/<%= classData.id %>/<%= student.id %>">ZurÃ¼ck zu Notendetails</a>
           </div>
         </header>
+
+        <% if (excludedMessage) { %>
+          <div class="teacher-alert info"><%= excludedMessage %></div>
+        <% } %>
 
         <div class="teacher-card">
           <div class="teacher-card-header">
@@ -71,12 +75,12 @@
             </div>
           <% } %>
           <p class="teacher-muted">
-            Einbezogene Einträge: <strong><%= summary.included_count %></strong> |
-            Ausgeschlossene Einträge: <strong><%= summary.excluded_count %></strong> |
+            Einbezogene EintrÃ¤ge: <strong><%= summary.included_count %></strong> |
+            Ausgeschlossene EintrÃ¤ge: <strong><%= summary.excluded_count %></strong> |
             Referenzschnitt (System): <strong><%= summary.reference_average != null ? summary.reference_average : "-" %></strong>
           </p>
           <p class="teacher-muted">
-            Punkte (aktuell möglich):
+            Punkte (aktuell mÃ¶glich):
             <strong>
               <%= summary.points_achieved_total != null ? summary.points_achieved_total : "-" %>/<%= summary.points_max_total != null ? summary.points_max_total : "-" %>
             </strong>
@@ -170,7 +174,7 @@
           <div class="teacher-card-header">
             <div>
               <p class="teacher-eyebrow">Rohdaten</p>
-              <h3>Alle bewerteten Einträge mit Berechnungsdaten</h3>
+              <h3>Alle bewerteten EintrÃ¤ge mit Berechnungsdaten</h3>
             </div>
             <div class="teacher-actions-inline">
               <a class="btn btn-secondary btn-sm" href="/teacher/student-grades/<%= classData.id %>/<%= student.id %>/details?format=csv_raw">.csv</a>
@@ -186,7 +190,7 @@
                   <th>Bezeichnung</th>
                   <th>Kategorie</th>
                   <th>Erfasst</th>
-                  <th>Prüfungsdatum</th>
+                  <th>PrÃ¼fungsdatum</th>
                   <th>Note</th>
                   <th>Gewicht roh</th>
                   <th>Gewicht effektiv</th>
@@ -207,7 +211,7 @@
                   </tr>
                 <% } else { %>
                   <% calculationRows.forEach((row) => { %>
-                    <tr>
+                    <tr class="<%= !row.included ? 'is-excluded' : '' %>">
                       <td><%= row.step %></td>
                       <td><%= row.source_type %></td>
                       <td><%= row.source_name %></td>
@@ -271,7 +275,7 @@
                   </tr>
                 <% } else { %>
                   <% calculationRows.forEach((row) => { %>
-                    <tr>
+                    <tr class="<%= !row.included ? 'is-excluded' : '' %>">
                       <td><%= row.step %></td>
                       <td><%= row.source_type %>: <%= row.source_name %></td>
                       <td><%= row.included ? "Ja" : "Nein" %></td>
@@ -293,7 +297,7 @@
           <div class="teacher-card-header">
             <div>
               <p class="teacher-eyebrow">Offene Vorlagen</p>
-              <h3>Noch nicht benotete Prüfungen</h3>
+              <h3>Noch nicht benotete PrÃ¼fungen</h3>
             </div>
             <div class="teacher-meta-chip"><%= openTemplates.length %> offen</div>
           </div>

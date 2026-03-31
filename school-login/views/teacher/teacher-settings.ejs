@@ -1,4 +1,4 @@
-<%
+﻿<%
   const page = {
     title: "Lehrer - Einstellungen",
     headerTitle: "Lehrerbereich",
@@ -29,9 +29,9 @@
 
         <div class="app-nav">
           <div class="nav-section">
-            <div class="nav-section-title">Menü</div>
-            <a href="/teacher/classes">Meine Fachzuordnungen</a>
-            <a href="/teacher/create-class">Fach zuordnen</a>
+            <div class="nav-section-title">MenÃ¼</div>
+            <a href="/teacher/classes">Fächer</a>
+            <a href="/teacher/create-class">Fach erstellen</a>
             <a class="is-active" href="/teacher/settings">Einstellungen</a>
             <form class="logout-form" method="POST" action="/logout">
               <input type="hidden" name="_csrf" value="<%= csrfToken %>">
@@ -44,18 +44,18 @@
       <section class="teacher-main">
         <header class="teacher-main-header">
           <div>
-            <p class="teacher-eyebrow">Persönliches Schema</p>
+            <p class="teacher-eyebrow">PersÃ¶nliches Schema</p>
             <h1>Bewertungseinstellungen</h1>
             <p class="teacher-muted">Gewichtung erfolgt nur in Punkten.</p>
           </div>
           <div class="teacher-actions-inline">
-            <a class="btn btn-secondary" href="/teacher/classes">Zurück</a>
+            <a class="btn btn-secondary" href="/teacher/classes">ZurÃ¼ck</a>
           </div>
         </header>
 
         <% if (!setupComplete || showSetupFlow) { %>
           <div class="teacher-alert info">
-            Erste Konfiguration: Erstelle ein Profil. Dieses Profil wird automatisch für neue Prüfungen verwendet.
+            Erste Konfiguration: Erstelle ein Profil. Dieses Profil wird automatisch fÃ¼r neue PrÃ¼fungen verwendet.
           </div>
         <% } %>
 
@@ -102,7 +102,7 @@
                     <% } %>
                     <form class="inline delete-profile-form" method="POST" action="/teacher/settings/delete-profile/<%= profile.id %>" data-profile-name="<%= profile.name %>">
                       <input type="hidden" name="_csrf" value="<%= csrfToken %>">
-                      <button class="btn btn-danger btn-sm" type="button">Löschen</button>
+                      <button class="btn btn-danger btn-sm" type="button">LÃ¶schen</button>
                     </form>
                   </div>
                 </div>
@@ -114,8 +114,8 @@
         <% if (!showConfigForm) { %>
           <div class="teacher-card">
             <div class="teacher-empty">
-              <h4>Profil auswählen</h4>
-              <p>Wähle bei einem Profil "Bearbeiten" oder erstelle ein neues Profil.</p>
+              <h4>Profil auswÃ¤hlen</h4>
+              <p>WÃ¤hle bei einem Profil "Bearbeiten" oder erstelle ein neues Profil.</p>
             </div>
           </div>
         <% } %>
@@ -360,15 +360,15 @@
     <div id="deleteProfileModal" class="modal-overlay">
       <div class="modal-content">
         <div class="modal-header">
-          <h3>Profil löschen</h3>
+          <h3>Profil lÃ¶schen</h3>
         </div>
         <div class="modal-body">
-          <p>Möchtest du das Profil <strong id="deleteProfileName"></strong> wirklich löschen?</p>
+          <p>MÃ¶chtest du das Profil <strong id="deleteProfileName"></strong> wirklich lÃ¶schen?</p>
           <p class="teacher-muted">Wenn es aktiv ist, wird automatisch ein anderes Profil aktiv gesetzt.</p>
         </div>
         <div class="modal-footer">
           <button class="btn btn-secondary" id="cancelDeleteProfile" type="button">Abbrechen</button>
-          <button class="btn btn-danger" id="confirmDeleteProfile" type="button">Löschen</button>
+          <button class="btn btn-danger" id="confirmDeleteProfile" type="button">LÃ¶schen</button>
         </div>
       </div>
     </div>

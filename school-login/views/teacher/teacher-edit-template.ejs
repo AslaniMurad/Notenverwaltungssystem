@@ -1,6 +1,6 @@
-<%
+﻿<%
   const page = {
-    title: "Lehrer - Prüfung bearbeiten",
+    title: "Lehrer - PrÃ¼fung bearbeiten",
     headerTitle: "Lehrerbereich",
     styles: ["/css/teacher-pages.css"],
     scripts: ["/js/app.js"],
@@ -18,15 +18,15 @@
 
         <div class="app-nav">
           <div class="nav-section">
-            <div class="nav-section-title">Menü</div>
-            <a href="/teacher/classes">Meine Fachzuordnungen</a>
-            <a href="/teacher/create-class">Fach zuordnen</a>
+            <div class="nav-section-title">MenÃ¼</div>
+            <a href="/teacher/classes">Fächer</a>
+            <a href="/teacher/create-class">Fach erstellen</a>
             <a href="/teacher/settings">Einstellungen</a>
             <div class="nav-section-title">Klasse: <%= classData.name %> / <%= classData.subject %></div>
-            <a href="/teacher/students/<%= classData.id %>">Schüler</a>
+            <a href="/teacher/students/<%= classData.id %>">SchÃ¼ler</a>
             <a href="/teacher/grades/<%= classData.id %>">Noten</a>
             <a href="/teacher/special-assessments/<%= classData.id %>">Sonderleistungen</a>
-            <a class="is-active" href="/teacher/grade-templates/<%= classData.id %>">Prüfungen</a>
+            <a class="is-active" href="/teacher/grade-templates/<%= classData.id %>">PrÃ¼fungen</a>
             <a href="/teacher/class-statistics/<%= classData.id %>">Statistiken</a>
             <form class="logout-form" method="POST" action="/logout">
               <input type="hidden" name="_csrf" value="<%= csrfToken %>">
@@ -39,7 +39,7 @@
       <section class="teacher-main">
         <header class="teacher-main-header">
           <div>
-            <p class="teacher-eyebrow">Prüfung bearbeiten</p>
+            <p class="teacher-eyebrow">PrÃ¼fung bearbeiten</p>
             <h1>Klasse <%= classData.name %></h1>
             <p class="teacher-muted">Profil: <strong><%= activeProfile.name %></strong> - Modus: Punkte</p>
           </div>
@@ -51,7 +51,7 @@
         <div class="teacher-card">
           <div class="teacher-card-header">
             <div>
-              <p class="teacher-eyebrow">Prüfungsvorlage</p>
+              <p class="teacher-eyebrow">PrÃ¼fungsvorlage</p>
               <h3>Details bearbeiten</h3>
             </div>
           </div>
@@ -63,7 +63,7 @@
           <form class="teacher-form" method="POST" action="/teacher/edit-template/<%= classData.id %>/<%= templateId %>">
             <input type="hidden" name="_csrf" value="<%= csrfToken %>">
 
-            <label for="name">Name der Prüfung *</label>
+            <label for="name">Name der PrÃ¼fung *</label>
             <input
               type="text"
               id="name"
@@ -75,7 +75,7 @@
 
             <label for="category">Kategorie *</label>
             <select id="category" name="category" required>
-              <option value="">-- Kategorie wählen --</option>
+              <option value="">-- Kategorie wÃ¤hlen --</option>
               <% categoryDefinitions.forEach((category) => { %>
                 <option
                   value="<%= category.key %>"
@@ -137,8 +137,8 @@
             ><%= formData && formData.description ? formData.description : '' %></textarea>
 
             <div class="teacher-form-actions">
-              <button class="btn btn-primary" type="submit">Änderungen speichern</button>
-              <a class="btn btn-secondary" href="/teacher/grade-templates/<%= classData.id %>">Zurück</a>
+              <button class="btn btn-primary" type="submit">Ã„nderungen speichern</button>
+              <a class="btn btn-secondary" href="/teacher/grade-templates/<%= classData.id %>">ZurÃ¼ck</a>
             </div>
           </form>
         </div>
@@ -211,7 +211,7 @@
             if (weightHint) {
               weightHint.textContent = useProfileSettings
                 ? "Waehle zuerst eine Kategorie, damit das Profil die Gewichtung setzen kann."
-                : "Wähle zuerst eine Kategorie.";
+                : "WÃ¤hle zuerst eine Kategorie.";
             }
             syncManagedFieldState(null);
             return;
@@ -228,7 +228,7 @@
             }
           } else if (weightHint) {
             weightHint.textContent =
-              "Keine Profil-Gewichtung für diese Kategorie gefunden.";
+              "Keine Profil-Gewichtung fÃ¼r diese Kategorie gefunden.";
           }
           syncManagedFieldState(suggestion);
         }

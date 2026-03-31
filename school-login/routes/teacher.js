@@ -637,6 +637,56 @@ function deduplicateStudents(rows = []) {
   return [...uniqueStudents.values()];
 }
 
+async function loadStudentExclusionMap(teacherId, classId, subjectId) {
+  const resolvedTeacherId = Number(teacherId);
+  const resolvedClassId = Number(classId);
+  const resolvedSubjectId = Number(subjectId);
+  if (
+    !Number.isFinite(resolvedTeacherId) ||
+    !Number.isFinite(resolvedClassId) ||
+    !Number.isFinite(resolvedSubjectId)
+  ) {
+    return new Map();
+  }
+
+  const rows = await allAsync(
+    `SELECT student_id, excluded_at
+     FROM teacher_student_exclusions
+     WHERE teacher_id = ? AND class_id = ? AND subject_id = ?`,
+    [resolvedTeacherId, resolvedClassId, resolvedSubjectId]
+  );
+  return new Map(
+    (rows || []).map((row) => [
+      String(row.student_id),
+      {
+        student_id: Number(row.student_id),
+        excluded_at: row.excluded_at || null
+      }
+    ])
+  );
+}
+
+function applyStudentExclusionState(students, exclusionMap) {
+  return deduplicateStudents(students).map((student) => {
+    const exclusion = exclusionMap instanceof Map ? exclusionMap.get(String(student.id)) : null;
+    return {
+      ...student,
+      is_excluded: Boolean(exclusion),
+      excluded_at: exclusion?.excluded_at || null
+    };
+  });
+}
+
+function isExcludedStudent(student) {
+  return Boolean(student?.is_excluded);
+}
+
+function buildExcludedStudentMessage(student, classData) {
+  const studentName = String(student?.name || "Der Schueler");
+  const subjectName = String(classData?.subject || "diesem Fach");
+  return `${studentName} ist im Fach ${subjectName} ausgeschlossen. Bestehende Eintraege bleiben nur historisch sichtbar und werden nicht gewertet.`;
+}
+
 async function renderAddGradeForm(req, res, payload) {
   const {
     status = 200,
@@ -645,7 +695,8 @@ async function renderAddGradeForm(req, res, payload) {
     templates,
     gradedTemplateIds = [],
     error = null,
-    formData = {}
+    formData = {},
+    excludedMessage = null
   } = payload || {};
   const activeProfile = await loadActiveTeacherProfile(req.session.user.id);
   const scoringMode = normalizeScoringMode(activeProfile?.scoring_mode);
@@ -671,6 +722,7 @@ async function renderAddGradeForm(req, res, payload) {
     formData: buildDefaultAddGradeFormData(formData),
     csrfToken: req.csrfToken(),
     error,
+    excludedMessage,
     maxFileSizeMb: MAX_GRADE_FILE_MB
   });
 }
@@ -731,7 +783,7 @@ function handleUpload(req, res, next) {
       const studentId = req.params.studentId;
       const classData = await requireClassAccessForTeacher(req, res, classId);
       if (!classData) return;
-      const students = await loadStudents(classId);
+      const students = await loadStudents(classId, req.session.user.id, classData.subject_id);
       const student = students.find((entry) => String(entry.id) === String(studentId));
       if (!student) {
         return renderError(res, req, "Schüler nicht gefunden.", 404, `/teacher/students/${classId}`);
@@ -921,12 +973,21 @@ async function requireClassAccessForTeacher(req, res, classId, backUrl = "/teach
   return classData;
 }
 
-async function loadStudents(classId) {
+async function loadStudents(classId, teacherId = null, subjectId = null) {
   const rows = await allAsync(
     "SELECT DISTINCT id, name, email FROM students WHERE class_id = ? ORDER BY name, email, id",
     [classId]
   );
-  return deduplicateStudents(rows);
+  const students = deduplicateStudents(rows);
+  if (!Number.isFinite(Number(teacherId)) || !Number.isFinite(Number(subjectId))) {
+    return students.map((student) => ({
+      ...student,
+      is_excluded: false,
+      excluded_at: null
+    }));
+  }
+  const exclusionMap = await loadStudentExclusionMap(teacherId, classId, subjectId);
+  return applyStudentExclusionState(students, exclusionMap);
 }
 
 async function loadTemplates(classId, subjectId) {
@@ -1116,6 +1177,7 @@ async function renderBulkGradeTemplateForm(req, res, payload = {}) {
   const templateHasMaxPoints = Number.isFinite(templateMaxPoints) && templateMaxPoints > 0;
   const rows = buildBulkGradeRows(students, existingGradesByStudent, formData);
   const existingCount = rows.filter((row) => Boolean(row.existing)).length;
+  const excludedCount = rows.filter((row) => isExcludedStudent(row.student)).length;
 
   return res.status(status).render("teacher/teacher-bulk-grade-template", {
     email: req.session.user.email,
@@ -1123,6 +1185,7 @@ async function renderBulkGradeTemplateForm(req, res, payload = {}) {
     template,
     rows,
     existingCount,
+    excludedCount,
     activeProfile,
     scoringMode,
     scoringModeLabel: getScoringModeLabel(scoringMode),
@@ -1444,20 +1507,7 @@ async function buildSettingsPageData(teacherId, selectedProfileId, formOverride 
 
 router.get("/", async (req, res, next) => {
   try {
-    const teacherId = req.session.user.id;
-    const activeSchoolYear = await schoolYearModel.getActiveSchoolYear();
-    const latestAssignment = await getAsync(
-      `SELECT cst.class_id, cst.subject_id
-       FROM class_subject_teacher cst
-       WHERE cst.teacher_id = ? AND cst.school_year_id = ?
-       ORDER BY cst.created_at DESC
-       LIMIT 1`,
-      [teacherId, activeSchoolYear?.id || 0]
-    );
-    if (!latestAssignment) {
-      return res.redirect("/teacher/classes?empty=1");
-    }
-    res.redirect(`/teacher/students/${latestAssignment.class_id}?subject_id=${latestAssignment.subject_id}`);
+    res.redirect("/teacher/classes");
   } catch (err) {
     next(err);
   }
@@ -2096,7 +2146,7 @@ router.get("/students/:classId", async (req, res, next) => {
       ? String(req.query.sort)
       : "name_asc";
 
-    const studentsAll = await loadStudents(classId);
+    const studentsAll = await loadStudents(classId, req.session.user.id, classData.subject_id);
     let students = studentsAll.filter((entry) => {
       if (!qFolded) return true;
       const haystack = foldText(`${entry.name || ""} ${entry.email || ""}`);
@@ -2124,6 +2174,7 @@ router.get("/students/:classId", async (req, res, next) => {
       students,
       openMessageCount,
       totalStudentCount: studentsAll.length,
+      excludedStudentCount: studentsAll.filter((student) => student.is_excluded).length,
       search: { q, sort },
       csrfToken: req.csrfToken()
     });
@@ -2293,6 +2344,41 @@ router.post("/delete-student/:classId/:studentId", async (req, res, next) => {
   }
 });
 
+router.post("/student-exclusion/:classId/:studentId", async (req, res, next) => {
+  try {
+    const classId = req.params.classId;
+    const studentId = Number(req.params.studentId);
+    const action = String(req.body?.action || "exclude").trim().toLowerCase();
+    const classData = await requireClassAccessForTeacher(req, res, classId);
+    if (!classData) return;
+
+    const students = await loadStudents(classId, req.session.user.id, classData.subject_id);
+    const student = students.find((entry) => Number(entry.id) === studentId);
+    if (!student) {
+      return renderError(res, req, "Schueler nicht gefunden.", 404, `/teacher/students/${classId}`);
+    }
+
+    if (action === "include") {
+      await runAsync(
+        "DELETE FROM teacher_student_exclusions WHERE teacher_id = ? AND class_id = ? AND subject_id = ? AND student_id = ?",
+        [req.session.user.id, classId, classData.subject_id, studentId]
+      );
+    } else {
+      await runAsync(
+        `INSERT INTO teacher_student_exclusions (teacher_id, class_id, subject_id, student_id, school_year_id)
+         VALUES (?,?,?,?,?)
+         ON CONFLICT (teacher_id, class_id, subject_id, student_id) DO NOTHING`,
+        [req.session.user.id, classId, classData.subject_id, studentId, classData.school_year_id]
+      );
+    }
+
+    const backUrl = req.get("referer") || `/teacher/students/${classId}`;
+    res.redirect(backUrl);
+  } catch (err) {
+    next(err);
+  }
+});
+
 router.get("/grades/:classId", async (req, res, next) => {
   try {
     const classId = req.params.classId;
@@ -2318,7 +2404,7 @@ router.get("/grades/:classId", async (req, res, next) => {
       ? String(req.query.sort)
       : "name_asc";
 
-    const studentsAll = await loadStudents(classId);
+    const studentsAll = await loadStudents(classId, req.session.user.id, classData.subject_id);
     const studentsBase = studentsAll.filter((entry) => {
       if (!qFolded) return true;
       const haystack = foldText(`${entry.name || ""} ${entry.email || ""}`);
@@ -2341,20 +2427,27 @@ router.get("/grades/:classId", async (req, res, next) => {
           classData.subject_id,
           student.id
         );
+        const excluded = isExcludedStudent(student);
         const participationAverageRows = buildParticipationAverageRows(participationMarks, participation);
-        const average = computeWeightedAverage([
-          ...grades,
-          ...participationAverageRows
-        ], { absenceMode });
-        const pointTotals = computePointTotalsWithParticipation(
-          [...grades, ...participationAverageRows],
-          { thresholds, absenceMode }
-        );
+        const average = excluded
+          ? null
+          : computeWeightedAverage([
+              ...grades,
+              ...participationAverageRows
+            ], { absenceMode });
+        const pointTotals = excluded
+          ? { achieved: 0, max: 0 }
+          : computePointTotalsWithParticipation(
+              [...grades, ...participationAverageRows],
+              { thresholds, absenceMode }
+            );
         const hasPointTotals = pointTotals.max > 0;
         return {
           ...student,
-          grade_count: grades.length,
-          ma_count: participationMarks.length,
+          grade_count: excluded ? 0 : grades.length,
+          ma_count: excluded ? 0 : participationMarks.length,
+          historical_grade_count: grades.length,
+          historical_ma_count: participationMarks.length,
           average_grade: average,
           points_achieved_total: hasPointTotals ? Number(pointTotals.achieved.toFixed(2)) : null,
           points_max_total: hasPointTotals ? Number(pointTotals.max.toFixed(2)) : null,
@@ -2377,6 +2470,7 @@ router.get("/grades/:classId", async (req, res, next) => {
     const compareNullableNumberDesc = (a, b) => -compareNullableNumberAsc(a, b);
 
     let studentsFiltered = studentsWithGrades.filter((student) => {
+      if (student.is_excluded && status === "incomplete") return false;
       const gradeCount = Number(student.grade_count || 0);
       const maCount = Number(student.ma_count || 0);
       if (status === "with_grades") return gradeCount > 0 || maCount > 0;
@@ -2408,6 +2502,7 @@ router.get("/grades/:classId", async (req, res, next) => {
       classData,
       students: studentsFiltered,
       totalStudentCount: studentsAll.length,
+      excludedStudentCount: studentsAll.filter((student) => student.is_excluded).length,
       possibleCount,
       activeProfile,
       participationEnabled: participation.ma_enabled,
@@ -2443,10 +2538,19 @@ router.post("/grades/:classId/participation", async (req, res, next) => {
     const symbol = normalizeParticipationSymbol(req.body?.ma_symbol);
     const note = String(req.body?.ma_note || "").trim();
 
-    const students = await loadStudents(classId);
+    const students = await loadStudents(classId, req.session.user.id, classData.subject_id);
     const student = students.find((entry) => Number(entry.id) === studentId);
     if (!student || !symbol) {
       return res.redirect(`/teacher/grades/${classId}`);
+    }
+    if (isExcludedStudent(student)) {
+      return renderError(
+        res,
+        req,
+        "Schueler ist in diesem Fach ausgeschlossen und kann nicht bewertet werden.",
+        400,
+        `/teacher/grades/${classId}`
+      );
     }
 
     await runAsync(
@@ -2473,7 +2577,7 @@ router.post("/delete-participation/:classId/:studentId/:markId", async (req, res
     const classData = await requireClassAccessForTeacher(req, res, classId);
     if (!classData) return;
 
-    const students = await loadStudents(classId);
+    const students = await loadStudents(classId, req.session.user.id, classData.subject_id);
     const student = students.find((entry) => String(entry.id) === String(studentId));
     if (!student) {
       return renderError(res, req, "Schüler nicht gefunden.", 404, `/teacher/students/${classId}`);
@@ -2512,7 +2616,7 @@ router.get("/student-grades/:classId/:studentId", async (req, res, next) => {
     const classData = await requireClassAccessForTeacher(req, res, classId);
     if (!classData) return;
 
-    const students = await loadStudents(classId);
+    const students = await loadStudents(classId, req.session.user.id, classData.subject_id);
     const student = students.find((entry) => String(entry.id) === String(studentId));
     if (!student) {
       return renderError(res, req, "Schüler nicht gefunden.", 404, `/teacher/students/${classId}`);
@@ -2552,6 +2656,9 @@ router.get("/student-grades/:classId/:studentId", async (req, res, next) => {
       student.id
     );
     const fallbackMode = resolveWeightMode(activeProfile?.weight_mode);
+    const excludedMessage = isExcludedStudent(student)
+      ? buildExcludedStudentMessage(student, classData)
+      : null;
     const grades = gradeRows.map((row) => {
       const hasAttachment = Boolean(row.attachment_path);
       const resolvedWeightMode = row.is_special ? fallbackMode : resolveWeightMode(row.weight_mode);
@@ -2590,7 +2697,8 @@ router.get("/student-grades/:classId/:studentId", async (req, res, next) => {
           : messages.filter((message) => !message.teacher_reply).length,
         delete_action: row.is_special
           ? `/teacher/delete-special-assessment/${classId}/${row.id}`
-          : `/teacher/delete-grade/${classId}/${row.id}`
+          : `/teacher/delete-grade/${classId}/${row.id}`,
+        is_subject_excluded: isExcludedStudent(student)
       };
     });
     const participationAverageRows = buildParticipationAverageRows(
@@ -2609,38 +2717,45 @@ router.get("/student-grades/:classId/:studentId", async (req, res, next) => {
           created_at: mark.created_at,
           grade: Number(gradeValue.toFixed(2)),
           weight: Number(participationConfig.ma_weight || 0),
-          weight_label: formatWeightLabel(participationConfig.ma_weight, WEIGHT_MODE_POINTS)
+          weight_label: formatWeightLabel(participationConfig.ma_weight, WEIGHT_MODE_POINTS),
+          is_subject_excluded: isExcludedStudent(student)
         };
       })
       .filter(Boolean);
-    const wishGradeRows = [
-      ...gradeRows.map((row) => ({
-        grade: Number(row.grade),
-        weight: Number(row.weight || 0),
-        is_absent: Boolean(row.is_absent),
-        source: "grade"
-      })),
-      ...participationAverageRows.map((row) => ({
-        grade: Number(row.grade),
-        weight: Number(row.weight || 0),
-        source: "participation"
-      }))
-    ]
-      .filter((row) => !shouldSkipGradeForAbsence(row, absenceMode))
-      .filter(
-        (row) =>
-          isValidGradeValue(row.grade) &&
-          isValidWeightValue(row.weight) &&
-          Number(row.weight) > 0
-      );
+    const wishGradeRows = isExcludedStudent(student)
+      ? []
+      : [
+          ...gradeRows.map((row) => ({
+            grade: Number(row.grade),
+            weight: Number(row.weight || 0),
+            is_absent: Boolean(row.is_absent),
+            source: "grade"
+          })),
+          ...participationAverageRows.map((row) => ({
+            grade: Number(row.grade),
+            weight: Number(row.weight || 0),
+            source: "participation"
+          }))
+        ]
+          .filter((row) => !shouldSkipGradeForAbsence(row, absenceMode))
+          .filter(
+            (row) =>
+              isValidGradeValue(row.grade) &&
+              isValidWeightValue(row.weight) &&
+              Number(row.weight) > 0
+          );
 
-    const average = computeWeightedAverage([...gradeRows, ...participationAverageRows], {
-      absenceMode
-    });
-    const studentPointTotals = computePointTotalsWithParticipation(
-      [...gradeRows, ...participationAverageRows],
-      { thresholds, absenceMode }
-    );
+    const average = isExcludedStudent(student)
+      ? null
+      : computeWeightedAverage([...gradeRows, ...participationAverageRows], {
+          absenceMode
+        });
+    const studentPointTotals = isExcludedStudent(student)
+      ? { achieved: 0, max: 0 }
+      : computePointTotalsWithParticipation(
+          [...gradeRows, ...participationAverageRows],
+          { thresholds, absenceMode }
+        );
     const pointsSummary =
       studentPointTotals.max > 0
         ? {
@@ -2661,6 +2776,7 @@ router.get("/student-grades/:classId/:studentId", async (req, res, next) => {
       average,
       pointsSummary,
       activeWeightMode: fallbackMode,
+      excludedMessage,
       openMessageCount,
       csrfToken: req.csrfToken()
     });
@@ -2676,7 +2792,7 @@ router.get("/student-grades/:classId/:studentId/details", async (req, res, next)
     const classData = await requireClassAccessForTeacher(req, res, classId);
     if (!classData) return;
 
-    const students = await loadStudents(classId);
+    const students = await loadStudents(classId, req.session.user.id, classData.subject_id);
     const student = students.find((entry) => String(entry.id) === String(studentId));
     if (!student) {
       return renderError(res, req, "Schüler nicht gefunden.", 404, `/teacher/students/${classId}`);
@@ -2698,6 +2814,10 @@ router.get("/student-grades/:classId/:studentId/details", async (req, res, next)
     const scoringMode = normalizeScoringMode(activeProfile?.scoring_mode);
     const participationEnabledForAverage =
       participationConfig.ma_enabled && Number(participationConfig.ma_weight) > 0;
+    const studentExcluded = isExcludedStudent(student);
+    const excludedMessage = studentExcluded
+      ? buildExcludedStudentMessage(student, classData)
+      : null;
 
     const detailRows = [];
 
@@ -2709,7 +2829,7 @@ router.get("/student-grades/:classId/:studentId/details", async (req, res, next)
       const skippedForAbsence = shouldSkipGradeForAbsence({ is_absent: isAbsent }, absenceMode);
       const hasValidGrade = isValidGradeValue(gradeValue);
       const hasValidWeight = isValidWeightValue(effectiveWeight);
-      const included = !skippedForAbsence && hasValidGrade && hasValidWeight;
+      const included = !studentExcluded && !skippedForAbsence && hasValidGrade && hasValidWeight;
       const contributionValue = included ? gradeValue * effectiveWeight : 0;
       const pointsAchieved = Number(row.points_achieved);
       const pointsMax = Number(row.points_max);
@@ -2719,7 +2839,9 @@ router.get("/student-grades/:classId/:studentId/details", async (req, res, next)
         pointsPercent != null ? buildGradeFromPercent(pointsPercent, thresholds) : null;
 
       let includeReason = "Gewichtet in Gesamtnote.";
-      if (skippedForAbsence) {
+      if (studentExcluded) {
+        includeReason = "Nicht gewichtet (Schueler im Fach ausgeschlossen).";
+      } else if (skippedForAbsence) {
         includeReason = "Nicht gewichtet (Abwesenheit laut Profil).";
       } else if (!hasValidGrade) {
         includeReason = "Nicht gewichtet (ungültige Note).";
@@ -2758,7 +2880,7 @@ router.get("/student-grades/:classId/:studentId/details", async (req, res, next)
       const effectiveWeight = participationConfig.ma_weight == null ? 1 : Number(participationConfig.ma_weight);
       const hasValidGrade = isValidGradeValue(gradeValue);
       const hasValidWeight = isValidWeightValue(effectiveWeight);
-      const included = participationEnabledForAverage && hasValidGrade && hasValidWeight;
+      const included = !studentExcluded && participationEnabledForAverage && hasValidGrade && hasValidWeight;
       const contributionValue = included ? gradeValue * effectiveWeight : 0;
       const symbolLabel = getParticipationSymbolLabel(mark.symbol);
       const estimatedPercent = hasValidGrade
@@ -2771,7 +2893,9 @@ router.get("/student-grades/:classId/:studentId/details", async (req, res, next)
         : null;
 
       let includeReason = "Gewichtet in Gesamtnote.";
-      if (!participationEnabledForAverage) {
+      if (studentExcluded) {
+        includeReason = "Nicht gewichtet (Schueler im Fach ausgeschlossen).";
+      } else if (!participationEnabledForAverage) {
         includeReason = "Nicht gewichtet (MA im Profil deaktiviert oder Gewichtung 0).";
       } else if (!hasValidGrade) {
         includeReason = "Nicht gewichtet (Symbol nicht im MA-Schema).";
@@ -2838,9 +2962,11 @@ router.get("/student-grades/:classId/:studentId/details", async (req, res, next)
       participationMarks,
       participationConfig
     );
-    const referenceAverage = computeWeightedAverage([...gradeRows, ...participationAverageRows], {
-      absenceMode
-    });
+    const referenceAverage = studentExcluded
+      ? null
+      : computeWeightedAverage([...gradeRows, ...participationAverageRows], {
+          absenceMode
+        });
 
     const summary = {
       included_count: calculationRows.filter((row) => row.included).length,
@@ -2850,10 +2976,12 @@ router.get("/student-grades/:classId/:studentId/details", async (req, res, next)
       average: runningWeightTotal > 0 ? Number((runningWeightedSum / runningWeightTotal).toFixed(2)) : null,
       reference_average: referenceAverage
     };
-    const detailPointTotals = computePointTotalsWithParticipation(
-      [...gradeRows, ...participationAverageRows],
-      { thresholds, absenceMode }
-    );
+    const detailPointTotals = studentExcluded
+      ? { achieved: 0, max: 0 }
+      : computePointTotalsWithParticipation(
+          [...gradeRows, ...participationAverageRows],
+          { thresholds, absenceMode }
+        );
     summary.points_achieved_total =
       detailPointTotals.max > 0 ? Number(detailPointTotals.achieved.toFixed(2)) : null;
     summary.points_max_total = detailPointTotals.max > 0 ? Number(detailPointTotals.max.toFixed(2)) : null;
@@ -2867,17 +2995,19 @@ router.get("/student-grades/:classId/:studentId/details", async (req, res, next)
         .filter((row) => !row.is_special && row.template_id != null)
         .map((row) => String(row.template_id))
     );
-    const openTemplates = templates
-      .filter((template) => !gradedTemplateIds.has(String(template.id)))
-      .map((template) => ({
-        id: template.id,
-        name: template.name,
-        category: template.category,
-        weight_label: template.weight_label || formatWeightLabel(template.weight, template.weight_mode),
-        max_points: template.max_points != null ? Number(template.max_points) : null,
-        date: template.date || null,
-        description: template.description || ""
-      }));
+    const openTemplates = studentExcluded
+      ? []
+      : templates
+          .filter((template) => !gradedTemplateIds.has(String(template.id)))
+          .map((template) => ({
+            id: template.id,
+            name: template.name,
+            category: template.category,
+            weight_label: template.weight_label || formatWeightLabel(template.weight, template.weight_mode),
+            max_points: template.max_points != null ? Number(template.max_points) : null,
+            date: template.date || null,
+            description: template.description || ""
+          }));
 
     const participationScale = PARTICIPATION_SYMBOL_OPTIONS.map((option) => ({
       symbol: option.label,
@@ -3009,6 +3139,7 @@ router.get("/student-grades/:classId/:studentId/details", async (req, res, next)
       calculationRows,
       openTemplates,
       summary,
+      excludedMessage,
       csrfToken: req.csrfToken()
     });
   } catch (err) {
@@ -3080,7 +3211,7 @@ router.get("/add-grade/:classId/:studentId", async (req, res, next) => {
     const classData = await requireClassAccessForTeacher(req, res, classId);
     if (!classData) return;
 
-    const students = await loadStudents(classId);
+    const students = await loadStudents(classId, req.session.user.id, classData.subject_id);
     const student = students.find((entry) => String(entry.id) === String(studentId));
     if (!student) {
       return renderError(res, req, "Schüler nicht gefunden.", 404, `/teacher/students/${classId}`);
@@ -3097,7 +3228,10 @@ router.get("/add-grade/:classId/:studentId", async (req, res, next) => {
       student,
       templates,
       gradedTemplateIds,
-      formData: {}
+      formData: {},
+      excludedMessage: isExcludedStudent(student)
+        ? buildExcludedStudentMessage(student, classData)
+        : null
     });
   } catch (err) {
     next(err);
@@ -3122,7 +3256,7 @@ router.post("/add-grade/:classId/:studentId", handleUpload, async (req, res, nex
       return;
     }
 
-    const students = await loadStudents(classId);
+    const students = await loadStudents(classId, req.session.user.id, classData.subject_id);
     const student = students.find((entry) => String(entry.id) === String(studentId));
     if (!student) {
       await removeUploadedFile(req.file);
@@ -3165,9 +3299,19 @@ router.post("/add-grade/:classId/:studentId", handleUpload, async (req, res, nex
         templates,
         gradedTemplateIds,
         formData,
-        error
+        error,
+        excludedMessage: isExcludedStudent(student)
+          ? buildExcludedStudentMessage(student, classData)
+          : null
       });
     };
+
+    if (isExcludedStudent(student)) {
+      return renderValidationError(
+        400,
+        "Schueler ist in diesem Fach ausgeschlossen und kann nicht bewertet werden."
+      );
+    }
 
     if (!grade_template_id) {
       return renderValidationError(400, "Bitte eine Prüfung auswählen.");
@@ -3488,7 +3632,7 @@ router.get("/bulk-grade-template/:classId/:templateId", async (req, res, next) =
       return res.redirect("/teacher/settings?setup=1");
     }
 
-    const students = await loadStudents(classId);
+    const students = await loadStudents(classId, req.session.user.id, classData.subject_id);
     const existingGradesByStudent = await loadExistingGradesForTemplate(
       classId,
       classData.subject_id,
@@ -3553,7 +3697,7 @@ router.post("/bulk-grade-template/:classId/:templateId", async (req, res, next) 
       return res.redirect("/teacher/settings?setup=1");
     }
 
-    const students = await loadStudents(classId);
+    const students = await loadStudents(classId, req.session.user.id, classData.subject_id);
     const existingGradesByStudent = await loadExistingGradesForTemplate(
       classId,
       classData.subject_id,
@@ -3582,6 +3726,11 @@ router.post("/bulk-grade-template/:classId/:templateId", async (req, res, next) 
       const isAbsent = Boolean(row.form.is_absent);
       const touched = hasGrade || hasPoints || isAbsent || noteText.length > 0;
       if (!touched) return;
+
+      if (isExcludedStudent(row.student)) {
+        validationErrors.push(`${studentName}: Schueler ist in diesem Fach ausgeschlossen.`);
+        return;
+      }
 
       if (hasGrade && (!Number.isFinite(gradeInput.value) || gradeInput.value < 1 || gradeInput.value > 5)) {
         validationErrors.push(`${studentName}: Note muss zwischen 1 und 5 liegen.`);
@@ -4100,8 +4249,12 @@ router.get("/special-assessments/:classId", async (req, res, next) => {
     const classData = await requireClassAccessForTeacher(req, res, classId);
     if (!classData) return;
 
-    const students = await loadStudents(classId);
-    const assessments = await loadSpecialAssessments(classId, classData.subject_id);
+    const students = await loadStudents(classId, req.session.user.id, classData.subject_id);
+    const studentStateById = new Map(students.map((student) => [String(student.id), student]));
+    const assessments = (await loadSpecialAssessments(classId, classData.subject_id)).map((entry) => ({
+      ...entry,
+      is_subject_excluded: isExcludedStudent(studentStateById.get(String(entry.student_id)))
+    }));
     const activeProfile = await loadActiveTeacherProfile(req.session.user.id);
     const weightMode = resolveWeightMode(activeProfile?.weight_mode);
     const openMessageCount = await loadClassOpenMessageCount(classId, classData.subject_id);
@@ -4139,7 +4292,7 @@ router.post("/special-assessments/:classId", async (req, res, next) => {
     const classData = await requireClassAccessForTeacher(req, res, classId);
     if (!classData) return;
 
-    const students = await loadStudents(classId);
+    const students = await loadStudents(classId, req.session.user.id, classData.subject_id);
     const activeProfile = await loadActiveTeacherProfile(req.session.user.id);
     const weightMode = resolveWeightMode(activeProfile?.weight_mode);
     const { student_id, type, name, description, weight, grade } = req.body || {};
@@ -4155,7 +4308,11 @@ router.post("/special-assessments/:classId", async (req, res, next) => {
       trimmedName || (trimmedType && trimmedType !== "Benutzerdefiniert" ? trimmedType : "");
 
     if (!selectedStudent || !isTypeValid || !Number.isFinite(weightValue) || !Number.isFinite(gradeValue)) {
-      const assessments = await loadSpecialAssessments(classId, classData.subject_id);
+      const studentStateById = new Map(students.map((student) => [String(student.id), student]));
+      const assessments = (await loadSpecialAssessments(classId, classData.subject_id)).map((entry) => ({
+        ...entry,
+        is_subject_excluded: isExcludedStudent(studentStateById.get(String(entry.student_id)))
+      }));
       return res.status(400).render("teacher/teacher-special-assessments", {
         email: req.session.user.email,
         classData,
@@ -4179,7 +4336,11 @@ router.post("/special-assessments/:classId", async (req, res, next) => {
     }
 
     if (trimmedType === "Benutzerdefiniert" && !resolvedName) {
-      const assessments = await loadSpecialAssessments(classId, classData.subject_id);
+      const studentStateById = new Map(students.map((student) => [String(student.id), student]));
+      const assessments = (await loadSpecialAssessments(classId, classData.subject_id)).map((entry) => ({
+        ...entry,
+        is_subject_excluded: isExcludedStudent(studentStateById.get(String(entry.student_id)))
+      }));
       return res.status(400).render("teacher/teacher-special-assessments", {
         email: req.session.user.email,
         classData,
@@ -4203,7 +4364,11 @@ router.post("/special-assessments/:classId", async (req, res, next) => {
     }
 
     if (weightValue < 0) {
-      const assessments = await loadSpecialAssessments(classId, classData.subject_id);
+      const studentStateById = new Map(students.map((student) => [String(student.id), student]));
+      const assessments = (await loadSpecialAssessments(classId, classData.subject_id)).map((entry) => ({
+        ...entry,
+        is_subject_excluded: isExcludedStudent(studentStateById.get(String(entry.student_id)))
+      }));
       return res.status(400).render("teacher/teacher-special-assessments", {
         email: req.session.user.email,
         classData,
@@ -4227,7 +4392,11 @@ router.post("/special-assessments/:classId", async (req, res, next) => {
     }
 
     if (gradeValue < 1 || gradeValue > 5) {
-      const assessments = await loadSpecialAssessments(classId, classData.subject_id);
+      const studentStateById = new Map(students.map((student) => [String(student.id), student]));
+      const assessments = (await loadSpecialAssessments(classId, classData.subject_id)).map((entry) => ({
+        ...entry,
+        is_subject_excluded: isExcludedStudent(studentStateById.get(String(entry.student_id)))
+      }));
       return res.status(400).render("teacher/teacher-special-assessments", {
         email: req.session.user.email,
         classData,
@@ -4246,6 +4415,34 @@ router.post("/special-assessments/:classId", async (req, res, next) => {
           grade
         },
         error: "Note muss zwischen 1 und 5 liegen.",
+        csrfToken: req.csrfToken()
+      });
+    }
+
+    if (isExcludedStudent(selectedStudent)) {
+      const studentStateById = new Map(students.map((student) => [String(student.id), student]));
+      const assessments = (await loadSpecialAssessments(classId, classData.subject_id)).map((entry) => ({
+        ...entry,
+        is_subject_excluded: isExcludedStudent(studentStateById.get(String(entry.student_id)))
+      }));
+      return res.status(400).render("teacher/teacher-special-assessments", {
+        email: req.session.user.email,
+        classData,
+        students,
+        assessments,
+        activeProfile,
+        weightMode,
+        weightUnit: getWeightUnit(weightMode),
+        specialTypes: SPECIAL_ASSESSMENT_TYPES,
+        formData: {
+          student_id: student_id || "",
+          type: trimmedType,
+          name: trimmedName,
+          description: trimmedDescription,
+          weight,
+          grade
+        },
+        error: "Schueler ist in diesem Fach ausgeschlossen und kann nicht bewertet werden.",
         csrfToken: req.csrfToken()
       });
     }
@@ -4308,7 +4505,9 @@ router.get("/class-statistics/:classId", async (req, res, next) => {
     const classData = await requireClassAccessForTeacher(req, res, classId);
     if (!classData) return;
 
-    const students = await loadStudents(classId);
+    const students = await loadStudents(classId, req.session.user.id, classData.subject_id);
+    const activeStudents = students.filter((student) => !isExcludedStudent(student));
+    const excludedStudents = students.filter((student) => isExcludedStudent(student));
     const templates = await loadTemplates(classId, classData.subject_id);
     const activeProfile = await loadActiveTeacherProfile(req.session.user.id);
     const participationConfig = normalizeParticipationConfig(
@@ -4316,10 +4515,10 @@ router.get("/class-statistics/:classId", async (req, res, next) => {
     );
     const absenceMode = normalizeAbsenceMode(activeProfile?.absence_mode);
     const openMessageCount = await loadClassOpenMessageCount(classId, classData.subject_id);
-    const studentMap = new Map(students.map((student) => [String(student.id), student]));
+    const studentMap = new Map(activeStudents.map((student) => [String(student.id), student]));
     const gradesByStudent = new Map();
 
-    for (const student of students) {
+    for (const student of activeStudents) {
       const grades = await loadStudentGrades(student.id, classId, classData.subject_id);
       const participationMarks = await loadParticipationMarks(
         classId,
@@ -4411,7 +4610,8 @@ router.get("/class-statistics/:classId", async (req, res, next) => {
       email: req.session.user.email,
       classData,
       activeProfile,
-      studentCount: students.length,
+      studentCount: activeStudents.length,
+      excludedStudentCount: excludedStudents.length,
       overallWeightedAverage,
       overallAverage,
       templateStats,

@@ -1,6 +1,6 @@
-<%
+﻿<%
   const page = {
-    title: 'Lehrer - Fach zuordnen',
+    title: 'Lehrer - Fach erstellen',
     headerTitle: 'Lehrerbereich',
     styles: ['/css/teacher-pages.css'],
     scripts: ['/js/app.js'],
@@ -15,8 +15,8 @@
         <div class="app-nav">
           <div class="nav-section">
             <div class="nav-section-title">Menue</div>
-            <a href="/teacher/classes">Meine Fachzuordnungen</a>
-            <a class="is-active" href="/teacher/create-class">Fach zuordnen</a>
+            <a href="/teacher/classes">Fächer</a>
+            <a class="is-active" href="/teacher/create-class">Fach erstellen</a>
             <a href="/teacher/settings">Einstellungen</a>
             <form class="logout-form" method="POST" action="/logout">
               <input type="hidden" name="_csrf" value="<%= csrfToken %>">
@@ -29,8 +29,8 @@
       <section class="teacher-main">
         <header class="teacher-main-header">
           <div>
-            <p class="teacher-eyebrow">Fachzuordnung</p>
-            <h1>Fach zu bestehender Klasse zuordnen</h1>
+            <p class="teacher-eyebrow">Fach</p>
+            <h1>Fach für bestehende Klasse erstellen</h1>
             <p class="teacher-muted">Rolle: Lehrer - <%= email %></p>
           </div>
           <div class="teacher-actions-inline">
@@ -42,7 +42,7 @@
           <div class="teacher-card-header">
             <div>
               <p class="teacher-eyebrow">Details</p>
-              <h3>Zuordnungsdaten</h3>
+              <h3>Fachdaten</h3>
             </div>
           </div>
 
@@ -74,7 +74,7 @@
             >
 
             <div class="teacher-form-actions">
-              <button class="btn btn-primary" type="submit">Fach zuordnen</button>
+              <button class="btn btn-primary" type="submit">Fach erstellen</button>
               <a class="btn btn-secondary" href="/teacher/classes">Zurueck</a>
             </div>
           </form>
