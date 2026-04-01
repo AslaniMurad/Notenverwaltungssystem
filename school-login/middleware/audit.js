@@ -6,10 +6,12 @@ const ENTITY_PATTERNS = [
   { regex: /\/users(\/|$)/i, entity: "user" },
   { regex: /\/classes(\/|$)/i, entity: "class" },
   { regex: /\/students(\/|$)/i, entity: "student" },
+  { regex: /\/assignments(\/|$)/i, entity: "assignment" },
   { regex: /\/grade-templates(\/|$)/i, entity: "exam_template" },
   { regex: /\/add-grade(\/|$)/i, entity: "grade" },
   { regex: /\/special-assessments(\/|$)/i, entity: "special_assessment" },
-  { regex: /\/participation(\/|$)/i, entity: "participation" }
+  { regex: /\/participation(\/|$)/i, entity: "participation" },
+  { regex: /\/student-exclusion(\/|$)/i, entity: "student_subject_exclusion" }
 ];
 const SUMMARY_LABELS = {
   email: "E-Mail",
@@ -36,9 +38,12 @@ const SUMMARY_LABELS = {
   note: "Kommentar",
   message: "Nachricht",
   reply: "Antwort",
+  action: "Aktion",
   ma_symbol: "Mitarbeit",
   ma_note: "Kommentar",
   grade_template_id: "Vorlage",
+  subject_id: "Fach",
+  head_teacher_id: "Klassenvorstand",
   id: "ID",
   classId: "Klasse",
   studentId: "Schueler",
@@ -71,11 +76,24 @@ const VALUE_LABELS = {
   Praesentation: "Praesentation",
   Wunschpruefung: "Wunschpruefung",
   Benutzerdefiniert: "Benutzerdefiniert",
+  include: "Einschliessen",
+  exclude: "Ausschliessen",
   plus: "+",
   plus_tilde: "+/-",
   neutral: "neutral",
   minus_tilde: "-/+",
   minus: "-"
+};
+const ENTITY_LABELS = {
+  user: "Benutzer",
+  class: "Klasse",
+  student: "Schueler",
+  assignment: "Fachzuordnung",
+  exam_template: "Pruefung",
+  grade: "Note",
+  special_assessment: "Sonderleistung",
+  participation: "Mitarbeit",
+  student_subject_exclusion: "Fachausschluss"
 };
 const SKIPPED_SUMMARY_KEYS = new Set([
   "_csrf",
@@ -211,155 +229,374 @@ function buildFallbackSummary(body) {
     .filter(Boolean);
 }
 
-function withSummary(text, summaryEntries = []) {
-  if (!summaryEntries.length) return text;
-  return `${text} (${summaryEntries.join(", ")})`;
+function joinSummaryEntries(entries = [], maxEntries = 4) {
+  return entries
+    .flat(Infinity)
+    .filter(Boolean)
+    .slice(0, maxEntries)
+    .join(", ");
 }
 
-function buildAuditDescription(req, routePath) {
+function getFormattedSourceValue(source, key) {
+  if (!source || typeof source !== "object") return null;
+  if (source[key] == null || source[key] === "") return null;
+  return formatSummaryValue(key, source[key]);
+}
+
+function buildTargetLabel(...candidates) {
+  for (const candidate of candidates.flat(Infinity)) {
+    const text = formatText(candidate, 120);
+    if (text) return text;
+  }
+  return null;
+}
+
+function buildEntityTarget(entityType, entityId) {
+  if (entityId == null || entityId === "") return null;
+  const label = ENTITY_LABELS[entityType] || "Eintrag";
+  return `${label} ID ${String(entityId).trim()}`;
+}
+
+function buildActionText(actionTitle, targetLabel, detailSummary) {
+  if (targetLabel && detailSummary) return `${actionTitle}: ${targetLabel} (${detailSummary})`;
+  if (targetLabel) return `${actionTitle}: ${targetLabel}`;
+  if (detailSummary) return `${actionTitle} (${detailSummary})`;
+  return actionTitle;
+}
+
+function buildScopeLabel(routePath, entityType) {
+  const normalizedPath = String(routePath || "").toLowerCase();
+  if (normalizedPath.startsWith("/admin/users")) return "Admin / Benutzer";
+  if (normalizedPath.startsWith("/admin/classes")) return "Admin / Klassen";
+  if (normalizedPath.startsWith("/admin/assignments")) return "Admin / Fachzuordnungen";
+  if (normalizedPath.startsWith("/admin/audit-logs")) return "Admin / Audit";
+  if (normalizedPath.startsWith("/teacher/settings")) return "Teacher / Einstellungen";
+  if (normalizedPath.startsWith("/teacher/grade-templates") || normalizedPath.startsWith("/teacher/create-template") || normalizedPath.startsWith("/teacher/edit-template") || normalizedPath.startsWith("/teacher/bulk-grade-template")) return "Teacher / Pruefungen";
+  if (normalizedPath.startsWith("/teacher/add-grade") || normalizedPath.startsWith("/teacher/grades") || normalizedPath.startsWith("/teacher/delete-grade")) return "Teacher / Noten";
+  if (normalizedPath.startsWith("/teacher/special-assessments")) return "Teacher / Sonderleistungen";
+  if (normalizedPath.startsWith("/teacher/students") || normalizedPath.startsWith("/teacher/add-student") || normalizedPath.startsWith("/teacher/delete-student") || normalizedPath.startsWith("/teacher/student-exclusion")) return "Teacher / Schueler";
+  if (normalizedPath.startsWith("/teacher/classes") || normalizedPath.startsWith("/teacher/create-class") || normalizedPath.startsWith("/teacher/delete-class")) return "Teacher / Faecher";
+  if (normalizedPath.startsWith("/teacher/test-questions")) return "Teacher / Rueckfragen";
+  if (normalizedPath.startsWith("/student/returns")) return "Student / Rueckgaben";
+  if (normalizedPath.startsWith("/student/notifications")) return "Student / Benachrichtigungen";
+
+  const parts = normalizedPath.split("/").filter(Boolean);
+  if (parts.length >= 2) {
+    const first = parts[0] === "admin" ? "Admin" : parts[0] === "teacher" ? "Teacher" : parts[0] === "student" ? "Student" : formatText(parts[0]);
+    const second = formatText(parts[1].replace(/-/g, " "));
+    return [first, second].filter(Boolean).join(" / ");
+  }
+  return ENTITY_LABELS[entityType] || "System";
+}
+
+function buildAuditEntry({ scopeLabel, actionTitle, targetLabel = null, detailEntries = [] }) {
+  const detailSummary = joinSummaryEntries(detailEntries);
+  return {
+    scopeLabel: scopeLabel || null,
+    actionTitle,
+    targetLabel: targetLabel || null,
+    detailSummary: detailSummary || null,
+    action: buildActionText(actionTitle, targetLabel, detailSummary)
+  };
+}
+
+function buildAuditDescription(req, routePath, entityType, entityId) {
   const body = sanitizeValue(req.body || {});
   const params = sanitizeValue(req.params || {});
   const hasFile = Boolean(req.file);
+  const scopeLabel = buildScopeLabel(routePath, entityType);
+  const entityTarget = buildEntityTarget(entityType, entityId);
 
   if (/^\/admin\/users$/i.test(routePath)) {
-    return withSummary("Benutzer wurde erstellt", buildSummaryFromSource(body, ["email", "role"]));
+    return buildAuditEntry({
+      scopeLabel,
+      actionTitle: "Benutzer erstellt",
+      targetLabel: buildTargetLabel(getFormattedSourceValue(body, "email"), entityTarget),
+      detailEntries: buildSummaryFromSource(body, ["role"])
+    });
   }
   if (/^\/admin\/users\/bulk$/i.test(routePath)) {
-    return withSummary(
-      "Benutzer wurden gesammelt erstellt",
-      buildSummaryFromSource(body, ["bulkRole", "bulkEmails"])
-    );
+    return buildAuditEntry({
+      scopeLabel,
+      actionTitle: "Benutzer gesammelt erstellt",
+      targetLabel: buildTargetLabel(getFormattedSourceValue(body, "bulkEmails"), "Mehrere Benutzer"),
+      detailEntries: buildSummaryFromSource(body, ["bulkRole"])
+    });
   }
   if (/^\/admin\/users\/[^/]+$/i.test(routePath)) {
-    return withSummary("Benutzer wurde bearbeitet", buildSummaryFromSource(body, ["email", "role", "status"]));
+    return buildAuditEntry({
+      scopeLabel,
+      actionTitle: "Benutzer bearbeitet",
+      targetLabel: buildTargetLabel(getFormattedSourceValue(body, "email"), entityTarget),
+      detailEntries: buildSummaryFromSource(body, ["role", "status"])
+    });
   }
   if (/^\/admin\/users\/[^/]+\/reset$/i.test(routePath)) {
-    return body.useInitial === "1"
-      ? "Passwort wurde auf Initial-Passwort zurueckgesetzt"
-      : "Passwort wurde geaendert";
+    return buildAuditEntry({
+      scopeLabel,
+      actionTitle: body.useInitial === "1" ? "Passwort auf Initial-Passwort gesetzt" : "Passwort geaendert",
+      targetLabel: entityTarget
+    });
   }
   if (/^\/admin\/users\/[^/]+\/delete$/i.test(routePath)) {
-    return withSummary("Benutzer wurde geloescht", buildSummaryFromSource(params, ["id"]));
+    return buildAuditEntry({
+      scopeLabel,
+      actionTitle: "Benutzer geloescht",
+      targetLabel: entityTarget
+    });
   }
-  if (/^\/admin\/classes$/i.test(routePath) || /^\/teacher\/create-class$/i.test(routePath)) {
-    return withSummary("Klasse wurde erstellt", buildSummaryFromSource(body, ["name", "subject"]));
+  if (/^\/admin\/classes$/i.test(routePath)) {
+    return buildAuditEntry({
+      scopeLabel,
+      actionTitle: "Klasse erstellt",
+      targetLabel: buildTargetLabel(getFormattedSourceValue(body, "name"), entityTarget),
+      detailEntries: buildSummaryFromSource(body, ["head_teacher_id"])
+    });
   }
   if (/^\/admin\/classes\/[^/]+$/i.test(routePath)) {
-    return withSummary(
-      "Klasse wurde bearbeitet",
-      buildSummaryFromSource(body, ["name", "subject", "teacher_id"])
-    );
+    return buildAuditEntry({
+      scopeLabel,
+      actionTitle: "Klasse bearbeitet",
+      targetLabel: buildTargetLabel(getFormattedSourceValue(body, "name"), entityTarget),
+      detailEntries: buildSummaryFromSource(body, ["head_teacher_id"])
+    });
   }
-  if (/^\/admin\/classes\/[^/]+\/delete$/i.test(routePath) || /^\/teacher\/delete-class\/[^/]+$/i.test(routePath)) {
-    return withSummary("Klasse wurde geloescht", buildSummaryFromSource(params, ["id"]));
+  if (/^\/admin\/classes\/[^/]+\/delete$/i.test(routePath)) {
+    return buildAuditEntry({
+      scopeLabel,
+      actionTitle: "Klasse geloescht",
+      targetLabel: entityTarget
+    });
   }
-  if (/^\/admin\/classes\/[^/]+\/students\/add$/i.test(routePath) || /^\/teacher\/add-student\/[^/]+$/i.test(routePath)) {
-    return withSummary("Schueler wurde hinzugefuegt", buildSummaryFromSource(body, ["name", "email"]));
+  if (/^\/admin\/classes\/[^/]+\/students\/add$/i.test(routePath)) {
+    return buildAuditEntry({
+      scopeLabel,
+      actionTitle: "Schueler zur Klasse hinzugefuegt",
+      targetLabel: buildTargetLabel(getFormattedSourceValue(body, "email"), getFormattedSourceValue(body, "name"), buildEntityTarget("student", params.studentId)),
+      detailEntries: buildSummaryFromSource(params, ["id"])
+    });
   }
   if (/^\/admin\/classes\/[^/]+\/students\/add-bulk$/i.test(routePath)) {
-    return withSummary(
-      "Schueler wurden gesammelt hinzugefuegt",
-      buildSummaryFromSource(body, ["bulkEmails"])
-    );
+    return buildAuditEntry({
+      scopeLabel,
+      actionTitle: "Schueler gesammelt zur Klasse hinzugefuegt",
+      targetLabel: buildTargetLabel(getFormattedSourceValue(body, "bulkEmails"), "Mehrere Schueler"),
+      detailEntries: buildSummaryFromSource(params, ["id"])
+    });
   }
-  if (
-    /^\/admin\/classes\/[^/]+\/students\/[^/]+\/delete$/i.test(routePath) ||
-    /^\/teacher\/delete-student\/[^/]+\/[^/]+$/i.test(routePath)
-  ) {
-    return withSummary(
-      "Schueler wurde entfernt",
-      buildSummaryFromSource(params, ["classId", "studentId"])
-    );
+  if (/^\/admin\/classes\/[^/]+\/students\/[^/]+\/delete$/i.test(routePath)) {
+    return buildAuditEntry({
+      scopeLabel,
+      actionTitle: "Schueler aus Klasse entfernt",
+      targetLabel: buildEntityTarget("student", params.studentId),
+      detailEntries: buildSummaryFromSource(params, ["classId"])
+    });
+  }
+  if (/^\/admin\/assignments/i.test(routePath)) {
+    return buildAuditEntry({
+      scopeLabel,
+      actionTitle: "Fachzuordnung gespeichert",
+      targetLabel: buildTargetLabel(getFormattedSourceValue(body, "subject"), entityTarget),
+      detailEntries: buildSummaryFromSource(body, ["classId", "teacher_id", "subject_id"])
+    });
+  }
+  if (/^\/teacher\/create-class$/i.test(routePath)) {
+    return buildAuditEntry({
+      scopeLabel,
+      actionTitle: "Fach erstellt",
+      targetLabel: buildTargetLabel(getFormattedSourceValue(body, "subject"), entityTarget),
+      detailEntries: buildSummaryFromSource(body, ["class_id"])
+    });
+  }
+  if (/^\/teacher\/delete-class\/[^/]+$/i.test(routePath)) {
+    return buildAuditEntry({
+      scopeLabel,
+      actionTitle: "Fach verlassen",
+      targetLabel: entityTarget
+    });
+  }
+  if (/^\/teacher\/add-student\/[^/]+$/i.test(routePath)) {
+    return buildAuditEntry({
+      scopeLabel,
+      actionTitle: "Schueler hinzugefuegt",
+      targetLabel: buildTargetLabel(getFormattedSourceValue(body, "email"), getFormattedSourceValue(body, "name"), entityTarget)
+    });
+  }
+  if (/^\/teacher\/delete-student\/[^/]+\/[^/]+$/i.test(routePath)) {
+    return buildAuditEntry({
+      scopeLabel,
+      actionTitle: "Schueler entfernt",
+      targetLabel: buildEntityTarget("student", params.studentId),
+      detailEntries: buildSummaryFromSource(params, ["classId"])
+    });
+  }
+  if (/^\/teacher\/student-exclusion\/[^/]+\/[^/]+$/i.test(routePath)) {
+    const actionValue = String(body.action || "").trim().toLowerCase();
+    return buildAuditEntry({
+      scopeLabel,
+      actionTitle: actionValue === "include" ? "Schueler im Fach eingeschlossen" : "Schueler im Fach ausgeschlossen",
+      targetLabel: buildEntityTarget("student", params.studentId),
+      detailEntries: [
+        buildSummaryFromSource(params, ["classId"]),
+        buildSummaryFromSource(body, ["subject_id"])
+      ]
+    });
   }
   if (/^\/teacher\/settings\/save-profile$/i.test(routePath)) {
-    return withSummary(
-      body.profile_id ? "Benotungsprofil wurde bearbeitet" : "Benotungsprofil wurde erstellt",
-      buildSummaryFromSource(body, ["profile_name", "scoring_mode", "absence_mode"])
-    );
+    return buildAuditEntry({
+      scopeLabel,
+      actionTitle: body.profile_id ? "Benotungsprofil bearbeitet" : "Benotungsprofil erstellt",
+      targetLabel: buildTargetLabel(getFormattedSourceValue(body, "profile_name"), entityTarget),
+      detailEntries: buildSummaryFromSource(body, ["scoring_mode", "absence_mode"])
+    });
   }
   if (/^\/teacher\/settings\/activate-profile\/[^/]+$/i.test(routePath)) {
-    return withSummary("Benotungsprofil wurde aktiviert", buildSummaryFromSource(params, ["profileId"]));
+    return buildAuditEntry({
+      scopeLabel,
+      actionTitle: "Benotungsprofil aktiviert",
+      targetLabel: buildEntityTarget("system", params.profileId)
+    });
   }
   if (/^\/teacher\/settings\/delete-profile\/[^/]+$/i.test(routePath)) {
-    return withSummary("Benotungsprofil wurde geloescht", buildSummaryFromSource(params, ["profileId"]));
+    return buildAuditEntry({
+      scopeLabel,
+      actionTitle: "Benotungsprofil geloescht",
+      targetLabel: buildEntityTarget("system", params.profileId)
+    });
   }
   if (/^\/teacher\/students\/[^/]+\/messages\/[^/]+\/reply$/i.test(routePath)) {
-    return withSummary("Antwort auf Schuelernachricht wurde gesendet", buildSummaryFromSource(body, ["reply"]));
+    return buildAuditEntry({
+      scopeLabel,
+      actionTitle: "Antwort auf Rueckfrage gesendet",
+      targetLabel: buildEntityTarget("student", params.studentId) || "Rueckfrage",
+      detailEntries: buildSummaryFromSource(body, ["reply"])
+    });
   }
   if (/^\/teacher\/grades\/[^/]+\/participation$/i.test(routePath)) {
-    return withSummary(
-      "Mitarbeitsbewertung wurde eingetragen",
-      buildSummaryFromSource(body, ["student_id", "ma_symbol", "ma_note"])
-    );
+    return buildAuditEntry({
+      scopeLabel,
+      actionTitle: "Mitarbeit eingetragen",
+      targetLabel: buildEntityTarget("student", body.student_id),
+      detailEntries: buildSummaryFromSource(body, ["ma_symbol", "ma_note"])
+    });
   }
   if (/^\/teacher\/delete-participation\/[^/]+\/[^/]+\/[^/]+$/i.test(routePath)) {
-    return withSummary(
-      "Mitarbeitsbewertung wurde geloescht",
-      buildSummaryFromSource(params, ["classId", "studentId", "markId"])
-    );
+    return buildAuditEntry({
+      scopeLabel,
+      actionTitle: "Mitarbeit geloescht",
+      targetLabel: buildEntityTarget("student", params.studentId),
+      detailEntries: buildSummaryFromSource(params, ["markId"])
+    });
   }
   if (/^\/teacher\/delete-grade\/[^/]+\/[^/]+$/i.test(routePath)) {
-    return withSummary("Note wurde geloescht", buildSummaryFromSource(params, ["classId", "gradeId"]));
+    return buildAuditEntry({
+      scopeLabel,
+      actionTitle: "Note geloescht",
+      targetLabel: buildEntityTarget("grade", params.gradeId),
+      detailEntries: buildSummaryFromSource(params, ["classId"])
+    });
   }
   if (/^\/teacher\/delete-grade-attachment\/[^/]+\/[^/]+$/i.test(routePath)) {
-    return withSummary(
-      "Datei bei Note wurde entfernt",
-      buildSummaryFromSource(params, ["classId", "gradeId"])
-    );
+    return buildAuditEntry({
+      scopeLabel,
+      actionTitle: "Anhang von Note entfernt",
+      targetLabel: buildEntityTarget("grade", params.gradeId)
+    });
   }
   if (/^\/teacher\/add-grade\/[^/]+\/[^/]+$/i.test(routePath)) {
-    const summary = buildSummaryFromSource(body, ["grade", "points_achieved", "is_absent", "note", "external_link"]);
-    if (hasFile) summary.push("Datei: hochgeladen");
-    return withSummary("Note wurde eingetragen", summary);
+    const detailEntries = buildSummaryFromSource(body, ["grade", "points_achieved", "is_absent", "note", "external_link"]);
+    if (hasFile) detailEntries.push("Datei: hochgeladen");
+    return buildAuditEntry({
+      scopeLabel,
+      actionTitle: "Note eingetragen",
+      targetLabel: buildEntityTarget("student", params.studentId),
+      detailEntries
+    });
   }
   if (/^\/teacher\/create-template\/[^/]+$/i.test(routePath)) {
-    return withSummary(
-      "Pruefungsvorlage wurde erstellt",
-      buildSummaryFromSource(body, ["name", "category", "weight", "max_points", "date"])
-    );
+    return buildAuditEntry({
+      scopeLabel,
+      actionTitle: "Pruefung erstellt",
+      targetLabel: buildTargetLabel(getFormattedSourceValue(body, "name"), entityTarget),
+      detailEntries: buildSummaryFromSource(body, ["category", "weight", "max_points", "date"])
+    });
   }
   if (/^\/teacher\/edit-template\/[^/]+\/[^/]+$/i.test(routePath)) {
-    return withSummary(
-      "Pruefungsvorlage wurde bearbeitet",
-      buildSummaryFromSource(body, ["name", "category", "weight", "max_points", "date"])
-    );
+    return buildAuditEntry({
+      scopeLabel,
+      actionTitle: "Pruefung bearbeitet",
+      targetLabel: buildTargetLabel(getFormattedSourceValue(body, "name"), buildEntityTarget("exam_template", params.templateId)),
+      detailEntries: buildSummaryFromSource(body, ["category", "weight", "max_points", "date"])
+    });
   }
   if (/^\/teacher\/delete-template\/[^/]+\/[^/]+$/i.test(routePath)) {
-    return withSummary(
-      "Pruefungsvorlage wurde geloescht",
-      buildSummaryFromSource(params, ["classId", "templateId"])
-    );
+    return buildAuditEntry({
+      scopeLabel,
+      actionTitle: "Pruefung geloescht",
+      targetLabel: buildEntityTarget("exam_template", params.templateId)
+    });
   }
   if (/^\/teacher\/special-assessments\/[^/]+$/i.test(routePath)) {
-    return withSummary(
-      "Sonderleistung wurde erstellt",
-      buildSummaryFromSource(body, ["student_id", "type", "name", "grade", "weight"])
-    );
+    return buildAuditEntry({
+      scopeLabel,
+      actionTitle: "Sonderleistung erstellt",
+      targetLabel: buildTargetLabel(getFormattedSourceValue(body, "name"), buildEntityTarget("student", body.student_id)),
+      detailEntries: buildSummaryFromSource(body, ["type", "grade", "weight"])
+    });
   }
   if (/^\/teacher\/delete-special-assessment\/[^/]+\/[^/]+$/i.test(routePath)) {
-    return withSummary(
-      "Sonderleistung wurde geloescht",
-      buildSummaryFromSource(params, ["classId", "assessmentId"])
-    );
+    return buildAuditEntry({
+      scopeLabel,
+      actionTitle: "Sonderleistung geloescht",
+      targetLabel: buildEntityTarget("special_assessment", params.assessmentId)
+    });
   }
   if (/^\/student\/returns\/[^/]+\/message$/i.test(routePath)) {
-    return withSummary("Nachricht zur Rueckgabe wurde gesendet", buildSummaryFromSource(body, ["message"]));
+    return buildAuditEntry({
+      scopeLabel,
+      actionTitle: "Nachricht zur Rueckgabe gesendet",
+      targetLabel: buildEntityTarget("grade", params.gradeId),
+      detailEntries: buildSummaryFromSource(body, ["message"])
+    });
   }
   if (/^\/student\/returns\/[^/]+\/messages\/seen$/i.test(routePath)) {
-    return withSummary("Rueckgabe-Nachrichten wurden als gelesen markiert", buildSummaryFromSource(params, ["gradeId"]));
+    return buildAuditEntry({
+      scopeLabel,
+      actionTitle: "Rueckgabe-Nachrichten gelesen",
+      targetLabel: buildEntityTarget("grade", params.gradeId)
+    });
   }
   if (/^\/student\/notifications\/[^/]+\/read$/i.test(routePath)) {
-    return withSummary("Benachrichtigung wurde als gelesen markiert", buildSummaryFromSource(params, ["id"]));
+    return buildAuditEntry({
+      scopeLabel,
+      actionTitle: "Benachrichtigung gelesen",
+      targetLabel: entityTarget
+    });
   }
 
   const fallbackSummary = buildFallbackSummary(body);
   if (/delete|remove/i.test(routePath)) {
-    return withSummary("Eintrag wurde geloescht", fallbackSummary);
+    return buildAuditEntry({
+      scopeLabel,
+      actionTitle: "Eintrag geloescht",
+      targetLabel: entityTarget,
+      detailEntries: fallbackSummary
+    });
   }
   if (/create|add|save/i.test(routePath)) {
-    return withSummary("Eintrag wurde gespeichert", fallbackSummary);
+    return buildAuditEntry({
+      scopeLabel,
+      actionTitle: "Eintrag gespeichert",
+      targetLabel: entityTarget,
+      detailEntries: fallbackSummary
+    });
   }
-  return withSummary("Eintrag wurde geaendert", fallbackSummary);
+  return buildAuditEntry({
+    scopeLabel,
+    actionTitle: "Eintrag bearbeitet",
+    targetLabel: entityTarget,
+    detailEntries: fallbackSummary
+  });
 }
 
 function createAuditLogMiddleware() {
@@ -383,7 +620,7 @@ function createAuditLogMiddleware() {
 
     res.on("finish", () => {
       if (res.statusCode >= 400) return;
-      const description = buildAuditDescription(req, routePath);
+      const auditEntry = buildAuditDescription(req, routePath, entityType, entityId);
 
       const payload = JSON.stringify(
         sanitizeValue({
@@ -396,13 +633,14 @@ function createAuditLogMiddleware() {
       db.run(
         `INSERT INTO audit_logs (
            actor_user_id, actor_email, actor_role, action, entity_type, entity_id,
-           http_method, route_path, status_code, ip_address, user_agent, payload
-         ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)`,
+           http_method, route_path, status_code, ip_address, user_agent, payload,
+           scope_label, action_title, target_label, detail_summary
+         ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
         [
           actor.id || null,
           actor.email || null,
           actor.role || null,
-          description,
+          auditEntry.action,
           entityType,
           entityId,
           req.method,
@@ -410,7 +648,11 @@ function createAuditLogMiddleware() {
           res.statusCode,
           ipAddress,
           userAgent,
-          payload
+          payload,
+          auditEntry.scopeLabel,
+          auditEntry.actionTitle,
+          auditEntry.targetLabel,
+          auditEntry.detailSummary
         ],
         (err) => {
           if (err) {

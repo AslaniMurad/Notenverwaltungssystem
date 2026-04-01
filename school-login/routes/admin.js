@@ -9,6 +9,117 @@ const { deriveNameFromEmail } = require("../utils/studentName");
 const { getDisplayName } = require("../utils/userDisplay");
 
 const INITIAL_PASSWORD = process.env.INITIAL_PASSWORD || null;
+const AUDIT_PAGE_SIZE = 50;
+const AUDIT_ENTITY_LABELS = {
+  user: "Benutzer",
+  class: "Klasse",
+  student: "Schueler",
+  assignment: "Fachzuordnung",
+  exam_template: "Pruefung",
+  grade: "Note",
+  special_assessment: "Sonderleistung",
+  participation: "Mitarbeit",
+  student_subject_exclusion: "Fachausschluss"
+};
+const AUDIT_CATEGORY_OPTIONS = {
+  all: { label: "Hauptlog", role: null },
+  admin: { label: "Logs-Admin", role: "admin" },
+  teacher: { label: "Logs-Teacher", role: "teacher" },
+  student: { label: "Logs-Student", role: "student" }
+};
+const AUDIT_SEARCH_MODE_OPTIONS = {
+  contains: { label: "Contains (Case-insensitive)" },
+  regex: { label: "Regex" },
+  exact: { label: "Exact" },
+  starts_with: { label: "Starts with" }
+};
+const AUDIT_METHOD_OPTIONS = ["", "POST", "PUT", "PATCH", "DELETE"];
+const AUDIT_TEXT_SEARCH_SQL = `COALESCE(action, '') || ' ' ||
+      COALESCE(scope_label, '') || ' ' ||
+      COALESCE(action_title, '') || ' ' ||
+      COALESCE(target_label, '') || ' ' ||
+      COALESCE(detail_summary, '') || ' ' ||
+      COALESCE(route_path, '')`;
+const AUDIT_FIELD_LABELS = {
+  email: "E-Mail",
+  role: "Rolle",
+  status: "Status",
+  name: "Name",
+  subject: "Fach",
+  subject_id: "Fach",
+  teacher_id: "Lehrer",
+  head_teacher_id: "Klassenvorstand",
+  bulkRole: "Rolle",
+  bulkEmails: "E-Mails",
+  profile_name: "Profil",
+  scoring_mode: "Bewertung",
+  absence_mode: "Abwesenheit",
+  student_id: "Schueler",
+  type: "Typ",
+  category: "Kategorie",
+  weight: "Gewichtung",
+  max_points: "Max. Punkte",
+  date: "Datum",
+  description: "Beschreibung",
+  grade: "Note",
+  points_achieved: "Punkte",
+  external_link: "Link",
+  is_absent: "Abwesend",
+  note: "Kommentar",
+  message: "Nachricht",
+  reply: "Antwort",
+  action: "Aktion",
+  ma_symbol: "Mitarbeit",
+  ma_note: "Kommentar",
+  grade_template_id: "Vorlage",
+  id: "ID",
+  classId: "Klasse",
+  class_id: "Klasse",
+  studentId: "Schueler",
+  profileId: "Profil",
+  gradeId: "Note",
+  templateId: "Vorlage",
+  assessmentId: "Sonderleistung",
+  markId: "Mitarbeit",
+  useInitial: "Initialpasswort"
+};
+const AUDIT_VALUE_LABELS = {
+  admin: "Admin",
+  teacher: "Teacher",
+  student: "Student",
+  active: "Aktiv",
+  locked: "Gesperrt",
+  deleted: "Geloescht",
+  points_or_grade: "Punkte oder Note",
+  points_and_grade: "Punkte und Note",
+  points_only: "Nur Punkte",
+  grade_only: "Nur Note",
+  include_zero: "Mit 0 bewerten",
+  exclude: "Nicht werten",
+  include: "Einschliessen",
+  Schularbeit: "Schularbeit",
+  Test: "Test",
+  Wiederholung: "Wiederholung",
+  Mitarbeit: "Mitarbeit",
+  Projekt: "Projekt",
+  Hausuebung: "Hausuebung",
+  Hausaufgabe: "Hausaufgabe",
+  Praesentation: "Praesentation",
+  Wunschpruefung: "Wunschpruefung",
+  Benutzerdefiniert: "Benutzerdefiniert",
+  plus: "+",
+  plus_tilde: "+/-",
+  neutral: "neutral",
+  minus_tilde: "-/+",
+  minus: "-"
+};
+const AUDIT_HIDDEN_PAYLOAD_KEYS = new Set([
+  "_csrf",
+  "password",
+  "bulkPassword",
+  "password_hash",
+  "must_change_password"
+]);
 
 const runAsync = (sql, params = []) =>
   new Promise((resolve, reject) => {
@@ -37,31 +148,177 @@ const getAsync = (sql, params = []) =>
 function parseAuditFilters(req) {
   const actor = String(req.query.actor || "").trim();
   const action = String(req.query.action || "").trim();
+  const route = String(req.query.route || "").trim();
   const entity = String(req.query.entity || "").trim();
-  return { actor, action, entity };
+  const category = parseAuditCategory(req.query.category);
+  const searchMode = parseAuditSearchMode(req.query.searchMode);
+  const method = parseAuditMethod(req.query.method);
+  const status = parseAuditStatus(req.query.status);
+  return { actor, action, route, entity, category, searchMode, method, status };
+}
+
+function parseAuditPage(req) {
+  const value = Number.parseInt(String(req.query.page || "1"), 10);
+  return Number.isInteger(value) && value > 0 ? value : 1;
+}
+
+function parseAuditCategory(value) {
+  const normalized = String(value || "all").trim().toLowerCase();
+  return AUDIT_CATEGORY_OPTIONS[normalized] ? normalized : "all";
+}
+
+function parseAuditSearchMode(value) {
+  const normalized = String(value || "contains").trim().toLowerCase();
+  return AUDIT_SEARCH_MODE_OPTIONS[normalized] ? normalized : "contains";
+}
+
+function parseAuditMethod(value) {
+  const normalized = String(value || "").trim().toUpperCase();
+  return AUDIT_METHOD_OPTIONS.includes(normalized) ? normalized : "";
+}
+
+function parseAuditStatus(value) {
+  const text = String(value || "").trim();
+  if (!text) return "";
+  return /^\d{3}$/.test(text) ? text : "";
+}
+
+function getAuditOffset(page = 1) {
+  const safePage = Number.isFinite(Number(page)) ? Math.max(1, Number(page)) : 1;
+  return (safePage - 1) * AUDIT_PAGE_SIZE;
+}
+
+function getAuditTotalPages(totalCount = 0) {
+  const safeCount = Math.max(0, Number(totalCount || 0));
+  return Math.max(1, Math.ceil(safeCount / AUDIT_PAGE_SIZE) || 1);
+}
+
+function normalizeAuditReturnPath(value) {
+  const text = String(value || "").trim();
+  if (!text || !text.startsWith("/") || text.startsWith("//")) return null;
+  if (text.startsWith("/admin/audit-logs")) return null;
+  return text;
+}
+
+function getAuditRefererPath(req) {
+  const referer = String(req.get("referer") || "").trim();
+  const host = String(req.get("host") || "").trim();
+  if (!referer || !host) return null;
+
+  try {
+    const base = `${req.protocol}://${host}`;
+    const url = new URL(referer, base);
+    if (url.host !== host) return null;
+    return `${url.pathname}${url.search || ""}`;
+  } catch {
+    return null;
+  }
+}
+
+function resolveAuditReturnTo(req) {
+  const queryTarget = normalizeAuditReturnPath(req.query.returnTo);
+  const refererTarget = normalizeAuditReturnPath(getAuditRefererPath(req));
+  const sessionTarget = normalizeAuditReturnPath(req.session?.adminAuditReturnTo);
+  const resolved = queryTarget || refererTarget || sessionTarget || "/admin";
+
+  if (req.session) {
+    req.session.adminAuditReturnTo = resolved;
+  }
+
+  return resolved;
+}
+
+function validateAuditRegexFilters(filters = {}) {
+  if (filters.searchMode !== "regex") return null;
+
+  const regexFields = [
+    ["Akteur", filters.actor],
+    ["Suchtext", filters.action],
+    ["Route", filters.route]
+  ];
+
+  for (const [label, value] of regexFields) {
+    if (!value) continue;
+    try {
+      new RegExp(value, "i");
+    } catch {
+      return `Ungueltiger Regex in ${label}.`;
+    }
+  }
+
+  return null;
+}
+
+function pushAuditTextFilter(where, params, expression, value, mode = "contains") {
+  const text = String(value || "").trim();
+  if (!text) return;
+
+  if (mode === "regex") {
+    where.push(`${expression} ~* ?`);
+    params.push(text);
+    return;
+  }
+
+  if (mode === "exact") {
+    where.push(`LOWER(${expression}) = LOWER(?)`);
+    params.push(text);
+    return;
+  }
+
+  if (mode === "starts_with") {
+    where.push(`LOWER(${expression}) LIKE LOWER(?)`);
+    params.push(`${text}%`);
+    return;
+  }
+
+  where.push(`LOWER(${expression}) LIKE LOWER(?)`);
+  params.push(`%${text}%`);
 }
 
 function buildAuditWhereClause(filters = {}) {
   const where = [];
   const params = [];
 
-  if (filters.actor) {
-    where.push("LOWER(actor_email) LIKE LOWER(?)");
-    params.push(`%${filters.actor}%`);
-  }
-  if (filters.action) {
-    where.push("LOWER(action) LIKE LOWER(?)");
-    params.push(`%${filters.action}%`);
-  }
+  pushAuditTextFilter(where, params, "COALESCE(actor_email, '')", filters.actor, filters.searchMode);
+  pushAuditTextFilter(where, params, AUDIT_TEXT_SEARCH_SQL, filters.action, filters.searchMode);
+  pushAuditTextFilter(where, params, "COALESCE(route_path, '')", filters.route, filters.searchMode);
+
   if (filters.entity) {
     where.push("LOWER(entity_type) = LOWER(?)");
     params.push(filters.entity);
+  }
+  if (filters.category && filters.category !== "all") {
+    const role = AUDIT_CATEGORY_OPTIONS[filters.category]?.role;
+    if (role) {
+      where.push("LOWER(actor_role) = LOWER(?)");
+      params.push(role);
+    }
+  }
+  if (filters.method) {
+    where.push("LOWER(http_method) = LOWER(?)");
+    params.push(filters.method);
+  }
+  if (filters.status) {
+    where.push("status_code = ?");
+    params.push(Number(filters.status));
   }
 
   return {
     whereClause: where.length ? `WHERE ${where.join(" AND ")}` : "",
     params
   };
+}
+
+async function fetchAuditCategoryCounts(filters = {}) {
+  const baseFilters = { ...filters, category: "all" };
+  const entries = await Promise.all(
+    Object.keys(AUDIT_CATEGORY_OPTIONS).map(async (categoryKey) => {
+      const count = await fetchAuditLogCount({ ...baseFilters, category: categoryKey });
+      return [categoryKey, count];
+    })
+  );
+
+  return Object.fromEntries(entries);
 }
 
 async function fetchAuditLogCount(filters) {
@@ -79,6 +336,9 @@ async function fetchAuditLogsPage({ filters, beforeId = null, afterId = null, li
   const { whereClause, params } = buildAuditWhereClause(filters);
   const clauses = whereClause ? [whereClause.slice(6)] : [];
   const queryParams = [...params];
+  const safeLimit = Number.isFinite(Number(limit))
+    ? Math.max(1, Math.min(AUDIT_PAGE_SIZE, Number(limit)))
+    : AUDIT_PAGE_SIZE;
 
   if (beforeId != null) {
     clauses.push("id < ?");
@@ -91,15 +351,341 @@ async function fetchAuditLogsPage({ filters, beforeId = null, afterId = null, li
 
   const combinedWhere = clauses.length ? `WHERE ${clauses.join(" AND ")}` : "";
   const rows = await allAsync(
-    `SELECT id, actor_email, actor_role, action, entity_type, entity_id, http_method, route_path, status_code, created_at
+    `SELECT id, actor_email, actor_role, action, scope_label, action_title, target_label, detail_summary,
+            entity_type, entity_id, http_method, route_path, status_code, ip_address, user_agent, payload, created_at
      FROM audit_logs
      ${combinedWhere}
      ORDER BY id DESC
      LIMIT ?`,
-    [...queryParams, Number(limit)]
+    [...queryParams, safeLimit]
   );
 
   return rows;
+}
+
+async function fetchAuditLogsByPage({ filters, page = 1 }) {
+  const safePage = Number.isFinite(Number(page)) ? Math.max(1, Number(page)) : 1;
+  const pageSize = AUDIT_PAGE_SIZE;
+  const offset = getAuditOffset(safePage);
+  const { whereClause, params } = buildAuditWhereClause(filters);
+  return allAsync(
+    `SELECT id, actor_email, actor_role, action, scope_label, action_title, target_label, detail_summary,
+            entity_type, entity_id, http_method, route_path, status_code, ip_address, user_agent, payload, created_at
+     FROM audit_logs
+     ${whereClause}
+     ORDER BY id DESC
+     LIMIT ?
+     OFFSET ?`,
+    [...params, pageSize, offset]
+  );
+}
+
+function parseStoredAuditAction(action) {
+  const text = String(action || "").trim();
+  if (!text) return { title: "", detailSummary: "" };
+  const match = text.match(/^(.*?)(?:\s+\((.*)\))?$/);
+  return {
+    title: match?.[1] ? String(match[1]).trim() : text,
+    detailSummary: match?.[2] ? String(match[2]).trim() : ""
+  };
+}
+
+function buildAuditScopeFallback(routePath, entityType) {
+  const normalized = String(routePath || "").toLowerCase();
+  if (normalized.startsWith("/admin/users")) return "Admin / Benutzer";
+  if (normalized.startsWith("/admin/classes")) return "Admin / Klassen";
+  if (normalized.startsWith("/admin/assignments")) return "Admin / Fachzuordnungen";
+  if (normalized.startsWith("/teacher/settings")) return "Teacher / Einstellungen";
+  if (normalized.startsWith("/teacher/create-template") || normalized.startsWith("/teacher/edit-template") || normalized.startsWith("/teacher/grade-templates") || normalized.startsWith("/teacher/bulk-grade-template")) return "Teacher / Pruefungen";
+  if (normalized.startsWith("/teacher/add-grade") || normalized.startsWith("/teacher/grades") || normalized.startsWith("/teacher/delete-grade")) return "Teacher / Noten";
+  if (normalized.startsWith("/teacher/students") || normalized.startsWith("/teacher/add-student") || normalized.startsWith("/teacher/delete-student") || normalized.startsWith("/teacher/student-exclusion")) return "Teacher / Schueler";
+  if (normalized.startsWith("/teacher/special-assessments")) return "Teacher / Sonderleistungen";
+  if (normalized.startsWith("/teacher/classes") || normalized.startsWith("/teacher/create-class")) return "Teacher / Faecher";
+  if (normalized.startsWith("/teacher/test-questions")) return "Teacher / Rueckfragen";
+
+  const parts = normalized.split("/").filter(Boolean);
+  if (parts.length >= 2) {
+    const first = parts[0] === "admin" ? "Admin" : parts[0] === "teacher" ? "Teacher" : parts[0];
+    const second = String(parts[1] || "").replace(/-/g, " ");
+    return `${first} / ${second}`;
+  }
+  return AUDIT_ENTITY_LABELS[entityType] || "System";
+}
+
+function parseAuditPayload(payload) {
+  if (!payload) return null;
+  try {
+    return typeof payload === "string" ? JSON.parse(payload) : payload;
+  } catch {
+    return null;
+  }
+}
+
+function humanizeAuditFieldLabel(key) {
+  const normalizedKey = String(key || "").trim();
+  if (!normalizedKey) return "Feld";
+  if (AUDIT_FIELD_LABELS[normalizedKey]) return AUDIT_FIELD_LABELS[normalizedKey];
+
+  const text = normalizedKey
+    .replace(/([a-z0-9])([A-Z])/g, "$1 $2")
+    .replace(/[_-]+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+
+  return text ? `${text.charAt(0).toUpperCase()}${text.slice(1)}` : "Feld";
+}
+
+function formatAuditText(value, maxLength = 180) {
+  const text = String(value || "").trim().replace(/\s+/g, " ");
+  if (!text) return null;
+  return text.length > maxLength ? `${text.slice(0, maxLength - 3)}...` : text;
+}
+
+function formatAuditFieldValue(key, value) {
+  if (value == null || value === "") return null;
+
+  if (Array.isArray(value)) {
+    return value.length ? `${value.length} Eintraege` : null;
+  }
+
+  if (typeof value === "boolean") {
+    return value ? "Ja" : "Nein";
+  }
+
+  if (typeof value === "object") {
+    return formatAuditText(JSON.stringify(value), 220);
+  }
+
+  const normalizedKey = String(key || "").trim();
+  const rawText = String(value).trim();
+  if (!rawText) return null;
+
+  if (normalizedKey === "bulkEmails") {
+    const amount = rawText
+      .split(/\r?\n/)
+      .map((line) => line.trim())
+      .filter(Boolean).length;
+    return amount ? `${amount} E-Mails` : null;
+  }
+
+  if (normalizedKey === "is_absent") {
+    return rawText === "on" ? "Ja" : AUDIT_VALUE_LABELS[rawText] || rawText;
+  }
+
+  if (/(_id|Id)$/.test(normalizedKey) && /^\d+$/.test(rawText)) {
+    return `ID ${rawText}`;
+  }
+
+  return AUDIT_VALUE_LABELS[rawText] || formatAuditText(rawText, 220);
+}
+
+function buildAuditFieldItems(source, options = {}) {
+  if (!source || typeof source !== "object") return [];
+
+  const {
+    skipKeys = AUDIT_HIDDEN_PAYLOAD_KEYS,
+    maxItems = 12
+  } = options;
+
+  const keys = Object.keys(source).filter((key) => {
+    if (skipKeys?.has(key)) return false;
+    const value = source[key];
+    return value != null && value !== "";
+  });
+
+  const visibleKeys = keys.slice(0, maxItems);
+  const items = visibleKeys
+    .map((key) => {
+      const value = formatAuditFieldValue(key, source[key]);
+      if (!value) return null;
+      return {
+        label: humanizeAuditFieldLabel(key),
+        value
+      };
+    })
+    .filter(Boolean);
+
+  const remaining = keys.length - visibleKeys.length;
+  if (remaining > 0) {
+    items.push({
+      label: "Weitere Felder",
+      value: `${remaining} weitere Felder`
+    });
+  }
+
+  return items;
+}
+
+function buildAuditFieldSummary(source, options = {}) {
+  const items = buildAuditFieldItems(source, options);
+  if (!items.length) return "-";
+  return items.map((item) => `${item.label}: ${item.value}`).join(" | ");
+}
+
+function buildAuditEntityLabel(entry) {
+  if (!entry?.entity_type) return null;
+  const label = AUDIT_ENTITY_LABELS[entry.entity_type] || "Eintrag";
+  if (entry.entity_id != null && entry.entity_id !== "") {
+    return `${label} ID ${entry.entity_id}`;
+  }
+  return label;
+}
+
+function getAuditCategoryLabel(actorRole) {
+  const normalized = String(actorRole || "").trim().toLowerCase();
+  if (AUDIT_CATEGORY_OPTIONS[normalized]) {
+    return AUDIT_CATEGORY_OPTIONS[normalized].label;
+  }
+  return "Hauptlog";
+}
+
+function buildAuditClientSummary(entry) {
+  const parts = [
+    entry.ip_address ? `IP: ${entry.ip_address}` : null,
+    entry.user_agent ? `Client: ${formatAuditText(entry.user_agent, 120)}` : null
+  ].filter(Boolean);
+
+  return parts.length ? parts.join(" | ") : "-";
+}
+
+function buildAuditCategoryTabs(filters, counts = {}, returnTo = null) {
+  return Object.entries(AUDIT_CATEGORY_OPTIONS).map(([key, option]) => ({
+    key,
+    label: option.label,
+    count: Number(counts[key] || 0),
+    isCurrent: parseAuditCategory(filters.category) === key,
+    href: buildAuditQuery({ ...filters, category: key }, 1, returnTo)
+  }));
+}
+
+function buildAuditTargetFallback(entry, payload) {
+  if (entry.entity_type && entry.entity_id) {
+    const label = AUDIT_ENTITY_LABELS[entry.entity_type] || "Eintrag";
+    return `${label} ID ${entry.entity_id}`;
+  }
+
+  const candidates = [
+    payload?.body?.email,
+    payload?.body?.name,
+    payload?.body?.profile_name,
+    payload?.body?.subject,
+    payload?.body?.type,
+    payload?.params?.id ? `ID ${payload.params.id}` : null,
+    payload?.params?.classId ? `Klasse ID ${payload.params.classId}` : null,
+    payload?.params?.studentId ? `Schueler ID ${payload.params.studentId}` : null
+  ];
+
+  for (const candidate of candidates) {
+    const text = String(candidate || "").trim();
+    if (text) return text;
+  }
+  return null;
+}
+
+function buildAuditDetailFallback(payload) {
+  const body = payload?.body;
+  if (!body || typeof body !== "object") return null;
+
+  const ignoredKeys = new Set(["_csrf", "password", "bulkPassword", "bulkEmails", "reply", "message"]);
+  const entries = Object.keys(body)
+    .filter((key) => !ignoredKeys.has(key))
+    .slice(0, 4)
+    .map((key) => `${key}: ${String(body[key] ?? "").trim()}`)
+    .filter((entry) => entry && !entry.endsWith(":"));
+
+  return entries.length ? entries.join(", ") : null;
+}
+
+function normalizeAuditLogRow(entry) {
+  const parsedAction = parseStoredAuditAction(entry.action);
+  const payload = parseAuditPayload(entry.payload);
+  const createdAt = entry.created_at ? new Date(entry.created_at) : null;
+  const createdAtLabel =
+    createdAt && !Number.isNaN(createdAt.getTime())
+      ? createdAt.toLocaleString("de-DE")
+      : "-";
+  const actorEmail = String(entry.actor_email || "").trim();
+  const actorRole = String(entry.actor_role || "").trim();
+  const actorRoleLabel =
+    actorRole === "admin" ? "Admin" :
+    actorRole === "teacher" ? "Teacher" :
+    actorRole === "student" ? "Student" :
+    (actorRole || "-");
+  const scopeLabel = entry.scope_label || buildAuditScopeFallback(entry.route_path, entry.entity_type);
+  const actionTitle = entry.action_title || parsedAction.title || entry.action || "-";
+  const targetLabel = entry.target_label || buildAuditTargetFallback(entry, payload) || "-";
+  const detailSummary = entry.detail_summary || parsedAction.detailSummary || buildAuditDetailFallback(payload) || "-";
+  const normalizedEntry = {
+    ...entry,
+    scope_label: scopeLabel,
+    action_title: actionTitle,
+    target_label: targetLabel,
+    detail_summary: detailSummary,
+    request_label: [entry.http_method, entry.route_path].filter(Boolean).join(" "),
+    created_at_label: createdAtLabel,
+    actor_label: actorEmail || "-",
+    actor_role_label: actorRoleLabel
+  };
+
+  return {
+    ...normalizedEntry,
+    entity_label: buildAuditEntityLabel(normalizedEntry) || "-",
+    role_log_label: getAuditCategoryLabel(actorRole),
+    params_summary: buildAuditFieldSummary(payload?.params, { maxItems: 6 }),
+    query_summary: buildAuditFieldSummary(payload?.query, { maxItems: 6 }),
+    body_summary: buildAuditFieldSummary(payload?.body, { maxItems: 10 }),
+    client_summary: buildAuditClientSummary(normalizedEntry)
+  };
+}
+
+function buildAuditQuery(filters = {}, page = 1, returnTo = null) {
+  const params = new URLSearchParams();
+  if (filters.actor) params.set("actor", filters.actor);
+  if (filters.action) params.set("action", filters.action);
+  if (filters.route) params.set("route", filters.route);
+  if (filters.entity) params.set("entity", filters.entity);
+  if (filters.searchMode && filters.searchMode !== "contains") params.set("searchMode", filters.searchMode);
+  if (filters.method) params.set("method", filters.method);
+  if (filters.status) params.set("status", filters.status);
+  if (filters.category && filters.category !== "all") params.set("category", filters.category);
+  if (page > 1) params.set("page", String(page));
+  if (returnTo) params.set("returnTo", returnTo);
+  const query = params.toString();
+  return query ? `?${query}` : "";
+}
+
+function buildAuditPagination(filters, currentPage, totalCount, returnTo = null) {
+  const totalPages = getAuditTotalPages(totalCount);
+  const safePage = Math.min(Math.max(1, Number(currentPage || 1)), totalPages);
+  const pageSize = AUDIT_PAGE_SIZE;
+  const offset = getAuditOffset(safePage);
+  const startPage = Math.max(1, safePage - 2);
+  const endPage = Math.min(totalPages, safePage + 2);
+  const pages = [];
+
+  for (let pageNumber = startPage; pageNumber <= endPage; pageNumber += 1) {
+    pages.push({
+      number: pageNumber,
+      isCurrent: pageNumber === safePage,
+      href: buildAuditQuery(filters, pageNumber, returnTo)
+    });
+  }
+
+  return {
+    currentPage: safePage,
+    totalPages,
+    pageSize,
+    maxPageSize: AUDIT_PAGE_SIZE,
+    rangeStart: totalCount > 0 ? offset + 1 : 0,
+    rangeEnd: Math.min(totalCount, offset + pageSize),
+    hasPrev: safePage > 1,
+    hasNext: safePage < totalPages,
+    prevHref: buildAuditQuery(filters, safePage - 1, returnTo),
+    nextHref: buildAuditQuery(filters, safePage + 1, returnTo),
+    firstHref: buildAuditQuery(filters, 1, returnTo),
+    lastHref: buildAuditQuery(filters, totalPages, returnTo),
+    pages
+  };
 }
 
 async function getActiveSchoolYearOrThrow() {
@@ -1228,16 +1814,56 @@ router.post("/classes/:id/students/add-bulk", async (req, res, next) => {
 
 router.get("/audit-logs", async (req, res, next) => {
   try {
+    const backHref = resolveAuditReturnTo(req);
     const filters = parseAuditFilters(req);
-    const [logs, totalCount] = await Promise.all([
-      fetchAuditLogsPage({ filters, limit: 100 }),
-      fetchAuditLogCount(filters)
+    const filterError = validateAuditRegexFilters(filters);
+    if (filterError) {
+      const emptyPagination = buildAuditPagination(filters, 1, 0, backHref);
+      const emptyCounts = Object.fromEntries(Object.keys(AUDIT_CATEGORY_OPTIONS).map((key) => [key, 0]));
+      return res.render("admin/audit-logs", {
+        logs: [],
+        totalCount: 0,
+        categoryCounts: emptyCounts,
+        categoryTabs: buildAuditCategoryTabs(filters, emptyCounts, backHref),
+        activeCategoryLabel: AUDIT_CATEGORY_OPTIONS[filters.category]?.label || AUDIT_CATEGORY_OPTIONS.all.label,
+        pagination: emptyPagination,
+        backHref,
+        query: filters,
+        auditFilterError: filterError,
+        auditSearchModes: AUDIT_SEARCH_MODE_OPTIONS,
+        auditMethodOptions: AUDIT_METHOD_OPTIONS,
+        csrfToken: req.csrfToken(),
+        currentUser: req.session.user,
+        activePath: req.originalUrl
+      });
+    }
+    const requestedPage = parseAuditPage(req);
+    const [totalCount, categoryCounts] = await Promise.all([
+      fetchAuditLogCount(filters),
+      fetchAuditCategoryCounts(filters)
     ]);
+    const totalPages = getAuditTotalPages(totalCount);
+    const currentPage = Math.min(requestedPage, totalPages);
+    const rawLogs = await fetchAuditLogsByPage({
+      filters,
+      page: currentPage
+    });
+    const logs = rawLogs.map(normalizeAuditLogRow);
+    const pagination = buildAuditPagination(filters, currentPage, totalCount, backHref);
+    const categoryTabs = buildAuditCategoryTabs(filters, categoryCounts, backHref);
 
     res.render("admin/audit-logs", {
       logs,
       totalCount,
+      categoryCounts,
+      categoryTabs,
+      activeCategoryLabel: AUDIT_CATEGORY_OPTIONS[filters.category]?.label || AUDIT_CATEGORY_OPTIONS.all.label,
+      pagination,
+      backHref,
       query: filters,
+      auditFilterError: null,
+      auditSearchModes: AUDIT_SEARCH_MODE_OPTIONS,
+      auditMethodOptions: AUDIT_METHOD_OPTIONS,
       csrfToken: req.csrfToken(),
       currentUser: req.session.user,
       activePath: req.originalUrl
@@ -1251,28 +1877,39 @@ router.get("/audit-logs", async (req, res, next) => {
 router.get("/audit-logs/data", async (req, res, next) => {
   try {
     const filters = parseAuditFilters(req);
-    const rawBeforeId = req.query.beforeId ? Number(req.query.beforeId) : null;
-    const rawAfterId = req.query.afterId ? Number(req.query.afterId) : null;
-    const beforeId = Number.isFinite(rawBeforeId) ? rawBeforeId : null;
-    const afterId = Number.isFinite(rawAfterId) ? rawAfterId : null;
-    const requestedLimit = Number(req.query.limit);
-    const limit = Number.isFinite(requestedLimit)
-      ? Math.max(1, Math.min(200, requestedLimit))
-      : 100;
-
-    const [logs, totalCount] = await Promise.all([
-      fetchAuditLogsPage({ filters, beforeId, afterId, limit }),
-      fetchAuditLogCount(filters)
+    const filterError = validateAuditRegexFilters(filters);
+    if (filterError) {
+      return res.status(400).json({
+        error: filterError,
+        logs: [],
+        totalCount: 0,
+        categoryCounts: Object.fromEntries(Object.keys(AUDIT_CATEGORY_OPTIONS).map((key) => [key, 0])),
+        category: filters.category,
+        page: 1,
+        totalPages: 1,
+        pageSize: AUDIT_PAGE_SIZE
+      });
+    }
+    const requestedPage = parseAuditPage(req);
+    const [totalCount, categoryCounts] = await Promise.all([
+      fetchAuditLogCount(filters),
+      fetchAuditCategoryCounts(filters)
     ]);
-
-    const oldestId = logs.length ? Number(logs[logs.length - 1].id) : null;
-    const hasMore = beforeId != null ? logs.length === limit : true;
+    const totalPages = getAuditTotalPages(totalCount);
+    const currentPage = Math.min(requestedPage, totalPages);
+    const logs = (await fetchAuditLogsByPage({
+      filters,
+      page: currentPage
+    })).map(normalizeAuditLogRow);
 
     return res.json({
       logs,
-      hasMore,
-      oldestId,
-      totalCount
+      totalCount,
+      categoryCounts,
+      category: filters.category,
+      page: currentPage,
+      totalPages,
+      pageSize: AUDIT_PAGE_SIZE
     });
   } catch (err) {
     console.error("DB error loading audit logs data:", err);

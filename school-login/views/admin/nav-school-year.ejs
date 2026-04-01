@@ -1,3 +1,9 @@
+<%
+  const safeActivePath = typeof activePath === 'string' ? activePath : '/admin';
+  const auditHref = safeActivePath.startsWith('/admin/audit-logs')
+    ? '/admin/audit-logs'
+    : `/admin/audit-logs?returnTo=${encodeURIComponent(safeActivePath)}`;
+%>
 <aside class="app-sidebar" aria-label="Admin Navigation">
   <%- include('../partials/sidebar-user-card', { user: { email: currentUser?.email, role: currentUser?.role, name: currentUser?.name } }) %>
 
@@ -22,7 +28,7 @@
 
     <div class="nav-section">
       <div class="nav-section-title">Logs</div>
-      <a class="<%= activePath.startsWith('/admin/audit-logs') ? 'is-active' : '' %>" href="/admin/audit-logs">Audit-Log</a>
+      <a class="<%= safeActivePath.startsWith('/admin/audit-logs') ? 'is-active' : '' %>" href="<%= auditHref %>">Audit-Log</a>
     </div>
 
     <div class="nav-section">

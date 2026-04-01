@@ -135,6 +135,57 @@ function createFakeDb() {
     return Number.isInteger(numeric) && numeric > 0 ? numeric : null;
   }
 
+  function parseAuditMatchMode(sql, field) {
+    const normalizedField = String(field || "").trim();
+    if (normalizedField === "actor") {
+      if (/\(*\s*COALESCE\(actor_email,\s*''\)\s*\)*\s*~\*/i.test(sql) || /actor_email\s*~\*/i.test(sql)) return "regex";
+      if (/LOWER\(\s*\(*\s*COALESCE\(actor_email,\s*''\)\s*\)*\s*\)\s*=\s*LOWER\(\?\)/i.test(sql) || /LOWER\(actor_email\)\s*=\s*LOWER\(\?\)/i.test(sql)) return "exact";
+      if (/LOWER\(\s*\(*\s*COALESCE\(actor_email,\s*''\)\s*\)*\s*\)\s+LIKE\s+LOWER\(\?\)/i.test(sql) || /LOWER\(actor_email\)\s+LIKE\s+LOWER\(\?\)/i.test(sql)) return "like";
+    }
+    if (normalizedField === "action") {
+      if (/\)\s*~\*\s*\?/i.test(sql) && /COALESCE\(action/i.test(sql)) return "regex";
+      if (/LOWER\(\s*COALESCE\(action[\s\S]*\)\s*=\s*LOWER\(\?\)/i.test(sql)) return "exact";
+      if (/LOWER\(\s*COALESCE\(action[\s\S]*LIKE\s+LOWER\(\?\)/i.test(sql)) return "like";
+    }
+    if (normalizedField === "route") {
+      if (/\(*\s*COALESCE\(route_path,\s*''\)\s*\)*\s*~\*/i.test(sql) || /route_path\s*~\*/i.test(sql)) return "regex";
+      if (/LOWER\(\s*\(*\s*COALESCE\(route_path,\s*''\)\s*\)*\s*\)\s*=\s*LOWER\(\?\)/i.test(sql) || /LOWER\(route_path\)\s*=\s*LOWER\(\?\)/i.test(sql)) return "exact";
+      if (/LOWER\(\s*\(*\s*COALESCE\(route_path,\s*''\)\s*\)*\s*\)\s+LIKE\s+LOWER\(\?\)/i.test(sql) || /LOWER\(route_path\)\s+LIKE\s+LOWER\(\?\)/i.test(sql)) return "like";
+    }
+    return null;
+  }
+
+  function matchesAuditText(value, needle, mode) {
+    if (needle == null || needle === "") return true;
+    const haystack = String(value || "");
+    if (mode === "regex") {
+      try {
+        return new RegExp(String(needle), "i").test(haystack);
+      } catch {
+        return false;
+      }
+    }
+
+    const normalizedHaystack = haystack.toLowerCase();
+    const normalizedNeedle = String(needle).toLowerCase();
+
+    if (mode === "exact") return normalizedHaystack === normalizedNeedle;
+    if (mode === "like") {
+      if (String(needle).startsWith("%") && String(needle).endsWith("%")) {
+        return normalizedHaystack.includes(normalizedNeedle.replace(/^%|%$/g, ""));
+      }
+      if (String(needle).endsWith("%")) {
+        return normalizedHaystack.startsWith(normalizedNeedle.replace(/%$/g, ""));
+      }
+      if (String(needle).startsWith("%")) {
+        return normalizedHaystack.endsWith(normalizedNeedle.replace(/^%/g, ""));
+      }
+      return normalizedHaystack.includes(normalizedNeedle);
+    }
+
+    return normalizedHaystack.includes(normalizedNeedle);
+  }
+
   const activeSchoolYear = ensureActiveSchoolYear();
 
   const db = {
@@ -1058,7 +1109,11 @@ function createFakeDb() {
           status_code,
           ip_address,
           user_agent,
-          payload
+          payload,
+          scope_label,
+          action_title,
+          target_label,
+          detail_summary
         ] = params;
         const auditEntry = {
           id: auditLogId++,
@@ -1066,6 +1121,10 @@ function createFakeDb() {
           actor_email: actor_email || null,
           actor_role: actor_role || null,
           action,
+          scope_label: scope_label || null,
+          action_title: action_title || null,
+          target_label: target_label || null,
+          detail_summary: detail_summary || null,
           entity_type: entity_type || null,
           entity_id: entity_id || null,
           http_method: http_method || null,
@@ -1327,28 +1386,53 @@ function createFakeDb() {
       } else if (/SELECT COUNT\(\*\) AS count FROM students/i.test(sql)) {
         row = { count: students.length };
       } else if (/SELECT COUNT\(\*\) AS count\s+FROM audit_logs/i.test(sql)) {
-        const hasActorFilter = /LOWER\(actor_email\) LIKE LOWER\(\?\)/i.test(sql);
-        const hasActionFilter = /LOWER\(action\) LIKE LOWER\(\?\)/i.test(sql);
+        const actorMode = parseAuditMatchMode(sql, "actor");
+        const actionMode = parseAuditMatchMode(sql, "action");
+        const routeMode = parseAuditMatchMode(sql, "route");
         const hasEntityFilter = /LOWER\(entity_type\) = LOWER\(\?\)/i.test(sql);
+        const hasRoleFilter = /LOWER\(actor_role\) = LOWER\(\?\)/i.test(sql);
+        const hasMethodFilter = /LOWER\(http_method\) = LOWER\(\?\)/i.test(sql);
+        const hasStatusFilter = /status_code = \?/i.test(sql);
         let index = 0;
-        const actorNeedle = hasActorFilter
-          ? String(params[index++] || "").replace(/%/g, "").toLowerCase()
+        const actorNeedle = actorMode ? String(params[index++] || "") : null;
+        const actionNeedle = actionMode
+          ? String(params[index++] || "")
           : null;
-        const actionNeedle = hasActionFilter
-          ? String(params[index++] || "").replace(/%/g, "").toLowerCase()
-          : null;
+        const routeNeedle = routeMode ? String(params[index++] || "") : null;
         const entityNeedle = hasEntityFilter ? String(params[index++] || "").toLowerCase() : null;
+        const roleNeedle = hasRoleFilter ? String(params[index++] || "").toLowerCase() : null;
+        const methodNeedle = hasMethodFilter ? String(params[index++] || "").toLowerCase() : null;
+        const statusNeedle = hasStatusFilter ? Number(params[index++]) : null;
 
         row = {
           count: auditLogs
             .filter((entry) =>
-              !actorNeedle ? true : String(entry.actor_email || "").toLowerCase().includes(actorNeedle)
+              !actorMode ? true : matchesAuditText(entry.actor_email, actorNeedle, actorMode)
             )
             .filter((entry) =>
-              !actionNeedle ? true : String(entry.action || "").toLowerCase().includes(actionNeedle)
+              !actionMode ? true : matchesAuditText([
+                entry.action,
+                entry.scope_label,
+                entry.action_title,
+                entry.target_label,
+                entry.detail_summary,
+                entry.route_path
+              ].join(" "), actionNeedle, actionMode)
+            )
+            .filter((entry) =>
+              !routeMode ? true : matchesAuditText(entry.route_path, routeNeedle, routeMode)
             )
             .filter((entry) =>
               !entityNeedle ? true : String(entry.entity_type || "").toLowerCase() === entityNeedle
+            )
+            .filter((entry) =>
+              !roleNeedle ? true : String(entry.actor_role || "").toLowerCase() === roleNeedle
+            )
+            .filter((entry) =>
+              !methodNeedle ? true : String(entry.http_method || "").toLowerCase() === methodNeedle
+            )
+            .filter((entry) =>
+              !Number.isFinite(statusNeedle) ? true : Number(entry.status_code) === statusNeedle
             ).length
         };
       } else if (/SELECT id FROM classes WHERE id = \? AND teacher_id = \?/i.test(sql)) {
@@ -2290,38 +2374,65 @@ function createFakeDb() {
           .sort((a, b) => new Date(b.created_at) - new Date(a.created_at))
           .map((n) => ({ ...n }));
       } else if (/FROM audit_logs/i.test(sql)) {
-        const hasActorFilter = /LOWER\(actor_email\) LIKE LOWER\(\?\)/i.test(sql);
-        const hasActionFilter = /LOWER\(action\) LIKE LOWER\(\?\)/i.test(sql);
+        const actorMode = parseAuditMatchMode(sql, "actor");
+        const actionMode = parseAuditMatchMode(sql, "action");
+        const routeMode = parseAuditMatchMode(sql, "route");
         const hasEntityFilter = /LOWER\(entity_type\) = LOWER\(\?\)/i.test(sql);
+        const hasRoleFilter = /LOWER\(actor_role\) = LOWER\(\?\)/i.test(sql);
+        const hasMethodFilter = /LOWER\(http_method\) = LOWER\(\?\)/i.test(sql);
+        const hasStatusFilter = /status_code = \?/i.test(sql);
         const hasBeforeIdFilter = /id < \?/i.test(sql);
         const hasAfterIdFilter = /id > \?/i.test(sql);
         const hasLimit = /LIMIT \?/i.test(sql);
+        const hasOffset = /OFFSET \?/i.test(sql);
         let index = 0;
-        const actorNeedle = hasActorFilter
-          ? String(params[index++] || "").replace(/%/g, "").toLowerCase()
-          : null;
-        const actionNeedle = hasActionFilter
-          ? String(params[index++] || "").replace(/%/g, "").toLowerCase()
-          : null;
+        const actorNeedle = actorMode ? String(params[index++] || "") : null;
+        const actionNeedle = actionMode ? String(params[index++] || "") : null;
+        const routeNeedle = routeMode ? String(params[index++] || "") : null;
         const entityNeedle = hasEntityFilter ? String(params[index++] || "").toLowerCase() : null;
+        const roleNeedle = hasRoleFilter ? String(params[index++] || "").toLowerCase() : null;
+        const methodNeedle = hasMethodFilter ? String(params[index++] || "").toLowerCase() : null;
+        const statusNeedle = hasStatusFilter ? Number(params[index++]) : null;
         const beforeId = hasBeforeIdFilter ? Number(params[index++]) : null;
         const afterId = hasAfterIdFilter ? Number(params[index++]) : null;
         const limit = hasLimit ? Number(params[index++]) : 300;
+        const offset = hasOffset ? Number(params[index++]) : 0;
+        const safeLimit = Number.isFinite(limit) ? Math.max(1, limit) : 300;
+        const safeOffset = Number.isFinite(offset) ? Math.max(0, offset) : 0;
 
         rows = auditLogs
           .filter((entry) =>
-            !actorNeedle ? true : String(entry.actor_email || "").toLowerCase().includes(actorNeedle)
+            !actorMode ? true : matchesAuditText(entry.actor_email, actorNeedle, actorMode)
           )
           .filter((entry) =>
-            !actionNeedle ? true : String(entry.action || "").toLowerCase().includes(actionNeedle)
+            !actionMode ? true : matchesAuditText([
+              entry.action,
+              entry.scope_label,
+              entry.action_title,
+              entry.target_label,
+              entry.detail_summary,
+              entry.route_path
+            ].join(" "), actionNeedle, actionMode)
+          )
+          .filter((entry) =>
+            !routeMode ? true : matchesAuditText(entry.route_path, routeNeedle, routeMode)
           )
           .filter((entry) =>
             !entityNeedle ? true : String(entry.entity_type || "").toLowerCase() === entityNeedle
           )
+          .filter((entry) =>
+            !roleNeedle ? true : String(entry.actor_role || "").toLowerCase() === roleNeedle
+          )
+          .filter((entry) =>
+            !methodNeedle ? true : String(entry.http_method || "").toLowerCase() === methodNeedle
+          )
+          .filter((entry) =>
+            !Number.isFinite(statusNeedle) ? true : Number(entry.status_code) === statusNeedle
+          )
           .filter((entry) => (!Number.isFinite(beforeId) ? true : Number(entry.id) < beforeId))
           .filter((entry) => (!Number.isFinite(afterId) ? true : Number(entry.id) > afterId))
           .sort((a, b) => Number(b.id) - Number(a.id))
-          .slice(0, Number.isFinite(limit) ? Math.max(1, limit) : 300)
+          .slice(safeOffset, safeOffset + safeLimit)
           .map((entry) => ({ ...entry }));
       } else if (/SELECT id, name, subject, teacher_id FROM classes WHERE id = \?/i.test(sql)) {
         const [id] = params;
@@ -3744,6 +3855,10 @@ async function initializeDatabase() {
       actor_email TEXT,
       actor_role TEXT,
       action TEXT NOT NULL,
+      scope_label TEXT,
+      action_title TEXT,
+      target_label TEXT,
+      detail_summary TEXT,
       entity_type TEXT,
       entity_id TEXT,
       http_method TEXT NOT NULL,
@@ -3755,6 +3870,10 @@ async function initializeDatabase() {
       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
     )
   `);
+  await pool.query("ALTER TABLE audit_logs ADD COLUMN IF NOT EXISTS scope_label TEXT");
+  await pool.query("ALTER TABLE audit_logs ADD COLUMN IF NOT EXISTS action_title TEXT");
+  await pool.query("ALTER TABLE audit_logs ADD COLUMN IF NOT EXISTS target_label TEXT");
+  await pool.query("ALTER TABLE audit_logs ADD COLUMN IF NOT EXISTS detail_summary TEXT");
   await pool.query(
     "CREATE INDEX IF NOT EXISTS audit_logs_created_at_idx ON audit_logs (created_at DESC)"
   );
