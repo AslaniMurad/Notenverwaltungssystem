@@ -42,4 +42,99 @@ if (studentEmailInput && studentNameInput) {
   });
 }
 
+document.querySelectorAll('[data-create-switcher]').forEach((root) => {
+  const buttons = Array.from(root.querySelectorAll('[data-mode-toggle]'));
+  const panels = Array.from(root.querySelectorAll('[data-create-panel]'));
+  if (!buttons.length || !panels.length) return;
+
+  const fallbackMode = buttons[0].getAttribute('data-mode-toggle') || 'single';
+
+  const setMode = (requestedMode) => {
+    const mode = buttons.some((button) => button.getAttribute('data-mode-toggle') === requestedMode)
+      ? requestedMode
+      : fallbackMode;
+
+    root.dataset.activeMode = mode;
+
+    buttons.forEach((button) => {
+      const isActive = button.getAttribute('data-mode-toggle') === mode;
+      button.classList.toggle('is-active', isActive);
+      button.setAttribute('aria-selected', String(isActive));
+      button.setAttribute('tabindex', isActive ? '0' : '-1');
+    });
+
+    panels.forEach((panel) => {
+      panel.hidden = panel.getAttribute('data-create-panel') !== mode;
+    });
+  };
+
+  buttons.forEach((button) => {
+    button.addEventListener('click', () => {
+      setMode(button.getAttribute('data-mode-toggle'));
+    });
+  });
+
+  setMode(root.getAttribute('data-default-mode') || fallbackMode);
+});
+
+const bulkDelimiterExamples = {
+  paragraph: [
+    'vorname.nachname@htlwy.at',
+    'vorname.nachname@htlwy.at',
+    'vorname.nachname@htlwy.at'
+  ].join('\n'),
+  semicolon: [
+    'vorname.nachname@htlwy.at',
+    'vorname.nachname@htlwy.at',
+    'vorname.nachname@htlwy.at'
+  ].join(';'),
+  comma: [
+    'vorname.nachname@htlwy.at',
+    'vorname.nachname@htlwy.at',
+    'vorname.nachname@htlwy.at'
+  ].join(','),
+  tab: [
+    'vorname.nachname@htlwy.at',
+    'vorname.nachname@htlwy.at',
+    'vorname.nachname@htlwy.at'
+  ].join('\t')
+};
+
+document.querySelectorAll('[data-bulk-format-switcher]').forEach((root) => {
+  const buttons = Array.from(root.querySelectorAll('[data-bulk-delimiter]'));
+  const form = root.closest('form');
+  const hiddenInput = form?.querySelector('[data-bulk-delimiter-input]');
+  const textArea = form?.querySelector('[data-bulk-emails-input]');
+  const preview = form?.querySelector('[data-bulk-delimiter-preview]');
+  if (!buttons.length || !hiddenInput) return;
+
+  const fallbackDelimiter = buttons[0].getAttribute('data-bulk-delimiter') || 'paragraph';
+
+  const setDelimiter = (requestedDelimiter) => {
+    const delimiter = buttons.some((button) => button.getAttribute('data-bulk-delimiter') === requestedDelimiter)
+      ? requestedDelimiter
+      : fallbackDelimiter;
+    const example = bulkDelimiterExamples[delimiter] || bulkDelimiterExamples.paragraph;
+
+    hiddenInput.value = delimiter;
+    if (textArea) textArea.placeholder = example;
+    if (preview) preview.textContent = example;
+
+    buttons.forEach((button) => {
+      const isActive = button.getAttribute('data-bulk-delimiter') === delimiter;
+      button.classList.toggle('is-active', isActive);
+      button.setAttribute('aria-selected', String(isActive));
+      button.setAttribute('tabindex', isActive ? '0' : '-1');
+    });
+  };
+
+  buttons.forEach((button) => {
+    button.addEventListener('click', () => {
+      setDelimiter(button.getAttribute('data-bulk-delimiter'));
+    });
+  });
+
+  setDelimiter(root.getAttribute('data-default-delimiter') || hiddenInput.value || fallbackDelimiter);
+});
+
 console.debug('School Panel assets loaded');

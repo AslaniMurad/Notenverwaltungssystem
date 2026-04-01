@@ -838,6 +838,97 @@ function buildClassDetailTables(classId, assignmentRows = [], students = [], tea
   };
 }
 
+function normalizeCreateMode(value, fallback = "single") {
+  const normalized = String(value || "").trim().toLowerCase();
+  return normalized === "bulk" ? "bulk" : fallback;
+}
+
+function normalizeUserRole(value, fallback = "student") {
+  const normalized = String(value || "").trim().toLowerCase();
+  return ["student", "teacher", "admin"].includes(normalized) ? normalized : fallback;
+}
+
+function normalizeBulkDelimiter(value, fallback = "paragraph") {
+  const normalized = String(value || "").trim().toLowerCase();
+  return ["paragraph", "comma", "semicolon", "tab"].includes(normalized) ? normalized : fallback;
+}
+
+function splitBulkEmails(rawValue, delimiter = "paragraph") {
+  const text = String(rawValue || "").replace(/\r/g, "");
+  const normalizedDelimiter = normalizeBulkDelimiter(delimiter);
+
+  if (!text.trim()) return [];
+
+  if (normalizedDelimiter === "comma") {
+    return text.split(/[,\n]+/).map((entry) => entry.trim()).filter(Boolean);
+  }
+  if (normalizedDelimiter === "semicolon") {
+    return text.split(/[;\n]+/).map((entry) => entry.trim()).filter(Boolean);
+  }
+  if (normalizedDelimiter === "tab") {
+    return text.split(/[\t\n]+/).map((entry) => entry.trim()).filter(Boolean);
+  }
+
+  return text.split(/\n+/).map((entry) => entry.trim()).filter(Boolean);
+}
+
+function renderCreateUserPage(req, res, options = {}) {
+  const {
+    bulkResult = null,
+    error = null,
+    mode = bulkResult ? "bulk" : "single",
+    singleForm = {},
+    bulkForm = {}
+  } = options;
+
+  return res.render("admin/create-user", {
+    csrfToken: req.csrfToken(),
+    currentUser: req.session.user,
+    activePath: "/admin/users/new",
+    bulkResult,
+    error,
+    mode: normalizeCreateMode(mode),
+    singleForm: {
+      email: String(singleForm.email || "").trim(),
+      role: normalizeUserRole(singleForm.role),
+      useInitial: Boolean(singleForm.useInitial)
+    },
+    bulkForm: {
+      bulkEmails: String(bulkForm.bulkEmails || "").trim(),
+      bulkRole: normalizeUserRole(bulkForm.bulkRole),
+      bulkUseInitial: Boolean(bulkForm.bulkUseInitial),
+      bulkDelimiter: normalizeBulkDelimiter(bulkForm.bulkDelimiter)
+    }
+  });
+}
+
+function renderAddStudentPage(req, res, classData, options = {}) {
+  const {
+    error = null,
+    bulkResult = null,
+    mode = bulkResult ? "bulk" : "single",
+    singleForm = {},
+    bulkForm = {}
+  } = options;
+
+  return res.render("admin/add-student", {
+    classData,
+    csrfToken: req.csrfToken(),
+    currentUser: req.session.user,
+    activePath: `/admin/classes/${classData.id}/students/add`,
+    error,
+    bulkResult,
+    mode: normalizeCreateMode(mode),
+    singleForm: {
+      name: String(singleForm.name || "").trim(),
+      email: String(singleForm.email || "").trim()
+    },
+    bulkForm: {
+      bulkEmails: String(bulkForm.bulkEmails || "").trim()
+    }
+  });
+}
+
 router.use(requireAuth, requireRole("admin"));
 router.use(createAuditLogMiddleware());
 router.use(async (req, res, next) => {
@@ -920,26 +1011,70 @@ router.get("/users", async (req, res, next) => {
   }
 });
 
-router.get("/users/new", (req, res) => {
-  res.render("admin/create-user", {
-    csrfToken: req.csrfToken(),
-    currentUser: req.session.user,
-    activePath: req.originalUrl,
-    bulkResult: null,
-    error: null
-  });
-});
+router.get("/users/new", (req, res) => renderCreateUserPage(req, res));
 
 router.post("/users", async (req, res, next) => {
   const { email, role, password, useInitial } = req.body || {};
   const wantsInitial = useInitial === "on";
+  const singleForm = {
+    email,
+    role,
+    useInitial: wantsInitial
+  };
+  const normalizedRole = normalizeUserRole(role, "");
+
+  if (!email || !normalizedRole || (!password && !wantsInitial)) {
+    res.status(400);
+    return renderCreateUserPage(req, res, {
+      error: "Bitte E-Mail, Rolle und eine gueltige Passwort-Option angeben.",
+      mode: "single",
+      singleForm
+    });
+  }
+  if (normalizedRole === "teacher" && wantsInitial) {
+    res.status(400);
+    return renderCreateUserPage(req, res, {
+      error: "Fuer Lehrer darf kein Initial-Passwort vergeben werden.",
+      mode: "single",
+      singleForm
+    });
+  }
+  if (wantsInitial && !INITIAL_PASSWORD) {
+    res.status(400);
+    return renderCreateUserPage(req, res, {
+      error: "Initial-Passwort ist nicht konfiguriert (ENV INITIAL_PASSWORD).",
+      mode: "single",
+      singleForm
+    });
+  }
+  if (wantsInitial) {
+    const initialError = getPasswordValidationError(INITIAL_PASSWORD);
+    if (initialError) {
+      res.status(400);
+      return renderCreateUserPage(req, res, {
+        error: `Initial-Passwort ist zu schwach: ${initialError}`,
+        mode: "single",
+        singleForm
+      });
+    }
+  } else {
+    const passwordError = getPasswordValidationError(password);
+    if (passwordError) {
+      res.status(400);
+      return renderCreateUserPage(req, res, {
+        error: passwordError,
+        mode: "single",
+        singleForm
+      });
+    }
+  }
 
   if (!email || !role || (!password && !wantsInitial)) {
-    return res.status(400).render("error", {
-      message: "Fehlende Felder beim Erstellen eines Nutzers.",
-      status: 400,
-      backUrl: "/admin/users/new",
-      csrfToken: req.csrfToken()
+    res.status(400);
+    return renderCreateUserPage(req, res, {
+      error: "Bitte E-Mail, Rolle und eine gueltige Passwort-Option angeben.",
+      mode: "single",
+      singleForm
     });
   }
   if (role === "teacher" && wantsInitial) {
@@ -994,11 +1129,11 @@ router.post("/users", async (req, res, next) => {
   } catch (err) {
     console.error("DB error inserting user:", err);
     if (String(err).includes("UNIQUE")) {
-      return res.status(409).render("error", {
-        message: "E-Mail existiert bereits.",
-        status: 409,
-        backUrl: "/admin/users/new",
-        csrfToken: req.csrfToken()
+      res.status(409);
+      return renderCreateUserPage(req, res, {
+        error: "E-Mail existiert bereits.",
+        mode: "single",
+        singleForm
       });
     }
     next(err);
@@ -1006,8 +1141,33 @@ router.post("/users", async (req, res, next) => {
 });
 
 router.post("/users/bulk", async (req, res, next) => {
-  const { bulkEmails, bulkRole, bulkPassword, bulkUseInitial } = req.body || {};
+  const { bulkEmails, bulkRole, bulkPassword, bulkUseInitial, bulkDelimiter } = req.body || {};
   const wantsInitial = bulkUseInitial === "on";
+  const normalizedBulkDelimiter = normalizeBulkDelimiter(bulkDelimiter);
+  const bulkForm = {
+    bulkEmails,
+    bulkRole,
+    bulkUseInitial: wantsInitial,
+    bulkDelimiter: normalizedBulkDelimiter
+  };
+  const normalizedBulkRole = normalizeUserRole(bulkRole, "");
+
+  if (!normalizedBulkRole) {
+    res.status(400);
+    return renderCreateUserPage(req, res, {
+      error: "Bitte waehle eine Rolle fuer neue Nutzer.",
+      mode: "bulk",
+      bulkForm
+    });
+  }
+  if (wantsInitial && normalizedBulkRole === "teacher") {
+    res.status(400);
+    return renderCreateUserPage(req, res, {
+      error: "Lehrer duerfen kein Initial-Passwort erhalten.",
+      mode: "bulk",
+      bulkForm
+    });
+  }
 
   if (!bulkRole) {
     return res.status(400).render("error", {
@@ -1026,10 +1186,53 @@ router.post("/users/bulk", async (req, res, next) => {
     });
   }
 
-  const lines = (bulkEmails || "")
-    .split(/\r?\n/)
-    .map((l) => l.trim())
-    .filter(Boolean);
+  const lines = splitBulkEmails(bulkEmails, normalizedBulkDelimiter);
+
+  if (lines.length === 0) {
+    res.status(400);
+    return renderCreateUserPage(req, res, {
+      error: "Keine E-Mails zum Anlegen gefunden.",
+      mode: "bulk",
+      bulkForm
+    });
+  }
+  if (!wantsInitial && !bulkPassword) {
+    res.status(400);
+    return renderCreateUserPage(req, res, {
+      error: "Bitte Passwort eingeben oder Initial-Kennwort nutzen.",
+      mode: "bulk",
+      bulkForm
+    });
+  }
+  if (wantsInitial && !INITIAL_PASSWORD) {
+    res.status(400);
+    return renderCreateUserPage(req, res, {
+      error: "Initial-Passwort ist nicht konfiguriert (ENV INITIAL_PASSWORD).",
+      mode: "bulk",
+      bulkForm
+    });
+  }
+  if (wantsInitial) {
+    const initialError = getPasswordValidationError(INITIAL_PASSWORD);
+    if (initialError) {
+      res.status(400);
+      return renderCreateUserPage(req, res, {
+        error: `Initial-Passwort ist zu schwach: ${initialError}`,
+        mode: "bulk",
+        bulkForm
+      });
+    }
+  } else {
+    const passwordError = getPasswordValidationError(bulkPassword);
+    if (passwordError) {
+      res.status(400);
+      return renderCreateUserPage(req, res, {
+        error: passwordError,
+        mode: "bulk",
+        bulkForm
+      });
+    }
+  }
 
   if (lines.length === 0) {
     return res.status(400).render("error", {
@@ -1088,7 +1291,7 @@ router.post("/users/bulk", async (req, res, next) => {
     try {
       await runAsync(
         "INSERT INTO users (email, password_hash, role, status, must_change_password) VALUES (?,?,?,?,?)",
-        [line, hash, bulkRole, "active", mustChange]
+        [line, hash, normalizedBulkRole, "active", mustChange]
       );
       bulkResult.success.push(line);
     } catch (err) {
@@ -1096,12 +1299,10 @@ router.post("/users/bulk", async (req, res, next) => {
     }
   }
 
-  res.render("admin/create-user", {
-    csrfToken: req.csrfToken(),
-    currentUser: req.session.user,
-    activePath: "/admin/users/new",
+  return renderCreateUserPage(req, res, {
     bulkResult,
-    error: null
+    mode: "bulk",
+    bulkForm
   });
 });
 
@@ -1630,14 +1831,7 @@ router.get("/classes/:id/students/add", async (req, res, next) => {
       });
     }
 
-    res.render("admin/add-student", {
-      classData,
-      csrfToken: req.csrfToken(),
-      currentUser: req.session.user,
-      activePath: req.originalUrl,
-      error: null,
-      bulkResult: null
-    });
+    return renderAddStudentPage(req, res, classData);
   } catch (err) {
     next(err);
   }
@@ -1648,6 +1842,18 @@ router.post("/classes/:id/students/add", async (req, res, next) => {
   const { name, email } = req.body || {};
   const resolvedEmail = String(email || "").trim();
   let resolvedName = String(name || "").trim();
+
+  if (!resolvedEmail) {
+    const classData = await getActiveClassById(classId, "id, name");
+    if (classData) {
+      res.status(400);
+      return renderAddStudentPage(req, res, classData, {
+        error: "Bitte E-Mail angeben.",
+        mode: "single",
+        singleForm: { name: resolvedName, email: resolvedEmail }
+      });
+    }
+  }
 
   if (!resolvedEmail) {
     return res.status(400).render("error", {
@@ -1662,6 +1868,15 @@ router.post("/classes/:id/students/add", async (req, res, next) => {
     if (derived) {
       resolvedName = derived;
     } else {
+      const classData = await getActiveClassById(classId, "id, name");
+      if (classData) {
+        res.status(400);
+        return renderAddStudentPage(req, res, classData, {
+          error: "Bitte Name angeben oder eine E-Mail im Format vorname.nachname@xy verwenden.",
+          mode: "single",
+          singleForm: { name: "", email: resolvedEmail }
+        });
+      }
       return res.status(400).render("error", {
         message: "Bitte Name angeben (oder E-Mail im Format vorname.nachname@xy).",
         status: 400,
@@ -1681,6 +1896,24 @@ router.post("/classes/:id/students/add", async (req, res, next) => {
         status: 404,
         backUrl: "/admin/classes",
         csrfToken: req.csrfToken()
+      });
+    }
+
+    const legacyUserRow = await getAsync("SELECT id, role FROM users WHERE email = ?", [resolvedEmail]);
+    if (!legacyUserRow || legacyUserRow.role !== "student") {
+      return renderAddStudentPage(req, res, classData, {
+        error: "E-Mail nicht gefunden oder nicht als Schueler registriert.",
+        mode: "single",
+        singleForm: { name: resolvedName, email: resolvedEmail }
+      });
+    }
+
+    const legacyDuplicate = await getAsync("SELECT id FROM students WHERE email = ? AND class_id = ?", [resolvedEmail, classId]);
+    if (legacyDuplicate) {
+      return renderAddStudentPage(req, res, classData, {
+        error: "Dieser Schueler ist bereits in der Klasse.",
+        mode: "single",
+        singleForm: { name: resolvedName, email: resolvedEmail }
       });
     }
 
@@ -1744,13 +1977,11 @@ router.post("/classes/:id/students/add-bulk", async (req, res, next) => {
     }
 
     if (lines.length === 0) {
-      return res.status(400).render("admin/add-student", {
-        classData,
-        csrfToken: req.csrfToken(),
-        currentUser: req.session.user,
-        activePath: `/admin/classes/${classId}/students/add`,
+      res.status(400);
+      return renderAddStudentPage(req, res, classData, {
         error: "Bitte E-Mails angeben.",
-        bulkResult: null
+        mode: "bulk",
+        bulkForm: { bulkEmails: bulkEmailsRaw }
       });
     }
 
@@ -1798,13 +2029,9 @@ router.post("/classes/:id/students/add-bulk", async (req, res, next) => {
       }
     }
 
-    return res.render("admin/add-student", {
-      classData,
-      csrfToken: req.csrfToken(),
-      currentUser: req.session.user,
-      activePath: `/admin/classes/${classId}/students/add`,
-      error: null,
-      bulkResult
+    return renderAddStudentPage(req, res, classData, {
+      bulkResult,
+      mode: "bulk"
     });
   } catch (err) {
     console.error("DB error adding students in bulk:", err);

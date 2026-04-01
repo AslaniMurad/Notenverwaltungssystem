@@ -1354,6 +1354,11 @@ function createFakeDb() {
         const [id] = params;
         const classRow = classes.find((c) => c.id === Number(id));
         if (classRow) {
+          const subjectCount = new Set(
+            teachingAssignments
+              .filter((entry) => entry.class_id === classRow.id && entry.subject_id != null)
+              .map((entry) => Number(entry.subject_id))
+          ).size || (classRow.subject_id != null ? 1 : 0);
           const teacherEmails =
             getTeacherEmailsForClassSubject(classRow.id, classRow.subject_id).join(", ") ||
             users.find((u) => u.id === classRow.teacher_id)?.email ||
@@ -1363,6 +1368,7 @@ function createFakeDb() {
             id: classRow.id,
             name: classRow.name,
             subject: classRow.subject,
+            subject_count: subjectCount,
             [alias]: teacherEmails
           };
         }
@@ -2145,7 +2151,17 @@ function createFakeDb() {
             note: entry.note || null,
             is_absent: entry.is_absent ? 1 : 0
           }));
-      } else if (/FROM grades g[\s\S]*UNION ALL[\s\S]*special_assessments/i.test(sql) && /WHERE g\.student_id = \?/i.test(sql)) {
+      } else if (
+        (
+          /FROM grades g[\s\S]*UNION ALL[\s\S]*special_assessments/i.test(sql) &&
+          /WHERE g\.student_id = \?/i.test(sql)
+        ) ||
+        (
+          String(sql).includes("FROM grades g") &&
+          String(sql).includes("FROM special_assessments sa") &&
+          String(sql).includes("WHERE g.student_id = ?")
+        )
+      ) {
         const hasTeacherScope = /WHERE g\.student_id = \? AND g\.class_id = \? AND gt\.subject_id = \?/i.test(sql);
         const student_id = params[0];
         const class_id = hasTeacherScope ? params[1] : null;
@@ -2157,7 +2173,7 @@ function createFakeDb() {
             const template = gradeTemplates.find((t) => t.id === g.grade_template_id) || {};
             const cls = classes.find((c) => c.id === g.class_id) || {};
             if (hasTeacherScope && template.subject_id !== subject_id) return null;
-            const subjectName = getClassSubjectLabel(g.class_id, template.subject_id);
+            const subjectName = getSubjectNameById(template.subject_id);
             return {
               id: g.id,
               grade: g.grade,
@@ -2173,6 +2189,7 @@ function createFakeDb() {
               template_max_points: template.max_points ?? null,
               date: template.date,
               description: template.description,
+              subject_id: template.subject_id ?? null,
               subject_name: subjectName,
               class_subject: cls.subject,
               teacher_email: getTeacherEmailsForClassSubject(g.class_id, template.subject_id).join(", "),
@@ -2192,7 +2209,7 @@ function createFakeDb() {
           .filter((entry) => (!hasTeacherScope ? true : entry.subject_id === subject_id))
           .map((entry) => {
             const cls = classes.find((c) => c.id === entry.class_id) || {};
-            const subjectName = getClassSubjectLabel(entry.class_id, entry.subject_id);
+            const subjectName = getSubjectNameById(entry.subject_id);
             return {
               id: entry.id,
               grade: entry.grade,
@@ -2208,6 +2225,7 @@ function createFakeDb() {
               template_max_points: null,
               date: entry.created_at,
               description: entry.description,
+              subject_id: entry.subject_id ?? null,
               subject_name: subjectName,
               class_subject: cls.subject,
               teacher_email: getTeacherEmailsForClassSubject(entry.class_id, entry.subject_id).join(", "),
@@ -2221,7 +2239,17 @@ function createFakeDb() {
             };
           });
         rows = [...baseRows, ...specialRows];
-      } else if (/FROM grades g[\s\S]*UNION ALL[\s\S]*special_assessments/i.test(sql) && /WHERE student\.class_id = \?/i.test(sql)) {
+      } else if (
+        (
+          /FROM grades g[\s\S]*UNION ALL[\s\S]*special_assessments/i.test(sql) &&
+          /WHERE student\.class_id = \?/i.test(sql)
+        ) ||
+        (
+          String(sql).includes("FROM grades g") &&
+          String(sql).includes("FROM special_assessments sa") &&
+          String(sql).includes("WHERE student.class_id = ?")
+        )
+      ) {
         const [class_id] = params;
         const studentIds = students.filter((s) => s.class_id === Number(class_id)).map((s) => s.id);
         const regularRows = grades
@@ -2229,7 +2257,7 @@ function createFakeDb() {
           .map((g) => {
             const template = gradeTemplates.find((t) => t.id === g.grade_template_id) || {};
             return {
-              subject: getClassSubjectLabel(g.class_id, template.subject_id),
+              subject: getSubjectNameById(template.subject_id),
               value: g.grade,
               weight: template.weight,
               is_absent: g.is_absent ? 1 : 0
@@ -2238,7 +2266,7 @@ function createFakeDb() {
         const specialRows = specialAssessments
           .filter((entry) => entry.class_id === Number(class_id))
           .map((entry) => ({
-            subject: getClassSubjectLabel(entry.class_id, entry.subject_id),
+            subject: getSubjectNameById(entry.subject_id),
             value: entry.grade,
             weight: entry.weight,
             is_absent: 0
@@ -2438,7 +2466,7 @@ function createFakeDb() {
         const [id] = params;
         const cls = classes.find((c) => c.id === Number(id));
         rows = cls ? [{ ...cls }] : [];
-      } else if (/SELECT .* FROM grade_templates/i.test(sql) && /WHERE (gt\.)?class_id = \?/i.test(sql)) {
+      } else if (/SELECT[\s\S]*FROM grade_templates/i.test(sql) && /WHERE (gt\.)?class_id = \?/i.test(sql)) {
         const [clsId, subjectId] = params;
         const wantsArchived = /archived_at IS NOT NULL/i.test(sql);
         const wantsActiveOnly = /archived_at IS NULL/i.test(sql) && !wantsArchived;
@@ -2459,7 +2487,7 @@ function createFakeDb() {
           })
           .map((t) => ({
             ...t,
-            subject_name: getClassSubjectLabel(t.class_id, t.subject_id),
+            subject_name: getSubjectNameById(t.subject_id),
             weight_mode: t.weight_mode || "points",
             max_points: t.max_points ?? null
           }));

@@ -338,10 +338,333 @@ body.page-admin-edit {
   border: 1px solid #fcd34d;
 }
 
+.admin-alert-danger {
+  background: rgba(239, 68, 68, 0.12);
+  color: #b91c1c;
+  border-color: rgba(239, 68, 68, 0.25);
+}
+
 .admin-alert.muted {
   background: var(--surface-2);
   color: var(--text-muted);
   border-color: var(--border);
+}
+
+.admin-create-header {
+  align-items: flex-start;
+}
+
+.admin-create-copy {
+  max-width: 760px;
+  margin-top: 8px;
+  line-height: 1.6;
+}
+
+.admin-create-shell {
+  display: grid;
+  gap: 16px;
+}
+
+.admin-create-overview {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 12px;
+}
+
+.admin-create-overview-card,
+.admin-panel-card,
+.admin-example-box,
+.admin-create-result,
+.admin-result-block {
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  background: var(--surface);
+}
+
+.admin-create-overview-card {
+  padding: 16px 18px;
+  display: grid;
+  gap: 6px;
+  box-shadow: 0 8px 24px rgba(15, 23, 42, 0.04);
+}
+
+.admin-create-overview-card strong {
+  font-size: 14px;
+  color: var(--text);
+}
+
+.admin-create-overview-card span {
+  color: var(--text-muted);
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.admin-mode-switch {
+  position: relative;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0;
+  padding: 4px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: var(--surface-2);
+  overflow: hidden;
+}
+
+.admin-mode-switch-indicator {
+  position: absolute;
+  top: 4px;
+  left: 4px;
+  width: calc(50% - 4px);
+  height: calc(100% - 8px);
+  border-radius: 999px;
+  background: var(--surface);
+  box-shadow: 0 8px 18px rgba(15, 23, 42, 0.08);
+  transition: transform 0.22s ease;
+}
+
+.admin-create-shell[data-active-mode="bulk"] .admin-mode-switch-indicator {
+  transform: translateX(100%);
+}
+
+.admin-mode-switch-option {
+  position: relative;
+  z-index: 1;
+  border: 0;
+  background: transparent;
+  color: var(--text-muted);
+  font-size: 13px;
+  font-weight: 700;
+  padding: 12px 16px;
+  border-radius: 999px;
+  cursor: pointer;
+  transition: color 0.18s ease;
+}
+
+.admin-mode-switch-option.is-active {
+  color: var(--text);
+}
+
+.admin-mode-panels {
+  display: grid;
+}
+
+.admin-mode-panel[hidden] {
+  display: none !important;
+}
+
+.admin-panel-card {
+  padding: 22px;
+  display: grid;
+  gap: 18px;
+  box-shadow: 0 12px 30px rgba(15, 23, 42, 0.05);
+}
+
+.admin-panel-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.admin-panel-head h3 {
+  margin: 0 0 6px;
+}
+
+.admin-stacked-form {
+  display: grid;
+  gap: 14px;
+}
+
+.admin-form-grid {
+  display: grid;
+  gap: 14px;
+}
+
+.admin-form-grid-2 {
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+}
+
+.admin-field {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+}
+
+.admin-field > span {
+  color: var(--text);
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.admin-inline-option {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 12px 14px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--surface-2);
+  color: var(--text);
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.admin-inline-option input {
+  margin: 2px 0 0;
+}
+
+.admin-inline-option-simple {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: none;
+  width: auto;
+  justify-self: start;
+}
+
+.admin-inline-option-simple input {
+  margin: 0;
+}
+
+.admin-example-box {
+  padding: 14px 16px;
+  display: grid;
+  gap: 6px;
+  background: var(--surface-2);
+}
+
+.admin-example-box strong {
+  font-size: 12px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+
+.admin-example-box span {
+  color: var(--text);
+  font-size: 13px;
+  line-height: 1.55;
+}
+
+.admin-bulk-delimiter {
+  display: grid;
+  gap: 12px;
+}
+
+.admin-bulk-delimiter-head {
+  display: grid;
+  gap: 4px;
+}
+
+.admin-bulk-delimiter-head strong {
+  color: var(--text);
+  font-size: 13px;
+}
+
+.admin-bulk-delimiter-switch {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: 8px;
+}
+
+.admin-bulk-delimiter-option {
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--surface-2);
+  color: var(--text-muted);
+  font-size: 13px;
+  font-weight: 700;
+  padding: 11px 12px;
+  text-align: center;
+  cursor: pointer;
+  transition: border-color 0.18s ease, background 0.18s ease, color 0.18s ease, box-shadow 0.18s ease;
+}
+
+.admin-bulk-delimiter-option.is-active {
+  border-color: rgba(37, 99, 235, 0.35);
+  background: rgba(37, 99, 235, 0.1);
+  color: #1d4ed8;
+  box-shadow: 0 8px 18px rgba(37, 99, 235, 0.12);
+}
+
+.admin-format-preview {
+  margin: 0;
+  color: var(--text);
+  font-size: 13px;
+  line-height: 1.6;
+  white-space: pre-wrap;
+  word-break: break-word;
+  font-family: Consolas, "Courier New", monospace;
+}
+
+.admin-panel-actions {
+  display: flex;
+  justify-content: flex-start;
+  gap: 10px;
+}
+
+.admin-create-result {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: 1px;
+  overflow: hidden;
+}
+
+.admin-result-metric {
+  padding: 16px;
+  background: var(--surface-2);
+  display: grid;
+  gap: 4px;
+}
+
+.admin-result-metric strong {
+  font-size: 24px;
+  line-height: 1;
+  color: var(--text);
+}
+
+.admin-result-metric span {
+  color: var(--text-muted);
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.admin-result-split {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: 14px;
+}
+
+.admin-result-block {
+  padding: 16px;
+}
+
+.admin-result-block h4 {
+  margin: 0 0 12px;
+}
+
+.admin-result-list {
+  margin: 0;
+  padding-left: 18px;
+  display: grid;
+  gap: 8px;
+  color: var(--text);
+  font-size: 13px;
+}
+
+@media (max-width: 720px) {
+  .admin-panel-card {
+    padding: 18px;
+  }
+
+  .admin-mode-switch-option {
+    padding: 11px 12px;
+  }
 }
 
 .rollover-page {
