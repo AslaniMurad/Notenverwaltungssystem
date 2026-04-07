@@ -138,6 +138,15 @@ function getAsync(sql, params = []) {
   });
 }
 
+function allAsync(sql, params = []) {
+  return new Promise((resolve, reject) => {
+    db.all(sql, params, (err, rows) => {
+      if (err) return reject(err);
+      resolve(rows || []);
+    });
+  });
+}
+
 function renderLogin(res, req, options = {}) {
   const {
     status = 200,
@@ -231,6 +240,7 @@ app.use((req, res, next) => {
 app.use(async (req, res, next) => {
   res.locals.activeSchoolYear = res.locals.activeSchoolYear || null;
   res.locals.sidebarStudentClass = null;
+  res.locals.sidebarTeacherKvClasses = null;
 
   const sessionUser = req.session?.user;
   if (!sessionUser) {
@@ -245,25 +255,43 @@ app.use(async (req, res, next) => {
     res.locals.activeSchoolYear = null;
   }
 
-  if (sessionUser.role !== "student") {
+  if (!res.locals.activeSchoolYear?.id) {
     return next();
   }
 
-  try {
-    if (!res.locals.activeSchoolYear?.id) {
-      return next();
+  if (sessionUser.role === "student") {
+    try {
+      const studentContext = await getAsync(
+        `SELECT c.name AS class_name
+         FROM students s
+         JOIN classes c ON c.id = s.class_id
+         WHERE s.email = ? AND c.school_year_id = ?`,
+        [sessionUser.email, res.locals.activeSchoolYear.id]
+      );
+      res.locals.sidebarStudentClass = studentContext?.class_name || null;
+    } catch (err) {
+      res.locals.sidebarStudentClass = null;
     }
+  }
 
-    const studentContext = await getAsync(
-      `SELECT c.name AS class_name
-       FROM students s
-       JOIN classes c ON c.id = s.class_id
-       WHERE s.email = ? AND c.school_year_id = ?`,
-      [sessionUser.email, res.locals.activeSchoolYear.id]
-    );
-    res.locals.sidebarStudentClass = studentContext?.class_name || null;
-  } catch (err) {
-    res.locals.sidebarStudentClass = null;
+  if (sessionUser.role === "teacher") {
+    try {
+      const kvClasses = await allAsync(
+        `SELECT c.name
+         FROM classes c
+         WHERE c.head_teacher_id = ? AND c.school_year_id = ?
+         ORDER BY c.name ASC`,
+        [sessionUser.id, res.locals.activeSchoolYear.id]
+      );
+      const uniqueClassNames = [...new Set(
+        kvClasses
+          .map((entry) => String(entry?.name || "").trim())
+          .filter(Boolean)
+      )];
+      res.locals.sidebarTeacherKvClasses = uniqueClassNames.join(", ") || null;
+    } catch (err) {
+      res.locals.sidebarTeacherKvClasses = null;
+    }
   }
 
   return next();

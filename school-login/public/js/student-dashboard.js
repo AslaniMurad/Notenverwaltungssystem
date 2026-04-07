@@ -32,7 +32,9 @@
       comment: grade.comment || "",
       value: grade.value == null ? null : Number(grade.value),
       weight: Number(grade.weight || 1),
-      is_absent: Boolean(grade.is_absent)
+      weight_label: grade.weight_label || "",
+      is_absent: Boolean(grade.is_absent),
+      excluded_from_average: Boolean(grade.excluded_from_average)
     };
   }
 
@@ -235,6 +237,7 @@
     let weightTotal = 0;
 
     grades.forEach((grade) => {
+      if (grade?.excluded_from_average) return;
       if (grade?.is_absent) return;
       const value = Number(grade?.value);
       const weight = Number(grade?.weight || 1);
@@ -352,7 +355,12 @@
         latestValue: null
       };
       bucket.count += 1;
-      if (!grade.is_absent && Number.isFinite(grade.value) && Number.isFinite(grade.weight)) {
+      if (
+        !grade.excluded_from_average &&
+        !grade.is_absent &&
+        Number.isFinite(grade.value) &&
+        Number.isFinite(grade.weight)
+      ) {
         bucket.weightedSum += grade.value * grade.weight;
         bucket.weightTotal += grade.weight;
       }
@@ -622,7 +630,7 @@
         const gradeText = formatGradeValue(grade.value);
         const dateText = formatDate(grade.graded_at);
         const teacherText = grade.teacher || "Lehrkraft unbekannt";
-        const weightText = formatWeight(grade.weight);
+        const weightText = grade.weight_label || formatWeight(grade.weight);
         const noteHtml = grade.comment
           ? `<div class="nav-note">${escapeHtml(grade.comment)}</div>`
           : "";

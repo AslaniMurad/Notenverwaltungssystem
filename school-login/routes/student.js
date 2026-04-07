@@ -141,7 +141,7 @@ async function loadClassAbsenceMode(classId) {
 
 async function loadStudentGrades(studentId) {
   return allAsync(
-    `SELECT g.id, g.grade, g.note, g.created_at, g.is_absent, gt.id as template_id, gt.name, gt.category, gt.weight, gt.date, gt.description, s.name as subject_name, gt.subject_id, c.subject as class_subject,
+    `SELECT g.id, g.grade, g.note, g.created_at, g.is_absent, g.excluded_from_average, gt.id as template_id, gt.name, gt.category, gt.weight, gt.date, gt.description, s.name as subject_name, gt.subject_id, c.subject as class_subject,
             COALESCE((
               SELECT STRING_AGG(teacher_rows.email, ', ')
               FROM (
@@ -159,7 +159,7 @@ async function loadStudentGrades(studentId) {
      LEFT JOIN subjects s ON s.id = gt.subject_id
      WHERE g.student_id = ?
      UNION ALL
-     SELECT sa.id, sa.grade, sa.description as note, sa.created_at, false as is_absent, NULL as template_id, sa.name, sa.type as category, sa.weight, sa.created_at as date, sa.description, ss.name as subject_name, sa.subject_id, c.subject as class_subject,
+     SELECT sa.id, sa.grade, sa.description as note, sa.created_at, false as is_absent, sa.excluded_from_average, NULL as template_id, sa.name, sa.type as category, sa.weight, sa.created_at as date, sa.description, ss.name as subject_name, sa.subject_id, c.subject as class_subject,
             COALESCE((
               SELECT STRING_AGG(teacher_rows.email, ', ')
               FROM (
@@ -206,7 +206,7 @@ async function loadArchivedTemplates(classId) {
 
 async function loadClassGradeRows(classId) {
   return allAsync(
-    `SELECT subj.name as subject, g.grade as value, gt.weight, g.is_absent
+    `SELECT subj.name as subject, g.grade as value, gt.weight, g.is_absent, g.excluded_from_average
      FROM grades g
      JOIN students student ON student.id = g.student_id
      JOIN grade_templates gt ON gt.id = g.grade_template_id
@@ -214,7 +214,7 @@ async function loadClassGradeRows(classId) {
      LEFT JOIN subjects subj ON subj.id = gt.subject_id
      WHERE student.class_id = ?
      UNION ALL
-     SELECT subj.name as subject, sa.grade as value, sa.weight, false as is_absent
+     SELECT subj.name as subject, sa.grade as value, sa.weight, false as is_absent, sa.excluded_from_average
      FROM special_assessments sa
      JOIN classes c ON c.id = sa.class_id
      LEFT JOIN subjects subj ON subj.id = sa.subject_id
@@ -247,6 +247,7 @@ function mapGradeRow(row, classInfo) {
   const isSpecial = Boolean(row.is_special);
   const title = row.name || row.category || "Leistung";
   const category = row.category || (isSpecial ? "Sonderleistung" : "");
+  const excludedFromAverage = Boolean(row.excluded_from_average);
   let comment = row.note || "";
   if (isSpecial) {
     const displayName = row.name || row.category || "Sonderleistung";
@@ -264,7 +265,9 @@ function mapGradeRow(row, classInfo) {
     subject_id: hasMappedSubjectId(row.subject_id) ? Number(row.subject_id) : null,
     teacher: row.teacher_email || classInfo?.teacher_email || null,
     comment,
-    graded_at: gradedAt
+    graded_at: gradedAt,
+    excluded_from_average: excludedFromAverage,
+    weight_label: excludedFromAverage ? "Ohne Gewichtung" : null
   };
 }
 
@@ -324,6 +327,7 @@ function computeAverages(grades, options = {}) {
   let weightTotal = 0;
 
   grades.forEach((grade) => {
+    if (grade?.excluded_from_average) return;
     if (grade?.is_absent && absenceMode === ABSENCE_MODE_EXCLUDE) return;
     const value = Number(grade?.value);
     const weight = grade?.weight == null ? 1 : Number(grade.weight);
@@ -352,6 +356,7 @@ function computeClassAverages(rows, options = {}) {
   const absenceMode = normalizeAbsenceMode(options.absenceMode);
   const bucket = new Map();
   rows.forEach((row) => {
+    if (row?.excluded_from_average) return;
     if (row?.is_absent && absenceMode === ABSENCE_MODE_EXCLUDE) return;
     const value = Number(row?.value);
     const weight = row?.weight == null ? 1 : Number(row.weight);

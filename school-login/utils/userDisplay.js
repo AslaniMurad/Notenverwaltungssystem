@@ -68,12 +68,13 @@ function getDisplayName({ email, name } = {}) {
   return "Nutzer";
 }
 
-function buildSidebarUser({ email, role, name, activeSchoolYearName, className } = {}) {
+function buildSidebarUser({ email, role, name, activeSchoolYearName, className, teacherKvClasses } = {}) {
   const displayName = getDisplayName({ email, name });
   const roleLabel = getRoleLabel(role);
   const normalizedEmail = String(email || "").trim();
   const normalizedSchoolYearName = String(activeSchoolYearName || "").trim();
   const normalizedClassName = String(className || "").trim();
+  const normalizedTeacherKvClasses = String(teacherKvClasses || "").trim();
   const normalizedRole = String(role || "").trim().toLowerCase();
   const metaLines = [];
 
@@ -85,6 +86,9 @@ function buildSidebarUser({ email, role, name, activeSchoolYearName, className }
   }
   if (normalizedRole === "student" && normalizedClassName) {
     metaLines.push(`Klasse: ${normalizedClassName}`);
+  }
+  if (normalizedRole === "teacher" && normalizedTeacherKvClasses) {
+    metaLines.push(`KV: ${normalizedTeacherKvClasses}`);
   }
 
   return {

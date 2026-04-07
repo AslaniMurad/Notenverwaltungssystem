@@ -5,10 +5,14 @@
   const resolvedSidebarStudentClass = typeof sidebarStudentClass !== "undefined"
     ? sidebarStudentClass
     : (typeof locals !== "undefined" ? locals.sidebarStudentClass : null);
+  const resolvedSidebarTeacherKvClasses = typeof sidebarTeacherKvClasses !== "undefined"
+    ? sidebarTeacherKvClasses
+    : (typeof locals !== "undefined" ? locals.sidebarTeacherKvClasses : null);
   const sidebarUser = userDisplay.buildSidebarUser({
     ...(user || {}),
     activeSchoolYearName: resolvedActiveSchoolYear?.name || "",
-    className: resolvedSidebarStudentClass || ""
+    className: resolvedSidebarStudentClass || "",
+    teacherKvClasses: resolvedSidebarTeacherKvClasses || ""
   });
 %>
 <div class="sidebar-brand">

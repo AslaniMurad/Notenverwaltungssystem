@@ -951,11 +951,38 @@ function createFakeDb() {
             attachment_size: attachment_size ? Number(attachment_size) : null,
             external_link: external_link || null,
             is_absent: Boolean(is_absent),
+            excluded_from_average: false,
             school_year_id,
             created_at: new Date().toISOString()
           };
           grades.push(newGrade);
           lastID = newGrade.id;
+        }
+      } else if (/DELETE FROM grades WHERE id = \? AND class_id = \?/i.test(sql)) {
+        const [idParam, classIdParam] = params;
+        for (let i = grades.length - 1; i >= 0; i -= 1) {
+          if (grades[i].id === Number(idParam) && grades[i].class_id === Number(classIdParam)) {
+            grades.splice(i, 1);
+          }
+        }
+      } else if (/UPDATE grades SET excluded_from_average = \? WHERE id = \? AND class_id = \?/i.test(sql)) {
+        const [excludedValue, idParam, classIdParam] = params;
+        const gradeRow = grades.find(
+          (entry) => entry.id === Number(idParam) && entry.class_id === Number(classIdParam)
+        );
+        if (gradeRow) {
+          gradeRow.excluded_from_average = Boolean(excludedValue);
+        }
+      } else if (/UPDATE grades SET attachment_path = NULL, attachment_original_name = NULL, attachment_mime = NULL, attachment_size = NULL WHERE id = \? AND class_id = \?/i.test(sql)) {
+        const [idParam, classIdParam] = params;
+        const gradeRow = grades.find(
+          (entry) => entry.id === Number(idParam) && entry.class_id === Number(classIdParam)
+        );
+        if (gradeRow) {
+          gradeRow.attachment_path = null;
+          gradeRow.attachment_original_name = null;
+          gradeRow.attachment_mime = null;
+          gradeRow.attachment_size = null;
         }
       } else if (/INSERT INTO special_assessments/i.test(sql)) {
         const hasSubjectId = /\(\s*student_id\s*,\s*class_id\s*,\s*subject_id\s*,/i.test(sql);
@@ -973,10 +1000,22 @@ function createFakeDb() {
           description: description || null,
           weight: Number(weight),
           grade: Number(grade),
+          excluded_from_average: false,
           created_at: new Date().toISOString()
         };
         specialAssessments.push(assessment);
         lastID = assessment.id;
+      } else if (/UPDATE special_assessments SET excluded_from_average = \? WHERE id = \? AND class_id = \? AND subject_id = \?/i.test(sql)) {
+        const [excludedValue, idParam, classIdParam, subjectIdParam] = params;
+        const assessmentRow = specialAssessments.find(
+          (entry) =>
+            entry.id === Number(idParam) &&
+            entry.class_id === Number(classIdParam) &&
+            entry.subject_id === normalizeOptionalId(subjectIdParam)
+        );
+        if (assessmentRow) {
+          assessmentRow.excluded_from_average = Boolean(excludedValue);
+        }
       } else if (/DELETE FROM special_assessments WHERE id = \? AND class_id = \?( AND subject_id = \?)?/i.test(sql)) {
         const [idParam, classIdParam, subjectIdParam] = params;
         for (let i = specialAssessments.length - 1; i >= 0; i -= 1) {
@@ -1580,7 +1619,7 @@ function createFakeDb() {
         const [email, class_id] = params;
         const student = students.find((s) => s.email === email && s.class_id === Number(class_id));
         row = student ? { id: student.id } : undefined;
-      } else if (/SELECT id FROM special_assessments WHERE id = \? AND class_id = \?( AND subject_id = \?)?/i.test(sql)) {
+      } else if (/SELECT id(, excluded_from_average)? FROM special_assessments WHERE id = \? AND class_id = \?( AND subject_id = \?)?/i.test(sql)) {
         const [assessmentId, clsId, subjectId] = params;
         const assessment = specialAssessments.find(
           (entry) =>
@@ -1588,7 +1627,9 @@ function createFakeDb() {
             entry.class_id === Number(clsId) &&
             (subjectId == null || entry.subject_id === normalizeOptionalId(subjectId))
         );
-        row = assessment ? { id: assessment.id } : undefined;
+        row = assessment
+          ? { id: assessment.id, excluded_from_average: assessment.excluded_from_average ? 1 : 0 }
+          : undefined;
       } else if (/SELECT id, max_points FROM grade_templates WHERE id = \? AND class_id = \?( AND subject_id = \?)?/i.test(sql)) {
         const [templateId, clsId, subjectId] = params;
         const template = gradeTemplates.find(
@@ -1607,7 +1648,7 @@ function createFakeDb() {
             (subjectId == null || entry.subject_id === normalizeOptionalId(subjectId))
         );
         row = template ? { id: template.id } : undefined;
-      } else if (/SELECT g\.attachment_path\s+FROM grades g\s+JOIN grade_templates gt ON gt\.id = g\.grade_template_id\s+WHERE g\.id = \? AND g\.class_id = \? AND gt\.subject_id = \?/i.test(sql)) {
+      } else if (/SELECT g\.attachment_path(, g\.excluded_from_average)?\s+FROM grades g\s+JOIN grade_templates gt ON gt\.id = g\.grade_template_id\s+WHERE g\.id = \? AND g\.class_id = \? AND gt\.subject_id = \?/i.test(sql)) {
         const [gradeId, clsId, subjectId] = params;
         const grade = grades.find(
           (entry) => entry.id === Number(gradeId) && entry.class_id === Number(clsId)
@@ -1617,7 +1658,10 @@ function createFakeDb() {
         );
         row =
           grade && template && template.subject_id === normalizeOptionalId(subjectId)
-            ? { attachment_path: grade.attachment_path || null }
+            ? {
+                attachment_path: grade.attachment_path || null,
+                excluded_from_average: grade.excluded_from_average ? 1 : 0
+              }
             : undefined;
       } else if (/SELECT attachment_path FROM grades WHERE id = \? AND class_id = \?/i.test(sql)) {
         const [gradeId, clsId] = params;
@@ -1776,6 +1820,16 @@ function createFakeDb() {
             subject: entry.subject,
             subject_id: entry.subject_id
           }));
+      } else if (/SELECT c\.name\s+FROM classes c\s+WHERE c\.head_teacher_id = \? AND c\.school_year_id = \?\s+ORDER BY c\.name ASC/i.test(sql)) {
+        const [teacherId, schoolYearId] = params;
+        rows = classes
+          .filter(
+            (entry) =>
+              Number(entry.head_teacher_id ?? entry.teacher_id ?? null) === Number(teacherId) &&
+              Number(entry.school_year_id) === Number(schoolYearId)
+          )
+          .sort((a, b) => String(a.name || "").localeCompare(String(b.name || "")))
+          .map((entry) => ({ name: entry.name }));
       } else if (/SELECT cst.subject_id,\s*COALESCE\(s.name, c.subject\) AS subject_name\s+FROM class_subject_teacher cst[\s\S]*WHERE cst.class_id = \? AND cst.school_year_id = c.school_year_id/i.test(sql)) {
         const [classIdParam] = params;
         const classRow = classes.find((entry) => entry.id === Number(classIdParam));
@@ -2115,7 +2169,7 @@ function createFakeDb() {
               entry.class_id === Number(class_id) && entry.student_id === Number(student_id)
           )
           .map((entry) => ({ grade_template_id: entry.grade_template_id }));
-      } else if (/SELECT id, student_id, grade, points_achieved, points_max, note, is_absent\s+FROM grades g\s+JOIN grade_templates gt ON gt\.id = g\.grade_template_id\s+WHERE g\.class_id = \? AND gt\.subject_id = \? AND g\.grade_template_id = \?/i.test(sql)) {
+      } else if (/SELECT g\.id, g\.student_id, g\.grade, g\.points_achieved, g\.points_max, g\.note, g\.is_absent\s+FROM grades g\s+JOIN grade_templates gt ON gt\.id = g\.grade_template_id\s+WHERE g\.class_id = \? AND gt\.subject_id = \? AND g\.grade_template_id = \?/i.test(sql)) {
         const [class_id, subject_id, grade_template_id] = params;
         rows = grades
           .filter(
@@ -2192,17 +2246,18 @@ function createFakeDb() {
               subject_id: template.subject_id ?? null,
               subject_name: subjectName,
               class_subject: cls.subject,
-              teacher_email: getTeacherEmailsForClassSubject(g.class_id, template.subject_id).join(", "),
-              attachment_path: g.attachment_path || null,
-              attachment_original_name: g.attachment_original_name || null,
-              attachment_mime: g.attachment_mime || null,
-              attachment_size: g.attachment_size || null,
-              external_link: g.external_link || null,
-              is_absent: g.is_absent ? 1 : 0,
-              is_special: 0
-            };
-          })
-          .filter(Boolean);
+            teacher_email: getTeacherEmailsForClassSubject(g.class_id, template.subject_id).join(", "),
+            attachment_path: g.attachment_path || null,
+            attachment_original_name: g.attachment_original_name || null,
+            attachment_mime: g.attachment_mime || null,
+            attachment_size: g.attachment_size || null,
+            external_link: g.external_link || null,
+            is_absent: g.is_absent ? 1 : 0,
+            excluded_from_average: g.excluded_from_average ? 1 : 0,
+            is_special: 0
+          };
+        })
+        .filter(Boolean);
         const specialRows = specialAssessments
           .filter((entry) => entry.student_id === Number(student_id))
           .filter((entry) => (!Number.isFinite(Number(class_id)) ? true : entry.class_id === Number(class_id)))
@@ -2235,6 +2290,7 @@ function createFakeDb() {
               attachment_size: null,
               external_link: null,
               is_absent: 0,
+              excluded_from_average: entry.excluded_from_average ? 1 : 0,
               is_special: 1
             };
           });
@@ -2260,7 +2316,8 @@ function createFakeDb() {
               subject: getSubjectNameById(template.subject_id),
               value: g.grade,
               weight: template.weight,
-              is_absent: g.is_absent ? 1 : 0
+              is_absent: g.is_absent ? 1 : 0,
+              excluded_from_average: g.excluded_from_average ? 1 : 0
             };
           });
         const specialRows = specialAssessments
@@ -2269,7 +2326,8 @@ function createFakeDb() {
             subject: getSubjectNameById(entry.subject_id),
             value: entry.grade,
             weight: entry.weight,
-            is_absent: 0
+            is_absent: 0,
+            excluded_from_average: entry.excluded_from_average ? 1 : 0
           }));
         rows = [...regularRows, ...specialRows];
       } else if (/FROM participation_marks\s+WHERE class_id = \? AND subject_id = \? AND student_id = \?\s+ORDER BY created_at DESC/i.test(sql)) {
@@ -3608,6 +3666,7 @@ async function initializeDatabase() {
       school_year_id INTEGER REFERENCES school_years(id),
       grade NUMERIC NOT NULL CHECK (grade >= 1 AND grade <= 5),
       is_absent BOOLEAN NOT NULL DEFAULT FALSE,
+      excluded_from_average BOOLEAN NOT NULL DEFAULT FALSE,
       points_achieved NUMERIC,
       points_max NUMERIC,
       note TEXT,
@@ -3638,6 +3697,18 @@ async function initializeDatabase() {
   );
   await pool.query(
     "ALTER TABLE grades ADD COLUMN IF NOT EXISTS points_max NUMERIC"
+  );
+  await pool.query(
+    "ALTER TABLE grades ADD COLUMN IF NOT EXISTS excluded_from_average BOOLEAN DEFAULT FALSE"
+  );
+  await pool.query(
+    "UPDATE grades SET excluded_from_average = FALSE WHERE excluded_from_average IS NULL"
+  );
+  await pool.query(
+    "ALTER TABLE grades ALTER COLUMN excluded_from_average SET DEFAULT FALSE"
+  );
+  await pool.query(
+    "ALTER TABLE grades ALTER COLUMN excluded_from_average SET NOT NULL"
   );
   await pool.query(
     "ALTER TABLE grades ADD COLUMN IF NOT EXISTS attachment_path TEXT"
@@ -3724,6 +3795,7 @@ async function initializeDatabase() {
       description TEXT,
       weight NUMERIC NOT NULL CHECK (weight >= 0),
       grade NUMERIC NOT NULL CHECK (grade >= 1 AND grade <= 5),
+      excluded_from_average BOOLEAN NOT NULL DEFAULT FALSE,
       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
     )
   `);
@@ -3736,6 +3808,18 @@ async function initializeDatabase() {
   );
   await pool.query(
     "ALTER TABLE special_assessments ADD COLUMN IF NOT EXISTS subject_id INTEGER"
+  );
+  await pool.query(
+    "ALTER TABLE special_assessments ADD COLUMN IF NOT EXISTS excluded_from_average BOOLEAN DEFAULT FALSE"
+  );
+  await pool.query(
+    "UPDATE special_assessments SET excluded_from_average = FALSE WHERE excluded_from_average IS NULL"
+  );
+  await pool.query(
+    "ALTER TABLE special_assessments ALTER COLUMN excluded_from_average SET DEFAULT FALSE"
+  );
+  await pool.query(
+    "ALTER TABLE special_assessments ALTER COLUMN excluded_from_average SET NOT NULL"
   );
   await pool.query(`
     UPDATE special_assessments sa

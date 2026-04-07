@@ -1003,14 +1003,14 @@ async function loadTemplates(classId, subjectId) {
 
 async function loadStudentGrades(studentId, classId, subjectId) {
   return allAsync(
-    `SELECT g.id, g.grade, g.points_achieved, g.points_max, g.note, g.created_at, g.grade_template_id as template_id, gt.name, gt.category, gt.weight, gt.weight_mode, gt.max_points as template_max_points, gt.date, gt.description, COALESCE(s.name, c.subject) as class_subject, g.attachment_path, g.attachment_original_name, g.attachment_mime, g.attachment_size, g.external_link, g.is_absent, 0 as is_special
+    `SELECT g.id, g.grade, g.points_achieved, g.points_max, g.note, g.created_at, g.grade_template_id as template_id, gt.name, gt.category, gt.weight, gt.weight_mode, gt.max_points as template_max_points, gt.date, gt.description, COALESCE(s.name, c.subject) as class_subject, g.attachment_path, g.attachment_original_name, g.attachment_mime, g.attachment_size, g.external_link, g.is_absent, g.excluded_from_average, 0 as is_special
      FROM grades g
      JOIN grade_templates gt ON gt.id = g.grade_template_id
      JOIN classes c ON c.id = g.class_id
      LEFT JOIN subjects s ON s.id = gt.subject_id
      WHERE g.student_id = ? AND g.class_id = ? AND gt.subject_id = ?
      UNION ALL
-     SELECT sa.id, sa.grade, NULL as points_achieved, NULL as points_max, sa.description as note, sa.created_at, NULL as template_id, sa.name, sa.type as category, sa.weight, NULL as weight_mode, NULL as template_max_points, sa.created_at as date, sa.description, COALESCE(ss.name, c.subject) as class_subject, NULL as attachment_path, NULL as attachment_original_name, NULL as attachment_mime, NULL as attachment_size, NULL as external_link, false as is_absent, 1 as is_special
+     SELECT sa.id, sa.grade, NULL as points_achieved, NULL as points_max, sa.description as note, sa.created_at, NULL as template_id, sa.name, sa.type as category, sa.weight, NULL as weight_mode, NULL as template_max_points, sa.created_at as date, sa.description, COALESCE(ss.name, c.subject) as class_subject, NULL as attachment_path, NULL as attachment_original_name, NULL as attachment_mime, NULL as attachment_size, NULL as external_link, false as is_absent, sa.excluded_from_average, 1 as is_special
      FROM special_assessments sa
      JOIN classes c ON c.id = sa.class_id
      LEFT JOIN subjects ss ON ss.id = sa.subject_id
@@ -1043,7 +1043,7 @@ async function loadTemplateForClass(classId, subjectId, templateId) {
 
 async function loadExistingGradesForTemplate(classId, subjectId, templateId) {
   const rows = await allAsync(
-    `SELECT id, student_id, grade, points_achieved, points_max, note, is_absent
+    `SELECT g.id, g.student_id, g.grade, g.points_achieved, g.points_max, g.note, g.is_absent
      FROM grades g
      JOIN grade_templates gt ON gt.id = g.grade_template_id
      WHERE g.class_id = ? AND gt.subject_id = ? AND g.grade_template_id = ?`,
@@ -1361,6 +1361,7 @@ function computeWeightedAverage(grades, options = {}) {
   let weightTotal = 0;
 
   grades.forEach((grade) => {
+    if (grade?.excluded_from_average) return;
     if (shouldSkipGradeForAbsence(grade, absenceMode)) return;
     const value = Number(grade?.grade);
     const weight = grade?.weight == null ? 1 : Number(grade.weight);
@@ -1405,6 +1406,7 @@ function computePointTotalsWithParticipation(entries, options = {}) {
   const absenceMode = normalizeAbsenceMode(options.absenceMode);
   return (entries || []).reduce(
     (acc, row) => {
+      if (row?.excluded_from_average) return acc;
       if (shouldSkipGradeForAbsence(row, absenceMode)) return acc;
 
       const achieved = Number(row?.points_achieved);
@@ -2678,10 +2680,13 @@ router.get("/student-grades/:classId/:studentId", async (req, res, next) => {
         points_percent: pointsPercent,
         note: row.note,
         is_absent: Boolean(row.is_absent),
+        excluded_from_average: Boolean(row.excluded_from_average),
         category: row.category,
         weight: row.weight,
         weight_mode: resolvedWeightMode,
-        weight_label: formatWeightLabel(row.weight, resolvedWeightMode),
+        weight_label: row.excluded_from_average
+          ? "Ohne Gewichtung"
+          : formatWeightLabel(row.weight, resolvedWeightMode),
         template_name: row.name,
         template_date: row.date,
         is_special: Boolean(row.is_special),
@@ -2729,6 +2734,7 @@ router.get("/student-grades/:classId/:studentId", async (req, res, next) => {
             grade: Number(row.grade),
             weight: Number(row.weight || 0),
             is_absent: Boolean(row.is_absent),
+            excluded_from_average: Boolean(row.excluded_from_average),
             source: "grade"
           })),
           ...participationAverageRows.map((row) => ({
@@ -2737,6 +2743,7 @@ router.get("/student-grades/:classId/:studentId", async (req, res, next) => {
             source: "participation"
           }))
         ]
+          .filter((row) => !row.excluded_from_average)
           .filter((row) => !shouldSkipGradeForAbsence(row, absenceMode))
           .filter(
             (row) =>
@@ -2825,11 +2832,17 @@ router.get("/student-grades/:classId/:studentId/details", async (req, res, next)
       const gradeValue = Number(row.grade);
       const rawWeight = Number(row.weight);
       const effectiveWeight = row.weight == null ? 1 : Number(row.weight);
+      const excludedFromAverage = Boolean(row.excluded_from_average);
       const isAbsent = Boolean(row.is_absent);
       const skippedForAbsence = shouldSkipGradeForAbsence({ is_absent: isAbsent }, absenceMode);
       const hasValidGrade = isValidGradeValue(gradeValue);
       const hasValidWeight = isValidWeightValue(effectiveWeight);
-      const included = !studentExcluded && !skippedForAbsence && hasValidGrade && hasValidWeight;
+      const included =
+        !studentExcluded &&
+        !excludedFromAverage &&
+        !skippedForAbsence &&
+        hasValidGrade &&
+        hasValidWeight;
       const contributionValue = included ? gradeValue * effectiveWeight : 0;
       const pointsAchieved = Number(row.points_achieved);
       const pointsMax = Number(row.points_max);
@@ -2841,6 +2854,8 @@ router.get("/student-grades/:classId/:studentId/details", async (req, res, next)
       let includeReason = "Gewichtet in Gesamtnote.";
       if (studentExcluded) {
         includeReason = "Nicht gewichtet (Schueler im Fach ausgeschlossen).";
+      } else if (excludedFromAverage) {
+        includeReason = "Nicht gewichtet (Gewichtung entfernt).";
       } else if (skippedForAbsence) {
         includeReason = "Nicht gewichtet (Abwesenheit laut Profil).";
       } else if (!hasValidGrade) {
@@ -2857,11 +2872,16 @@ router.get("/student-grades/:classId/:studentId/details", async (req, res, next)
         exam_date: row.date || null,
         note: row.note || "",
         is_absent: isAbsent,
+        excluded_from_average: excludedFromAverage,
         included,
         include_reason: includeReason,
         grade: hasValidGrade ? Number(gradeValue.toFixed(2)) : null,
         raw_weight: isValidWeightValue(rawWeight) ? Number(rawWeight.toFixed(2)) : null,
-        effective_weight: hasValidWeight ? Number(effectiveWeight.toFixed(2)) : null,
+        effective_weight: excludedFromAverage
+          ? 0
+          : hasValidWeight
+            ? Number(effectiveWeight.toFixed(2))
+            : null,
         contribution: contributionValue,
         points_achieved: hasPoints ? Number(pointsAchieved.toFixed(2)) : null,
         points_max: hasPoints ? Number(pointsMax.toFixed(2)) : null,
@@ -3151,11 +3171,12 @@ router.post("/delete-grade/:classId/:gradeId", async (req, res, next) => {
   try {
     const classId = req.params.classId;
     const gradeId = req.params.gradeId;
+    const deleteMode = String(req.body?.delete_mode || "delete_entry");
     const classData = await requireClassAccessForTeacher(req, res, classId);
     if (!classData) return;
 
     const gradeRow = await getAsync(
-      `SELECT g.attachment_path
+      `SELECT g.attachment_path, g.excluded_from_average
        FROM grades g
        JOIN grade_templates gt ON gt.id = g.grade_template_id
        WHERE g.id = ? AND g.class_id = ? AND gt.subject_id = ?`,
@@ -3163,6 +3184,15 @@ router.post("/delete-grade/:classId/:gradeId", async (req, res, next) => {
     );
     if (!gradeRow) {
       return renderError(res, req, "Note nicht gefunden.", 404, `/teacher/student-grades/${classId}`);
+    }
+    if (deleteMode === "remove_weight" || deleteMode === "toggle_weight") {
+      await runAsync("UPDATE grades SET excluded_from_average = ? WHERE id = ? AND class_id = ?", [
+        !Boolean(gradeRow.excluded_from_average),
+        gradeId,
+        classId
+      ]);
+      const backUrl = req.get("referer") || `/teacher/grades/${classId}`;
+      return res.redirect(backUrl);
     }
     await runAsync("DELETE FROM grades WHERE id = ? AND class_id = ?", [gradeId, classId]);
     await removeStoredAttachment(gradeRow?.attachment_path);
@@ -4476,15 +4506,24 @@ router.post("/delete-special-assessment/:classId/:assessmentId", async (req, res
   try {
     const classId = req.params.classId;
     const assessmentId = req.params.assessmentId;
+    const deleteMode = String(req.body?.delete_mode || "delete_entry");
     const classData = await requireClassAccessForTeacher(req, res, classId);
     if (!classData) return;
 
     const assessmentRow = await getAsync(
-      "SELECT id FROM special_assessments WHERE id = ? AND class_id = ? AND subject_id = ?",
+      "SELECT id, excluded_from_average FROM special_assessments WHERE id = ? AND class_id = ? AND subject_id = ?",
       [assessmentId, classId, classData.subject_id]
     );
     if (!assessmentRow) {
       return renderError(res, req, "Sonderleistung nicht gefunden.", 404, `/teacher/special-assessments/${classId}`);
+    }
+    if (deleteMode === "remove_weight" || deleteMode === "toggle_weight") {
+      await runAsync(
+        "UPDATE special_assessments SET excluded_from_average = ? WHERE id = ? AND class_id = ? AND subject_id = ?",
+        [!Boolean(assessmentRow.excluded_from_average), assessmentId, classId, classData.subject_id]
+      );
+      const backUrl = req.get("referer") || `/teacher/special-assessments/${classId}`;
+      return res.redirect(backUrl);
     }
 
     await runAsync("DELETE FROM special_assessments WHERE id = ? AND class_id = ? AND subject_id = ?", [

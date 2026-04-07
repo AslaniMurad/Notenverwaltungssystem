@@ -241,14 +241,24 @@
                           Fragen (<%= (grade.messages || []).length %>)
                         </button>
                       <% } %>
-                      <form class="inline delete-grade-form" method="POST" action="<%= grade.delete_action %>" data-grade-info="<%= grade.template_name %> (<%= grade.grade %>)">
+                      <form
+                        class="inline delete-grade-form"
+                        method="POST"
+                        action="<%= grade.delete_action %>"
+                        data-grade-info="<%= grade.template_name %> (<%= grade.grade %>)"
+                        data-weight-removed="<%= grade.excluded_from_average ? '1' : '0' %>"
+                      >
                         <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+                        <input type="hidden" name="delete_mode" value="delete_entry" data-delete-mode-input>
                         <button class="btn btn-danger btn-sm" type="button">Löschen</button>
                       </form>
                     </div>
                   </div>
                   <% if (grade.is_absent) { %>
                     <p class="teacher-muted">Als Abwesenheit erfasst.</p>
+                  <% } %>
+                  <% if (grade.excluded_from_average) { %>
+                    <p class="teacher-muted">Gewichtung entfernt. Der Eintrag bleibt sichtbar, zählt aber nicht zur Gesamtnote.</p>
                   <% } %>
                   <% if (grade.note) { %>
                     <p class="grade-description"><%= grade.note %></p>
@@ -367,15 +377,16 @@
     <div id="deleteGradeModal" class="modal-overlay">
       <div class="modal-content">
         <div class="modal-header">
-          <h3>Note löschen</h3>
+          <h3>Eintrag löschen</h3>
         </div>
         <div class="modal-body">
-          <p>Möchtest du die Note <strong id="deleteGradeInfo"></strong> wirklich löschen?</p>
-          <p class="teacher-muted">Diese Aktion kann nicht rückgängig gemacht werden.</p>
+          <p>Was soll mit <strong id="deleteGradeInfo"></strong> passieren?</p>
+          <p class="teacher-muted" id="deleteGradeHint">Eintrag löschen entfernt ihn vollständig. Gewichtung entfernen lässt den Eintrag stehen, zählt ihn aber nicht mehr zur Note.</p>
         </div>
         <div class="modal-footer">
           <button class="btn btn-secondary" id="cancelDeleteGrade" type="button">Abbrechen</button>
-          <button class="btn btn-danger" id="confirmDeleteGrade" type="button">Löschen</button>
+          <button class="btn btn-secondary" id="removeWeightGrade" type="button">Gewichtung entfernen</button>
+          <button class="btn btn-danger" id="confirmDeleteGrade" type="button">Eintrag löschen</button>
         </div>
       </div>
     </div>
@@ -505,9 +516,20 @@
 
         const deleteGradeModal = document.getElementById("deleteGradeModal");
         const deleteGradeInfo = document.getElementById("deleteGradeInfo");
+        const deleteGradeHint = document.getElementById("deleteGradeHint");
         const cancelDeleteGrade = document.getElementById("cancelDeleteGrade");
+        const removeWeightGrade = document.getElementById("removeWeightGrade");
         const confirmDeleteGrade = document.getElementById("confirmDeleteGrade");
         let currentGradeForm = null;
+
+        function submitCurrentGradeForm(mode) {
+          if (!currentGradeForm) return;
+          const modeInput = currentGradeForm.querySelector("[data-delete-mode-input]");
+          if (modeInput) {
+            modeInput.value = mode;
+          }
+          currentGradeForm.submit();
+        }
 
         document.querySelectorAll(".delete-grade-form button[type='button']").forEach((button) => {
           button.addEventListener("click", (event) => {
@@ -515,6 +537,16 @@
             currentGradeForm = button.closest("form");
             if (deleteGradeInfo) {
               deleteGradeInfo.textContent = currentGradeForm?.dataset?.gradeInfo || "";
+            }
+            if (deleteGradeHint) {
+              deleteGradeHint.textContent = currentGradeForm?.dataset?.weightRemoved === "1"
+                ? "Die Gewichtung dieses Eintrags ist aktuell entfernt. Mit einem weiteren Klick kannst du sie wiederherstellen."
+                : "Eintrag löschen entfernt ihn vollständig. Gewichtung entfernen lässt den Eintrag stehen, zählt ihn aber nicht mehr zur Note.";
+            }
+            if (removeWeightGrade) {
+              removeWeightGrade.textContent = currentGradeForm?.dataset?.weightRemoved === "1"
+                ? "Gewichtung wiederherstellen"
+                : "Gewichtung entfernen";
             }
             deleteGradeModal?.classList.add("active");
           });
@@ -526,7 +558,11 @@
         });
 
         confirmDeleteGrade?.addEventListener("click", () => {
-          if (currentGradeForm) currentGradeForm.submit();
+          submitCurrentGradeForm("delete_entry");
+        });
+
+        removeWeightGrade?.addEventListener("click", () => {
+          submitCurrentGradeForm("toggle_weight");
         });
 
         deleteGradeModal?.addEventListener("click", (event) => {
