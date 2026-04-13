@@ -1,4 +1,61 @@
 <%
+  const hasActiveSchoolYear = Boolean(activeSchoolYear?.name);
+  const now = new Date();
+  const formattedDate = new Intl.DateTimeFormat('de-AT', {
+    timeZone: 'Europe/Vienna',
+    weekday: 'long',
+    day: '2-digit',
+    month: 'long',
+    year: 'numeric'
+  }).format(now);
+  const groups = [
+    {
+      eyebrow: 'Aktionen',
+      themeClass: 'is-start',
+      title: 'Schnellstart',
+      links: [
+        { title: 'Nutzer anlegen', href: '/admin/users/new' },
+        { title: 'Klasse erstellen', href: '/admin/classes/new' }
+      ]
+    },
+    {
+      eyebrow: 'Verwaltung',
+      themeClass: 'is-manage',
+      title: 'Verwaltung',
+      links: [
+        { title: 'Nutzerverwaltung', href: '/admin/users' },
+        { title: 'Klassen', href: '/admin/classes' },
+        { title: 'Unterrichtszuordnung', href: '/admin/assignments' }
+      ]
+    },
+    {
+      eyebrow: 'System',
+      themeClass: 'is-system',
+      title: 'System',
+      links: [
+        { title: 'Schuljahreswechsel', href: '/admin/rollover' },
+        { title: 'Archiv', href: '/archive' },
+        { title: 'Audit-Log', href: '/admin/audit-logs?returnTo=%2Fadmin' }
+      ]
+    }
+  ];
+
+  const qaPlaceholders = [
+    {
+      question: 'Lorem ipsum dolor sit amet?',
+      answer: 'Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua.'
+    },
+    {
+      question: 'Consectetur adipiscing elit?',
+      answer: 'Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat.'
+    },
+    {
+      question: 'Sed do eiusmod tempor incididunt?',
+      answer: 'Duis aute irure dolor in reprehenderit in voluptate velit esse cillum dolore eu fugiat nulla pariatur.'
+    }
+  ];
+%>
+<%
   const page = {
     title: 'Admin - Home',
     headerTitle: 'Adminbereich',
@@ -11,69 +68,50 @@
     <div class="app-shell">
       <%- include('./nav-school-year', { csrfToken, currentUser, activePath, activeSchoolYear }) %>
 
-      <section class="app-main admin-home-page">
-        <div class="admin-home-hero">
-          <p class="app-main-subtitle admin-home-subtitle">Admin</p>
+      <section class="app-main admin-home-page admin-home-overview-page">
+        <header class="admin-home-overview-header">
+          <div class="admin-home-overview-copy">
+            <p class="admin-home-overview-welcome">Willkommen <%= currentUser?.email || 'Admin' %></p>
+            <h1><%= formattedDate %></h1>
+            <p class="admin-home-overview-schoolyear">Schuljahr: <strong><%= hasActiveSchoolYear ? activeSchoolYear.name : 'Nicht gesetzt' %></strong></p>
+          </div>
+        </header>
 
-          <div class="admin-home-header">
-            <div class="admin-home-copy">
-              <h1>Adminbereich</h1>
-              <p class="admin-home-meta">
-                Schuljahr
-                <strong><%= activeSchoolYear?.name || 'Nicht gesetzt' %></strong>
-                <span class="admin-home-status <%= activeSchoolYear?.name ? 'is-ready' : 'is-pending' %>">
-                  <%= activeSchoolYear?.name ? 'Aktiv' : 'Fehlt' %>
-                </span>
-              </p>
-            </div>
+        <section class="admin-home-overview-groups" aria-label="Admin Uebersicht">
+          <% groups.forEach(function (group) { %>
+            <section class="admin-home-overview-group <%= group.themeClass %>">
+              <div class="admin-home-overview-group-head">
+                <p class="admin-eyebrow"><%= group.eyebrow %></p>
+                <h2><%= group.title %></h2>
+              </div>
 
-            <div class="admin-actions-row admin-home-actions">
-              <a class="btn btn-primary" href="/admin/users/new">Nutzer anlegen</a>
-              <a class="btn btn-secondary" href="/admin/classes/new">Klasse erstellen</a>
-              <a class="btn btn-secondary" href="/admin/rollover">Schuljahreswechsel</a>
-            </div>
+              <nav class="admin-home-overview-links" aria-label="<%= group.title %>">
+                <% group.links.forEach(function (link) { %>
+                  <a class="admin-home-overview-link" href="<%= link.href %>">
+                    <span class="admin-home-overview-link-title"><%= link.title %></span>
+                    <span class="admin-home-overview-link-arrow" aria-hidden="true">></span>
+                  </a>
+                <% }) %>
+              </nav>
+            </section>
+          <% }) %>
+        </section>
+
+        <section class="admin-home-qa-section" aria-label="Q and A Platzhalter">
+          <div class="admin-home-qa-head">
+            <p class="admin-eyebrow">Q and A</p>
+            <h2>Platzhalter fuer spaeter</h2>
           </div>
 
-          <div class="admin-home-stats">
-            <a class="admin-home-stat" href="/admin/users" aria-label="Nutzerverwaltung oeffnen">
-              <span class="admin-eyebrow">Nutzer</span>
-              <strong><%= stats.users %></strong>
-            </a>
-
-            <a class="admin-home-stat" href="/admin/classes" aria-label="Klassenbereich oeffnen">
-              <span class="admin-eyebrow">Klassen</span>
-              <strong><%= stats.classes %></strong>
-            </a>
-
-            <a class="admin-home-stat" href="/admin/classes" aria-label="Schuelerbereich oeffnen">
-              <span class="admin-eyebrow">Schueler</span>
-              <strong><%= stats.students %></strong>
-            </a>
+          <div class="admin-home-qa-list">
+            <% qaPlaceholders.forEach(function (item) { %>
+              <details class="admin-home-qa-item">
+                <summary><%= item.question %></summary>
+                <p><%= item.answer %></p>
+              </details>
+            <% }) %>
           </div>
-        </div>
-
-        <div class="admin-home-sections">
-          <div class="admin-home-section">
-            <p class="admin-eyebrow">Bereiche</p>
-            <h2>Direktlinks</h2>
-
-            <div class="admin-home-link-list">
-              <a class="admin-home-link" href="/admin/users">Nutzerverwaltung</a>
-              <a class="admin-home-link" href="/admin/classes">Klassenbereich</a>
-              <a class="admin-home-link" href="/archive">Archiv</a>
-              <a class="admin-home-link" href="/admin/audit-logs?returnTo=%2Fadmin">Audit-Log</a>
-            </div>
-          </div>
-
-          <div class="admin-home-section admin-home-tutorial" id="tutorial-placeholder">
-            <p class="admin-eyebrow">Tutorial</p>
-            <h2>Platzhalter</h2>
-
-            <button class="btn admin-home-disabled-button" type="button" disabled>
-              Tutorial-Seite noch nicht verfuegbar
-            </button>
-          </div>
-        </div>
+        </section>
       </section>
     </div>
 <% } }; %>
