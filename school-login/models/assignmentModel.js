@@ -6,7 +6,7 @@ async function listClasses() {
      FROM classes c
      JOIN school_years sy ON sy.id = c.school_year_id
      WHERE sy.is_active = ?
-     ORDER BY c.name ASC, c.subject ASC`
+     ORDER BY c.name ASC, c.id ASC`
     ,
     [true]
   );
@@ -105,6 +105,16 @@ async function createAssignments({ classId, subjectId, teacherIds, schoolYearId 
   return { created, duplicates };
 }
 
+async function listAssignedTeacherIdsForClass(classId) {
+  return allAsync(
+    `SELECT cst.teacher_id
+     FROM class_subject_teacher cst
+     JOIN school_years sy ON sy.id = cst.school_year_id
+     WHERE cst.class_id = ? AND sy.is_active = ?`,
+    [classId, true]
+  );
+}
+
 async function deleteAssignment(assignmentId) {
   return runAsync("DELETE FROM class_subject_teacher WHERE id = ?", [assignmentId]);
 }
@@ -114,6 +124,7 @@ module.exports = {
   deleteAssignment,
   getClassById,
   getSubjectById,
+  listAssignedTeacherIdsForClass,
   listAssignmentGroups,
   listAssignmentRows,
   listClasses,

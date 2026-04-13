@@ -1,6 +1,6 @@
-<%
+﻿<%
   const page = {
-    title: 'Lehrer — Klasse erstellen',
+    title: 'Lehrer - Fach erstellen',
     headerTitle: 'Lehrerbereich',
     styles: ['/css/teacher-pages.css'],
     scripts: ['/js/app.js'],
@@ -14,9 +14,9 @@
 
         <div class="app-nav">
           <div class="nav-section">
-            <div class="nav-section-title">Menü</div>
-            <a href="/teacher/classes">Meine Klassen</a>
-            <a class="is-active" href="/teacher/create-class">Klasse erstellen</a>
+            <div class="nav-section-title">Menue</div>
+            <a href="/teacher/classes">Fächer</a>
+            <a class="is-active" href="/teacher/create-class">Fach erstellen</a>
             <a href="/teacher/settings">Einstellungen</a>
             <form class="logout-form" method="POST" action="/logout">
               <input type="hidden" name="_csrf" value="<%= csrfToken %>">
@@ -29,9 +29,9 @@
       <section class="teacher-main">
         <header class="teacher-main-header">
           <div>
-            <p class="teacher-eyebrow">Neue Klasse</p>
-            <h1>Klasse erstellen</h1>
-            <p class="teacher-muted">Rolle: Lehrer · <%= email %></p>
+            <p class="teacher-eyebrow">Fach</p>
+            <h1>Fach für bestehende Klasse erstellen</h1>
+            <p class="teacher-muted">Rolle: Lehrer - <%= email %></p>
           </div>
           <div class="teacher-actions-inline">
             <a class="btn btn-secondary" href="/teacher/classes">Abbrechen</a>
@@ -42,22 +42,40 @@
           <div class="teacher-card-header">
             <div>
               <p class="teacher-eyebrow">Details</p>
-              <h3>Klasseninformationen</h3>
+              <h3>Fachdaten</h3>
             </div>
           </div>
+
+          <% if (error) { %>
+            <div class="teacher-alert error"><%= error %></div>
+          <% } %>
 
           <form class="teacher-form" method="POST" action="/teacher/create-class">
             <input type="hidden" name="_csrf" value="<%= csrfToken %>">
 
-            <label for="name">Klassenname</label>
-            <input type="text" id="name" name="name" required placeholder="z.B. 3AHIF">
+            <label for="class_id">Klasse</label>
+            <select id="class_id" name="class_id" required>
+              <option value="">Bitte waehlen</option>
+              <% (classes || []).forEach((entry) => { %>
+                <option value="<%= entry.id %>" <%= String((formData && formData.class_id) || '') === String(entry.id) ? 'selected' : '' %>>
+                  <%= entry.name %>
+                </option>
+              <% }) %>
+            </select>
 
             <label for="subject">Fach</label>
-            <input type="text" id="subject" name="subject" required placeholder="z.B. Mathematik">
+            <input
+              type="text"
+              id="subject"
+              name="subject"
+              value="<%= (formData && formData.subject) || '' %>"
+              required
+              placeholder="z.B. Mathematik"
+            >
 
             <div class="teacher-form-actions">
-              <button class="btn btn-primary" type="submit">Klasse erstellen</button>
-              <a class="btn btn-secondary" href="/teacher/classes">Zurück</a>
+              <button class="btn btn-primary" type="submit">Fach erstellen</button>
+              <a class="btn btn-secondary" href="/teacher/classes">Zurueck</a>
             </div>
           </form>
         </div>
@@ -66,4 +84,3 @@
 <% } };
 %>
 <%- include('../layout', page) %>
-

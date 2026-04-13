@@ -1,6 +1,17 @@
 <%
+  const resolvedMode = mode === 'bulk' ? 'bulk' : 'single';
+  const singleValues = singleForm || {};
+  const bulkValues = bulkForm || {};
+  const hasBulkResult = Boolean(bulkResult);
+  const resolvedBulkDelimiter = ['paragraph', 'comma', 'semicolon', 'tab'].includes(bulkValues.bulkDelimiter) ? bulkValues.bulkDelimiter : 'paragraph';
+  const bulkDelimiterExamples = {
+    paragraph: 'vorname.nachname@htlwy.at\nvorname.nachname@htlwy.at\nvorname.nachname@htlwy.at',
+    semicolon: 'vorname.nachname@htlwy.at;vorname.nachname@htlwy.at;vorname.nachname@htlwy.at',
+    comma: 'vorname.nachname@htlwy.at,vorname.nachname@htlwy.at,vorname.nachname@htlwy.at',
+    tab: 'vorname.nachname@htlwy.at\tvorname.nachname@htlwy.at\tvorname.nachname@htlwy.at'
+  };
   const page = {
-    title: 'Admin — Nutzer anlegen',
+    title: 'Admin - Nutzer anlegen',
     headerTitle: 'Adminbereich',
     styles: ['/css/admin.css'],
     scripts: ['/js/app.js'],
@@ -12,83 +23,179 @@
       <%- include('./nav', { csrfToken, currentUser, activePath }) %>
 
       <section class="app-main">
-        <div class="app-main-header">
+        <div class="app-main-header admin-create-header">
           <div>
             <p class="app-main-subtitle">Nutzer anlegen</p>
             <h1>Nutzer erstellen</h1>
-            
           </div>
           <a class="btn btn-secondary" href="/admin/users">Zur Nutzerliste</a>
         </div>
 
-        <div class="admin-grid">
-          <div class="admin-card" id="single">
-            
-            <h3>Einzelnen Nutzer erstellen</h3>
-            <form class="admin-form vertical" method="POST" action="/admin/users">
-              <input type="hidden" name="_csrf" value="<%= csrfToken %>">
-              <label>E-Mail</label>
-              <input name="email" type="email" placeholder="nutzer@schule.at" required>
-              <label>Rolle</label>
-              <select name="role">
-                <option value="student">Schüler</option>
-                <option value="teacher">Lehrer</option>
-                <option value="admin">Admin</option>
-              </select>
-              <label>Initial-Passwort</label>
-              <div class="admin-row">
-                <input name="password" type="password" placeholder="Eigenes Passwort">
-                <label class="admin-checkbox">
-                  <input type="checkbox" name="useInitial"> Initial-Kennwort aus ENV INITIAL_PASSWORD setzen (nicht für Lehrer)
-                </label>
-              </div>
-              <button class="btn btn-primary" type="submit">Anlegen</button>
-            </form>
+        <div class="admin-create-shell" data-create-switcher data-default-mode="<%= resolvedMode %>">
+          <% if (error) { %>
+            <div class="admin-alert admin-alert-danger"><%= error %></div>
+          <% } %>
+
+          <div class="admin-mode-switch" data-mode-switch role="tablist" aria-label="Erstellmodus">
+            <span class="admin-mode-switch-indicator" aria-hidden="true"></span>
+            <button type="button" class="admin-mode-switch-option" data-mode-toggle="single" role="tab" aria-selected="false">Einzeln</button>
+            <button type="button" class="admin-mode-switch-option" data-mode-toggle="bulk" role="tab" aria-selected="false">Bulk</button>
           </div>
 
-          <div class="admin-card" id="bulk">
-            
-            <h3>Bulk-Anlage</h3>
-            <form class="admin-form vertical" method="POST" action="/admin/users/bulk">
-              <input type="hidden" name="_csrf" value="<%= csrfToken %>">
-              <label>E-Mail-Liste (eine Adresse pro Zeile)</label>
-              <textarea name="bulkEmails" rows="6" placeholder="max@example.com&#10;lena@example.com" required></textarea>
-              <label>Rolle</label>
-              <select name="bulkRole">
-                <option value="student">Schüler</option>
-                <option value="teacher">Lehrer</option>
-                <option value="admin">Admin</option>
-              </select>
-              <label>Passwort-Option</label>
-              <div class="admin-row">
-                <input name="bulkPassword" type="password" placeholder="Gemeinsames Passwort">
-                <label class="admin-checkbox">
-                  <input type="checkbox" name="bulkUseInitial"> Initial-Kennwort aus ENV INITIAL_PASSWORD verwenden (nicht für Lehrer)
-                </label>
-              </div>
-              <button class="btn btn-secondary" type="submit">Bulk anlegen</button>
-            </form>
+          <div class="admin-mode-panels">
+            <section class="admin-mode-panel" data-create-panel="single">
+              <div class="admin-panel-card">
+                <div class="admin-panel-head">
+                  <div>
+                    <h3>Einzelnen Nutzer anlegen</h3>
+                    <p class="admin-muted">Fuer einzelne Korrekturen, Admin-Konten oder neue Eintritte.</p>
+                  </div>
+                </div>
 
-            <% if (bulkResult) { %>
-              <div class="admin-bulk-result">
-                <p><strong>Erfolg:</strong> <%= bulkResult.success.length %> Nutzer angelegt.</p>
-                <% if (bulkResult.success.length) { %>
-                  <ul>
-                    <% bulkResult.success.forEach(function(mail){ %>
-                      <li><%= mail %></li>
-                    <% }) %>
-                  </ul>
+                <form class="admin-form vertical admin-stacked-form" method="POST" action="/admin/users">
+                  <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+
+                  <label class="admin-field">
+                    <span>E-Mail</span>
+                    <input name="email" type="email" placeholder="nutzer@schule.at" value="<%= singleValues.email || '' %>" required>
+                  </label>
+
+                  <div class="admin-form-grid admin-form-grid-2">
+                    <label class="admin-field">
+                      <span>Rolle</span>
+                      <select name="role">
+                        <option value="student" <%= (singleValues.role || 'student') === 'student' ? 'selected' : '' %>>Schueler</option>
+                        <option value="teacher" <%= singleValues.role === 'teacher' ? 'selected' : '' %>>Lehrer</option>
+                        <option value="admin" <%= singleValues.role === 'admin' ? 'selected' : '' %>>Admin</option>
+                      </select>
+                    </label>
+
+                    <label class="admin-field">
+                      <span>Eigenes Passwort</span>
+                      <input name="password" type="password" placeholder="Sicheres Startpasswort">
+                    </label>
+                  </div>
+
+                  <label class="admin-inline-option admin-inline-option-simple">
+                    <input type="checkbox" name="useInitial" <%= singleValues.useInitial ? 'checked' : '' %>>
+                    <span>INITIAL_PASSWORD nutzen</span>
+                  </label>
+
+                  <div class="admin-panel-actions">
+                    <button class="btn btn-primary" type="submit">Nutzer anlegen</button>
+                  </div>
+                </form>
+              </div>
+            </section>
+
+            <section class="admin-mode-panel" data-create-panel="bulk">
+              <div class="admin-panel-card">
+                <div class="admin-panel-head">
+                  <div>
+                    <h3>Bulk-Anlage</h3>
+                    <p class="admin-muted">Eine E-Mail pro Zeile. Rolle und Passwortregel gelten fuer alle Eintraege.</p>
+                  </div>
+                </div>
+
+                <% if (hasBulkResult) { %>
+                  <div class="admin-create-result">
+                    <div class="admin-result-metric">
+                      <strong><%= bulkResult.success.length %></strong>
+                      <span>angelegt</span>
+                    </div>
+                    <div class="admin-result-metric">
+                      <strong><%= bulkResult.failed.length %></strong>
+                      <span>fehlgeschlagen</span>
+                    </div>
+                  </div>
                 <% } %>
-                <% if (bulkResult.failed.length) { %>
-                  <p><strong>Nicht angelegt:</strong></p>
-                  <ul>
-                    <% bulkResult.failed.forEach(function(item){ %>
-                      <li><%= item.email %> — <%= item.reason %></li>
-                    <% }) %>
-                  </ul>
+
+                <form class="admin-form vertical admin-stacked-form" method="POST" action="/admin/users/bulk">
+                  <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+                  <input type="hidden" name="bulkDelimiter" value="<%= resolvedBulkDelimiter %>" data-bulk-delimiter-input>
+
+                  <div class="admin-bulk-delimiter" data-bulk-format-switcher data-default-delimiter="<%= resolvedBulkDelimiter %>">
+                    <div class="admin-bulk-delimiter-head">
+                      <strong>Trennformat</strong>
+                      <span class="admin-muted">Lege fest, wie die E-Mails im Feld getrennt sind.</span>
+                    </div>
+
+                    <div class="admin-bulk-delimiter-switch" role="tablist" aria-label="Trennformat">
+                      <button type="button" class="admin-bulk-delimiter-option" data-bulk-delimiter="paragraph" role="tab" aria-selected="false">Absatzgetrennt</button>
+                      <button type="button" class="admin-bulk-delimiter-option" data-bulk-delimiter="comma" role="tab" aria-selected="false">Kommagetrennt</button>
+                      <button type="button" class="admin-bulk-delimiter-option" data-bulk-delimiter="semicolon" role="tab" aria-selected="false">Semikolongetrennt</button>
+                      <button type="button" class="admin-bulk-delimiter-option" data-bulk-delimiter="tab" role="tab" aria-selected="false">Tabulatorgetrennt</button>
+                    </div>
+                  </div>
+
+                  <label class="admin-field">
+                    <span>E-Mail-Liste</span>
+                    <textarea
+                      name="bulkEmails"
+                      rows="8"
+                      required
+                      data-bulk-emails-input
+                      placeholder="<%= bulkDelimiterExamples[resolvedBulkDelimiter] %>"
+                    ><%= bulkValues.bulkEmails || '' %></textarea>
+                  </label>
+
+                  <div class="admin-form-grid admin-form-grid-2">
+                    <label class="admin-field">
+                      <span>Rolle</span>
+                      <select name="bulkRole">
+                        <option value="student" <%= (bulkValues.bulkRole || 'student') === 'student' ? 'selected' : '' %>>Schueler</option>
+                        <option value="teacher" <%= bulkValues.bulkRole === 'teacher' ? 'selected' : '' %>>Lehrer</option>
+                        <option value="admin" <%= bulkValues.bulkRole === 'admin' ? 'selected' : '' %>>Admin</option>
+                      </select>
+                    </label>
+
+                    <label class="admin-field">
+                      <span>Gemeinsames Passwort</span>
+                      <input name="bulkPassword" type="password" placeholder="Ein Passwort fuer alle">
+                    </label>
+                  </div>
+
+                  <label class="admin-inline-option admin-inline-option-simple">
+                    <input type="checkbox" name="bulkUseInitial" <%= bulkValues.bulkUseInitial ? 'checked' : '' %>>
+                    <span>INITIAL_PASSWORD nutzen</span>
+                  </label>
+
+                  <div class="admin-panel-actions">
+                    <button class="btn btn-primary" type="submit">Bulk anlegen</button>
+                  </div>
+                </form>
+
+                <% if (hasBulkResult) { %>
+                  <div class="admin-result-split">
+                    <div class="admin-result-block">
+                      <h4>Erfolgreich</h4>
+                      <% if (bulkResult.success.length) { %>
+                        <ul class="admin-result-list">
+                          <% bulkResult.success.forEach(function(mail){ %>
+                            <li><%= mail %></li>
+                          <% }) %>
+                        </ul>
+                      <% } else { %>
+                        <p class="admin-muted">Keine erfolgreichen Anlegungen.</p>
+                      <% } %>
+                    </div>
+
+                    <div class="admin-result-block">
+                      <h4>Fehlgeschlagen</h4>
+                      <% if (bulkResult.failed.length) { %>
+                        <ul class="admin-result-list">
+                          <% bulkResult.failed.forEach(function(item){ %>
+                            <li><strong><%= item.email %></strong> - <%= item.reason %></li>
+                          <% }) %>
+                        </ul>
+                      <% } else { %>
+                        <p class="admin-muted">Keine fehlgeschlagenen Eintraege.</p>
+                      <% } %>
+                    </div>
+                  </div>
                 <% } %>
               </div>
-            <% } %>
+            </section>
           </div>
         </div>
       </section>

@@ -42,6 +42,30 @@ function sanitizeFilename(name) {
     .slice(0, 120);
 }
 
+function hasMappedSubjectId(value) {
+  const numeric = Number(value);
+  return Number.isInteger(numeric) && numeric > 0;
+}
+
+function resolveLegacyClassSubject(classInfo) {
+  const legacySubject = String(classInfo?.subject || "").trim();
+  const subjectCount = Number(classInfo?.subject_count || 0);
+  if (!legacySubject) return "";
+  return subjectCount <= 1 ? legacySubject : "";
+}
+
+function resolveSubjectLabel(source, classInfo, fallback = "Ohne Fachzuordnung") {
+  const explicitSubject = String(source?.subject_name || "").trim();
+  if (explicitSubject) return explicitSubject;
+
+  if (!hasMappedSubjectId(source?.subject_id)) {
+    const legacySubject = resolveLegacyClassSubject(classInfo);
+    if (legacySubject) return legacySubject;
+  }
+
+  return fallback;
+}
+
 async function loadStudentProfile(email) {
   return getAsync(
     "SELECT s.*, c.name as class_name, c.subject as class_subject, c.id as class_id FROM students s JOIN classes c ON c.id = s.class_id WHERE s.email = ?",
@@ -53,17 +77,34 @@ async function loadClassInfo(classId) {
   return getAsync(
     `SELECT c.id, c.name, c.subject,
             COALESCE((
+              SELECT COUNT(DISTINCT cst.subject_id)
+              FROM class_subject_teacher cst
+              WHERE cst.class_id = c.id
+            ), 0) AS subject_count,
+            COALESCE((
               SELECT STRING_AGG(teacher_rows.email, ', ')
               FROM (
                 SELECT DISTINCT u.email
                 FROM class_subject_teacher cst
                 JOIN users u ON u.id = cst.teacher_id
-                WHERE cst.class_id = c.id AND cst.subject_id = c.subject_id
+                WHERE cst.class_id = c.id
                 ORDER BY u.email
               ) AS teacher_rows
             ), '') AS teacher_email
      FROM classes c
      WHERE c.id = ?`,
+    [classId]
+  );
+}
+
+async function loadClassSubjects(classId) {
+  return allAsync(
+    `SELECT cst.subject_id, COALESCE(s.name, c.subject) AS subject_name
+     FROM class_subject_teacher cst
+     JOIN classes c ON c.id = cst.class_id
+     LEFT JOIN subjects s ON s.id = cst.subject_id
+     WHERE cst.class_id = ? AND cst.school_year_id = c.school_year_id
+     ORDER BY subject_name ASC`,
     [classId]
   );
 }
@@ -90,7 +131,7 @@ async function loadClassAbsenceMode(classId) {
      FROM class_subject_teacher cst
      JOIN classes c ON c.id = cst.class_id
      LEFT JOIN teacher_grading_profiles gp ON gp.teacher_id = cst.teacher_id AND gp.is_active = ?
-     WHERE c.id = ? AND cst.subject_id = c.subject_id
+     WHERE c.id = ?
      ORDER BY gp.created_at ASC, gp.id ASC
      LIMIT 1`,
     [true, classId]
@@ -100,15 +141,39 @@ async function loadClassAbsenceMode(classId) {
 
 async function loadStudentGrades(studentId) {
   return allAsync(
-    `SELECT g.id, g.grade, g.note, g.created_at, g.is_absent, gt.id as template_id, gt.name, gt.category, gt.weight, gt.date, gt.description, c.subject as class_subject, g.attachment_path, g.attachment_original_name, g.attachment_mime, g.attachment_size, g.external_link, 0 as is_special
+    `SELECT g.id, g.grade, g.note, g.created_at, g.is_absent, g.excluded_from_average, gt.id as template_id, gt.name, gt.category, gt.weight, gt.date, gt.description, s.name as subject_name, gt.subject_id, c.subject as class_subject,
+            COALESCE((
+              SELECT STRING_AGG(teacher_rows.email, ', ')
+              FROM (
+                SELECT DISTINCT u.email
+                FROM class_subject_teacher cst
+                JOIN users u ON u.id = cst.teacher_id
+                WHERE cst.class_id = g.class_id AND cst.subject_id = gt.subject_id
+                ORDER BY u.email
+              ) AS teacher_rows
+            ), '') AS teacher_email,
+            g.attachment_path, g.attachment_original_name, g.attachment_mime, g.attachment_size, g.external_link, 0 as is_special
      FROM grades g
      JOIN grade_templates gt ON gt.id = g.grade_template_id
      JOIN classes c ON c.id = g.class_id
+     LEFT JOIN subjects s ON s.id = gt.subject_id
      WHERE g.student_id = ?
      UNION ALL
-     SELECT sa.id, sa.grade, sa.description as note, sa.created_at, false as is_absent, NULL as template_id, sa.name, sa.type as category, sa.weight, sa.created_at as date, sa.description, c.subject as class_subject, NULL as attachment_path, NULL as attachment_original_name, NULL as attachment_mime, NULL as attachment_size, NULL as external_link, 1 as is_special
+     SELECT sa.id, sa.grade, sa.description as note, sa.created_at, false as is_absent, sa.excluded_from_average, NULL as template_id, sa.name, sa.type as category, sa.weight, sa.created_at as date, sa.description, ss.name as subject_name, sa.subject_id, c.subject as class_subject,
+            COALESCE((
+              SELECT STRING_AGG(teacher_rows.email, ', ')
+              FROM (
+                SELECT DISTINCT u.email
+                FROM class_subject_teacher cst
+                JOIN users u ON u.id = cst.teacher_id
+                WHERE cst.class_id = sa.class_id AND cst.subject_id = sa.subject_id
+                ORDER BY u.email
+              ) AS teacher_rows
+            ), '') AS teacher_email,
+            NULL as attachment_path, NULL as attachment_original_name, NULL as attachment_mime, NULL as attachment_size, NULL as external_link, 1 as is_special
      FROM special_assessments sa
      JOIN classes c ON c.id = sa.class_id
+     LEFT JOIN subjects ss ON ss.id = sa.subject_id
      WHERE sa.student_id = ?
      ORDER BY created_at DESC`,
     [studentId, studentId]
@@ -117,28 +182,42 @@ async function loadStudentGrades(studentId) {
 
 async function loadTemplates(classId) {
   return allAsync(
-    "SELECT id, name, category, weight, date, description FROM grade_templates WHERE class_id = ? AND archived_at IS NULL ORDER BY date, name",
+    `SELECT gt.id, gt.name, gt.category, gt.weight, gt.date, gt.description, s.name AS subject_name, gt.subject_id
+     FROM grade_templates gt
+     JOIN classes c ON c.id = gt.class_id
+     LEFT JOIN subjects s ON s.id = gt.subject_id
+     WHERE gt.class_id = ? AND gt.archived_at IS NULL
+     ORDER BY subject_name ASC, gt.date, gt.name`,
     [classId]
   );
 }
 
 async function loadArchivedTemplates(classId) {
   return allAsync(
-    "SELECT id, name, category, weight, date, description FROM grade_templates WHERE class_id = ? AND archived_at IS NOT NULL ORDER BY date DESC, name",
+    `SELECT gt.id, gt.name, gt.category, gt.weight, gt.date, gt.description, s.name AS subject_name, gt.subject_id
+     FROM grade_templates gt
+     JOIN classes c ON c.id = gt.class_id
+     LEFT JOIN subjects s ON s.id = gt.subject_id
+     WHERE gt.class_id = ? AND gt.archived_at IS NOT NULL
+     ORDER BY subject_name ASC, gt.date DESC, gt.name`,
     [classId]
   );
 }
 
 async function loadClassGradeRows(classId) {
   return allAsync(
-    `SELECT gt.name as subject, g.grade as value, gt.weight, g.is_absent
+    `SELECT subj.name as subject, g.grade as value, gt.weight, g.is_absent, g.excluded_from_average
      FROM grades g
-     JOIN students s ON s.id = g.student_id
+     JOIN students student ON student.id = g.student_id
      JOIN grade_templates gt ON gt.id = g.grade_template_id
-     WHERE s.class_id = ?
+     JOIN classes c ON c.id = g.class_id
+     LEFT JOIN subjects subj ON subj.id = gt.subject_id
+     WHERE student.class_id = ?
      UNION ALL
-     SELECT sa.name as subject, sa.grade as value, sa.weight, false as is_absent
+     SELECT subj.name as subject, sa.grade as value, sa.weight, false as is_absent, sa.excluded_from_average
      FROM special_assessments sa
+     JOIN classes c ON c.id = sa.class_id
+     LEFT JOIN subjects subj ON subj.id = sa.subject_id
      WHERE sa.class_id = ?`,
     [classId, classId]
   );
@@ -153,7 +232,7 @@ async function loadNotifications(studentId) {
 
 async function loadGradeMessages(studentId) {
   return allAsync(
-    `SELECT gm.id, gm.grade_id, gm.student_message, gm.teacher_reply, gm.teacher_reply_seen_at, gm.created_at, gm.replied_at
+    `SELECT gm.id, gm.grade_id, gm.student_message, gm.teacher_reply, gm.teacher_reply_by_email, gm.teacher_reply_seen_at, gm.student_hidden_at, gm.created_at, gm.replied_at
      FROM grade_messages gm
      JOIN grades g ON g.id = gm.grade_id
      WHERE gm.student_id = ? AND g.student_id = ?
@@ -163,25 +242,32 @@ async function loadGradeMessages(studentId) {
 }
 
 function mapGradeRow(row, classInfo) {
-  const subject = row.class_subject || classInfo?.subject || row.name || "Fach";
+  const subject = resolveSubjectLabel(row, classInfo);
   const gradedAt = row.date || row.created_at;
   const isSpecial = Boolean(row.is_special);
-  const baseComment = row.note || row.name || "";
-  let comment = baseComment;
+  const title = row.name || row.category || "Leistung";
+  const category = row.category || (isSpecial ? "Sonderleistung" : "");
+  const excludedFromAverage = Boolean(row.excluded_from_average);
+  let comment = row.note || "";
   if (isSpecial) {
     const displayName = row.name || row.category || "Sonderleistung";
     const description = row.description || row.note || "";
-    comment = description && description !== displayName ? `${displayName} – ${description}` : displayName;
+    comment = description && description !== displayName ? `${displayName} - ${description}` : displayName;
   }
   return {
     id: row.id,
     value: row.grade == null ? null : Number(row.grade),
     weight: row.weight == null ? 1 : Number(row.weight),
     is_absent: Boolean(row.is_absent),
+    title,
+    category,
     subject,
-    teacher: classInfo?.teacher_email || null,
+    subject_id: hasMappedSubjectId(row.subject_id) ? Number(row.subject_id) : null,
+    teacher: row.teacher_email || classInfo?.teacher_email || null,
     comment,
-    graded_at: gradedAt
+    graded_at: gradedAt,
+    excluded_from_average: excludedFromAverage,
+    weight_label: excludedFromAverage ? "Ohne Gewichtung" : null
   };
 }
 
@@ -193,7 +279,7 @@ function mapTaskRow(template, gradeRow, classInfo) {
     weight: Number(template.weight || 0),
     due_at: template.date || null,
     description: template.description || "",
-    subject: classInfo?.subject || "",
+    subject: resolveSubjectLabel(template, classInfo),
     graded: Boolean(gradeRow && gradeRow.id),
     grade: gradeRow ? Number(gradeRow.grade) : null,
     graded_at: gradeRow?.created_at || null,
@@ -202,11 +288,17 @@ function mapTaskRow(template, gradeRow, classInfo) {
 }
 
 function mapReturnRow(row, classInfo, messagesByGrade = new Map()) {
-  const subject = row.class_subject || classInfo?.subject || row.name || "";
+  const subject = resolveSubjectLabel(row, classInfo);
   const hasFile = Boolean(row.attachment_path);
   const hasLink = Boolean(row.external_link);
   const canMessage = Boolean(row.template_id && !row.is_special);
   const messages = canMessage ? messagesByGrade.get(String(row.id)) || [] : [];
+  const threadClosedAt = messages.reduce((latest, message) => {
+    const hiddenAt = message.student_hidden_at || null;
+    if (!hiddenAt) return latest;
+    if (!latest) return hiddenAt;
+    return new Date(hiddenAt) > new Date(latest) ? hiddenAt : latest;
+  }, null);
   return {
     id: row.id,
     template_id: row.template_id,
@@ -223,6 +315,7 @@ function mapReturnRow(row, classInfo, messagesByGrade = new Map()) {
     attachment_size: hasFile ? row.attachment_size || null : null,
     external_link: hasLink ? row.external_link : null,
     can_message: canMessage,
+    thread_closed_at: threadClosedAt,
     messages
   };
 }
@@ -234,6 +327,7 @@ function computeAverages(grades, options = {}) {
   let weightTotal = 0;
 
   grades.forEach((grade) => {
+    if (grade?.excluded_from_average) return;
     if (grade?.is_absent && absenceMode === ABSENCE_MODE_EXCLUDE) return;
     const value = Number(grade?.value);
     const weight = grade?.weight == null ? 1 : Number(grade.weight);
@@ -262,11 +356,12 @@ function computeClassAverages(rows, options = {}) {
   const absenceMode = normalizeAbsenceMode(options.absenceMode);
   const bucket = new Map();
   rows.forEach((row) => {
+    if (row?.excluded_from_average) return;
     if (row?.is_absent && absenceMode === ABSENCE_MODE_EXCLUDE) return;
     const value = Number(row?.value);
     const weight = row?.weight == null ? 1 : Number(row.weight);
     if (!isValidGradeValue(value) || !isValidWeightValue(weight)) return;
-    const key = row.subject || "Fach";
+    const key = row.subject || "Ohne Fachzuordnung";
     const entry = bucket.get(key) || { weightedSum: 0, weightTotal: 0 };
     entry.weightedSum += value * weight;
     entry.weightTotal += weight;
@@ -388,18 +483,22 @@ async function buildStudentDashboardViewModel(req) {
   if (!context) return null;
 
   const { student, classInfo, classAbsenceMode } = context;
-  const [gradeRows, templates, archivedTemplates, classRows, notifications] = await Promise.all([
+  const [gradeRows, templates, archivedTemplates, classRows, notifications, classSubjects] = await Promise.all([
     loadStudentGrades(student.id),
     loadTemplates(student.class_id),
     loadArchivedTemplates(student.class_id),
     loadClassGradeRows(student.class_id),
-    loadNotifications(student.id)
+    loadNotifications(student.id),
+    loadClassSubjects(student.class_id)
   ]);
 
   const grades = gradeRows.map((row) => mapGradeRow(row, classInfo));
-  const subjectSet = new Set(grades.map((grade) => grade.subject));
-  if (classInfo?.subject) subjectSet.add(classInfo.subject);
-  if (student.class_subject) subjectSet.add(student.class_subject);
+  const subjectSet = new Set(
+    classSubjects.map((entry) => String(entry.subject_name || "").trim()).filter(Boolean)
+  );
+  grades.forEach((grade) => {
+    if (grade.subject) subjectSet.add(grade.subject);
+  });
 
   const subjects = Array.from(subjectSet).filter(Boolean);
   const averages = computeAverages(grades, { absenceMode: classAbsenceMode });
@@ -423,7 +522,9 @@ async function buildStudentDashboardViewModel(req) {
       id: message.id,
       student_message: message.student_message,
       teacher_reply: message.teacher_reply || null,
+      teacher_reply_by_email: message.teacher_reply_by_email || null,
       teacher_reply_seen_at: message.teacher_reply_seen_at || null,
+      student_hidden_at: message.student_hidden_at || null,
       created_at: message.created_at,
       replied_at: message.replied_at || null
     });
@@ -437,7 +538,7 @@ async function buildStudentDashboardViewModel(req) {
   const studentProfile = {
     name: student.name,
     class: student.class_name || classInfo?.name || "Unbekannt",
-    subject: student.class_subject || classInfo?.subject || ""
+    schoolYear: req.res?.locals?.activeSchoolYear?.name || student.school_year || ""
   };
 
   return {
@@ -448,6 +549,7 @@ async function buildStudentDashboardViewModel(req) {
     archivedTasks,
     returns,
     initialData: {
+      currentUserEmail: req.session.user.email,
       grades,
       averages,
       tasks,
@@ -473,8 +575,21 @@ async function renderStudentDashboardPage(req, res, activePage) {
     });
   }
 
+  const requestedGradeSubject =
+    activePage === "grades" ? String(req.query.subject || "").trim() : "";
+  const selectedGradeSubject = viewModel.subjects.includes(requestedGradeSubject)
+    ? requestedGradeSubject
+    : "";
+  const gradeFilters = {
+    query: String(req.query.query || "").trim(),
+    startDate: String(req.query.startDate || "").trim(),
+    endDate: String(req.query.endDate || "").trim(),
+    sort: String(req.query.sort || "date").trim().toLowerCase() === "value" ? "value" : "date"
+  };
+
   return res.render("student-dashboard", {
     activePage,
+    activeSchoolYear: req.res?.locals?.activeSchoolYear || null,
     email: req.session.user.email,
     studentProfile: viewModel.studentProfile,
     subjects: viewModel.subjects,
@@ -483,6 +598,8 @@ async function renderStudentDashboardPage(req, res, activePage) {
     returns: viewModel.returns,
     materials: [],
     messages: [],
+    gradeSubject: selectedGradeSubject,
+    gradeFilters,
     initialData: viewModel.initialData,
     csrfToken: viewModel.csrfToken
   });
@@ -511,11 +628,15 @@ router.get("/profile", async (req, res, next) => {
     }
 
     const { student, classInfo } = context;
+    const classSubjects = await loadClassSubjects(student.class_id);
+    const subjects = classSubjects
+      .map((entry) => String(entry.subject_name || "").trim())
+      .filter(Boolean);
     res.json({
       name: student.name,
       class: student.class_name || classInfo?.name || "",
       classId: student.class_id,
-      subject: student.class_subject || classInfo?.subject || "",
+      subjects,
       schoolYear: student.school_year || null
     });
   } catch (err) {
@@ -539,6 +660,7 @@ router.get("/grades", async (req, res, next) => {
     let grades = gradeRows.map((row) => mapGradeRow(row, classInfo));
 
     const subject = String(req.query.subject || "").trim();
+    const query = String(req.query.query || "").trim().toLowerCase();
     const startDate = req.query.startDate ? new Date(req.query.startDate) : null;
     const endDate = req.query.endDate ? new Date(req.query.endDate) : null;
 
@@ -548,6 +670,13 @@ router.get("/grades", async (req, res, next) => {
 
     if (subject) {
       grades = grades.filter((grade) => grade.subject === subject);
+    }
+    if (query) {
+      grades = grades.filter((grade) =>
+        [grade.subject, grade.title, grade.category, grade.comment, grade.teacher]
+          .map((value) => String(value || "").toLowerCase())
+          .some((value) => value.includes(query))
+      );
     }
     if (startDate && !Number.isNaN(startDate.getTime())) {
       grades = grades.filter((grade) => {
@@ -654,7 +783,9 @@ router.get("/returns", async (req, res, next) => {
         id: message.id,
         student_message: message.student_message,
         teacher_reply: message.teacher_reply || null,
+        teacher_reply_by_email: message.teacher_reply_by_email || null,
         teacher_reply_seen_at: message.teacher_reply_seen_at || null,
+        student_hidden_at: message.student_hidden_at || null,
         created_at: message.created_at,
         replied_at: message.replied_at || null
       });
@@ -709,9 +840,51 @@ router.post("/returns/:gradeId/message", async (req, res, next) => {
     }
 
     await runAsync(
+      `UPDATE grade_messages
+       SET student_hidden_at = NULL
+       WHERE grade_id = ? AND student_id = ? AND student_hidden_at IS NOT NULL`,
+      [gradeId, context.student.id]
+    );
+    await runAsync(
       "INSERT INTO grade_messages (grade_id, student_id, student_message) VALUES (?,?,?)",
       [gradeId, context.student.id, message]
     );
+    return res.json({ ok: true });
+  } catch (err) {
+    next(err);
+  }
+});
+
+router.post("/returns/:gradeId/messages/hide", async (req, res, next) => {
+  try {
+    const context = await getStudentContext(req);
+    if (!context) {
+      return res.status(404).json({ error: "Student nicht gefunden." });
+    }
+
+    const gradeId = Number(req.params.gradeId);
+    if (!gradeId) {
+      return res.status(400).json({ error: "Ungueltige Rueckgabe-ID." });
+    }
+
+    const grade = await getAsync(
+      "SELECT id, grade_template_id FROM grades WHERE id = ? AND student_id = ?",
+      [gradeId, context.student.id]
+    );
+    if (!grade) {
+      return res.status(404).json({ error: "Rueckgabe nicht gefunden." });
+    }
+    if (!grade.grade_template_id) {
+      return res.status(400).json({ error: "Tickets sind nur fuer Rueckgaben aus Pruefungen verfuegbar." });
+    }
+
+    await runAsync(
+      `UPDATE grade_messages
+       SET student_hidden_at = current_timestamp
+       WHERE grade_id = ? AND student_id = ? AND student_hidden_at IS NULL`,
+      [gradeId, context.student.id]
+    );
+
     return res.json({ ok: true });
   } catch (err) {
     next(err);
@@ -892,7 +1065,6 @@ router.get("/grades.pdf", async (req, res, next) => {
       "Notenuebersicht",
       `Schueler: ${student.name}`,
       `Klasse: ${student.class_name || classInfo?.name || ""}`,
-      `Fach: ${student.class_subject || classInfo?.subject || ""}`,
       "",
       "Fach | Datum | Note | Gewicht | Kommentar"
     ];

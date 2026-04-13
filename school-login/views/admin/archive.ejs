@@ -70,57 +70,67 @@
 
       <section class="app-main archive-page">
         <section class="admin-card archive-hero" id="archive-overview">
-          <div class="archive-hero-grid">
-            <div class="archive-hero-copy">
+          <div class="archive-hero-head">
+            <div>
               <p class="app-main-subtitle">Archiv</p>
-              <h1>Historische Schuljahre fuer viel Datenvolumen aufbereitet</h1>
-              <p class="admin-muted archive-hero-text">
-                Die Seite ist auf grosse Tabellen ausgelegt: klare Kennzahlen, Sprungmarken, kompakte Tabellen,
-                Live-Filter und CSV-Downloads pro Datenbereich.
-              </p>
+              <h1>Archivdaten</h1>
             </div>
-
-            <div class="archive-hero-side">
-              <div class="archive-highlight-card">
-                <span class="archive-highlight-label">Gewaehltes Schuljahr</span>
-                <strong><%= selectedSchoolYear?.name || 'Kein Schuljahr' %></strong>
-                <small><%= selectedYearLabel %></small>
-              </div>
-
-              <div class="archive-highlight-grid">
-                <div class="archive-mini-stat">
-                  <span>Gesamtzeilen</span>
-                  <strong><%= formatNumber(totalRecords) %></strong>
-                </div>
-                <div class="archive-mini-stat">
-                  <span>Durchschnittsnote</span>
-                  <strong><%= formatAverageGrade(archiveStats?.averageGrade) %></strong>
-                </div>
-                <div class="archive-mini-stat">
-                  <span>Schueler mit Noten</span>
-                  <strong><%= formatNumber(archiveStats?.uniqueStudents || 0) %></strong>
-                </div>
-                <div class="archive-mini-stat">
-                  <span>Letzte Aktivitaet</span>
-                  <strong><%= formatDateTime(archiveStats?.latestActivityAt) %></strong>
-                </div>
-              </div>
+            <div class="archive-toolbar-actions">
+              <a class="btn btn-secondary" href="/admin/rollover">Schuljahreswechsel</a>
+              <a class="btn btn-secondary" href="/admin">Admin</a>
             </div>
           </div>
+
+          <dl class="archive-meta-grid">
+            <div class="archive-meta-item">
+              <dt>Schuljahr</dt>
+              <dd><%= selectedSchoolYear?.name || 'Kein Schuljahr' %></dd>
+            </div>
+            <div class="archive-meta-item">
+              <dt>Zeitraum</dt>
+              <dd><%= selectedYearLabel %></dd>
+            </div>
+            <div class="archive-meta-item">
+              <dt>Datensaetze</dt>
+              <dd><%= formatNumber(totalRecords) %></dd>
+            </div>
+            <div class="archive-meta-item">
+              <dt>Durchschnitt</dt>
+              <dd><%= formatAverageGrade(archiveStats?.averageGrade) %></dd>
+            </div>
+            <div class="archive-meta-item">
+              <dt>Schueler</dt>
+              <dd><%= formatNumber(archiveStats?.uniqueStudents || 0) %></dd>
+            </div>
+            <div class="archive-meta-item">
+              <dt>Lehrkraefte</dt>
+              <dd><%= formatNumber(archiveStats?.uniqueTeachers || 0) %></dd>
+            </div>
+            <div class="archive-meta-item">
+              <dt>Archivtypen</dt>
+              <dd><%= formatNumber(archiveStats?.archiveTypes || 0) %></dd>
+            </div>
+            <div class="archive-meta-item">
+              <dt>Letzte Aktivitaet</dt>
+              <dd><%= formatDateTime(archiveStats?.latestActivityAt) %></dd>
+            </div>
+          </dl>
+
+          <% if (activeSchoolYear) { %>
+            <div class="archive-context-note">
+              Aktiv: <strong><%= activeSchoolYear.name %></strong>
+              <% if (selectedSchoolYear && Number(activeSchoolYear.id) !== Number(selectedSchoolYear.id)) { %>
+                <span> | Ansicht: <%= selectedSchoolYear.name %></span>
+              <% } %>
+            </div>
+          <% } %>
         </section>
 
         <section class="admin-card archive-toolbar">
           <div class="archive-toolbar-head">
             <div>
-              <p class="admin-eyebrow">Filter</p>
-              <h2>Schuljahr fokussieren</h2>
-              <p class="admin-muted">
-                Wechsle zwischen Schuljahren und exportiere die sichtbaren Bereiche als vollstaendige CSV.
-              </p>
-            </div>
-            <div class="archive-toolbar-actions">
-              <a class="btn btn-secondary" href="/admin/rollover">Schuljahreswechsel</a>
-              <a class="btn btn-secondary" href="/admin">Zurueck zur Admin-Startseite</a>
+              <p class="admin-eyebrow">Ansicht</p>
+              <h2>Schuljahr / Export</h2>
             </div>
           </div>
 
@@ -165,18 +175,9 @@
             </div>
           <% } %>
 
-          <% if (activeSchoolYear) { %>
-            <div class="archive-context-note">
-              <strong>Aktives Schuljahr:</strong> <%= activeSchoolYear.name %>
-              <% if (selectedSchoolYear && Number(activeSchoolYear.id) !== Number(selectedSchoolYear.id)) { %>
-                <span> | Archivansicht zeigt derzeit <%= selectedSchoolYear.name %></span>
-              <% } %>
-            </div>
-          <% } %>
-
           <noscript>
             <div class="archive-context-note">
-              Live-Filter und schrittweises Nachladen benoetigen JavaScript. CSV-Downloads funktionieren weiterhin.
+              Ohne JavaScript sind nur Grundansicht und CSV-Export aktiv.
             </div>
           </noscript>
         </section>
@@ -190,35 +191,11 @@
           <% }) %>
         </nav>
 
-        <section class="archive-summary-grid">
-          <div class="admin-card archive-summary-card">
-            <p class="admin-eyebrow">Datendichte</p>
-            <h3><%= formatNumber(totalRecords) %></h3>
-            <p class="admin-muted">Klassen, Zuordnungen, Noten und Archivprotokolle in einer Sicht.</p>
-          </div>
-          <div class="admin-card archive-summary-card">
-            <p class="admin-eyebrow">Lehrkraefte</p>
-            <h3><%= formatNumber(archiveStats?.uniqueTeachers || 0) %></h3>
-            <p class="admin-muted"><%= formatNumber(assignments.length) %> Unterrichtszuordnungen im gewaehlten Jahr.</p>
-          </div>
-          <div class="admin-card archive-summary-card">
-            <p class="admin-eyebrow">Schueler</p>
-            <h3><%= formatNumber(archiveStats?.uniqueStudents || 0) %></h3>
-            <p class="admin-muted"><%= formatNumber(totalGrades) %> archivierte Noten mit direktem CSV-Export.</p>
-          </div>
-          <div class="admin-card archive-summary-card">
-            <p class="admin-eyebrow">Archivtypen</p>
-            <h3><%= formatNumber(archiveStats?.archiveTypes || 0) %></h3>
-            <p class="admin-muted">Zuletzt aktualisiert: <%= formatDateTime(archiveStats?.latestActivityAt) %>.</p>
-          </div>
-        </section>
-
         <section class="admin-card archive-section" id="archive-log" data-archive-section data-archive-page-size="20">
           <div class="archive-section-head">
             <div>
-              <p class="admin-eyebrow">Archivstatus</p>
-              <h2>Archivierte Bereiche</h2>
-              <p class="admin-muted">Protokollierte Archivlaeufe und deren Umfang im gewaehlten Schuljahr.</p>
+              <p class="admin-eyebrow">Status</p>
+              <h2>Archivstatus</h2>
             </div>
             <div class="archive-section-actions">
               <span class="admin-badge"><%= formatNumber(archiveEntries.length) %> Eintraege</span>
@@ -237,7 +214,7 @@
                 <input type="search" placeholder="Nach Typ, Anzahl oder Datum filtern" data-archive-search>
               </label>
               <div class="archive-inline-stats">
-                <span class="archive-inline-stat">CSV exportiert alle <%= formatNumber(archiveEntries.length) %> Zeilen.</span>
+                <span class="archive-inline-stat">CSV: <%= formatNumber(archiveEntries.length) %> Zeilen</span>
               </div>
             </div>
 
@@ -280,9 +257,8 @@
         <section class="admin-card archive-section" id="archive-classes" data-archive-section data-archive-page-size="24">
           <div class="archive-section-head">
             <div>
-              <p class="admin-eyebrow">Read-only</p>
+              <p class="admin-eyebrow">Tabelle</p>
               <h2>Klassen</h2>
-              <p class="admin-muted">Klassenstammdaten mit Zeitstempel, optimiert fuer schnelle Uebersicht und Export.</p>
             </div>
             <div class="archive-section-actions">
               <span class="admin-badge"><%= formatNumber(classes.length) %> Klassen</span>
@@ -302,7 +278,7 @@
               </label>
               <div class="archive-inline-stats">
                 <span class="archive-inline-stat"><%= formatNumber(classes.length) %> Datensaetze</span>
-                <span class="archive-inline-stat">CSV enthaelt alle Klassen dieses Schuljahres.</span>
+                <span class="archive-inline-stat">CSV komplett</span>
               </div>
             </div>
 
@@ -347,9 +323,8 @@
         <section class="admin-card archive-section" id="archive-assignments" data-archive-section data-archive-page-size="24">
           <div class="archive-section-head">
             <div>
-              <p class="admin-eyebrow">Read-only</p>
-              <h2>Lehrerzuordnungen</h2>
-              <p class="admin-muted">Gebuendelte Unterrichtszuordnungen pro Klasse und Fach fuer schnelles Nachschlagen.</p>
+              <p class="admin-eyebrow">Tabelle</p>
+              <h2>Zuordnungen</h2>
             </div>
             <div class="archive-section-actions">
               <span class="admin-badge"><%= formatNumber(assignments.length) %> Zuordnungen</span>
@@ -369,7 +344,7 @@
               </label>
               <div class="archive-inline-stats">
                 <span class="archive-inline-stat"><%= formatNumber(archiveStats?.uniqueTeachers || 0) %> Lehrkraefte beteiligt</span>
-                <span class="archive-inline-stat">Mehrfachzuweisungen wurden pro Klasse und Fach gebuendelt.</span>
+                <span class="archive-inline-stat">CSV komplett</span>
               </div>
             </div>
 
@@ -410,9 +385,8 @@
         <section class="admin-card archive-section archive-section-wide" id="archive-grades" data-archive-section data-archive-page-size="40">
           <div class="archive-section-head">
             <div>
-              <p class="admin-eyebrow">Read-only</p>
+              <p class="admin-eyebrow">Tabelle</p>
               <h2>Noten</h2>
-              <p class="admin-muted">Die groesste Datenmenge startet kompakt und laesst sich live filtern oder vollstaendig exportieren.</p>
             </div>
             <div class="archive-section-actions">
               <span class="admin-badge"><%= formatNumber(totalGrades) %> Noten</span>
@@ -433,7 +407,7 @@
               <div class="archive-inline-stats">
                 <span class="archive-inline-stat"><%= formatNumber(archiveStats?.uniqueStudents || 0) %> Schueler</span>
                 <span class="archive-inline-stat">Durchschnitt: <%= formatAverageGrade(archiveStats?.averageGrade) %></span>
-                <span class="archive-inline-stat">CSV exportiert alle <%= formatNumber(totalGrades) %> Noten.</span>
+                <span class="archive-inline-stat">CSV: <%= formatNumber(totalGrades) %> Noten</span>
               </div>
             </div>
 

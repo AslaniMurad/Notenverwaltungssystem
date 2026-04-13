@@ -16,9 +16,8 @@
           <div>
             <p class="app-main-subtitle">Unterrichtszuordnungen</p>
             <h1>Lehrer nach Klasse und Fach</h1>
-            <p class="admin-muted">Die Zuordnungen werden zentral ueber `class_subject_teacher` verwaltet.</p>
+            <p class="admin-muted">Hier siehst du alle Lehrer-Klasse-Zuordnungen im aktuellen Schuljahr.</p>
           </div>
-          <a class="btn btn-primary" href="/admin/assignments/new">Lehrer zuordnen</a>
         </div>
 
         <% if (message) { %>
@@ -40,48 +39,88 @@
           <% if (!assignments.length) { %>
             <div class="admin-empty">Noch keine Zuordnungen vorhanden.</div>
           <% } else { %>
-            <div class="grades-table-wrapper">
-              <table class="grades-table">
+            <div class="assign-index-toolbar">
+              <input
+                type="text"
+                id="assign-filter"
+                class="assign-search-input"
+                placeholder="Klasse, Fach oder Lehrer suchen..."
+                autocomplete="off"
+              >
+            </div>
+
+            <div class="assign-index-table-wrap">
+              <table class="assign-index-table" id="assign-table">
                 <thead>
                   <tr>
-                    <th>Klasse</th>
-                    <th>Fach</th>
-                    <th>Lehrer</th>
-                    <th>Aktionen</th>
+                    <th class="assign-col-class">Klasse</th>
+                    <th class="assign-col-subject">Fach</th>
+                    <th class="assign-col-teachers">Zugeordnete Lehrer</th>
+                    <th class="assign-col-action"></th>
                   </tr>
                 </thead>
                 <tbody>
                   <% assignments.forEach((assignmentGroup) => { %>
-                    <tr>
-                      <td><%= assignmentGroup.class_name %></td>
-                      <td><%= assignmentGroup.subject_name %></td>
-                      <td><%= assignmentGroup.teacher_names %></td>
-                      <td>
-                        <div class="admin-row wrap">
+                    <tr data-search="<%= assignmentGroup.class_name.toLowerCase() %> <%= assignmentGroup.subject_name.toLowerCase() %> <%= assignmentGroup.rows.map((r) => (r.teacher_display_name + ' ' + r.teacher_email).toLowerCase()).join(' ') %>">
+                      <td class="assign-col-class">
+                        <span class="assign-class-badge"><%= assignmentGroup.class_name %></span>
+                      </td>
+                      <td class="assign-col-subject"><%= assignmentGroup.subject_name %></td>
+                      <td class="assign-col-teachers">
+                        <div class="assign-chips">
                           <% assignmentGroup.rows.forEach((row) => { %>
-                            <form
-                              method="POST"
-                              action="/admin/assignments/delete"
-                              data-confirm-title="Zuordnung entfernen"
-                              data-confirm-message="Moechtest du diese Zuordnung wirklich entfernen?"
-                              data-confirm-note="Die Lehrerzuordnung fuer diese Klasse und dieses Fach wird geloescht."
-                              data-confirm-action="Entfernen"
-                              data-confirm-variant="danger"
-                            >
-                              <input type="hidden" name="_csrf" value="<%= csrfToken %>">
-                              <input type="hidden" name="assignment_id" value="<%= row.id %>">
-                              <button class="btn btn-danger btn-sm" type="submit"><%= row.teacher_email %> entfernen</button>
-                            </form>
+                            <span class="assign-chip">
+                              <span class="assign-chip-name"><%= row.teacher_display_name %></span>
+                              <form
+                                method="POST"
+                                action="/admin/assignments/delete"
+                                class="assign-chip-form"
+                                data-confirm-title="Zuordnung entfernen"
+                                data-confirm-message="<%= row.teacher_display_name %> (<%= row.teacher_email %>) von <%= assignmentGroup.class_name %> – <%= assignmentGroup.subject_name %> entfernen?"
+                                data-confirm-action="Entfernen"
+                                data-confirm-variant="danger"
+                              >
+                                <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+                                <input type="hidden" name="assignment_id" value="<%= row.id %>">
+                                <button class="assign-chip-remove" type="submit" title="<%= row.teacher_display_name %> entfernen">&times;</button>
+                              </form>
+                            </span>
                           <% }) %>
                         </div>
+                      </td>
+                      <td class="assign-col-action">
+                        <a class="btn btn-secondary btn-sm assign-btn-add" href="/admin/assignments/new?class=<%= assignmentGroup.class_id %>&subject=<%= assignmentGroup.subject_id %>">+ Lehrer</a>
                       </td>
                     </tr>
                   <% }) %>
                 </tbody>
               </table>
             </div>
+            <p class="admin-muted assign-no-results" id="assign-no-match" style="display:none">Keine Zuordnungen gefunden.</p>
           <% } %>
         </div>
+
+        <script>
+          (function () {
+            var filterInput = document.getElementById('assign-filter');
+            var noMatch = document.getElementById('assign-no-match');
+            if (!filterInput) return;
+
+            filterInput.addEventListener('input', function () {
+              var query = filterInput.value.trim().toLowerCase();
+              var rows = document.querySelectorAll('#assign-table tbody tr');
+              var visible = 0;
+
+              rows.forEach(function (row) {
+                var match = !query || (row.getAttribute('data-search') || '').indexOf(query) !== -1;
+                row.style.display = match ? '' : 'none';
+                if (match) visible++;
+              });
+
+              if (noMatch) noMatch.style.display = visible === 0 ? '' : 'none';
+            });
+          })();
+        </script>
       </section>
     </div>
 <% } }; %>

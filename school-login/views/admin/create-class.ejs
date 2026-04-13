@@ -1,6 +1,6 @@
 <%
   const page = {
-    title: 'Admin â€” Klasse erstellen',
+    title: 'Admin - Klasse erstellen',
     headerTitle: 'Adminbereich',
     styles: ['/css/admin.css'],
     scripts: ['/js/app.js'],
@@ -16,18 +16,23 @@
           <div>
             <p class="app-main-subtitle">Klassen</p>
             <h1>Neue Klasse anlegen</h1>
-            <p class="admin-muted">FÃ¼lle das Formular aus, um eine neue Klasse zu erstellen.</p>
+            <p class="admin-muted">Lege zuerst nur die Klasse an. Faecher und Lehrer werden spaeter separat zugeordnet.</p>
           </div>
         </div>
 
         <div class="admin-card">
           <form class="admin-form vertical" method="POST" action="/admin/classes">
             <input type="hidden" name="_csrf" value="<%= csrfToken %>">
-            <label>Klassenname</label>
-            <input type="text" name="name" placeholder="z.B. 3AHWII" required>
-            <label>Fach</label>
-            <input type="text" name="subject" placeholder="z.B. Informatik" required>
-            <p class="admin-muted">Lehrer werden anschliessend unter "Unterrichtszuordnung" verknuepft.</p>
+            <label for="name">Klassenname</label>
+            <input id="name" type="text" name="name" placeholder="z.B. 3AHWII" required>
+            <label for="head_teacher_id">Klassenvorstand</label>
+            <select id="head_teacher_id" name="head_teacher_id">
+              <option value="">Kein Klassenvorstand</option>
+              <% (teachers || []).forEach((teacher) => { %>
+                <option value="<%= teacher.id %>"><%= teacher.email %></option>
+              <% }) %>
+            </select>
+            <p class="admin-muted">Diese Klasse kann auch ohne Fachzuordnung gespeichert werden.</p>
             <button class="btn btn-primary" type="submit">Klasse erstellen</button>
           </form>
         </div>

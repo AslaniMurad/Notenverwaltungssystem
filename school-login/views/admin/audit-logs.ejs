@@ -1,75 +1,245 @@
 <%
   const search = query || {};
+  const filterError = auditFilterError || null;
+  const searchModes = auditSearchModes || {};
+  const methodOptions = Array.isArray(auditMethodOptions) ? auditMethodOptions : ["", "POST", "PUT", "PATCH", "DELETE"];
+  const returnTo = backHref || '/admin';
+  const resetParams = new URLSearchParams();
+  if (search.category && search.category !== 'all') resetParams.set('category', search.category);
+  if (returnTo) resetParams.set('returnTo', returnTo);
+  const resetHref = `/admin/audit-logs${resetParams.toString() ? `?${resetParams.toString()}` : ''}`;
+  const tabs = Array.isArray(categoryTabs) ? categoryTabs : [];
+  const pageState = pagination || {
+    currentPage: 1,
+    totalPages: 1,
+    pageSize: 50,
+    maxPageSize: 50,
+    rangeStart: 0,
+    rangeEnd: 0,
+    hasPrev: false,
+    hasNext: false,
+    prevHref: '#',
+    nextHref: '#',
+    firstHref: '#',
+    lastHref: '#',
+    pages: []
+  };
+  const hasLogs = Array.isArray(logs) && logs.length > 0;
   const page = {
     title: 'Admin - Audit-Log',
     headerTitle: 'Adminbereich',
     headerActions: [],
     styles: ['/css/admin.css'],
-    scripts: ['/js/app.js', '/js/admin-audit-logs.js'],
-    bodyClass: 'page-admin',
+    scripts: ['/js/app.js'],
+    bodyClass: 'page-admin page-admin-audit-focus',
     hideHeader: true,
     hideFooter: true,
     content: function () { %>
-    <div class="app-shell">
-      <%- include('./nav', { csrfToken, currentUser, activePath }) %>
-
-      <section class="app-main">
-        <div class="app-main-header">
+    <section class="admin-wrap admin-audit-focus-wrap">
+      <div class="admin-card admin-audit-hero">
+        <div class="admin-audit-hero-main">
           <div>
-            <p class="app-main-subtitle">Protokoll</p>
+            <p class="admin-eyebrow">Protokoll</p>
             <h1>Audit-Log</h1>
           </div>
-        </div>
-
-        <div class="admin-card">
-          <div class="admin-topbar">
-            <div>
-              <p class="admin-eyebrow">Filter</p>
-              <h3>Eintraege suchen</h3>
-            </div>
+          <div class="admin-audit-hero-actions">
+            <a class="btn btn-secondary" href="<%= returnTo %>">Zurueck</a>
           </div>
-          <form class="admin-form" method="GET" action="/admin/audit-logs">
-            <input type="text" name="actor" placeholder="Akteur (E-Mail)" value="<%= search.actor || '' %>">
-            <input type="text" name="action" placeholder="Beschreibung" value="<%= search.action || '' %>">
-            <input type="text" name="entity" placeholder="Entitaet (z.B. user, class)" value="<%= search.entity || '' %>">
+        </div>
+      </div>
+
+      <div class="admin-card">
+        <div class="admin-topbar">
+          <div>
+            <p class="admin-eyebrow">Filter</p>
+            <h3>Eintraege suchen</h3>
+          </div>
+        </div>
+        <% if (filterError) { %>
+          <div class="admin-audit-filter-error"><%= filterError %></div>
+        <% } %>
+        <form class="admin-form admin-audit-form" method="GET" action="/admin/audit-logs">
+          <input type="hidden" name="returnTo" value="<%= returnTo %>">
+          <input type="hidden" name="category" value="<%= search.category || 'all' %>">
+          <div class="admin-audit-filter-grid">
+            <label class="admin-audit-filter-field">
+              <span>Suchtext</span>
+              <input type="text" name="action" placeholder="Aktion, Bereich, Ziel oder Route" value="<%= search.action || '' %>">
+            </label>
+            <label class="admin-audit-filter-field">
+              <span>Suchmodus</span>
+              <select name="searchMode">
+                <% Object.entries(searchModes).forEach(function ([key, option]) { %>
+                  <option value="<%= key %>" <%= (search.searchMode || 'contains') === key ? 'selected' : '' %>><%= option.label %></option>
+                <% }) %>
+              </select>
+            </label>
+            <label class="admin-audit-filter-field">
+              <span>Akteur</span>
+              <input type="text" name="actor" placeholder="admin@example.com" value="<%= search.actor || '' %>">
+            </label>
+            <label class="admin-audit-filter-field">
+              <span>Route</span>
+              <input type="text" name="route" placeholder="/teacher/add-grade" value="<%= search.route || '' %>">
+            </label>
+            <label class="admin-audit-filter-field">
+              <span>Entitaet</span>
+              <input type="text" name="entity" placeholder="user, class, grade" value="<%= search.entity || '' %>">
+            </label>
+            <label class="admin-audit-filter-field">
+              <span>Methode</span>
+              <select name="method">
+                <% methodOptions.forEach(function (method) { %>
+                  <option value="<%= method %>" <%= (search.method || '') === method ? 'selected' : '' %>><%= method || 'Alle' %></option>
+                <% }) %>
+              </select>
+            </label>
+            <label class="admin-audit-filter-field">
+              <span>Status</span>
+              <input type="text" name="status" inputmode="numeric" maxlength="3" placeholder="200" value="<%= search.status || '' %>">
+            </label>
+          </div>
+          <div class="admin-audit-filter-actions">
             <button class="btn btn-secondary" type="submit">Suchen</button>
-            <a class="btn" href="/admin/audit-logs">Zuruecksetzen</a>
-          </form>
+            <a class="btn" href="<%= resetHref %>">Zuruecksetzen</a>
+          </div>
+        </form>
+      </div>
+
+      <div class="admin-card">
+        <div class="admin-topbar admin-topbar-stack">
+          <div>
+            <p class="admin-eyebrow">Audit-Bereiche</p>
+            <h3 class="admin-heading-spaced"><%= activeCategoryLabel || 'Hauptlog' %></h3>
+            <p class="admin-muted">
+              <% if (hasLogs) { %>
+                Zeige <strong><%= pageState.rangeStart %></strong> bis <strong><%= pageState.rangeEnd %></strong> von <strong><%= Number(totalCount || 0) %></strong> Eintraegen.
+              <% } else { %>
+                Keine Audit-Eintraege gefunden.
+              <% } %>
+            </p>
+          </div>
+          <div class="admin-audit-summary">
+            <span class="admin-badge"><%= Number(totalCount || 0) %> Eintraege</span>
+            <span class="admin-badge admin-badge-neutral">Seite <%= pageState.currentPage %> / <%= pageState.totalPages %></span>
+            <span class="admin-badge admin-badge-neutral">Max. <%= pageState.maxPageSize %> pro Seite</span>
+          </div>
         </div>
 
-        <div class="admin-card">
-          <div class="admin-topbar">
-            <h3 class="admin-heading-spaced">Letzte Aktionen</h3>
-            <span
-              class="admin-badge"
-              id="audit-log-count"
-              data-total-count="<%= Number(totalCount || 0) %>"
-            ><%= Number(totalCount || 0) %> Eintraege</span>
-          </div>
-          <table class="admin-table" id="audit-log-table">
+        <% if (tabs.length > 0) { %>
+          <nav class="admin-audit-tabs" aria-label="Audit-Kategorien">
+            <% tabs.forEach(function (tab) { %>
+              <a class="admin-audit-tab <%= tab.isCurrent ? 'is-active' : '' %>" href="<%= tab.href %>">
+                <span class="admin-audit-tab-title"><%= tab.label %></span>
+                <span class="admin-audit-tab-count"><%= tab.count %></span>
+              </a>
+            <% }) %>
+          </nav>
+        <% } %>
+
+        <% if (pageState.totalPages > 1) { %>
+          <nav class="admin-pagination" aria-label="Audit-Log Seiten oben">
+            <div class="admin-pagination-group">
+              <a class="btn <%= pageState.hasPrev ? '' : 'is-disabled' %>" href="<%= pageState.hasPrev ? pageState.firstHref : '#' %>">Erste</a>
+              <a class="btn <%= pageState.hasPrev ? '' : 'is-disabled' %>" href="<%= pageState.hasPrev ? pageState.prevHref : '#' %>">Zurueck</a>
+            </div>
+            <div class="admin-pagination-pages">
+              <% pageState.pages.forEach(function (pageLink) { %>
+                <a class="btn <%= pageLink.isCurrent ? 'btn-secondary' : '' %>" href="<%= pageLink.href %>"><%= pageLink.number %></a>
+              <% }) %>
+            </div>
+            <div class="admin-pagination-group">
+              <a class="btn <%= pageState.hasNext ? '' : 'is-disabled' %>" href="<%= pageState.hasNext ? pageState.nextHref : '#' %>">Weiter</a>
+              <a class="btn <%= pageState.hasNext ? '' : 'is-disabled' %>" href="<%= pageState.hasNext ? pageState.lastHref : '#' %>">Letzte</a>
+            </div>
+          </nav>
+        <% } %>
+
+        <div class="admin-table-wrap">
+          <table class="admin-table admin-audit-table">
             <thead>
               <tr>
                 <th>Zeit</th>
+                <th>Kategorie</th>
                 <th>Akteur</th>
-                <th>Beschreibung</th>
+                <th>Bereich</th>
+                <th>Aktion</th>
+                <th>Ziel / Entitaet</th>
+                <th>Details / Eingaben</th>
+                <th>Parameter / Filter</th>
+                <th>Request / Client</th>
               </tr>
             </thead>
-            <tbody id="audit-log-table-body">
-              <% if (!logs || logs.length === 0) { %>
-                <tr><td colspan="3" class="admin-muted">Keine Audit-Eintraege gefunden.</td></tr>
+            <tbody>
+              <% if (!hasLogs) { %>
+                <tr>
+                  <td colspan="9" class="admin-muted">Keine Audit-Eintraege gefunden.</td>
+                </tr>
               <% } %>
               <% logs.forEach(function(entry){ %>
-                <tr data-log-id="<%= entry.id %>">
-                  <td><%= entry.created_at || '-' %></td>
-                  <td><%= entry.actor_email || '-' %></td>
-                  <td><%= entry.action || '-' %></td>
+                <tr>
+                  <td class="admin-audit-time">
+                    <strong><%= entry.created_at_label || '-' %></strong>
+                  </td>
+                  <td class="admin-audit-cell">
+                    <span class="admin-pill"><%= entry.role_log_label || 'Hauptlog' %></span>
+                  </td>
+                  <td class="admin-audit-cell">
+                    <strong><%= entry.actor_label || '-' %></strong>
+                    <div class="admin-muted"><%= entry.actor_role_label || '-' %></div>
+                  </td>
+                  <td class="admin-audit-cell">
+                    <span class="admin-pill"><%= entry.scope_label || '-' %></span>
+                  </td>
+                  <td class="admin-audit-cell">
+                    <strong><%= entry.action_title || entry.action || '-' %></strong>
+                  </td>
+                  <td class="admin-audit-cell">
+                    <div><strong><%= entry.target_label || '-' %></strong></div>
+                    <div class="admin-muted"><%= entry.entity_label || '-' %></div>
+                  </td>
+                  <td class="admin-audit-cell">
+                    <div><%= entry.detail_summary || '-' %></div>
+                    <div class="admin-muted admin-audit-inline-label">Eingaben</div>
+                    <div class="admin-muted"><%= entry.body_summary || '-' %></div>
+                  </td>
+                  <td class="admin-audit-cell">
+                    <div class="admin-muted admin-audit-inline-label">Parameter</div>
+                    <div><%= entry.params_summary || '-' %></div>
+                    <div class="admin-muted admin-audit-inline-label">Filter</div>
+                    <div><%= entry.query_summary || '-' %></div>
+                  </td>
+                  <td class="admin-audit-cell">
+                    <div><span class="admin-pill admin-pill-compact"><%= entry.http_method || '-' %></span></div>
+                    <div class="admin-muted"><%= entry.route_path || '-' %></div>
+                    <div class="admin-muted">Status: <%= entry.status_code || '-' %></div>
+                    <div class="admin-muted admin-audit-inline-label">Client</div>
+                    <div class="admin-muted"><%= entry.client_summary || '-' %></div>
+                  </td>
                 </tr>
               <% }) %>
             </tbody>
           </table>
-          <div id="audit-logs-sentinel" class="admin-muted" style="padding-top:10px;">Weitere Eintraege werden automatisch geladen ...</div>
         </div>
-      </section>
-    </div>
+
+        <% if (pageState.totalPages > 1) { %>
+          <nav class="admin-pagination admin-pagination-bottom" aria-label="Audit-Log Seiten unten">
+            <div class="admin-pagination-group">
+              <a class="btn <%= pageState.hasPrev ? '' : 'is-disabled' %>" href="<%= pageState.hasPrev ? pageState.firstHref : '#' %>">Erste</a>
+              <a class="btn <%= pageState.hasPrev ? '' : 'is-disabled' %>" href="<%= pageState.hasPrev ? pageState.prevHref : '#' %>">Zurueck</a>
+            </div>
+            <div class="admin-pagination-pages">
+              <% pageState.pages.forEach(function (pageLink) { %>
+                <a class="btn <%= pageLink.isCurrent ? 'btn-secondary' : '' %>" href="<%= pageLink.href %>"><%= pageLink.number %></a>
+              <% }) %>
+            </div>
+            <div class="admin-pagination-group">
+              <a class="btn <%= pageState.hasNext ? '' : 'is-disabled' %>" href="<%= pageState.hasNext ? pageState.nextHref : '#' %>">Weiter</a>
+              <a class="btn <%= pageState.hasNext ? '' : 'is-disabled' %>" href="<%= pageState.hasNext ? pageState.lastHref : '#' %>">Letzte</a>
+            </div>
+          </nav>
+        <% } %>
+      </div>
+    </section>
 <% } }; %>
 <%- include('../layout', page) %>

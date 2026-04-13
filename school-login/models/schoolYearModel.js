@@ -39,11 +39,21 @@ async function getSchoolYearByName(name) {
 
 async function listClassesBySchoolYear(schoolYearId) {
   return allAsync(
-    `SELECT id, name, subject, subject_id, school_year_id, created_at
+    `SELECT id, name, subject, subject_id, school_year_id, head_teacher_id, created_at
      FROM classes
      WHERE school_year_id = ?
-     ORDER BY name ASC, subject ASC`,
+     ORDER BY name ASC, id ASC`,
     [schoolYearId]
+  );
+}
+
+async function listStudentsByClassId(classId) {
+  return allAsync(
+    `SELECT id, name, email
+     FROM students
+     WHERE class_id = ?
+     ORDER BY name ASC, email ASC, id ASC`,
+    [classId]
   );
 }
 
@@ -139,6 +149,7 @@ module.exports = {
   listArchivesBySchoolYear,
   listAssignmentRowsBySchoolYear,
   listClassesBySchoolYear,
+  listStudentsByClassId,
   listGradesBySchoolYear,
   listRolloverLogs,
   listSchoolYears

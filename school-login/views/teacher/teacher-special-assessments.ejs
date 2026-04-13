@@ -1,6 +1,6 @@
-<%
+﻿<%
   const page = {
-    title: `Lehrer – Sonderleistungen (${classData.name})`,
+    title: `Lehrer â€“ Sonderleistungen (${classData.name})`,
     headerTitle: 'Lehrerbereich',
     styles: ['/css/teacher-pages.css'],
     scripts: ['/js/app.js'],
@@ -21,11 +21,11 @@
           "wunschpr-fung": "wunschprufung"
         })[
           String(value || "")
-            .replace(/Ã¤/g, "ä")
-            .replace(/Ã¶/g, "ö")
-            .replace(/Ã¼/g, "ü")
-            .replace(/ÃŸ/g, "ß")
-            .replace(/Â/g, "")
+            .replace(/ÃƒÂ¤/g, "Ã¤")
+            .replace(/ÃƒÂ¶/g, "Ã¶")
+            .replace(/ÃƒÂ¼/g, "Ã¼")
+            .replace(/ÃƒÅ¸/g, "ÃŸ")
+            .replace(/Ã‚/g, "")
             .normalize("NFD")
             .replace(/[\u0300-\u036f]/g, "")
             .toLowerCase()
@@ -33,11 +33,11 @@
             .replace(/^-+|-+$/g, "")
         ] ||
         String(value || "")
-          .replace(/Ã¤/g, "ä")
-          .replace(/Ã¶/g, "ö")
-          .replace(/Ã¼/g, "ü")
-          .replace(/ÃŸ/g, "ß")
-          .replace(/Â/g, "")
+          .replace(/ÃƒÂ¤/g, "Ã¤")
+          .replace(/ÃƒÂ¶/g, "Ã¶")
+          .replace(/ÃƒÂ¼/g, "Ã¼")
+          .replace(/ÃƒÅ¸/g, "ÃŸ")
+          .replace(/Ã‚/g, "")
           .normalize("NFD")
           .replace(/[\u0300-\u036f]/g, "")
           .toLowerCase()
@@ -50,16 +50,16 @@
 
         <div class="app-nav">
           <div class="nav-section">
-            <div class="nav-section-title">Menü</div>
-            <a href="/teacher/classes">Meine Klassen</a>
-            <a href="/teacher/create-class">Klasse erstellen</a>
+            <div class="nav-section-title">MenÃ¼</div>
+            <a href="/teacher/classes">Fächer</a>
+            <a href="/teacher/create-class">Fach erstellen</a>
             <a href="/teacher/settings">Einstellungen</a>
             <div class="nav-section-title">Klasse: <%= classData.name %> / <%= classData.subject %></div>
-            <a href="/teacher/students/<%= classData.id %>">Schüler</a>
+            <a href="/teacher/students/<%= classData.id %>">SchÃ¼ler</a>
             <a class="<%= (typeof openMessageCount !== 'undefined' && openMessageCount > 0) ? 'is-alert' : '' %>" href="/teacher/test-questions/<%= classData.id %>">Fragen zu Tests<% if (typeof openMessageCount !== 'undefined' && openMessageCount > 0) { %><span class="nav-notification-badge"><%= openMessageCount %></span><% } %></a>
             <a href="/teacher/grades/<%= classData.id %>">Noten</a>
             <a class="is-active" href="/teacher/special-assessments/<%= classData.id %>">Sonderleistungen</a>
-            <a href="/teacher/grade-templates/<%= classData.id %>">Prüfungen</a>
+            <a href="/teacher/grade-templates/<%= classData.id %>">PrÃ¼fungen</a>
             <a href="/teacher/class-statistics/<%= classData.id %>">Statistiken</a>
             <form class="logout-form" method="POST" action="/logout">
               <input type="hidden" name="_csrf" value="<%= csrfToken %>">
@@ -74,15 +74,15 @@
           <div>
             <p class="teacher-eyebrow">Klasse <%= classData.name %></p>
             <h1>Sonderleistungen</h1>
-            <p class="teacher-muted">Fach: <%= classData.subject %> · Individuelle Zusatzbewertungen</p>
+            <p class="teacher-muted">Fach: <%= classData.subject %> Â· Individuelle Zusatzbewertungen</p>
           </div>
           <div class="teacher-actions-inline">
-            <a class="btn btn-secondary" href="/teacher/classes">Zurück</a>
+            <a class="btn btn-secondary" href="/teacher/classes">ZurÃ¼ck</a>
           </div>
         </header>
 
         <div class="teacher-alert info">
-          Sonderleistungen nutzen Punkte und fliessen zusätzlich in die Gesamtnote ein.
+          Sonderleistungen nutzen Punkte und fliessen zusÃ¤tzlich in die Gesamtnote ein.
         </div>
 
         <div class="teacher-card">
@@ -100,32 +100,32 @@
           <form class="teacher-form" method="POST" action="/teacher/special-assessments/<%= classData.id %>">
             <input type="hidden" name="_csrf" value="<%= csrfToken %>">
 
-            <label for="student_id">Schüler *</label>
+            <label for="student_id">SchÃ¼ler *</label>
             <select id="student_id" name="student_id" required>
-              <option value="">-- Schüler wählen --</option>
+              <option value="">-- SchÃ¼ler wÃ¤hlen --</option>
               <% students.forEach(student => { %>
-                <option value="<%= student.id %>" <%= String(formData.student_id) === String(student.id) ? 'selected' : '' %>>
-                  <%= student.name %> (<%= student.email %>)
+                <option value="<%= student.id %>" <%= String(formData.student_id) === String(student.id) ? 'selected' : '' %> <%= student.is_excluded ? 'disabled' : '' %>>
+                  <%= student.name %> (<%= student.email %>)<%= student.is_excluded ? ' - ausgeschlossen' : '' %>
                 </option>
               <% }) %>
             </select>
 
             <label for="type">Typ *</label>
             <select id="type" name="type" required>
-              <option value="">-- Typ wählen --</option>
+              <option value="">-- Typ wÃ¤hlen --</option>
               <% specialTypes.forEach(typeOption => { %>
                 <option value="<%= typeOption %>" <%= formData.type === typeOption ? 'selected' : '' %>>
                   <%= typeOption %>
                 </option>
               <% }) %>
             </select>
-            <small class="form-hint">Für "Benutzerdefiniert" ist eine eigene Bezeichnung Pflicht.</small>
+            <small class="form-hint">FÃ¼r "Benutzerdefiniert" ist eine eigene Bezeichnung Pflicht.</small>
 
             <label for="name">Bezeichnung</label>
-            <input type="text" id="name" name="name" value="<%= formData.name || '' %>" placeholder="z.B. Präsentation Modul 2">
+            <input type="text" id="name" name="name" value="<%= formData.name || '' %>" placeholder="z.B. PrÃ¤sentation Modul 2">
 
             <label for="description">Beschreibung</label>
-            <textarea id="description" name="description" rows="2" placeholder="Kurzbeschreibung oder Wunsch des Schülers"><%= formData.description || '' %></textarea>
+            <textarea id="description" name="description" rows="2" placeholder="Kurzbeschreibung oder Wunsch des SchÃ¼lers"><%= formData.description || '' %></textarea>
 
             <label for="weight">Gewichtung (ab 0 <%= weightUnit %>) *</label>
             <input type="number" id="weight" name="weight" min="0" step="0.5" required value="<%= formData.weight || '' %>">
@@ -135,7 +135,7 @@
 
             <div class="teacher-form-actions">
               <button class="btn btn-primary" type="submit">Sonderleistung speichern</button>
-              <a class="btn btn-secondary" href="/teacher/grades/<%= classData.id %>">Zurück zu Noten</a>
+              <a class="btn btn-secondary" href="/teacher/grades/<%= classData.id %>">ZurÃ¼ck zu Noten</a>
             </div>
           </form>
         </div>
@@ -143,34 +143,37 @@
         <div class="teacher-card">
           <div class="teacher-card-header">
             <div>
-              <p class="teacher-eyebrow">Übersicht</p>
+              <p class="teacher-eyebrow">Ãœbersicht</p>
               <h3>Sonderleistungen der Klasse</h3>
             </div>
-            <div class="teacher-meta-chip"><%= assessments.length %> Einträge</div>
+            <div class="teacher-meta-chip"><%= assessments.length %> EintrÃ¤ge</div>
           </div>
 
           <div class="grades-list">
             <% if (assessments.length === 0) { %>
               <div class="teacher-empty">
                 <h4>Noch keine Sonderleistungen</h4>
-                <p>Lege individuelle Bewertungen für einzelne Schüler an.</p>
+                <p>Lege individuelle Bewertungen fÃ¼r einzelne SchÃ¼ler an.</p>
               </div>
             <% } else { %>
               <% assessments.forEach(assessment => { %>
-                <div class="grade-item">
+                <div class="grade-item <%= assessment.is_subject_excluded ? 'is-excluded' : '' %>">
                   <div class="grade-item-header">
                     <div>
                           <span class="grade-category-badge <%= categoryClass(assessment.type) %>"><%= assessment.type %></span>
                       <h4 class="grade-item-title"><%= assessment.name %></h4>
                       <span class="weight-badge-small"><%= assessment.weight %> <%= weightUnit %></span>
                       <span class="grade-date"><%= new Date(assessment.created_at).toLocaleDateString('de-DE') %></span>
-                      <div class="teacher-muted">Schüler: <%= assessment.student_name %></div>
+                      <div class="teacher-muted">SchÃ¼ler: <%= assessment.student_name %></div>
+                      <% if (assessment.is_subject_excluded) { %>
+                        <div class="teacher-excluded-note"><span class="teacher-exclusion-badge">Ausgeschlossen</span> Nur historisch sichtbar</div>
+                      <% } %>
                     </div>
                     <div class="grade-item-actions">
                       <span class="grade-badge grade-<%= Math.round(assessment.grade) %>"><%= assessment.grade %></span>
                       <form class="inline delete-special-assessment-form" method="POST" action="/teacher/delete-special-assessment/<%= classData.id %>/<%= assessment.id %>" data-assessment-name="<%= assessment.name %>">
                         <input type="hidden" name="_csrf" value="<%= csrfToken %>">
-                        <button class="btn btn-danger btn-sm" type="button">Löschen</button>
+                        <button class="btn btn-danger btn-sm" type="button">LÃ¶schen</button>
                       </form>
                     </div>
                   </div>
@@ -188,15 +191,15 @@
     <div id="deleteSpecialAssessmentModal" class="modal-overlay">
       <div class="modal-content">
         <div class="modal-header">
-          <h3>Sonderleistung löschen</h3>
+          <h3>Sonderleistung lÃ¶schen</h3>
         </div>
         <div class="modal-body">
-          <p>Möchtest du die Sonderleistung <strong id="deleteSpecialAssessmentName"></strong> wirklich löschen?</p>
-          <p class="teacher-muted">Diese Aktion kann nicht rückgängig gemacht werden.</p>
+          <p>MÃ¶chtest du die Sonderleistung <strong id="deleteSpecialAssessmentName"></strong> wirklich lÃ¶schen?</p>
+          <p class="teacher-muted">Diese Aktion kann nicht rÃ¼ckgÃ¤ngig gemacht werden.</p>
         </div>
         <div class="modal-footer">
           <button class="btn btn-secondary" id="cancelDeleteSpecialAssessment">Abbrechen</button>
-          <button class="btn btn-danger" id="confirmDeleteSpecialAssessment">Löschen</button>
+          <button class="btn btn-danger" id="confirmDeleteSpecialAssessment">LÃ¶schen</button>
         </div>
       </div>
     </div>

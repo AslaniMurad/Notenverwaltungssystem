@@ -1,4 +1,4 @@
-<%
+﻿<%
   const page = {
     title: `Lehrer - Pruefung benoten (${classData.name})`,
     headerTitle: 'Lehrerbereich',
@@ -21,8 +21,8 @@
         <div class="app-nav">
           <div class="nav-section">
             <div class="nav-section-title">Menue</div>
-            <a href="/teacher/classes">Meine Klassen</a>
-            <a href="/teacher/create-class">Klasse erstellen</a>
+            <a href="/teacher/classes">Fächer</a>
+            <a href="/teacher/create-class">Fach erstellen</a>
             <a href="/teacher/settings">Einstellungen</a>
             <div class="nav-section-title">Klasse: <%= classData.name %> / <%= classData.subject %></div>
             <a href="/teacher/students/<%= classData.id %>">Schueler</a>
@@ -88,6 +88,9 @@
             <% if (existingCount > 0) { %>
               Bereits benotet: <strong><%= existingCount %></strong>
             <% } %>
+            <% if (excludedCount > 0) { %>
+              - Ausgeschlossen: <strong><%= excludedCount %></strong>
+            <% } %>
           </div>
 
           <form class="teacher-form" method="POST" action="/teacher/bulk-grade-template/<%= classData.id %>/<%= template.id %>">
@@ -108,13 +111,18 @@
                 <tbody>
                   <% rows.forEach((row) => { %>
                     <% const fieldKey = `s_${row.student.id}`; %>
-                    <tr class="<%= row.existing ? 'bulk-grade-row-locked' : '' %>">
+                    <tr class="<%= row.existing ? 'bulk-grade-row-locked' : '' %> <%= row.student.is_excluded ? 'is-excluded' : '' %>">
                       <td>
                         <strong><%= row.student.name %></strong>
                         <div class="teacher-muted"><%= row.student.email %></div>
+                        <% if (row.student.is_excluded) { %>
+                          <div class="teacher-excluded-note"><span class="teacher-exclusion-badge">Ausgeschlossen</span> Nicht bewertbar</div>
+                        <% } %>
                       </td>
                       <td>
-                        <% if (row.existing) { %>
+                        <% if (row.student.is_excluded) { %>
+                          <span class="teacher-exclusion-badge">Ausgeschlossen</span>
+                        <% } else if (row.existing) { %>
                           <span class="template-status template-status-graded">
                             Bereits bewertet
                           </span>
@@ -132,6 +140,7 @@
                             inputmode="decimal"
                             name="grade[<%= fieldKey %>]"
                             value="<%= row.form.grade %>"
+                            <%= row.student.is_excluded ? 'disabled' : '' %>
                             placeholder="z.B. 2.5"
                           >
                         <% } %>
@@ -146,7 +155,7 @@
                             inputmode="decimal"
                             name="points_achieved[<%= fieldKey %>]"
                             value="<%= row.form.points_achieved %>"
-                            <%= templateHasMaxPoints ? '' : 'disabled' %>
+                            <%= templateHasMaxPoints && !row.student.is_excluded ? '' : 'disabled' %>
                             data-points-enabled="<%= templateHasMaxPoints ? '1' : '0' %>"
                             placeholder="<%= templateHasMaxPoints ? 'z.B. 18' : 'Keine Max.-Punkte' %>"
                           >
@@ -160,6 +169,7 @@
                             name="is_absent[<%= fieldKey %>]"
                             value="1"
                             <%= row.form.is_absent ? 'checked' : '' %>
+                            <%= row.student.is_excluded ? 'disabled' : '' %>
                           >
                           <span>Ja</span>
                         </label>
@@ -171,6 +181,7 @@
                           name="note[<%= fieldKey %>]"
                           value="<%= row.form.note %>"
                           maxlength="500"
+                          <%= row.student.is_excluded ? 'disabled' : '' %>
                           placeholder="Optional"
                         >
                       </td>
@@ -200,6 +211,7 @@
       document.querySelectorAll('.bulk-absent-checkbox').forEach((checkbox) => {
         const row = checkbox.closest('tr');
         if (!row) return;
+        if (row.classList.contains('is-excluded')) return;
         const gradeInput = row.querySelector('.bulk-grade-input:not(.bulk-points-input)');
         const pointsInput = row.querySelector('.bulk-points-input');
         const toggleInputs = () => {
@@ -222,6 +234,7 @@
       bulkForm?.addEventListener('submit', (event) => {
         const rows = Array.from(document.querySelectorAll('.bulk-grade-table tbody tr'));
         const hasAnyValue = rows.some((row) => {
+          if (row.classList.contains('is-excluded')) return false;
           const gradeValue = String(row.querySelector('input[name^="grade["]')?.value || '').trim();
           const pointsValue = String(row.querySelector('input[name^="points_achieved["]')?.value || '').trim();
           const noteValue = String(row.querySelector('input[name^="note["]')?.value || '').trim();

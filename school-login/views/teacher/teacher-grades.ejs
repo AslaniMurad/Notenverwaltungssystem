@@ -1,4 +1,4 @@
-<%
+﻿<%
   const page = {
     title: `Lehrer - Noten (${classData.name})`,
     headerTitle: "Lehrerbereich",
@@ -15,16 +15,16 @@
 
         <div class="app-nav">
           <div class="nav-section">
-            <div class="nav-section-title">Menü</div>
-            <a href="/teacher/classes">Meine Klassen</a>
-            <a href="/teacher/create-class">Klasse erstellen</a>
+            <div class="nav-section-title">MenÃ¼</div>
+            <a href="/teacher/classes">Fächer</a>
+            <a href="/teacher/create-class">Fach erstellen</a>
             <a href="/teacher/settings">Einstellungen</a>
             <div class="nav-section-title">Klasse: <%= classData.name %> / <%= classData.subject %></div>
             <a href="/teacher/students/<%= classData.id %>">Schueler</a>
             <a class="<%= (typeof openMessageCount !== 'undefined' && openMessageCount > 0) ? 'is-alert' : '' %>" href="/teacher/test-questions/<%= classData.id %>">Fragen zu Tests<% if (typeof openMessageCount !== 'undefined' && openMessageCount > 0) { %><span class="nav-notification-badge"><%= openMessageCount %></span><% } %></a>
             <a class="is-active" href="/teacher/grades/<%= classData.id %>">Noten</a>
             <a href="/teacher/special-assessments/<%= classData.id %>">Sonderleistungen</a>
-            <a href="/teacher/grade-templates/<%= classData.id %>">Prüfungen</a>
+            <a href="/teacher/grade-templates/<%= classData.id %>">PrÃ¼fungen</a>
             <a href="/teacher/class-statistics/<%= classData.id %>">Statistiken</a>
             <form class="logout-form" method="POST" action="/logout">
               <input type="hidden" name="_csrf" value="<%= csrfToken %>">
@@ -38,11 +38,11 @@
         <header class="teacher-main-header">
           <div>
             <p class="teacher-eyebrow">Klasse <%= classData.name %></p>
-            <h1>Notenübersicht</h1>
+            <h1>NotenÃ¼bersicht</h1>
             <p class="teacher-muted">Fach: <%= classData.subject %> - Rolle: Lehrer</p>
           </div>
           <div class="teacher-actions-inline">
-            <a class="btn btn-secondary" href="/teacher/classes">Zurück</a>
+            <a class="btn btn-secondary" href="/teacher/classes">ZurÃ¼ck</a>
           </div>
         </header>
 
@@ -62,14 +62,14 @@
             class="form-input teacher-search-input"
             type="search"
             name="q"
-            placeholder="Schüler nach Name oder E-Mail suchen"
+            placeholder="SchÃ¼ler nach Name oder E-Mail suchen"
             value="<%= (search && search.q) || '' %>"
           >
           <select class="form-select teacher-search-select" name="status" aria-label="Filter">
             <option value="all" <%= (search && search.status) === 'all' ? 'selected' : '' %>>Alle</option>
             <option value="with_grades" <%= (search && search.status) === 'with_grades' ? 'selected' : '' %>>Mit Bewertungen</option>
             <option value="no_grades" <%= (search && search.status) === 'no_grades' ? 'selected' : '' %>>Ohne Bewertungen</option>
-            <option value="incomplete" <%= (search && search.status) === 'incomplete' ? 'selected' : '' %>>Unvollständig</option>
+            <option value="incomplete" <%= (search && search.status) === 'incomplete' ? 'selected' : '' %>>UnvollstÃ¤ndig</option>
           </select>
           <select class="form-select teacher-search-select" name="sort" aria-label="Sortierung">
             <option value="name_asc" <%= (search && search.sort) === 'name_asc' ? 'selected' : '' %>>Name A-Z</option>
@@ -86,17 +86,20 @@
         <div class="teacher-card">
           <div class="teacher-card-header">
             <div>
-              <p class="teacher-eyebrow">Schüler und Noten</p>
-              <h3><%= students.length %> / <%= totalStudentCount %> Schüler in dieser Klasse</h3>
+              <p class="teacher-eyebrow">SchÃ¼ler und Noten</p>
+              <h3><%= students.length %> / <%= totalStudentCount %> SchÃ¼ler in dieser Klasse</h3>
             </div>
+            <% if (excludedStudentCount > 0) { %>
+              <div class="teacher-meta-chip"><%= excludedStudentCount %> ausgeschlossen</div>
+            <% } %>
           </div>
 
           <div class="grades-table-wrapper">
             <% if (students.length === 0) { %>
               <div class="teacher-empty">
-                <h4>Noch keine Schüler</h4>
-                <p>Füge zuerst Schüler zur Klasse hinzu.</p>
-                <a class="btn btn-primary" href="/teacher/add-student/<%= classData.id %>">Schüler hinzufügen</a>
+                <h4>Noch keine SchÃ¼ler</h4>
+                <p>FÃ¼ge zuerst SchÃ¼ler zur Klasse hinzu.</p>
+                <a class="btn btn-primary" href="/teacher/add-student/<%= classData.id %>">SchÃ¼ler hinzufÃ¼gen</a>
               </div>
             <% } else { %>
               <table class="grades-table">
@@ -109,21 +112,40 @@
                       <th>MA</th>
                     <% } %>
                     <th>Punkte (aktuell)</th>
-                    <th>⌀</th>
+                    <th>âŒ€</th>
                     <th>Aktionen</th>
                   </tr>
                 </thead>
                 <tbody>
                   <% students.forEach((student) => { %>
-                    <tr>
-                      <td><strong><%= student.name %></strong></td>
+                    <tr class="<%= student.is_excluded ? 'is-excluded' : '' %>">
+                      <td>
+                        <strong><%= student.name %></strong>
+                        <% if (student.is_excluded) { %>
+                          <div class="teacher-excluded-note"><span class="teacher-exclusion-badge">Ausgeschlossen</span> Historisch sichtbar, nicht gewertet</div>
+                        <% } %>
+                      </td>
                       <td><%= student.email %></td>
-                      <td><span class="badge-count"><%= student.grade_count %>/<%= possibleCount || 0 %></span></td>
+                      <td>
+                        <% if (student.is_excluded) { %>
+                          <span class="teacher-muted">-</span>
+                        <% } else { %>
+                          <span class="badge-count"><%= student.grade_count %>/<%= possibleCount || 0 %></span>
+                        <% } %>
+                      </td>
                       <% if (participationEnabled) { %>
-                        <td><span class="badge-count"><%= student.ma_count || 0 %></span></td>
+                        <td>
+                          <% if (student.is_excluded) { %>
+                            <span class="teacher-muted">-</span>
+                          <% } else { %>
+                            <span class="badge-count"><%= student.ma_count || 0 %></span>
+                          <% } %>
+                        </td>
                       <% } %>
                       <td>
-                        <% if (student.points_max_total != null) { %>
+                        <% if (student.is_excluded) { %>
+                          <span class="teacher-muted">-</span>
+                        <% } else if (student.points_max_total != null) { %>
                           <div>
                             <strong><%= student.points_achieved_total %>/<%= student.points_max_total %></strong>
                           </div>
@@ -133,7 +155,9 @@
                         <% } %>
                       </td>
                       <td>
-                        <% if (student.average_grade != null) { %>
+                        <% if (student.is_excluded) { %>
+                          <span class="teacher-muted">-</span>
+                        <% } else if (student.average_grade != null) { %>
                           <span class="grade-badge grade-<%= Math.round(student.average_grade) %>">
                             <%= student.average_grade %>
                           </span>
@@ -141,11 +165,13 @@
                           <span class="teacher-muted">-</span>
                         <% } %>
                       </td>
-                      <td>
+                      <td class="no-strike">
                         <div class="table-actions">
                           <a class="btn btn-primary btn-sm" href="/teacher/student-grades/<%= classData.id %>/<%= student.id %>">Details</a>
-                          <a class="btn btn-secondary btn-sm" href="/teacher/add-grade/<%= classData.id %>/<%= student.id %>">+ Bewertung</a>
-                          <% if (participationEnabled) { %>
+                          <% if (!student.is_excluded) { %>
+                            <a class="btn btn-secondary btn-sm" href="/teacher/add-grade/<%= classData.id %>/<%= student.id %>">+ Bewertung</a>
+                          <% } %>
+                          <% if (participationEnabled && !student.is_excluded) { %>
                             <button
                               class="btn btn-secondary btn-sm open-ma-modal"
                               type="button"
@@ -154,6 +180,8 @@
                             >
                               MA
                             </button>
+                          <% } else if (student.is_excluded) { %>
+                            <span class="teacher-exclusion-badge">Nicht bewertbar</span>
                           <% } %>
                         </div>
                       </td>
@@ -177,10 +205,10 @@
             <input type="hidden" name="_csrf" value="<%= csrfToken %>">
             <input type="hidden" name="student_id" id="ma_student_id">
             <div class="modal-body">
-              <p>Schüler: <strong id="ma_student_name"></strong></p>
+              <p>SchÃ¼ler: <strong id="ma_student_name"></strong></p>
               <label for="ma_symbol">Benotung</label>
               <select id="ma_symbol" name="ma_symbol" required>
-                <option value="">Bitte wählen</option>
+                <option value="">Bitte wÃ¤hlen</option>
                 <% (participationSymbolOptions || []).forEach((symbolOption) => { %>
                   <option value="<%= symbolOption.value %>"><%= symbolOption.label %></option>
                 <% }) %>

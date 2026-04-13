@@ -1,0 +1,158 @@
+<%
+  const page = {
+    title: `Admin - Klasse ${classData.name}`,
+    headerTitle: 'Adminbereich',
+    styles: ['/css/admin.css'],
+    scripts: ['/js/app.js'],
+    bodyClass: 'page-admin',
+    hideHeader: true,
+    hideFooter: true,
+    content: function () { %>
+    <div class="app-shell">
+      <%- include('./nav', { csrfToken, currentUser, activePath }) %>
+
+      <section class="app-main">
+        <div class="app-main-header">
+          <div>
+            <p class="app-main-subtitle">Klasse</p>
+            <h1><%= classData.name %></h1>
+            <p class="admin-muted">
+              Klassenvorstand: <%= classData.head_teacher_email || '-' %> -
+              Fachzuordnungen: <%= classData.assignment_count || 0 %>
+            </p>
+          </div>
+          <div class="admin-actions-row">
+            <a class="btn btn-primary" href="/admin/classes/<%= classData.id %>/students">Schueler</a>
+            <a class="btn btn-secondary" href="/admin/assignments/new?class=<%= classData.id %>&create_subject=1">Fach erstellen</a>
+            <a class="btn btn-secondary" href="/admin/classes/<%= classData.id %>/edit">Bearbeiten</a>
+            <a class="btn" href="/admin/classes">Zurueck</a>
+          </div>
+        </div>
+
+        <div class="admin-stat-grid">
+          <div class="admin-stat-card">
+            <p class="admin-eyebrow">Lehrer</p>
+            <strong><%= stats.teacher_count %></strong>
+          </div>
+          <div class="admin-stat-card">
+            <p class="admin-eyebrow">Schueler</p>
+            <strong><%= stats.student_count %></strong>
+          </div>
+          <div class="admin-stat-card">
+            <p class="admin-eyebrow">Faecher</p>
+            <strong><%= stats.subject_count %></strong>
+          </div>
+        </div>
+
+        <div class="admin-section-stack">
+          <div class="admin-card">
+            <div class="admin-topbar">
+              <div>
+                <p class="admin-eyebrow">Lehrer</p>
+                <h3>Lehreruebersicht</h3>
+              </div>
+              <span class="admin-badge"><%= teacherRows.length %> Eintraege</span>
+            </div>
+            <% if (!teacherRows.length) { %>
+              <div class="admin-empty">Noch keine Lehrer ueber Faecher zugeordnet.</div>
+            <% } else { %>
+              <div class="admin-table-wrap">
+                <table class="admin-table">
+                  <thead>
+                    <tr>
+                      <th>Name</th>
+                      <th>E-Mail</th>
+                      <th>Faecher</th>
+                      <th>Anzahl</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <% teacherRows.forEach((teacher) => { %>
+                      <tr>
+                        <td>
+                          <%= teacher.display_name %>
+                          <% if (teacher.is_head_teacher) { %>
+                            <span class="admin-inline-badge">Klassenvorstand</span>
+                          <% } %>
+                        </td>
+                        <td><%= teacher.email %></td>
+                        <td><%= teacher.subjects_label %></td>
+                        <td><%= teacher.subject_count %></td>
+                      </tr>
+                    <% }) %>
+                  </tbody>
+                </table>
+              </div>
+            <% } %>
+          </div>
+
+          <div class="admin-card">
+            <div class="admin-topbar">
+              <div>
+                <p class="admin-eyebrow">Schueler</p>
+                <h3>Schuelerliste</h3>
+              </div>
+              <span class="admin-badge"><%= students.length %> Eintraege</span>
+            </div>
+            <% if (!students.length) { %>
+              <div class="admin-empty">Noch keine Schueler in dieser Klasse.</div>
+            <% } else { %>
+              <div class="admin-table-wrap">
+                <table class="admin-table">
+                  <thead>
+                    <tr>
+                      <th>Name</th>
+                      <th>E-Mail</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <% students.forEach((student) => { %>
+                      <tr>
+                        <td><%= student.name %></td>
+                        <td><%= student.email %></td>
+                      </tr>
+                    <% }) %>
+                  </tbody>
+                </table>
+              </div>
+            <% } %>
+          </div>
+
+          <div class="admin-card">
+            <div class="admin-topbar">
+              <div>
+                <p class="admin-eyebrow">Faecher</p>
+                <h3>Fachuebersicht</h3>
+              </div>
+              <span class="admin-badge"><%= subjectRows.length %> Eintraege</span>
+            </div>
+            <% if (!subjectRows.length) { %>
+              <div class="admin-empty">Noch keine Faecher zugeordnet.</div>
+            <% } else { %>
+              <div class="admin-table-wrap">
+                <table class="admin-table">
+                  <thead>
+                    <tr>
+                      <th>Fach</th>
+                      <th>Lehrer</th>
+                      <th>Anzahl</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <% subjectRows.forEach((subject) => { %>
+                      <tr>
+                        <td><%= subject.name %></td>
+                        <td><%= subject.teacher_emails %></td>
+                        <td><%= subject.teacher_count %></td>
+                      </tr>
+                    <% }) %>
+                  </tbody>
+                </table>
+              </div>
+            <% } %>
+          </div>
+        </div>
+      </section>
+    </div>
+<% } }; %>
+<%- include('../layout', page) %>

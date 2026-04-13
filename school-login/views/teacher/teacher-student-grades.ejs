@@ -51,8 +51,8 @@
         <div class="app-nav">
           <div class="nav-section">
             <div class="nav-section-title">Menü</div>
-            <a href="/teacher/classes">Meine Klassen</a>
-            <a href="/teacher/create-class">Klasse erstellen</a>
+            <a href="/teacher/classes">Fächer</a>
+            <a href="/teacher/create-class">Fach erstellen</a>
             <a href="/teacher/settings">Einstellungen</a>
             <div class="nav-section-title">Klasse: <%= classData.name %> / <%= classData.subject %></div>
             <a href="/teacher/students/<%= classData.id %>">Schueler</a>
@@ -77,11 +77,19 @@
             <p class="teacher-muted">Klasse: <%= classData.name %> (<%= classData.subject %>)</p>
           </div>
           <div class="teacher-actions-inline">
-            <a class="btn btn-primary" href="/teacher/add-grade/<%= classData.id %>/<%= student.id %>">+ Bewertung hinzufügen</a>
+            <% if (!student.is_excluded) { %>
+              <a class="btn btn-primary" href="/teacher/add-grade/<%= classData.id %>/<%= student.id %>">+ Bewertung hinzufügen</a>
+            <% } else { %>
+              <span class="teacher-exclusion-badge">Im Fach ausgeschlossen</span>
+            <% } %>
             <a class="btn btn-secondary" href="/teacher/student-grades/<%= classData.id %>/<%= student.id %>/details">Details</a>
             <a class="btn btn-secondary" href="/teacher/grades/<%= classData.id %>">Zurück</a>
           </div>
         </header>
+
+        <% if (excludedMessage) { %>
+          <div class="teacher-alert info"><%= excludedMessage %></div>
+        <% } %>
 
         <% if (average != null || pointsSummary) { %>
           <div class="stats-card">
@@ -129,7 +137,7 @@
             </button>
           </div>
           <% if ((wishGradeRows || []).length === 0) { %>
-            <p class="teacher-muted">Noch keine gewichteten Einträge vorhanden.</p>
+            <p class="teacher-muted"><%= student.is_excluded ? 'Keine aktive Berechnung, weil der Schueler in diesem Fach ausgeschlossen ist.' : 'Noch keine gewichteten Einträge vorhanden.' %></p>
           <% } else { %>
             <p class="teacher-muted">Der Rechner berücksichtigt Noten und Mitarbeit aus der Gesamtnote.</p>
           <% } %>
@@ -153,8 +161,8 @@
             </div>
           <% } else if ((participationEntries || []).length === 0) { %>
             <div class="teacher-empty">
-              <h4>Noch keine Mitarbeit</h4>
-              <p>In der Notenübersicht kannst du mit dem MA-Button Einträge erfassen.</p>
+              <h4><%= student.is_excluded ? 'Keine aktive Mitarbeit' : 'Noch keine Mitarbeit' %></h4>
+              <p><%= student.is_excluded ? 'Der Schueler ist in diesem Fach ausgeschlossen. Historische MA-Eintraege wuerden hier erscheinen.' : 'In der Notenübersicht kannst du mit dem MA-Button Einträge erfassen.' %></p>
             </div>
           <% } else { %>
             <div class="grades-table-wrapper">
@@ -171,7 +179,7 @@
                 </thead>
                 <tbody>
                   <% (participationEntries || []).forEach((entry) => { %>
-                    <tr>
+                    <tr class="<%= student.is_excluded ? 'is-excluded' : '' %>">
                       <td><%= entry.created_at ? new Date(entry.created_at).toLocaleDateString("de-DE") : "-" %></td>
                       <td><span class="badge-count"><%= entry.symbol_label %></span></td>
                       <td>
@@ -205,13 +213,15 @@
           <div class="grades-list">
             <% if (grades.length === 0) { %>
               <div class="teacher-empty">
-                <h4>Noch keine Noten</h4>
-                <p>Füge die erste Note für diesen Schüler hinzu.</p>
-                <a class="btn btn-primary" href="/teacher/add-grade/<%= classData.id %>/<%= student.id %>">Bewertung hinzufügen</a>
+                <h4><%= student.is_excluded ? 'Keine aktiven Bewertungen' : 'Noch keine Noten' %></h4>
+                <p><%= student.is_excluded ? 'Der Schueler ist in diesem Fach ausgeschlossen. Historische Eintraege wuerden hier erscheinen.' : 'Füge die erste Note für diesen Schüler hinzu.' %></p>
+                <% if (!student.is_excluded) { %>
+                  <a class="btn btn-primary" href="/teacher/add-grade/<%= classData.id %>/<%= student.id %>">Bewertung hinzufügen</a>
+                <% } %>
               </div>
             <% } else { %>
               <% grades.forEach((grade) => { %>
-                <div class="grade-item">
+                <div class="grade-item <%= grade.is_subject_excluded ? 'is-excluded' : '' %>">
                   <div class="grade-item-header">
                     <div>
                         <span class="grade-category-badge <%= categoryClass(grade.category) %>"><%= grade.category %></span>
@@ -231,14 +241,24 @@
                           Fragen (<%= (grade.messages || []).length %>)
                         </button>
                       <% } %>
-                      <form class="inline delete-grade-form" method="POST" action="<%= grade.delete_action %>" data-grade-info="<%= grade.template_name %> (<%= grade.grade %>)">
+                      <form
+                        class="inline delete-grade-form"
+                        method="POST"
+                        action="<%= grade.delete_action %>"
+                        data-grade-info="<%= grade.template_name %> (<%= grade.grade %>)"
+                        data-weight-removed="<%= grade.excluded_from_average ? '1' : '0' %>"
+                      >
                         <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+                        <input type="hidden" name="delete_mode" value="delete_entry" data-delete-mode-input>
                         <button class="btn btn-danger btn-sm" type="button">Löschen</button>
                       </form>
                     </div>
                   </div>
                   <% if (grade.is_absent) { %>
                     <p class="teacher-muted">Als Abwesenheit erfasst.</p>
+                  <% } %>
+                  <% if (grade.excluded_from_average) { %>
+                    <p class="teacher-muted">Gewichtung entfernt. Der Eintrag bleibt sichtbar, zählt aber nicht zur Gesamtnote.</p>
                   <% } %>
                   <% if (grade.note) { %>
                     <p class="grade-description"><%= grade.note %></p>
@@ -266,18 +286,29 @@
                         <p class="teacher-muted">Keine Fragen zu dieser Note vorhanden.</p>
                       <% } else { %>
                         <div class="teacher-list">
+                          <% if (grade.thread_closed_at) { %>
+                            <div class="teacher-message-item">
+                              <div class="teacher-message-bubble system">
+                                <p class="teacher-message-author">Status</p>
+                                <p><%= student.name %> hat die Anfrage geschlossen.</p>
+                                <small class="teacher-muted"><%= new Date(grade.thread_closed_at).toLocaleString('de-DE') %></small>
+                              </div>
+                            </div>
+                          <% } %>
                           <% grade.messages.forEach(message => { %>
                             <div class="teacher-message-item">
                               <div class="teacher-message-bubble student">
+                                <p class="teacher-message-author"><%= student.email || 'Schueler' %></p>
                                 <p><%= message.student_message %></p>
                                 <small class="teacher-muted"><%= new Date(message.created_at).toLocaleString('de-DE') %></small>
                               </div>
                               <% if (message.teacher_reply) { %>
                                 <div class="teacher-message-bubble teacher">
+                                  <p class="teacher-message-author"><%= message.teacher_reply_by_email || 'Lehrkraft' %></p>
                                   <p><%= message.teacher_reply %></p>
                                   <small class="teacher-muted">Beantwortet: <%= message.replied_at ? new Date(message.replied_at).toLocaleString('de-DE') : '-' %></small>
                                 </div>
-                              <% } else { %>
+                              <% } else if (!grade.thread_closed_at) { %>
                                 <form class="teacher-form teacher-reply-form" method="POST" action="/teacher/students/<%= classData.id %>/messages/<%= message.id %>/reply">
                                   <input type="hidden" name="_csrf" value="<%= csrfToken %>">
                                   <label for="reply-grade-<%= grade.id %>-<%= message.id %>">Antwort</label>
@@ -346,15 +377,16 @@
     <div id="deleteGradeModal" class="modal-overlay">
       <div class="modal-content">
         <div class="modal-header">
-          <h3>Note löschen</h3>
+          <h3>Eintrag löschen</h3>
         </div>
         <div class="modal-body">
-          <p>Möchtest du die Note <strong id="deleteGradeInfo"></strong> wirklich löschen?</p>
-          <p class="teacher-muted">Diese Aktion kann nicht rückgängig gemacht werden.</p>
+          <p>Was soll mit <strong id="deleteGradeInfo"></strong> passieren?</p>
+          <p class="teacher-muted" id="deleteGradeHint">Eintrag löschen entfernt ihn vollständig. Gewichtung entfernen lässt den Eintrag stehen, zählt ihn aber nicht mehr zur Note.</p>
         </div>
         <div class="modal-footer">
           <button class="btn btn-secondary" id="cancelDeleteGrade" type="button">Abbrechen</button>
-          <button class="btn btn-danger" id="confirmDeleteGrade" type="button">Löschen</button>
+          <button class="btn btn-secondary" id="removeWeightGrade" type="button">Gewichtung entfernen</button>
+          <button class="btn btn-danger" id="confirmDeleteGrade" type="button">Eintrag löschen</button>
         </div>
       </div>
     </div>
@@ -484,9 +516,20 @@
 
         const deleteGradeModal = document.getElementById("deleteGradeModal");
         const deleteGradeInfo = document.getElementById("deleteGradeInfo");
+        const deleteGradeHint = document.getElementById("deleteGradeHint");
         const cancelDeleteGrade = document.getElementById("cancelDeleteGrade");
+        const removeWeightGrade = document.getElementById("removeWeightGrade");
         const confirmDeleteGrade = document.getElementById("confirmDeleteGrade");
         let currentGradeForm = null;
+
+        function submitCurrentGradeForm(mode) {
+          if (!currentGradeForm) return;
+          const modeInput = currentGradeForm.querySelector("[data-delete-mode-input]");
+          if (modeInput) {
+            modeInput.value = mode;
+          }
+          currentGradeForm.submit();
+        }
 
         document.querySelectorAll(".delete-grade-form button[type='button']").forEach((button) => {
           button.addEventListener("click", (event) => {
@@ -494,6 +537,16 @@
             currentGradeForm = button.closest("form");
             if (deleteGradeInfo) {
               deleteGradeInfo.textContent = currentGradeForm?.dataset?.gradeInfo || "";
+            }
+            if (deleteGradeHint) {
+              deleteGradeHint.textContent = currentGradeForm?.dataset?.weightRemoved === "1"
+                ? "Die Gewichtung dieses Eintrags ist aktuell entfernt. Mit einem weiteren Klick kannst du sie wiederherstellen."
+                : "Eintrag löschen entfernt ihn vollständig. Gewichtung entfernen lässt den Eintrag stehen, zählt ihn aber nicht mehr zur Note.";
+            }
+            if (removeWeightGrade) {
+              removeWeightGrade.textContent = currentGradeForm?.dataset?.weightRemoved === "1"
+                ? "Gewichtung wiederherstellen"
+                : "Gewichtung entfernen";
             }
             deleteGradeModal?.classList.add("active");
           });
@@ -505,7 +558,11 @@
         });
 
         confirmDeleteGrade?.addEventListener("click", () => {
-          if (currentGradeForm) currentGradeForm.submit();
+          submitCurrentGradeForm("delete_entry");
+        });
+
+        removeWeightGrade?.addEventListener("click", () => {
+          submitCurrentGradeForm("toggle_weight");
         });
 
         deleteGradeModal?.addEventListener("click", (event) => {

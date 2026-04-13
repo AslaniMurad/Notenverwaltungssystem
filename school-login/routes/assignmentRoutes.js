@@ -8,6 +8,7 @@ router.use(requireAuth, requireRole("admin"));
 
 router.get("/assignments", assignmentController.renderAssignmentList);
 router.get("/assignments/new", assignmentController.renderNewAssignmentForm);
+router.get("/assignments/api/class/:classId/teachers", assignmentController.getClassTeachers);
 router.post("/assignments", assignmentController.createAssignment);
 router.post("/assignments/delete", assignmentController.deleteAssignment);
 

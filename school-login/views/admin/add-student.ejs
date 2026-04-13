@@ -1,6 +1,10 @@
 <%
+  const resolvedMode = mode === 'bulk' ? 'bulk' : 'single';
+  const singleValues = singleForm || {};
+  const bulkValues = bulkForm || {};
+  const hasBulkResult = Boolean(bulkResult);
   const page = {
-    title: 'Admin — Schüler hinzufügen',
+    title: 'Admin - Schueler hinzufuegen',
     headerTitle: 'Adminbereich',
     styles: ['/css/admin.css'],
     scripts: ['/js/app.js'],
@@ -12,66 +16,146 @@
       <%- include('./nav', { csrfToken, currentUser, activePath }) %>
 
       <section class="app-main">
-        <div class="app-main-header">
+        <div class="app-main-header admin-create-header">
           <div>
             <p class="app-main-subtitle">Klasse <%= classData.name %></p>
-            <h1>Schüler hinzufügen</h1>
-            <p class="admin-muted">Nur registrierte Schüler können zugeordnet werden.</p>
+            <h1>Schueler hinzufuegen</h1>
+            <p class="admin-muted admin-create-copy">Nur vorhandene Student-Konten koennen der Klasse zugeordnet werden. Wechsle zwischen Einzelzuordnung und Bulk-Modus.</p>
           </div>
-          <a class="btn btn-secondary" href="/admin/classes/<%= classData.id %>/students">Zurück</a>
+          <a class="btn btn-secondary" href="/admin/classes/<%= classData.id %>/students">Zurueck</a>
         </div>
 
-        <div class="admin-card-narrow">
-          <% if (error) { %>
-            <div class="admin-alert"><%= error %></div>
-          <% } %>
-          <% if (bulkResult) { %>
-            <div class="admin-alert">
-              Bulk Ergebnis: <%= bulkResult.success.length %> hinzugef&uuml;gt, <%= bulkResult.failed.length %> fehlgeschlagen.
+        <div class="admin-create-shell" data-create-switcher data-default-mode="<%= resolvedMode %>">
+          <div class="admin-create-overview">
+            <div class="admin-create-overview-card">
+              <strong>Einzeln</strong>
+              <span>Geeignet fuer neue Eintritte oder gezielte Korrekturen einzelner Zuordnungen.</span>
             </div>
-            <% if (bulkResult.failed.length) { %>
-              <div class="admin-alert">
-                <p>Fehlgeschlagen:</p>
-                <ul>
-                  <% bulkResult.failed.forEach((entry) => { %>
-                    <li><%= entry.email %> - <%= entry.reason %></li>
-                  <% }); %>
-                </ul>
-              </div>
-            <% } %>
+            <div class="admin-create-overview-card">
+              <strong>Bulk</strong>
+              <span>Mehrere registrierte Schueler per E-Mail-Liste in einem Schritt der Klasse zuweisen.</span>
+            </div>
+          </div>
+
+          <% if (error) { %>
+            <div class="admin-alert admin-alert-danger"><%= error %></div>
           <% } %>
-          <form class="admin-edit-form" method="POST" action="/admin/classes/<%= classData.id %>/students/add">
-            <input type="hidden" name="_csrf" value="<%= csrfToken %>">
 
-            <label for="name">Name</label>
-            <input id="name" name="name" type="text" data-student-name>
-            <p class="admin-muted">Wird automatisch gesetzt bei E-Mail im Format vorname.nachname@xy.</p>
+          <div class="admin-mode-switch" data-mode-switch role="tablist" aria-label="Zuordnungsmodus">
+            <span class="admin-mode-switch-indicator" aria-hidden="true"></span>
+            <button type="button" class="admin-mode-switch-option" data-mode-toggle="single" role="tab" aria-selected="false">Einzeln</button>
+            <button type="button" class="admin-mode-switch-option" data-mode-toggle="bulk" role="tab" aria-selected="false">Bulk</button>
+          </div>
 
-            <label for="email">E-Mail</label>
-            <input id="email" name="email" type="email" required data-student-email>
+          <div class="admin-mode-panels">
+            <section class="admin-mode-panel" data-create-panel="single">
+              <div class="admin-panel-card">
+                <div class="admin-panel-head">
+                  <div>
+                    <h3>Einzelnen Schueler zuordnen</h3>
+                    <p class="admin-muted">Der Name kann automatisch aus `vorname.nachname@...` abgeleitet werden.</p>
+                  </div>
+                </div>
 
-            <button class="btn btn-primary" type="submit">Hinzufügen</button>
-          </form>
-        </div>
+                <form class="admin-form vertical admin-stacked-form" method="POST" action="/admin/classes/<%= classData.id %>/students/add">
+                  <input type="hidden" name="_csrf" value="<%= csrfToken %>">
 
-        <div class="admin-card-narrow">
-          <h3>Bulk Schüler hinzufügen</h3>
-          <p class="admin-muted">Eine E-Mail pro Zeile. Name wird aus vorname.nachname@xy abgeleitet.</p>
-          <form class="admin-edit-form" method="POST" action="/admin/classes/<%= classData.id %>/students/add-bulk">
-            <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+                  <label class="admin-field">
+                    <span>Name</span>
+                    <input id="name" name="name" type="text" value="<%= singleValues.name || '' %>" data-student-name placeholder="Max Mustermann">
+                  </label>
 
-            <label for="bulkEmails">E-Mails (eine pro Zeile)</label>
-            <textarea id="bulkEmails" name="bulkEmails" rows="6" required></textarea>
+                  <label class="admin-field">
+                    <span>E-Mail</span>
+                    <input id="email" name="email" type="email" value="<%= singleValues.email || '' %>" data-student-email placeholder="max.mustermann@schule.at" required>
+                  </label>
 
-            <button class="btn btn-primary" type="submit">Bulk hinzufügen</button>
-          </form>
+                  <div class="admin-example-box">
+                    <strong>Automatik</strong>
+                    <span>Wenn das Namensfeld leer bleibt und die E-Mail dem Muster `vorname.nachname@...` folgt, wird der Name automatisch eingesetzt.</span>
+                  </div>
+
+                  <div class="admin-panel-actions">
+                    <button class="btn btn-primary" type="submit">Schueler zuordnen</button>
+                  </div>
+                </form>
+              </div>
+            </section>
+
+            <section class="admin-mode-panel" data-create-panel="bulk">
+              <div class="admin-panel-card">
+                <div class="admin-panel-head">
+                  <div>
+                    <h3>Bulk-Zuordnung</h3>
+                    <p class="admin-muted">Eine registrierte Schueler-E-Mail pro Zeile. Der Name wird aus der Adresse abgeleitet.</p>
+                  </div>
+                </div>
+
+                <% if (hasBulkResult) { %>
+                  <div class="admin-create-result">
+                    <div class="admin-result-metric">
+                      <strong><%= bulkResult.success.length %></strong>
+                      <span>zugeordnet</span>
+                    </div>
+                    <div class="admin-result-metric">
+                      <strong><%= bulkResult.failed.length %></strong>
+                      <span>fehlgeschlagen</span>
+                    </div>
+                  </div>
+                <% } %>
+
+                <form class="admin-form vertical admin-stacked-form" method="POST" action="/admin/classes/<%= classData.id %>/students/add-bulk">
+                  <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+
+                  <label class="admin-field">
+                    <span>E-Mail-Liste</span>
+                    <textarea id="bulkEmails" name="bulkEmails" rows="8" placeholder="max.mustermann@schule.at&#10;lena.beispiel@schule.at" required><%= bulkValues.bulkEmails || '' %></textarea>
+                  </label>
+
+                  <div class="admin-example-box">
+                    <strong>Voraussetzung</strong>
+                    <span>Jede E-Mail muss bereits als Student-Konto existieren. Nicht passende Zeilen erscheinen im Ergebnis mit Grund.</span>
+                  </div>
+
+                  <div class="admin-panel-actions">
+                    <button class="btn btn-primary" type="submit">Bulk zuordnen</button>
+                  </div>
+                </form>
+
+                <% if (hasBulkResult) { %>
+                  <div class="admin-result-split">
+                    <div class="admin-result-block">
+                      <h4>Erfolgreich</h4>
+                      <% if (bulkResult.success.length) { %>
+                        <ul class="admin-result-list">
+                          <% bulkResult.success.forEach((entry) => { %>
+                            <li><%= entry %></li>
+                          <% }); %>
+                        </ul>
+                      <% } else { %>
+                        <p class="admin-muted">Keine erfolgreichen Zuordnungen.</p>
+                      <% } %>
+                    </div>
+
+                    <div class="admin-result-block">
+                      <h4>Fehlgeschlagen</h4>
+                      <% if (bulkResult.failed.length) { %>
+                        <ul class="admin-result-list">
+                          <% bulkResult.failed.forEach((entry) => { %>
+                            <li><strong><%= entry.email %></strong> - <%= entry.reason %></li>
+                          <% }); %>
+                        </ul>
+                      <% } else { %>
+                        <p class="admin-muted">Keine fehlgeschlagenen Eintraege.</p>
+                      <% } %>
+                    </div>
+                  </div>
+                <% } %>
+              </div>
+            </section>
+          </div>
         </div>
       </section>
     </div>
 <% } }; %>
 <%- include('../layout', page) %>
-
-
-
-
-
