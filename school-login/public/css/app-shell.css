@@ -92,7 +92,7 @@
 .sidebar-brand-actions {
   display: grid;
   justify-items: end;
-  gap: 10px;
+  gap: 12px;
   flex-shrink: 0;
 }
 
@@ -100,12 +100,13 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: 10px;
-  min-width: 112px;
-  min-height: 42px;
-  padding: 8px 12px;
+  width: 54px;
+  height: 54px;
+  min-width: 54px;
+  min-height: 54px;
+  padding: 0;
   border: 1px solid var(--shell-border);
-  border-radius: 12px;
+  border-radius: 16px;
   background: linear-gradient(135deg, var(--surface-2) 0%, var(--shell-surface) 100%);
   color: var(--shell-text);
   box-shadow: 0 8px 18px rgba(15, 23, 42, 0.08);
@@ -132,35 +133,14 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 28px;
-  height: 28px;
-  border-radius: 9px;
+  width: 36px;
+  height: 36px;
+  border-radius: 12px;
   background: var(--shell-accent-muted);
   color: var(--shell-accent);
-  font-size: 15px;
+  font-size: 22px;
   line-height: 1;
   flex-shrink: 0;
-}
-
-.sidebar-theme-toggle-copy {
-  display: grid;
-  gap: 2px;
-  text-align: left;
-}
-
-.sidebar-theme-toggle-label {
-  font-size: 11px;
-  font-weight: 700;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-  color: var(--shell-muted);
-}
-
-.sidebar-theme-toggle .theme-toggle-state {
-  font-size: 13px;
-  font-weight: 700;
-  color: var(--shell-text);
-  line-height: 1.2;
 }
 
 .sidebar-title {
@@ -175,7 +155,13 @@
   color: var(--shell-muted);
   margin-top: 0;
   line-height: 1.4;
-  word-break: break-word;
+  word-break: normal;
+}
+
+.sidebar-meta-email {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .app-nav {
@@ -450,5 +436,9 @@
   .sidebar-badge {
     width: 100%;
     justify-content: center;
+  }
+
+  .sidebar-theme-toggle {
+    min-width: 0;
   }
 }
