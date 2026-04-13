@@ -271,6 +271,13 @@ small,
   transform: translateY(1px);
 }
 
+body.page-student > #themeToggle,
+body.page-teacher > #themeToggle,
+body.page-admin > #themeToggle,
+body.page-admin-edit > #themeToggle {
+  display: none;
+}
+
 .card,
 .app-main,
 .app-sidebar,

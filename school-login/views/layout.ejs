@@ -35,7 +35,22 @@
   </style>
   <script>
     (function () {
-      document.documentElement.removeAttribute("data-theme");
+      const storageKey = "nvs-theme";
+      const root = document.documentElement;
+
+      try {
+        const savedTheme = window.localStorage.getItem(storageKey);
+        if (savedTheme === "light" || savedTheme === "dark") {
+          root.setAttribute("data-theme", savedTheme);
+          return;
+        }
+      } catch (error) {
+      }
+
+      root.setAttribute(
+        "data-theme",
+        window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light"
+      );
     })();
   </script>
   <noscript>
@@ -105,7 +120,7 @@
   </script>
 </head>
 <body class="<%= ['app-shell-body', bodyClass, locals.isMobile ? 'mobile-view' : 'desktop-view'].filter(Boolean).join(' ') %>">
-  <button id="themeToggle" type="button" aria-label="Dark Mode umschalten" title="Dark Mode umschalten">Theme</button>
+  <button id="themeToggle" type="button" data-theme-toggle="floating" aria-label="Dark Mode umschalten" title="Dark Mode umschalten">Theme</button>
 
   <% if (!hideHeader) { %>
     <%- include('partials/site-header', { headerTitle: headerTitle || title, headerActions: headerActions || [], isMobile: locals.isMobile, brandLogoSrc: brandLogoPath }) %>

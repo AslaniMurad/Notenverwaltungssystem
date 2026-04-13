@@ -42,7 +42,7 @@
 
 .sidebar-brand {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   justify-content: space-between;
   gap: 12px;
   padding: 12px 10px 16px;
@@ -67,6 +67,80 @@
   font-weight: 700;
   background: var(--shell-accent-muted);
   color: var(--shell-accent);
+}
+
+.sidebar-brand-actions {
+  display: grid;
+  justify-items: end;
+  gap: 10px;
+  flex-shrink: 0;
+}
+
+.sidebar-theme-toggle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  min-width: 112px;
+  min-height: 42px;
+  padding: 8px 12px;
+  border: 1px solid var(--shell-border);
+  border-radius: 12px;
+  background: linear-gradient(135deg, var(--surface-2) 0%, var(--shell-surface) 100%);
+  color: var(--shell-text);
+  box-shadow: 0 8px 18px rgba(15, 23, 42, 0.08);
+  cursor: pointer;
+  transition:
+    border-color 0.18s ease,
+    background 0.18s ease,
+    box-shadow 0.18s ease,
+    transform 0.18s ease;
+}
+
+.sidebar-theme-toggle:hover {
+  border-color: var(--shell-accent);
+  box-shadow: 0 12px 24px rgba(0, 61, 165, 0.14);
+  transform: translateY(-1px);
+}
+
+.sidebar-theme-toggle:focus-visible {
+  outline: 2px solid var(--shell-accent);
+  outline-offset: 2px;
+}
+
+.sidebar-theme-toggle .theme-toggle-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 9px;
+  background: var(--shell-accent-muted);
+  color: var(--shell-accent);
+  font-size: 15px;
+  line-height: 1;
+  flex-shrink: 0;
+}
+
+.sidebar-theme-toggle-copy {
+  display: grid;
+  gap: 2px;
+  text-align: left;
+}
+
+.sidebar-theme-toggle-label {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--shell-muted);
+}
+
+.sidebar-theme-toggle .theme-toggle-state {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--shell-text);
+  line-height: 1.2;
 }
 
 .sidebar-title {
@@ -235,5 +309,22 @@
     position: relative;
     top: 0;
     min-height: auto;
+  }
+
+  .sidebar-brand {
+    flex-wrap: wrap;
+  }
+
+  .sidebar-brand-actions {
+    width: 100%;
+    justify-items: stretch;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    align-items: start;
+  }
+
+  .sidebar-theme-toggle,
+  .sidebar-badge {
+    width: 100%;
+    justify-content: center;
   }
 }
