@@ -1,11 +1,11 @@
 <%
   const pageMeta = {
-    overview: { title: "Schueler - Uebersicht", heading: "Uebersicht" },
-    tasks: { title: "Schueler - Aufgaben", heading: "Aufgaben" },
-    returns: { title: "Schueler - Rueckgaben", heading: "Rueckgaben" },
-    requests: { title: "Schueler - Anfragen", heading: "Anfragen" },
-    grades: { title: "Schueler - Noten", heading: "Noten" },
-    archive: { title: "Schueler - Archiv", heading: "Archiv" }
+    overview: { title: "Schüler - Übersicht", heading: "Übersicht" },
+    tasks: { title: "Schüler - Aufgaben", heading: "Aufgaben" },
+    returns: { title: "Schüler - Rückgaben", heading: "Rückgaben" },
+    requests: { title: "Schüler - Anfragen", heading: "Anfragen" },
+    grades: { title: "Schüler - Noten", heading: "Noten" },
+    archive: { title: "Schüler - Archiv", heading: "Archiv" }
   };
   const requestedPage = typeof activePage !== "undefined" ? String(activePage) : "overview";
   const currentPage = pageMeta[requestedPage] ? requestedPage : "overview";
@@ -17,24 +17,24 @@
   const schoolYearLabel = studentProfile.schoolYear || resolvedActiveSchoolYear?.name || "-";
   const page = {
     title: currentMeta.title,
-    headerTitle: "Schuelerbereich",
+    headerTitle: "Schülerbereich",
     styles: ["/css/student-dashboard.css"],
     scripts: ["/js/app.js", "/js/student-dashboard.js"],
     bodyClass: "page-student",
     hideHeader: true,
     hideFooter: true,
     content: function () { %>
-    <button class="mobile-nav-toggle" aria-label="Navigation oeffnen"></button>
+    <button class="mobile-nav-toggle" aria-label="Navigation öffnen"></button>
     <div class="app-shell app-shell-wide">
-      <aside class="app-sidebar" aria-label="Schuelernavigation">
+      <aside class="app-sidebar" aria-label="Schülernavigation">
         <%- include('./partials/sidebar-user-card', { user: { email, role: 'student', name: studentProfile.name } }) %>
 
         <div class="app-nav">
           <div class="nav-section">
-            <div class="nav-section-title">Menue</div>
-            <a class="<%= currentPage === 'overview' ? 'is-active' : '' %>" href="/student">Uebersicht</a>
+            <div class="nav-section-title">Menü</div>
+            <a class="<%= currentPage === 'overview' ? 'is-active' : '' %>" href="/student">Übersicht</a>
             <a class="<%= currentPage === 'tasks' ? 'is-active' : '' %>" href="/student/tasks">Aufgaben</a>
-            <a class="<%= currentPage === 'returns' ? 'is-active' : '' %>" href="/student/returns">Rueckgaben</a>
+            <a class="<%= currentPage === 'returns' ? 'is-active' : '' %>" href="/student/returns">Rückgaben</a>
             <a class="<%= currentPage === 'requests' ? 'is-active' : '' %>" href="/student/requests">Anfragen</a>
             <a class="<%= currentPage === 'grades' ? 'is-active' : '' %>" href="/student/grades">Noten</a>
             <a class="<%= currentPage === 'archive' ? 'is-active' : '' %>" href="/student/archive">Archiv</a>
@@ -80,15 +80,15 @@
             <section id="overview">
               <div class="overview-stats-strip">
                 <div class="stat-inline"><span class="stat-inline-label">Durchschnitt</span><strong class="stat-inline-value" id="overview-average">-</strong></div>
-                <div class="stat-inline"><span class="stat-inline-label">Faecher</span><strong class="stat-inline-value" id="overview-subject-count"><%= safeSubjects.length %></strong></div>
+                <div class="stat-inline"><span class="stat-inline-label">Fächer</span><strong class="stat-inline-value" id="overview-subject-count"><%= safeSubjects.length %></strong></div>
                 <div class="stat-inline"><span class="stat-inline-label">Offene Aufgaben</span><strong class="stat-inline-value" id="overview-open-tasks">-</strong></div>
-                <div class="stat-inline"><span class="stat-inline-label">Rueckgaben</span><strong class="stat-inline-value" id="overview-return-count">-</strong></div>
-                <div class="stat-inline"><span class="stat-inline-label">Offene Rueckfragen</span><strong class="stat-inline-value" id="overview-open-requests">-</strong></div>
+                <div class="stat-inline"><span class="stat-inline-label">Rückgaben</span><strong class="stat-inline-value" id="overview-return-count">-</strong></div>
+                <div class="stat-inline"><span class="stat-inline-label">Offene Rückfragen</span><strong class="stat-inline-value" id="overview-open-requests">-</strong></div>
               </div>
 
               <div class="section-block">
                 <div class="section-block-head">
-                  <h3>Naechste Aufgaben</h3>
+                  <h3>Nächste Aufgaben</h3>
                   <span class="dataset-count" id="overview-upcoming-count">-</span>
                 </div>
                 <div id="overview-upcoming" class="overview-list"></div>
@@ -104,7 +104,7 @@
 
               <div class="section-block">
                 <div class="section-block-head">
-                  <h3>Letzte Rueckgaben</h3>
+                  <h3>Letzte Rückgaben</h3>
                   <span class="dataset-count" id="overview-recent-return-count">-</span>
                 </div>
                 <div id="overview-recent-returns" class="overview-list"></div>
@@ -118,7 +118,7 @@
                 <div class="dataset-head">
                   <div>
                     <h3>Aufgaben</h3>
-                    <p class="dataset-copy">Filterbar und kompakte Liste fuer viele Eintraege.</p>
+                    <p class="dataset-copy">Filterbar und kompakte Liste für viele Einträge.</p>
                   </div>
                   <span class="dataset-count" id="task-count">-</span>
                 </div>
@@ -145,12 +145,12 @@
               <div class="card">
                 <div class="dataset-head">
                   <div>
-                    <h3>Rueckgaben</h3>
-                    <p class="dataset-copy">Alle Rueckgaben mit Fach, Status und direktem Zugriff auf Rueckfragen.</p>
+                    <h3>Rückgaben</h3>
+                    <p class="dataset-copy">Alle Rückgaben mit Fach, Status und direktem Zugriff auf Rückfragen.</p>
                   </div>
                   <span class="dataset-count" id="return-count">-</span>
                 </div>
-                <form id="return-filter" class="filter-grid" aria-label="Rueckgaben filtern">
+                <form id="return-filter" class="filter-grid" aria-label="Rückgaben filtern">
                   <label>Fach
                     <select name="subject" id="return-filter-subject">
                       <option value="">Alle</option>
@@ -174,14 +174,14 @@
                 <div class="dataset-head">
                   <div>
                     <h3>Anfragen</h3>
-                    <p class="dataset-copy">Nur bestehende oder bereits gefuehrte Tickets, sortiert nach Aktivitaet.</p>
+                    <p class="dataset-copy">Nur bestehende oder bereits geführte Tickets, sortiert nach Aktivität.</p>
                   </div>
                   <span class="dataset-count" id="request-count">-</span>
                 </div>
                 <form id="request-filter" class="filter-grid" aria-label="Anfragen filtern">
-                  <label>Rueckgabe
+                  <label>Rückgabe
                     <select name="gradeId" id="request-filter-grade">
-                      <option value="">Alle Rueckgaben</option>
+                      <option value="">Alle Rückgaben</option>
                     </select>
                   </label>
                   <label>Suche
@@ -200,7 +200,7 @@
               <% if (!selectedGradeSubject) { %>
                 <div class="section-block">
                   <div class="section-block-head">
-                    <h3>Fach auswaehlen</h3>
+                    <h3>Fach auswählen</h3>
                     <div class="button-row">
                       <a class="btn small secondary" href="/student/grades.csv">CSV Export</a>
                       <a class="btn small secondary" href="/student/grades.pdf">PDF Export</a>
@@ -213,7 +213,7 @@
                   <div class="section-block-head">
                     <div>
                       <div class="grade-back-link-row">
-                        <a class="btn small secondary" href="/student/grades">Zur Faecheruebersicht</a>
+                        <a class="btn small secondary" href="/student/grades">Zur Fächerübersicht</a>
                       </div>
                       <h3><%= selectedGradeSubject %></h3>
                     </div>
@@ -248,7 +248,7 @@
                     <div class="stat-inline"><span class="stat-inline-label">Fachdurchschnitt</span><strong class="stat-inline-value" id="avg-overall">-</strong></div>
                     <div class="stat-inline"><span class="stat-inline-label">Trend</span><span class="stat-inline-value" id="avg-trend">-</span></div>
                     <div class="stat-inline"><span class="stat-inline-label">Aktualisierung</span><span class="stat-inline-value" id="avg-updated">-</span></div>
-                    <div class="stat-inline"><span class="stat-inline-label">Eintraege</span><strong class="stat-inline-value" id="grade-count">-</strong></div>
+                    <div class="stat-inline"><span class="stat-inline-label">Einträge</span><strong class="stat-inline-value" id="grade-count">-</strong></div>
                   </div>
 
                   <div id="grade-list" aria-live="polite" class="grade-list-flat"></div>
@@ -262,7 +262,7 @@
               <div class="card">
                 <div class="dataset-head">
                   <div>
-                    <h3>Archivierte Pruefungen</h3>
+                    <h3>Archivierte Prüfungen</h3>
                     <p class="dataset-copy">Historische Leistungen mit denselben Filtern wie im Live-Bereich.</p>
                   </div>
                   <span class="dataset-count" id="archive-count">-</span>

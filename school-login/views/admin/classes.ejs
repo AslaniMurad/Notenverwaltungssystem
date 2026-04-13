@@ -16,7 +16,7 @@
           <div>
             <p class="app-main-subtitle">Klassen</p>
             <h1>Alle Klassen verwalten</h1>
-            <p class="admin-muted">Klassen sind eigenstaendig. Faecher und Lehrer werden separat zugeordnet.</p>
+            <p class="admin-muted">Klassen sind eigenständig. Fächer und Lehrer werden separat zugeordnet.</p>
           </div>
           <div class="admin-actions-row">
             <a class="btn btn-secondary" href="/admin/assignments/new">Fach zuordnen</a>
@@ -33,14 +33,14 @@
             <span class="admin-badge"><%= classes.length %> Treffer</span>
           </div>
           <form class="admin-form" method="GET" action="/admin/classes">
-            <input type="text" name="q" placeholder="Name, Faecher oder Lehrer" value="<%= query %>">
+            <input type="text" name="q" placeholder="Name, Fächer oder Lehrer" value="<%= query %>">
             <button class="btn btn-secondary" type="submit">Suchen</button>
-            <a class="btn" href="/admin/classes">Zuruecksetzen</a>
+            <a class="btn" href="/admin/classes">Zurücksetzen</a>
           </form>
         </div>
 
         <div class="admin-card">
-          <h3 class="admin-heading-spaced">Klassenuebersicht</h3>
+          <h3 class="admin-heading-spaced">Klassenübersicht</h3>
           <div class="admin-grid">
             <% if (classes.length === 0) { %>
               <div class="admin-empty">Keine Klassen gefunden.</div>
@@ -50,26 +50,26 @@
                 <a class="admin-class-card-link" href="/admin/classes/<%= cls.id %>">
                   <p class="admin-eyebrow">Klasse</p>
                   <h4><%= cls.name %></h4>
-                  <p class="admin-muted">Faecher: <%= cls.assigned_subjects_label %></p>
+                  <p class="admin-muted">Fächer: <%= cls.assigned_subjects_label %></p>
                   <p class="admin-muted">Lehrer: <%= cls.teacher_emails || '-' %></p>
                   <p class="admin-muted">Klassenvorstand: <%= cls.head_teacher_email || '-' %></p>
                   <p class="admin-muted">Fachzuordnungen: <%= cls.assignment_count || 0 %></p>
                 </a>
                 <div class="admin-row wrap">
-                  <a class="btn btn-primary" href="/admin/classes/<%= cls.id %>/students">Schueler</a>
+                  <a class="btn btn-primary" href="/admin/classes/<%= cls.id %>/students">Schüler</a>
                   <a class="btn btn-secondary" href="/admin/assignments/new?class=<%= cls.id %>&create_subject=1">Fach erstellen</a>
                   <a class="btn btn-secondary" href="/admin/classes/<%= cls.id %>/edit">Bearbeiten</a>
                   <form
                     method="POST"
                     action="/admin/classes/<%= cls.id %>/delete"
-                    data-confirm-title="Klasse loeschen"
-                    data-confirm-message="Moechtest du diese Klasse wirklich loeschen?"
-                    data-confirm-note="Alle Schuelerzuordnungen in dieser Klasse werden ebenfalls entfernt."
-                    data-confirm-action="Loeschen"
+                    data-confirm-title="Klasse löschen"
+                    data-confirm-message="Möchtest du diese Klasse wirklich löschen?"
+                    data-confirm-note="Alle Schülerzuordnungen in dieser Klasse werden ebenfalls entfernt."
+                    data-confirm-action="Löschen"
                     data-confirm-variant="danger"
                   >
                     <input type="hidden" name="_csrf" value="<%= csrfToken %>">
-                    <button class="btn btn-danger" type="submit">Loeschen</button>
+                    <button class="btn btn-danger" type="submit">Löschen</button>
                   </form>
                 </div>
               </div>

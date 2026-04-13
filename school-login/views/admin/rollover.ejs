@@ -13,7 +13,7 @@
   const sourceClassMap = new Map(sourceClasses.map((classRow) => [Number(classRow.id), classRow]));
   const startValues = startForm || {};
   const routeActiveName = draft?.activeSchoolYear?.name || preview?.activeSchoolYear?.name || activeSchoolYear?.name || 'Nicht gesetzt';
-  const routeNextName = draft?.nextSchoolYear?.name || preview?.nextSchoolYear?.name || startValues.schoolYearName || 'Nicht verfuegbar';
+  const routeNextName = draft?.nextSchoolYear?.name || preview?.nextSchoolYear?.name || startValues.schoolYearName || 'Nicht verfügbar';
   const routeActiveStart = draft?.activeSchoolYear?.start_date || preview?.activeSchoolYear?.start_date || activeSchoolYear?.start_date;
   const routeActiveEnd = draft?.activeSchoolYear?.end_date || preview?.activeSchoolYear?.end_date || activeSchoolYear?.end_date;
   const routeNextStart = draft?.nextSchoolYear?.startDate || preview?.nextSchoolYear?.startDate || startValues.startDate;
@@ -68,12 +68,12 @@
             <p class="app-main-subtitle">Schuljahresverwaltung</p>
             <h1>Schuljahreswechsel-Assistent</h1>
             <p class="admin-muted school-year-header-copy">
-              Mehrstufiger Wizard fuer Klassen, Lehrerzuordnungen und Schueleruebernahme.
+              Mehrstufiger Wizard für Klassen, Lehrerzuordnungen und Schülerübernahme.
             </p>
           </div>
           <div class="admin-actions-row school-year-header-actions">
             <% if (hasWizard) { %>
-              <a class="btn btn-primary" href="/admin/rollover?step=<%= wizardStep === 'start' ? 'classes' : wizardStep %>">Assistent oeffnen</a>
+              <a class="btn btn-primary" href="/admin/rollover?step=<%= wizardStep === 'start' ? 'classes' : wizardStep %>">Assistent öffnen</a>
             <% } %>
             <a class="btn btn-secondary" href="/archive">Archiv</a>
           </div>
@@ -89,7 +89,7 @@
             <% } %>
             <% if (intakeParseErrors.length) { %>
               <div class="school-year-alert school-year-alert-error">
-                <strong>Import pruefen:</strong>
+                <strong>Import prüfen:</strong>
                 <ul class="school-year-inline-list">
                   <% intakeParseErrors.forEach((entry) => { %>
                     <li><%= entry %></li>
@@ -122,7 +122,7 @@
               <% if (hasWizard) { %>
                 <form method="POST" action="/admin/rollover/reset">
                   <input type="hidden" name="_csrf" value="<%= csrfToken %>">
-                  <button class="btn btn-secondary" type="submit">Assistent zuruecksetzen</button>
+                  <button class="btn btn-secondary" type="submit">Assistent zurücksetzen</button>
                 </form>
               <% } %>
             </div>
@@ -145,7 +145,7 @@
 
                 <div class="school-year-metric-grid">
                   <div class="school-year-metric"><span>Klassen</span><strong><%= draft?.sourceSummary?.classCount || preview?.classCount || 0 %></strong></div>
-                  <div class="school-year-metric"><span>Schueler</span><strong><%= draft?.sourceSummary?.studentCount || preview?.studentCount || 0 %></strong></div>
+                  <div class="school-year-metric"><span>Schüler</span><strong><%= draft?.sourceSummary?.studentCount || preview?.studentCount || 0 %></strong></div>
                   <div class="school-year-metric"><span>Zuordnungen</span><strong><%= draft?.sourceSummary?.assignmentCount || preview?.assignmentsCopied || 0 %></strong></div>
                   <div class="school-year-metric"><span>Archivierte Noten</span><strong><%= draft?.sourceSummary?.gradeCount || preview?.gradeCount || 0 %></strong></div>
                 </div>
@@ -158,7 +158,7 @@
                       <p class="admin-eyebrow">Zielschuljahr</p>
                       <h3>Aktueller Wizard</h3>
                     </div>
-                    <small>Zum Aendern Assistent zuerst zuruecksetzen.</small>
+                    <small>Zum Ändern Assistent zuerst zurücksetzen.</small>
                   </div>
 
                   <div class="school-year-start-readonly">
@@ -187,7 +187,7 @@
                       <p class="admin-eyebrow">Zielschuljahr</p>
                       <h3>Bezeichnung und Datum festlegen</h3>
                     </div>
-                    <small>Standardwerte koennen vor dem Start angepasst werden.</small>
+                    <small>Standardwerte können vor dem Start angepasst werden.</small>
                   </div>
 
                   <form method="POST" action="/admin/rollover/start" class="school-year-form-stack school-year-start-form">
@@ -278,7 +278,7 @@
                     <tr>
                       <th>Typ</th>
                       <th>Quelle</th>
-                      <th>Schueler</th>
+                      <th>Schüler</th>
                       <th>Zielname</th>
                       <th>Lehrer</th>
                       <th>Aktiv</th>
@@ -340,7 +340,7 @@
                           <td>
                             <input type="hidden" name="extra_rows[<%= index %>][plan_key]" value="<%= plan?.key || '' %>">
                             <select name="extra_rows[<%= index %>][template_source_class_id]" class="form-select">
-                              <option value="">Vorlage waehlen</option>
+                              <option value="">Vorlage wählen</option>
                               <% sourceClasses.forEach((classRow) => { %>
                                 <option value="<%= classRow.id %>" <%= Number(plan?.templateSourceClassId) === Number(classRow.id) ? 'selected' : '' %>>
                                   <%= classRow.name %> / <%= classRow.subject %>
@@ -372,7 +372,7 @@
 
               <div class="school-year-button-row">
                 <button class="btn btn-secondary" type="submit" name="intent" value="stay">Speichern</button>
-                <button class="btn btn-primary" type="submit" name="intent" value="next">Weiter zu Schuelern</button>
+                <button class="btn btn-primary" type="submit" name="intent" value="next">Weiter zu Schülern</button>
               </div>
             </form>
           </section>
@@ -383,12 +383,12 @@
             <div class="school-year-panel-head">
               <div>
                 <p class="admin-eyebrow">Schritt 2</p>
-                <h2>Schueler planen</h2>
+                <h2>Schüler planen</h2>
               </div>
               <div class="school-year-panel-meta">
                 <span><%= sourceClassGroups.length %> Ausgangsklassen</span>
-                <span><%= validation.reviewStats.promotedStudentCount || 0 %> Uebernahmen</span>
-                <span><%= validation.reviewStats.intakeStudentCount || 0 %> neue Schueler</span>
+                <span><%= validation.reviewStats.promotedStudentCount || 0 %> Übernahmen</span>
+                <span><%= validation.reviewStats.intakeStudentCount || 0 %> neue Schüler</span>
               </div>
             </div>
 
@@ -406,15 +406,15 @@
                 <details class="school-year-student-group" data-rollover-student-group <%= index < 3 ? 'open' : '' %>>
                   <summary>
                     <span><strong><%= group.classRow.name %></strong> / <%= group.classRow.subject %></span>
-                    <small><%= group.students.length %> Schueler | <%= group.promoteCount %> uebernehmen | <%= group.graduateCount %> beenden</small>
+                    <small><%= group.students.length %> Schüler | <%= group.promoteCount %> übernehmen | <%= group.graduateCount %> beenden</small>
                   </summary>
                   <div class="school-year-group-body">
                     <div class="school-year-group-defaults">
                       <label>
                         <span>Standardaktion</span>
                         <select name="student_defaults[<%= group.classRow.id %>][default_action]" class="form-select">
-                          <option value="promote" <%= group.defaults.defaultAction === 'promote' ? 'selected' : '' %>>In Zielklasse uebernehmen</option>
-                          <option value="graduate" <%= group.defaults.defaultAction === 'graduate' ? 'selected' : '' %>>Nicht uebernehmen</option>
+                          <option value="promote" <%= group.defaults.defaultAction === 'promote' ? 'selected' : '' %>>In Zielklasse übernehmen</option>
+                          <option value="graduate" <%= group.defaults.defaultAction === 'graduate' ? 'selected' : '' %>>Nicht übernehmen</option>
                         </select>
                       </label>
                       <label>
@@ -452,8 +452,8 @@
                               </td>
                               <td>
                                 <select name="student_overrides[<%= studentPlan.sourceStudentId %>][action]" class="form-select">
-                                  <option value="promote" <%= studentPlan.action === 'promote' ? 'selected' : '' %>>Uebernehmen</option>
-                                  <option value="graduate" <%= studentPlan.action === 'graduate' ? 'selected' : '' %>>Nicht uebernehmen</option>
+                                  <option value="promote" <%= studentPlan.action === 'promote' ? 'selected' : '' %>>Übernehmen</option>
+                                  <option value="graduate" <%= studentPlan.action === 'graduate' ? 'selected' : '' %>>Nicht übernehmen</option>
                                 </select>
                               </td>
                               <td>
@@ -477,8 +477,8 @@
                 <section class="school-year-subpanel">
                   <div class="school-year-subpanel-head">
                     <div>
-                      <p class="admin-eyebrow">Neue Schueler</p>
-                      <h3>Intake und Zusatzklassen fuellen</h3>
+                      <p class="admin-eyebrow">Neue Schüler</p>
+                      <h3>Intake und Zusatzklassen füllen</h3>
                     </div>
                     <small>Format pro Zeile: <code>Name;E-Mail</code> oder <code>E-Mail</code></small>
                   </div>
@@ -492,7 +492,7 @@
                           rows="6"
                           placeholder="Max Mustermann;max.mustermann@schule.at"
                         ><%= target.rawText %></textarea>
-                        <small><%= target.students.length %> neue Schueler erkannt</small>
+                        <small><%= target.students.length %> neue Schüler erkannt</small>
                       </label>
                     <% }) %>
                   </div>
@@ -500,8 +500,8 @@
               <% } %>
 
               <div class="school-year-button-row">
-                <button class="btn btn-secondary" type="submit" name="intent" value="back">Zurueck zu Klassen</button>
-                <button class="btn btn-primary" type="submit" name="intent" value="next">Weiter zur Pruefung</button>
+                <button class="btn btn-secondary" type="submit" name="intent" value="back">Zurück zu Klassen</button>
+                <button class="btn btn-primary" type="submit" name="intent" value="next">Weiter zur Prüfung</button>
               </div>
             </form>
           </section>
@@ -512,12 +512,12 @@
             <div class="school-year-panel-head">
               <div>
                 <p class="admin-eyebrow">Schritt 3</p>
-                <h2>Pruefen und ausfuehren</h2>
+                <h2>Prüfen und ausführen</h2>
               </div>
               <div class="school-year-panel-meta">
                 <span><%= validation.reviewStats.targetClassCount || 0 %> Zielklassen</span>
-                <span><%= validation.reviewStats.promotedStudentCount || 0 %> Schueler uebernehmen</span>
-                <span><%= validation.reviewStats.intakeStudentCount || 0 %> neue Schueler</span>
+                <span><%= validation.reviewStats.promotedStudentCount || 0 %> Schüler übernehmen</span>
+                <span><%= validation.reviewStats.intakeStudentCount || 0 %> neue Schüler</span>
               </div>
             </div>
 
@@ -547,8 +547,8 @@
                     <th>Quelle</th>
                     <th>Zielklasse</th>
                     <th>Lehrer</th>
-                    <th>Uebernahmen</th>
-                    <th>Neue Schueler</th>
+                    <th>Übernahmen</th>
+                    <th>Neue Schüler</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -568,7 +568,7 @@
 
             <form method="POST" action="/admin/rollover/execute" class="school-year-confirm-form">
               <input type="hidden" name="_csrf" value="<%= csrfToken %>">
-              <label for="confirmation_text">Zielschuljahr bestaetigen</label>
+              <label for="confirmation_text">Zielschuljahr bestätigen</label>
               <input
                 id="confirmation_text"
                 class="form-input school-year-confirm-input"
@@ -579,12 +579,12 @@
                 required
               >
               <small class="admin-muted school-year-confirm-note">
-                Gib exakt <strong><%= draft?.nextSchoolYear?.name || '-' %></strong> ein. Vor der Ausfuehrung wird ein Backup erzeugt.
+                Gib exakt <strong><%= draft?.nextSchoolYear?.name || '-' %></strong> ein. Vor der Ausführung wird ein Backup erzeugt.
               </small>
 
               <div class="school-year-button-row">
-                <a class="btn btn-secondary" href="/admin/rollover?step=students">Zurueck zu Schuelern</a>
-                <button class="btn btn-danger" type="submit" <%= validation.valid ? '' : 'disabled' %>>Schuljahreswechsel ausfuehren</button>
+                <a class="btn btn-secondary" href="/admin/rollover?step=students">Zurück zu Schülern</a>
+                <button class="btn btn-danger" type="submit" <%= validation.valid ? '' : 'disabled' %>>Schuljahreswechsel ausführen</button>
               </div>
             </form>
           </section>
@@ -622,7 +622,7 @@
                         <button class="btn btn-secondary" type="submit">Schuljahr wiederherstellen</button>
                       </form>
                     <% } else if (String(logRow.status || '').toLowerCase() === 'success' && logRow.backup_path) { %>
-                      <small>Restore nur moeglich, wenn <%= logRow.new_school_year %> aktiv ist.</small>
+                      <small>Restore nur möglich, wenn <%= logRow.new_school_year %> aktiv ist.</small>
                     <% } %>
                   </div>
                 </div>

@@ -18,11 +18,11 @@
             <a href="/teacher/classes">Fächer</a>
             <a href="/teacher/create-class">Fach erstellen</a>
             <div class="nav-section-title">Klasse: <%= classData.name %> / <%= classData.subject %></div>
-            <a href="/teacher/students/<%= classData.id %>">Schueler</a>
+            <a href="/teacher/students/<%= classData.id %>">Schüler</a>
             <a class="is-active <%= (typeof openMessageCount !== 'undefined' && openMessageCount > 0) ? 'is-alert' : '' %>" href="/teacher/test-questions/<%= classData.id %>">Fragen zu Tests<% if (typeof openMessageCount !== 'undefined' && openMessageCount > 0) { %><span class="nav-notification-badge"><%= openMessageCount %></span><% } %></a>
             <a href="/teacher/grades/<%= classData.id %>">Noten</a>
             <a href="/teacher/special-assessments/<%= classData.id %>">Sonderleistungen</a>
-            <a href="/teacher/grade-templates/<%= classData.id %>">Pruefungen</a>
+            <a href="/teacher/grade-templates/<%= classData.id %>">Prüfungen</a>
             <a href="/teacher/class-statistics/<%= classData.id %>">Statistiken</a>
             <form class="logout-form" method="POST" action="/logout">
               <input type="hidden" name="_csrf" value="<%= csrfToken %>">
@@ -35,12 +35,12 @@
       <section class="teacher-main teacher-test-questions-page">
         <header class="teacher-main-header teacher-main-header-compact">
           <div>
-            <p class="teacher-eyebrow">Rueckgaben</p>
+            <p class="teacher-eyebrow">Rückgaben</p>
             <h1>Fragen zu Tests</h1>
             <p class="teacher-muted">Klasse: <%= classData.name %> - Fach: <%= classData.subject %></p>
           </div>
           <div class="teacher-actions-inline">
-            <a class="btn btn-secondary" href="/teacher/students/<%= classData.id %>">Zurueck zu Schueler</a>
+            <a class="btn btn-secondary" href="/teacher/students/<%= classData.id %>">Zurück zu Schüler</a>
           </div>
         </header>
 
@@ -59,7 +59,7 @@
           <% if (!messageThreads || messageThreads.length === 0) { %>
             <div class="teacher-empty">
               <h4>Keine Fragen vorhanden</h4>
-              <p>Schuelerfragen zu Rueckgaben erscheinen hier.</p>
+              <p>Schülerfragen zu Rückgaben erscheinen hier.</p>
             </div>
           <% } else { %>
             <form class="teacher-search-form teacher-thread-controls" id="thread-filter-form" role="search" aria-label="Nachrichten filtern" onsubmit="return false;">
@@ -69,7 +69,7 @@
                   class="form-input teacher-search-input"
                   type="search"
                   id="thread-search"
-                  placeholder="Schueler, E-Mail, Test oder Nachricht suchen"
+                  placeholder="Schüler, E-Mail, Test oder Nachricht suchen"
                 >
               </div>
               <div class="teacher-thread-filter-field">
@@ -84,7 +84,7 @@
                 <label class="teacher-filter-label" for="thread-sort-filter">Sortierung</label>
                 <select class="form-select teacher-search-select" id="thread-sort-filter" aria-label="Sortierung">
                   <option value="latest_desc">Neueste zuerst</option>
-                  <option value="latest_asc">Aelteste zuerst</option>
+                  <option value="latest_asc">Älteste zuerst</option>
                   <option value="open_first">Offene zuerst</option>
                   <option value="student_asc">Name A-Z</option>
                   <option value="student_desc">Name Z-A</option>
@@ -124,12 +124,12 @@
                         </p>
                         <div class="teacher-thread-meta">
                           <span><%= thread.messages.length %> Nachricht<%= thread.messages.length === 1 ? '' : 'en' %></span>
-                          <span>Letzte Aktivitaet: <%= new Date(thread.latest_at).toLocaleString('de-DE') %></span>
+                          <span>Letzte Aktivität: <%= new Date(thread.latest_at).toLocaleString('de-DE') %></span>
                         </div>
                       </div>
                       <div class="teacher-thread-summary-right">
                         <% if (thread.student_closed_at) { %>
-                          <span class="teacher-meta-chip teacher-meta-chip-status-student-closed">vom Schueler geschlossen</span>
+                          <span class="teacher-meta-chip teacher-meta-chip-status-student-closed">vom Schüler geschlossen</span>
                         <% } else if (hasOpenMessages) { %>
                           <span class="teacher-meta-chip teacher-meta-chip-status-open"><%= openMessages %> offen</span>
                         <% } else { %>
@@ -140,8 +140,8 @@
 
                     <div class="teacher-collapsible-body">
                       <div class="teacher-thread-body-header">
-                        <small class="teacher-muted">Letzte Aktivitaet: <%= new Date(thread.latest_at).toLocaleString('de-DE') %></small>
-                        <a class="btn btn-secondary btn-sm" href="/teacher/student-grades/<%= classData.id %>/<%= thread.student_id %>">Zum Schueler-Detail</a>
+                        <small class="teacher-muted">Letzte Aktivität: <%= new Date(thread.latest_at).toLocaleString('de-DE') %></small>
+                        <a class="btn btn-secondary btn-sm" href="/teacher/student-grades/<%= classData.id %>/<%= thread.student_id %>">Zum Schüler-Detail</a>
                       </div>
                       <% if (thread.student_closed_at) { %>
                         <div class="teacher-message-bubble system">
@@ -152,7 +152,7 @@
                       <% } %>
                       <% thread.messages.forEach(message => { %>
                         <div class="teacher-message-bubble student">
-                          <p class="teacher-message-author"><%= thread.student_email || 'Schueler' %></p>
+                          <p class="teacher-message-author"><%= thread.student_email || 'Schüler' %></p>
                           <p><%= message.student_message %></p>
                           <small class="teacher-muted"><%= new Date(message.created_at).toLocaleString('de-DE') %></small>
                         </div>
@@ -169,7 +169,7 @@
                           <form class="teacher-form teacher-reply-form" method="POST" action="/teacher/students/<%= classData.id %>/messages/<%= message.id %>/reply">
                             <input type="hidden" name="_csrf" value="<%= csrfToken %>">
                             <label for="reply-<%= message.id %>">Antwort</label>
-                            <textarea id="reply-<%= message.id %>" name="reply" rows="3" maxlength="1000" required placeholder="Antwort an den Schueler..."></textarea>
+                            <textarea id="reply-<%= message.id %>" name="reply" rows="3" maxlength="1000" required placeholder="Antwort an den Schüler..."></textarea>
                             <div class="teacher-form-actions">
                               <button class="btn btn-primary" type="submit">Antwort senden</button>
                             </div>

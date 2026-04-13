@@ -1,6 +1,6 @@
 ﻿<%
   const page = {
-    title: `Lehrer - Schueler (${classData.name})`,
+    title: `Lehrer - Schüler (${classData.name})`,
     headerTitle: 'Lehrerbereich',
     styles: ['/css/teacher-pages.css'],
     scripts: ['/js/app.js'],
@@ -14,16 +14,16 @@
 
         <div class="app-nav">
           <div class="nav-section">
-            <div class="nav-section-title">MenÃ¼</div>
+            <div class="nav-section-title">Menü</div>
             <a href="/teacher/classes">Fächer</a>
             <a href="/teacher/create-class">Fach erstellen</a>
             <a href="/teacher/settings">Einstellungen</a>
             <div class="nav-section-title">Klasse: <%= classData.name %> / <%= classData.subject %></div>
-            <a class="is-active" href="/teacher/students/<%= classData.id %>">Schueler</a>
+            <a class="is-active" href="/teacher/students/<%= classData.id %>">Schüler</a>
             <a class="<%= (typeof openMessageCount !== 'undefined' && openMessageCount > 0) ? 'is-alert' : '' %>" href="/teacher/test-questions/<%= classData.id %>">Fragen zu Tests<% if (typeof openMessageCount !== 'undefined' && openMessageCount > 0) { %><span class="nav-notification-badge"><%= openMessageCount %></span><% } %></a>
             <a href="/teacher/grades/<%= classData.id %>">Noten</a>
             <a href="/teacher/special-assessments/<%= classData.id %>">Sonderleistungen</a>
-            <a href="/teacher/grade-templates/<%= classData.id %>">Pruefungen</a>
+            <a href="/teacher/grade-templates/<%= classData.id %>">Prüfungen</a>
             <a href="/teacher/class-statistics/<%= classData.id %>">Statistiken</a>
             <form class="logout-form" method="POST" action="/logout">
               <input type="hidden" name="_csrf" value="<%= csrfToken %>">
@@ -37,12 +37,12 @@
         <header class="teacher-main-header">
           <div>
             <p class="teacher-eyebrow">Klasse <%= classData.name %></p>
-            <h1>Schueler verwalten</h1>
+            <h1>Schüler verwalten</h1>
             <p class="teacher-muted">Fach: <%= classData.subject %> - Rolle: Lehrer</p>
           </div>
           <div class="teacher-actions-inline">
-            <a class="btn btn-primary" href="/teacher/add-student/<%= classData.id %>">+ Schueler hinzufuegen</a>
-            <a class="btn btn-secondary" href="/teacher/classes">Zurueck</a>
+            <a class="btn btn-primary" href="/teacher/add-student/<%= classData.id %>">+ Schüler hinzufügen</a>
+            <a class="btn btn-secondary" href="/teacher/classes">Zurück</a>
           </div>
         </header>
 
@@ -51,7 +51,7 @@
             class="form-input teacher-search-input"
             type="search"
             name="q"
-            placeholder="SchÃ¼ler nach Name oder E-Mail suchen"
+            placeholder="Schüler nach Name oder E-Mail suchen"
             value="<%= (search && search.q) || '' %>"
           >
           <select class="form-select teacher-search-select" name="sort" aria-label="Sortierung">
@@ -67,8 +67,8 @@
         <div class="teacher-card">
           <div class="teacher-card-header">
             <div>
-              <p class="teacher-eyebrow">Schueler</p>
-              <h3><%= students.length %> / <%= totalStudentCount %> Schueler in dieser Klasse</h3>
+              <p class="teacher-eyebrow">Schüler</p>
+              <h3><%= students.length %> / <%= totalStudentCount %> Schüler in dieser Klasse</h3>
             </div>
             <% if (excludedStudentCount > 0) { %>
               <div class="teacher-meta-chip"><%= excludedStudentCount %> ausgeschlossen</div>
@@ -78,15 +78,15 @@
           <div class="teacher-list">
             <% if (students.length === 0) { %>
               <div class="teacher-empty">
-                <h4>Noch keine Schueler</h4>
-                <p>Fuege Schueler hinzu, um die Klasse zu fuellen.</p>
-                <a class="btn btn-primary" href="/teacher/add-student/<%= classData.id %>">Schueler hinzufuegen</a>
+                <h4>Noch keine Schüler</h4>
+                <p>Füge Schüler hinzu, um die Klasse zu füllen.</p>
+                <a class="btn btn-primary" href="/teacher/add-student/<%= classData.id %>">Schüler hinzufügen</a>
               </div>
             <% } else { %>
               <% students.forEach(student => { %>
                 <div class="teacher-student-card <%= student.is_excluded ? 'is-excluded' : '' %>">
                   <div>
-                    <p class="teacher-eyebrow">Schueler</p>
+                    <p class="teacher-eyebrow">Schüler</p>
                     <h4><%= student.name %></h4>
                     <p class="teacher-muted"><%= student.email %></p>
                     <% if (student.is_excluded) { %>
@@ -123,10 +123,10 @@
     <div id="deleteModal" class="modal-overlay">
       <div class="modal-content">
         <div class="modal-header">
-          <h3>Schueler entfernen</h3>
+          <h3>Schüler entfernen</h3>
         </div>
         <div class="modal-body">
-          <p>Moechtest du den Schueler <strong id="deleteStudentName"></strong> wirklich aus der Klasse entfernen?</p>
+          <p>Möchtest du den Schüler <strong id="deleteStudentName"></strong> wirklich aus der Klasse entfernen?</p>
         </div>
         <div class="modal-footer">
           <button class="btn btn-secondary" id="cancelDelete">Abbrechen</button>

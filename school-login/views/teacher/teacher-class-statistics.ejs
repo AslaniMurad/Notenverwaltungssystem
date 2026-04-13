@@ -1,6 +1,6 @@
 ﻿<%
   const page = {
-    title: `Lehrer â€” Klassenstatistiken (${classData.name})`,
+    title: `Lehrer - Klassenstatistiken (${classData.name})`,
     headerTitle: 'Lehrerbereich',
     styles: ['/css/teacher-pages.css'],
     scripts: ['/js/app.js'],
@@ -21,11 +21,16 @@
           "wunschpr-fung": "wunschprufung"
         })[
           String(value || "")
-            .replace(/ÃƒÂ¤/g, "Ã¤")
-            .replace(/ÃƒÂ¶/g, "Ã¶")
-            .replace(/ÃƒÂ¼/g, "Ã¼")
-            .replace(/ÃƒÅ¸/g, "ÃŸ")
-            .replace(/Ã‚/g, "")
+            .replace(/\u00c3\u0192\u00c2\u00a4/g, "ä")
+            .replace(/\u00c3\u0192\u00c2\u00b6/g, "ö")
+            .replace(/\u00c3\u0192\u00c2\u00bc/g, "ü")
+            .replace(/\u00c3\u0192\u00c5\u00b8/g, "ß")
+            .replace(/\u00c3\u201a/g, "")
+            .replace(/\u00c3\u00a4/g, "ä")
+            .replace(/\u00c3\u00b6/g, "ö")
+            .replace(/\u00c3\u00bc/g, "ü")
+            .replace(/\u00c3\u0178/g, "ß")
+            .replace(/\u00c2/g, "")
             .normalize("NFD")
             .replace(/[\u0300-\u036f]/g, "")
             .toLowerCase()
@@ -33,11 +38,16 @@
             .replace(/^-+|-+$/g, "")
         ] ||
         String(value || "")
-          .replace(/ÃƒÂ¤/g, "Ã¤")
-          .replace(/ÃƒÂ¶/g, "Ã¶")
-          .replace(/ÃƒÂ¼/g, "Ã¼")
-          .replace(/ÃƒÅ¸/g, "ÃŸ")
-          .replace(/Ã‚/g, "")
+          .replace(/\u00c3\u0192\u00c2\u00a4/g, "ä")
+            .replace(/\u00c3\u0192\u00c2\u00b6/g, "ö")
+            .replace(/\u00c3\u0192\u00c2\u00bc/g, "ü")
+            .replace(/\u00c3\u0192\u00c5\u00b8/g, "ß")
+            .replace(/\u00c3\u201a/g, "")
+            .replace(/\u00c3\u00a4/g, "ä")
+            .replace(/\u00c3\u00b6/g, "ö")
+            .replace(/\u00c3\u00bc/g, "ü")
+            .replace(/\u00c3\u0178/g, "ß")
+            .replace(/\u00c2/g, "")
           .normalize("NFD")
           .replace(/[\u0300-\u036f]/g, "")
           .toLowerCase()
@@ -50,16 +60,16 @@
 
         <div class="app-nav">
           <div class="nav-section">
-            <div class="nav-section-title">MenÃ¼</div>
+            <div class="nav-section-title">Menü</div>
             <a href="/teacher/classes">Fächer</a>
             <a href="/teacher/create-class">Fach erstellen</a>
             <a href="/teacher/settings">Einstellungen</a>
             <div class="nav-section-title">Klasse: <%= classData.name %> / <%= classData.subject %></div>
-            <a href="/teacher/students/<%= classData.id %>">SchÃ¼ler</a>
+            <a href="/teacher/students/<%= classData.id %>">Schüler</a>
             <a class="<%= (typeof openMessageCount !== 'undefined' && openMessageCount > 0) ? 'is-alert' : '' %>" href="/teacher/test-questions/<%= classData.id %>">Fragen zu Tests<% if (typeof openMessageCount !== 'undefined' && openMessageCount > 0) { %><span class="nav-notification-badge"><%= openMessageCount %></span><% } %></a>
             <a href="/teacher/grades/<%= classData.id %>">Noten</a>
             <a href="/teacher/special-assessments/<%= classData.id %>">Sonderleistungen</a>
-            <a href="/teacher/grade-templates/<%= classData.id %>">PrÃ¼fungen</a>
+            <a href="/teacher/grade-templates/<%= classData.id %>">Prüfungen</a>
             <a class="is-active" href="/teacher/class-statistics/<%= classData.id %>">Statistiken</a>
             <form class="logout-form" method="POST" action="/logout">
               <input type="hidden" name="_csrf" value="<%= csrfToken %>">
@@ -74,32 +84,32 @@
           <div>
             <p class="teacher-eyebrow">Klasse <%= classData.name %></p>
             <h1>Klassenstatistiken</h1>
-            <p class="teacher-muted">Fach: <%= classData.subject %> Â· <%= studentCount %> aktive SchÃ¼ler<% if (excludedStudentCount > 0) { %> Â· <%= excludedStudentCount %> ausgeschlossen<% } %></p>
+            <p class="teacher-muted">Fach: <%= classData.subject %> · <%= studentCount %> aktive Schüler<% if (excludedStudentCount > 0) { %> · <%= excludedStudentCount %> ausgeschlossen<% } %></p>
           </div>
           <div class="teacher-actions-inline">
-            <a class="btn btn-secondary" href="/teacher/classes">ZurÃ¼ck</a>
+            <a class="btn btn-secondary" href="/teacher/classes">Zurück</a>
           </div>
         </header>
 
-        <!-- GesamtÃ¼bersicht -->
+        <!-- Gesamtübersicht -->
         <% if (overallWeightedAverage || overallAverage) { %>
           <div class="stats-card">
             <div class="stat-item">
               <p class="stat-label">Klassendurchschnitt (gewichtet)</p>
               <p class="stat-value grade-<%= Math.round(overallWeightedAverage) %>">
-                <%= overallWeightedAverage || 'â€”' %>
+                <%= overallWeightedAverage || '-' %>
               </p>
             </div>
             <div class="stat-item">
               <p class="stat-label">Durchschnitt (ungewichtet)</p>
-              <p class="stat-value"><%= overallAverage || 'â€”' %></p>
+              <p class="stat-value"><%= overallAverage || '-' %></p>
             </div>
             <div class="stat-item">
-              <p class="stat-label">Anzahl PrÃ¼fungen</p>
+              <p class="stat-label">Anzahl Prüfungen</p>
               <p class="stat-value"><%= templateStats.length %></p>
             </div>
             <div class="stat-item">
-              <p class="stat-label">Anzahl SchÃ¼ler</p>
+              <p class="stat-label">Anzahl Schüler</p>
               <p class="stat-value"><%= studentCount %></p>
             </div>
           </div>
@@ -108,18 +118,18 @@
         <div class="teacher-card">
           <div class="teacher-card-header">
             <div>
-              <p class="teacher-eyebrow">PrÃ¼fungsstatistiken</p>
-              <h3>Durchschnitt pro PrÃ¼fung</h3>
+              <p class="teacher-eyebrow">Prüfungsstatistiken</p>
+              <h3>Durchschnitt pro Prüfung</h3>
             </div>
-            <div class="teacher-meta-chip"><%= templateStats.length %> PrÃ¼fungen</div>
+            <div class="teacher-meta-chip"><%= templateStats.length %> Prüfungen</div>
           </div>
 
           <div class="statistics-list">
             <% if (templateStats.length === 0) { %>
               <div class="teacher-empty">
-                <h4>Noch keine PrÃ¼fungen</h4>
-                <p>Erstelle PrÃ¼fungsvorlagen, um Statistiken zu sehen.</p>
-                <a class="btn btn-primary" href="/teacher/grade-templates/<%= classData.id %>">PrÃ¼fungen verwalten</a>
+                <h4>Noch keine Prüfungen</h4>
+                <p>Erstelle Prüfungsvorlagen, um Statistiken zu sehen.</p>
+                <a class="btn btn-primary" href="/teacher/grade-templates/<%= classData.id %>">Prüfungen verwalten</a>
               </div>
             <% } else { %>
               <% templateStats.forEach(stat => { %>
@@ -144,7 +154,7 @@
                             <%= stat.average %>
                           </p>
                         <% } else { %>
-                          <p class="statistics-value-empty">â€”</p>
+                          <p class="statistics-value-empty">-</p>
                         <% } %>
                       </div>
 
@@ -171,7 +181,7 @@
                             <% } %>
                           </p>
                         <% } else { %>
-                          <p class="statistics-value-empty">â€”</p>
+                          <p class="statistics-value-empty">-</p>
                         <% } %>
                       </div>
 
@@ -188,7 +198,7 @@
                             <% } %>
                           </p>
                         <% } else { %>
-                          <p class="statistics-value-empty">â€”</p>
+                          <p class="statistics-value-empty">-</p>
                         <% } %>
                       </div>
                     </div>

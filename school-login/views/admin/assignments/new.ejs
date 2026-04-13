@@ -23,9 +23,9 @@
           <div>
             <p class="app-main-subtitle">Unterrichtszuordnungen</p>
             <h1>Lehrer einem Klassenfach zuordnen</h1>
-            <p class="admin-muted">Klassen koennen ohne Fach starten. Hier wird das Fach pro Zuordnung festgelegt.</p>
+            <p class="admin-muted">Klassen können ohne Fach starten. Hier wird das Fach pro Zuordnung festgelegt.</p>
           </div>
-          <a class="btn btn-secondary" href="/admin/assignments">Zur Uebersicht</a>
+          <a class="btn btn-secondary" href="/admin/assignments">Zur Übersicht</a>
         </div>
 
         <% if (message) { %>
@@ -45,7 +45,7 @@
               </select>
               <input type="hidden" name="create_subject" value="1">
               <button class="btn btn-secondary" type="submit">Klasse laden</button>
-              <a class="btn" href="/admin/assignments/new?class=<%= encodeURIComponent(selClassId) %>">Bestehendes Fach waehlen</a>
+              <a class="btn" href="/admin/assignments/new?class=<%= encodeURIComponent(selClassId) %>">Bestehendes Fach wählen</a>
             </form>
           <% } else { %>
             <form class="admin-form" method="GET" action="/admin/assignments/new">
@@ -66,7 +66,7 @@
           <% if (!classes.length) { %>
             <p class="admin-muted">Es gibt noch keine Klassen im aktiven Schuljahr.</p>
           <% } else if (!subjects.length) { %>
-            <p class="admin-muted">Es gibt noch keine Faecher. Lege unten ein neues Fach an und ordne es direkt Lehrern zu.</p>
+            <p class="admin-muted">Es gibt noch keine Fächer. Lege unten ein neues Fach an und ordne es direkt Lehrern zu.</p>
           <% } %>
         </div>
 
@@ -95,13 +95,13 @@
                   placeholder="z.B. Mathematik"
                   required
                 >
-                <p class="admin-muted">Dieses Fach wird angelegt und direkt der gewaehlten Klasse mit den markierten Lehrern zugeordnet.</p>
+                <p class="admin-muted">Dieses Fach wird angelegt und direkt der gewählten Klasse mit den markierten Lehrern zugeordnet.</p>
               <% } else { %>
                 <input type="hidden" name="subject_id" value="<%= selSubjectId %>">
               <% } %>
 
               <div class="assign-teacher-section">
-                <label>Lehrer auswaehlen</label>
+                <label>Lehrer auswählen</label>
                 <input
                   type="text"
                   id="teacher-search"
@@ -129,7 +129,7 @@
                 </div>
 
                 <div id="available-section" class="assign-group">
-                  <p class="assign-group-title">Verfuegbare Lehrer (<span id="available-count"><%= teachers.filter((t) => !assignedSet.has(t.id)).length %></span>)</p>
+                  <p class="assign-group-title">Verfügbare Lehrer (<span id="available-count"><%= teachers.filter((t) => !assignedSet.has(t.id)).length %></span>)</p>
                   <div class="assign-new-table-wrap">
                     <table class="assign-new-table" id="available-list">
                       <thead><tr><th class="assign-col-check"></th><th>Name</th><th>E-Mail</th></tr></thead>
@@ -196,7 +196,7 @@
 
         function updateSelectionCount() {
           var checked = document.querySelectorAll('#available-list input[type="checkbox"]:checked');
-          selectionCount.textContent = checked.length ? checked.length + ' Lehrer ausgewaehlt' : '';
+          selectionCount.textContent = checked.length ? checked.length + ' Lehrer ausgewählt' : '';
         }
 
         searchInput.addEventListener('input', filterTeachers);

@@ -114,7 +114,7 @@ function normalizeSqlDateInput(value, fieldLabel) {
 
   const sqlDate = toSqlDate(normalizedValue);
   if (!sqlDate || !getDateParts(sqlDate)) {
-    throw new Error(`${fieldLabel} ist ungueltig.`);
+    throw new Error(`${fieldLabel} ist ungültig.`);
   }
 
   return sqlDate;
@@ -203,7 +203,7 @@ function parseStudentImportLine(line) {
 
   email = normalizeText(email);
   if (!email || !email.includes("@")) {
-    return { error: "E-Mail fehlt oder ist ungueltig." };
+    return { error: "E-Mail fehlt oder ist ungültig." };
   }
 
   if (!name) {
@@ -807,7 +807,7 @@ function validateWizardDraft(draft) {
     const expectedStudentCount = Array.isArray(classRow.students) ? classRow.students.length : 0;
     const plannedStudentCount = studentCountsBySourceClassId.get(Number(classRow.id)) || 0;
     if (plannedStudentCount !== expectedStudentCount) {
-      errors.push(`Schuelerplanung fuer ${formatClassSubjectLabel(classRow)} ist unvollstaendig.`);
+      errors.push(`Schülerplanung für ${formatClassSubjectLabel(classRow)} ist unvollständig.`);
     }
   });
 
@@ -966,7 +966,7 @@ async function createArchiveEntries({ schoolYearId, summary, queryRunner }) {
 function buildExecutionRows(draft) {
   const validation = validateWizardDraft(draft);
   if (!validation.valid) {
-    throw new Error(validation.errors[0] || "Wizard-Entwurf ist ungueltig.");
+    throw new Error(validation.errors[0] || "Wizard-Entwurf ist ungültig.");
   }
 
   const enabledPlans = getEnabledTargetPlans(draft);
@@ -1161,7 +1161,7 @@ async function executeWizardRollover({ draft, executedBy, confirmationText }) {
     endDate: restoredDraft.nextSchoolYear?.endDate
   });
   if (Number(liveSource.activeSchoolYear.id) !== Number(restoredDraft.activeSchoolYear.id)) {
-    throw new Error("Das aktive Schuljahr hat sich geaendert. Assistent bitte neu starten.");
+    throw new Error("Das aktive Schuljahr hat sich geändert. Assistent bitte neu starten.");
   }
   if (liveSource.nextSchoolYearExists) {
     throw new Error(`Das Schuljahr ${liveSource.nextSchoolYear.name} existiert bereits.`);
@@ -1169,7 +1169,7 @@ async function executeWizardRollover({ draft, executedBy, confirmationText }) {
 
   const normalizedConfirmation = normalizeText(confirmationText);
   if (normalizedConfirmation !== restoredDraft.nextSchoolYear.name) {
-    throw new Error(`Bestaetigung fehlt. Bitte ${restoredDraft.nextSchoolYear.name} exakt eingeben.`);
+    throw new Error(`Bestätigung fehlt. Bitte ${restoredDraft.nextSchoolYear.name} exakt eingeben.`);
   }
 
   const executionRows = buildExecutionRows(restoredDraft);
@@ -1223,7 +1223,7 @@ function ensureBackupPathInDirectory(filePath) {
     resolvedPath === resolvedBackupDir || resolvedPath.startsWith(`${resolvedBackupDir}${path.sep}`);
 
   if (!isInsideBackupDir) {
-    throw new Error("Backup-Pfad ist ungueltig.");
+    throw new Error("Backup-Pfad ist ungültig.");
   }
 
   return resolvedPath;
@@ -1245,7 +1245,7 @@ async function readBackupSnapshot(backupPath) {
   const previousSchoolYearName = normalizeText(payload?.meta?.activeSchoolYear?.name);
   const targetSchoolYearName = normalizeText(payload?.meta?.nextSchoolYear?.name);
   if (!previousSchoolYearName || !targetSchoolYearName) {
-    throw new Error("Backup-Datei ist unvollstaendig.");
+    throw new Error("Backup-Datei ist unvollständig.");
   }
 
   return {
@@ -1336,7 +1336,7 @@ async function restoreSchoolYearFromBackup({ backupPath, executedBy }) {
   }
 
   if (normalizeText(currentActiveSchoolYear?.name) !== targetSchoolYearName) {
-    throw new Error(`Wiederherstellen ist nur moeglich, wenn ${targetSchoolYearName} aktuell aktiv ist.`);
+    throw new Error(`Wiederherstellen ist nur möglich, wenn ${targetSchoolYearName} aktuell aktiv ist.`);
   }
 
   if (!previousSchoolYear) {
