@@ -22,5 +22,14 @@
       <div class="sidebar-meta"><%= line %></div>
     <% }) %>
   </div>
-  <span class="sidebar-badge"><%= sidebarUser.badgeLabel %></span>
+  <div class="sidebar-brand-actions">
+    <span class="sidebar-badge"><%= sidebarUser.badgeLabel %></span>
+    <button class="sidebar-theme-toggle" type="button" data-theme-toggle="sidebar" aria-label="Theme umschalten" title="Theme umschalten">
+      <span class="theme-toggle-icon" aria-hidden="true">&#127769;</span>
+      <span class="sidebar-theme-toggle-copy">
+        <span class="sidebar-theme-toggle-label">Ansicht</span>
+        <span class="theme-toggle-state">Darkmode</span>
+      </span>
+    </button>
+  </div>
 </div>
