@@ -8,6 +8,26 @@
   --shell-text: var(--text);
   --shell-radius: 14px;
   --shell-shadow: 0 12px 30px rgba(0, 61, 165, 0.08);
+  --nav-icon-default: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0%200%2024%2024'%3E%3Cpath d='M4,5h16v3H4zM4,10.5h16v3H4zM4,16h16v3H4z'/%3E%3C/svg%3E");
+  --nav-icon-home: url("data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%2024%2024%22%20fill%3D%22none%22%20stroke%3D%22black%22%20stroke-width%3D%222%22%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22%3E%3Cpath%20d%3D%22M4%2011.5%2012%205l8%206.5V20h-5v-5H9v5H4z%22%2F%3E%3C%2Fsvg%3E");
+  --nav-icon-plus: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0%200%2024%2024'%3E%3Cpath d='M11,4h2v7h7v2h-7v7h-2v-7H4v-2h7z'/%3E%3C/svg%3E");
+  --nav-icon-users: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0%200%2024%2024'%3E%3Cpath d='M9,11a4,4,0,1,0,0-8,4,4,0,0,0,0,8zm0,2c-3.3,0-6,1.7-6,3.8V20h12v-3.2C15,14.7,12.3,13,9,13zm8-1a3,3,0,1,0,0-6,3,3,0,0,0,0,6zm0,2c-.7,0-1.4,.1-2,.3,1.2,.9,2,2.1,2,3.5V20h5v-2.6C22,15.5,19.8,14,17,14z'/%3E%3C/svg%3E");
+  --nav-icon-user-plus: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0%200%2024%2024'%3E%3Cpath d='M9,11a4,4,0,1,0,0-8,4,4,0,0,0,0,8zm0,2c-3.3,0-6,1.7-6,3.8V20h12v-3.2C15,14.7,12.3,13,9,13zm8-9h2v3h3v2h-3v3h-2V9h-3V7h3z'/%3E%3C/svg%3E");
+  --nav-icon-document: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0%200%2024%2024'%3E%3Cpath d='M6,3h9l5,5v13H6zM14,5v5h5zM8,13h8v2H8zM8,17h8v2H8z'/%3E%3C/svg%3E");
+  --nav-icon-calendar: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0%200%2024%2024'%3E%3Cpath d='M4,5h16v16H4zM7,2h2v3H7zM15,2h2v3h-2zM7,11h3v3H7zM12,11h3v3h-3zM7,16h3v3H7zM12,16h3v3h-3z'/%3E%3C/svg%3E");
+  --nav-icon-archive: url("data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%2024%2024%22%20fill%3D%22none%22%20stroke%3D%22black%22%20stroke-width%3D%222%22%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22%3E%3Cpath%20d%3D%22M4%206h16v4H4zM6%2010h12v10H6z%22%2F%3E%3Cpath%20d%3D%22M9%2014h6%22%2F%3E%3C%2Fsvg%3E");
+  --nav-icon-settings: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0%200%2024%2024'%3E%3Cpath d='M19.4,13.5a7.8,7.8,0,0,0,0-3l2-1.5-2-3.5-2.4,1a8.7,8.7,0,0,0-2.6-1.5L14,2h-4l-.4,3A8.7,8.7,0,0,0,7,6.5l-2.4-1-2,3.5,2,1.5a7.8,7.8,0,0,0,0,3l-2,1.5,2,3.5,2.4-1a8.7,8.7,0,0,0,2.6,1.5l.4,3h4l.4-3a8.7,8.7,0,0,0,2.6-1.5l2.4,1,2-3.5zM12,15a3,3,0,1,1,0-6,3,3,0,0,1,0,6z'/%3E%3C/svg%3E");
+  --nav-icon-student: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0%200%2024%2024'%3E%3Cpath d='M12,3,2,8l10,5,10-5zM6,11v4c0,2,3,4,6,4s6-2,6-4v-4l-6,3zM20,10v6h2V9z'/%3E%3C/svg%3E");
+  --nav-icon-question: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0%200%2024%2024'%3E%3Cpath d='M11,17h2v2h-2zM12,3a5,5,0,0,0-5,5h2a3,3,0,1,1,4.8,2.4c-1.4,1-2.8,2.1-2.8,4.6h2c0-1.5,.8-2.1,2-3,1.5-1.1,2-2.3,2-4a5,5,0,0,0-5-5z'/%3E%3C/svg%3E");
+  --nav-icon-grade: url("data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%2024%2024%22%20fill%3D%22none%22%20stroke%3D%22black%22%20stroke-width%3D%222%22%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22%3E%3Ccircle%20cx%3D%2212%22%20cy%3D%2210%22%20r%3D%226%22%2F%3E%3Cpath%20d%3D%22M12%207.5v5%22%2F%3E%3Cpath%20d%3D%22M11%2012.5h3%22%2F%3E%3Cpath%20d%3D%22M8.5%2015.5%206%2022l6-3%206%203-2.5-6.5%22%2F%3E%3C%2Fsvg%3E");
+  --nav-icon-star: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0%200%2024%2024'%3E%3Cpath d='M12,2l2.9,6,6.6,.9-4.8,4.6,1.2,6.5L12,17l-5.9,3,1.2-6.5L2.5,8.9l6.6-.9z'/%3E%3C/svg%3E");
+  --nav-icon-template: url("data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%2024%2024%22%20fill%3D%22none%22%20stroke%3D%22black%22%20stroke-width%3D%222%22%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22%3E%3Cpath%20d%3D%22M8%204h8l1%202h3v15H4V6h3z%22%2F%3E%3Cpath%20d%3D%22M9%204h6%22%2F%3E%3Cpath%20d%3D%22M8%2011l2%202%204-4%22%2F%3E%3Cpath%20d%3D%22M8%2017h8%22%2F%3E%3C%2Fsvg%3E");
+  --nav-icon-chart: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0%200%2024%2024'%3E%3Cpath d='M4,20h17v2H2V3h2zM6,17h3v-6H6zM11,17h3V7h-3zM16,17h3V8h-3z'/%3E%3C/svg%3E");
+  --nav-icon-logout: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0%200%2024%2024'%3E%3Cpath d='M4,4h9v4h-2V6H6v12h5v-2h2v4H4zM15,8l5,4-5,4v-3H9v-2h6z'/%3E%3C/svg%3E");
+  --nav-icon-task: url("data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%2024%2024%22%20fill%3D%22none%22%20stroke%3D%22black%22%20stroke-width%3D%222%22%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22%3E%3Cpath%20d%3D%22M6%204h12v16H6z%22%2F%3E%3Cpath%20d%3D%22M9%208l1.5%201.5L14%206%22%2F%3E%3Cpath%20d%3D%22M9%2014h6M9%2017h5%22%2F%3E%3C%2Fsvg%3E");
+  --nav-icon-return: url("data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%2024%2024%22%20fill%3D%22none%22%20stroke%3D%22black%22%20stroke-width%3D%222%22%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22%3E%3Cpath%20d%3D%22M4%2014v5h16v-5%22%2F%3E%3Cpath%20d%3D%22M8%2010l-4%204%204%204%22%2F%3E%3Cpath%20d%3D%22M4%2014h10a4%204%200%200%200%204-4V5%22%2F%3E%3C%2Fsvg%3E");
+  --nav-icon-request: url("data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%2024%2024%22%20fill%3D%22none%22%20stroke%3D%22black%22%20stroke-width%3D%222%22%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22%3E%3Cpath%20d%3D%22M5%205h14v10H9l-4%204z%22%2F%3E%3Cpath%20d%3D%22M9%209h6M9%2012h3%22%2F%3E%3C%2Fsvg%3E");
+  --nav-icon-assignment: url("data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%2024%2024%22%20fill%3D%22none%22%20stroke%3D%22black%22%20stroke-width%3D%222%22%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22%3E%3Crect%20x%3D%224%22%20y%3D%224%22%20width%3D%2216%22%20height%3D%2210%22%20rx%3D%222%22%2F%3E%3Cpath%20d%3D%22M8%208h3M8%2011h5M12%2014v5M8%2020h8%22%2F%3E%3Ccircle%20cx%3D%2217%22%20cy%3D%228%22%20r%3D%221.3%22%20fill%3D%22black%22%20stroke%3D%22none%22%2F%3E%3Cpath%20d%3D%22M16%2011h2%22%2F%3E%3C%2Fsvg%3E");
 }
 
 .app-shell-body {
@@ -101,9 +121,11 @@
 .app-nav a,
 .app-nav button.nav-trigger,
 .app-nav .app-nav-link {
+  --nav-icon: var(--nav-icon-default);
   display: flex;
-  justify-content: space-between;
   align-items: center;
+  gap: 10px;
+  justify-content: flex-start;
   width: 100%;
   padding: 12px 14px;
   border-radius: 12px;
@@ -116,12 +138,113 @@
   cursor: pointer;
 }
 
+.app-nav a::before,
+.app-nav button.nav-trigger::before,
+.app-nav .app-nav-link::before {
+  content: "";
+  width: 20px;
+  height: 20px;
+  flex: 0 0 20px;
+  background: currentColor;
+  opacity: 0.85;
+  -webkit-mask: var(--nav-icon) center / contain no-repeat;
+  mask: var(--nav-icon) center / contain no-repeat;
+}
+
+.app-nav a[href="/admin"],
+.app-nav a[href="/student"] {
+  --nav-icon: var(--nav-icon-home);
+}
+
+.app-nav a[href="/admin/classes"],
+.app-nav a[href="/admin#list"],
+.app-nav a[href="/teacher/classes"] {
+  --nav-icon: var(--nav-icon-default);
+}
+
+.app-nav a[href="/admin/classes/new"],
+.app-nav a[href="/teacher/create-class"] {
+  --nav-icon: var(--nav-icon-plus);
+}
+
+.app-nav a[href="/admin#new"],
+.app-nav a[href="/admin/users/new"] {
+  --nav-icon: var(--nav-icon-user-plus);
+}
+
+.app-nav button.nav-trigger,
+.app-nav a[href="/admin/users"] {
+  --nav-icon: var(--nav-icon-users);
+}
+
+.app-nav a[href^="/admin/assignments"] {
+  --nav-icon: var(--nav-icon-assignment);
+}
+
+.app-nav a[href^="/admin/audit-logs"] {
+  --nav-icon: var(--nav-icon-document);
+}
+
+.app-nav a[href^="/admin/rollover"] {
+  --nav-icon: var(--nav-icon-calendar);
+}
+
+.app-nav a[href="/archive"],
+.app-nav a[href="/student/archive"] {
+  --nav-icon: var(--nav-icon-archive);
+}
+
+.app-nav a[href="/teacher/settings"] {
+  --nav-icon: var(--nav-icon-settings);
+}
+
+.app-nav a[href^="/teacher/students/"] {
+  --nav-icon: var(--nav-icon-student);
+}
+
+.app-nav a[href^="/teacher/test-questions/"] {
+  --nav-icon: var(--nav-icon-question);
+}
+
+.app-nav a[href^="/teacher/grades/"] {
+  --nav-icon: var(--nav-icon-grade);
+}
+
+.app-nav a[href^="/teacher/special-assessments/"] {
+  --nav-icon: var(--nav-icon-star);
+}
+
+.app-nav a[href^="/teacher/grade-templates/"] {
+  --nav-icon: var(--nav-icon-template);
+}
+
+.app-nav a[href^="/teacher/class-statistics/"] {
+  --nav-icon: var(--nav-icon-chart);
+}
+
+.app-nav a[href="/student/tasks"] {
+  --nav-icon: var(--nav-icon-task);
+}
+
+.app-nav a[href="/student/returns"] {
+  --nav-icon: var(--nav-icon-return);
+}
+
+.app-nav a[href="/student/requests"] {
+  --nav-icon: var(--nav-icon-request);
+}
+
+.app-nav a[href="/student/grades"] {
+  --nav-icon: var(--nav-icon-grade);
+}
+
 .app-nav .logout-form {
   margin: 0;
 }
 
 .app-nav .logout-form .app-nav-link {
-  justify-content: center;
+  --nav-icon: var(--nav-icon-logout);
+  justify-content: flex-start;
 }
 
 .app-nav a:hover,
@@ -155,7 +278,7 @@
   min-width: 20px;
   height: 20px;
   padding: 0 6px;
-  margin-left: 10px;
+  margin-left: auto;
   border-radius: 999px;
   background: #dc2626;
   color: #ffffff;
@@ -171,6 +294,7 @@
 }
 
 .nav-trigger .chevron {
+  margin-left: auto;
   transition: transform 0.16s ease;
 }
 
