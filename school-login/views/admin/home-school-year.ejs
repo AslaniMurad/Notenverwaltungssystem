@@ -11,69 +11,67 @@
     <div class="app-shell">
       <%- include('./nav-school-year', { csrfToken, currentUser, activePath, activeSchoolYear }) %>
 
-      <section class="app-main">
-        <div class="app-main-header">
-          <div>
-            <p class="app-main-subtitle">Uebersicht</p>
-            <h1>Willkommen im Adminbereich</h1>
-            <p class="admin-muted">
-              Aktives Schuljahr:
-              <strong><%= activeSchoolYear?.name || 'Nicht gesetzt' %></strong>
-            </p>
+      <section class="app-main admin-home-page">
+        <div class="admin-home-hero">
+          <p class="app-main-subtitle admin-home-subtitle">Admin</p>
+
+          <div class="admin-home-header">
+            <div class="admin-home-copy">
+              <h1>Adminbereich</h1>
+              <p class="admin-home-meta">
+                Schuljahr
+                <strong><%= activeSchoolYear?.name || 'Nicht gesetzt' %></strong>
+                <span class="admin-home-status <%= activeSchoolYear?.name ? 'is-ready' : 'is-pending' %>">
+                  <%= activeSchoolYear?.name ? 'Aktiv' : 'Fehlt' %>
+                </span>
+              </p>
+            </div>
+
+            <div class="admin-actions-row admin-home-actions">
+              <a class="btn btn-primary" href="/admin/users/new">Nutzer anlegen</a>
+              <a class="btn btn-secondary" href="/admin/classes/new">Klasse erstellen</a>
+              <a class="btn btn-secondary" href="/admin/rollover">Schuljahreswechsel</a>
+            </div>
           </div>
-          <div class="admin-actions-row">
-            <a class="btn btn-primary" href="/admin/rollover">Schuljahreswechsel</a>
-            <a class="btn btn-secondary" href="/archive">Archiv</a>
+
+          <div class="admin-home-stats">
+            <a class="admin-home-stat" href="/admin/users" aria-label="Nutzerverwaltung oeffnen">
+              <span class="admin-eyebrow">Nutzer</span>
+              <strong><%= stats.users %></strong>
+            </a>
+
+            <a class="admin-home-stat" href="/admin/classes" aria-label="Klassenbereich oeffnen">
+              <span class="admin-eyebrow">Klassen</span>
+              <strong><%= stats.classes %></strong>
+            </a>
+
+            <a class="admin-home-stat" href="/admin/classes" aria-label="Schuelerbereich oeffnen">
+              <span class="admin-eyebrow">Schueler</span>
+              <strong><%= stats.students %></strong>
+            </a>
           </div>
         </div>
 
-        <div class="admin-grid">
-          <div class="admin-card">
-            <p class="admin-eyebrow">Nutzer</p>
-            <h3><%= stats.users %> Accounts</h3>
-            <a class="admin-link" href="/admin/users">Zur Nutzerliste -></a>
-          </div>
-          <div class="admin-card">
-            <p class="admin-eyebrow">Klassen</p>
-            <h3><%= stats.classes %> Klassen</h3>
-            <a class="admin-link" href="/admin/classes">Klassen oeffnen -></a>
-          </div>
-          <div class="admin-card">
-            <p class="admin-eyebrow">Schueler</p>
-            <h3><%= stats.students %> Eintraege</h3>
-            <a class="admin-link" href="/admin/classes">Schueler ansehen -></a>
-          </div>
-        </div>
+        <div class="admin-home-sections">
+          <div class="admin-home-section">
+            <p class="admin-eyebrow">Bereiche</p>
+            <h2>Direktlinks</h2>
 
-        <div class="admin-grid">
-          <div class="admin-card">
-            <div class="admin-topbar">
-              <div>
-                <p class="admin-eyebrow">Schuljahreswechsel</p>
-                <h3>Schuljahr weiterfuehren</h3>
-              </div>
-            </div>
-            <p class="admin-muted">
-              Wechsle direkt vom aktiven ins naechste Schuljahr. Klassen und Zuordnungen werden uebernommen, historische Daten bleiben archiviert.
-            </p>
-            <div class="admin-row wrap">
-              <a class="btn btn-primary" href="/admin/rollover">Bereich oeffnen</a>
+            <div class="admin-home-link-list">
+              <a class="admin-home-link" href="/admin/users">Nutzerverwaltung</a>
+              <a class="admin-home-link" href="/admin/classes">Klassenbereich</a>
+              <a class="admin-home-link" href="/archive">Archiv</a>
+              <a class="admin-home-link" href="/admin/audit-logs?returnTo=%2Fadmin">Audit-Log</a>
             </div>
           </div>
 
-          <div class="admin-card">
-            <div class="admin-topbar">
-              <div>
-                <p class="admin-eyebrow">Archiv</p>
-                <h3>Historische Jahre lesen</h3>
-              </div>
-            </div>
-            <p class="admin-muted">
-              Alte Klassen, Noten und Lehrerzuordnungen bleiben erhalten und koennen im Read-only-Archiv gefiltert werden.
-            </p>
-            <div class="admin-row wrap">
-              <a class="btn btn-secondary" href="/archive">Archiv oeffnen</a>
-            </div>
+          <div class="admin-home-section admin-home-tutorial" id="tutorial-placeholder">
+            <p class="admin-eyebrow">Tutorial</p>
+            <h2>Platzhalter</h2>
+
+            <button class="btn admin-home-disabled-button" type="button" disabled>
+              Tutorial-Seite noch nicht verfuegbar
+            </button>
           </div>
         </div>
       </section>
