@@ -430,11 +430,16 @@
         const avgText = item.average == null ? "-" : Number(item.average).toFixed(2);
         const latestText = item.latestAt ? formatDate(item.latestAt) : "-";
         const subjectUrl = `/student/grades?subject=${encodeURIComponent(item.subject)}`;
+        const subjectText = escapeHtml(item.subject);
+        const countLabel = `${item.count} ${item.count === 1 ? "Eintrag" : "Eintraege"}`;
         return `
-          <a class="subject-list-row" href="${subjectUrl}">
-            <span>${escapeHtml(item.subject)}</span>
+          <a class="subject-list-row" href="${subjectUrl}" aria-label="Fach ${subjectText} oeffnen">
+            <span class="subject-list-subject">
+              <span class="subject-list-name">${subjectText}</span>
+              <span class="subject-list-hint">Notenverlauf ansehen</span>
+            </span>
             <span class="subject-list-avg ${gradeColor(item.average)}">${avgText}</span>
-            <span class="subject-list-count">${item.count}</span>
+            <span class="subject-list-count">${countLabel}</span>
             <span class="subject-list-date">${latestText}</span>
           </a>
         `;
