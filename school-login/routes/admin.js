@@ -13,9 +13,9 @@ const AUDIT_PAGE_SIZE = 50;
 const AUDIT_ENTITY_LABELS = {
   user: "Benutzer",
   class: "Klasse",
-  student: "Schueler",
+  student: "Schüler",
   assignment: "Fachzuordnung",
-  exam_template: "Pruefung",
+  exam_template: "Prüfung",
   grade: "Note",
   special_assessment: "Sonderleistung",
   participation: "Mitarbeit",
@@ -54,7 +54,7 @@ const AUDIT_FIELD_LABELS = {
   profile_name: "Profil",
   scoring_mode: "Bewertung",
   absence_mode: "Abwesenheit",
-  student_id: "Schueler",
+  student_id: "Schüler",
   type: "Typ",
   category: "Kategorie",
   weight: "Gewichtung",
@@ -75,7 +75,7 @@ const AUDIT_FIELD_LABELS = {
   id: "ID",
   classId: "Klasse",
   class_id: "Klasse",
-  studentId: "Schueler",
+  studentId: "Schüler",
   profileId: "Profil",
   gradeId: "Note",
   templateId: "Vorlage",
@@ -89,23 +89,23 @@ const AUDIT_VALUE_LABELS = {
   student: "Student",
   active: "Aktiv",
   locked: "Gesperrt",
-  deleted: "Geloescht",
+  deleted: "Gelöscht",
   points_or_grade: "Punkte oder Note",
   points_and_grade: "Punkte und Note",
   points_only: "Nur Punkte",
   grade_only: "Nur Note",
   include_zero: "Mit 0 bewerten",
   exclude: "Nicht werten",
-  include: "Einschliessen",
+  include: "Einschließen",
   Schularbeit: "Schularbeit",
   Test: "Test",
   Wiederholung: "Wiederholung",
   Mitarbeit: "Mitarbeit",
   Projekt: "Projekt",
-  Hausuebung: "Hausuebung",
+  Hausübung: "Hausübung",
   Hausaufgabe: "Hausaufgabe",
-  Praesentation: "Praesentation",
-  Wunschpruefung: "Wunschpruefung",
+  Präsentation: "Präsentation",
+  Wunschprüfung: "Wunschprüfung",
   Benutzerdefiniert: "Benutzerdefiniert",
   plus: "+",
   plus_tilde: "+/-",
@@ -242,7 +242,7 @@ function validateAuditRegexFilters(filters = {}) {
     try {
       new RegExp(value, "i");
     } catch {
-      return `Ungueltiger Regex in ${label}.`;
+      return `Ungültiger Regex in ${label}.`;
     }
   }
 
@@ -396,12 +396,12 @@ function buildAuditScopeFallback(routePath, entityType) {
   if (normalized.startsWith("/admin/classes")) return "Admin / Klassen";
   if (normalized.startsWith("/admin/assignments")) return "Admin / Fachzuordnungen";
   if (normalized.startsWith("/teacher/settings")) return "Teacher / Einstellungen";
-  if (normalized.startsWith("/teacher/create-template") || normalized.startsWith("/teacher/edit-template") || normalized.startsWith("/teacher/grade-templates") || normalized.startsWith("/teacher/bulk-grade-template")) return "Teacher / Pruefungen";
+  if (normalized.startsWith("/teacher/create-template") || normalized.startsWith("/teacher/edit-template") || normalized.startsWith("/teacher/grade-templates") || normalized.startsWith("/teacher/bulk-grade-template")) return "Teacher / Prüfungen";
   if (normalized.startsWith("/teacher/add-grade") || normalized.startsWith("/teacher/grades") || normalized.startsWith("/teacher/delete-grade")) return "Teacher / Noten";
-  if (normalized.startsWith("/teacher/students") || normalized.startsWith("/teacher/add-student") || normalized.startsWith("/teacher/delete-student") || normalized.startsWith("/teacher/student-exclusion")) return "Teacher / Schueler";
+  if (normalized.startsWith("/teacher/students") || normalized.startsWith("/teacher/add-student") || normalized.startsWith("/teacher/delete-student") || normalized.startsWith("/teacher/student-exclusion")) return "Teacher / Schüler";
   if (normalized.startsWith("/teacher/special-assessments")) return "Teacher / Sonderleistungen";
-  if (normalized.startsWith("/teacher/classes") || normalized.startsWith("/teacher/create-class")) return "Teacher / Faecher";
-  if (normalized.startsWith("/teacher/test-questions")) return "Teacher / Rueckfragen";
+  if (normalized.startsWith("/teacher/classes") || normalized.startsWith("/teacher/create-class")) return "Teacher / Fächer";
+  if (normalized.startsWith("/teacher/test-questions")) return "Teacher / Rückfragen";
 
   const parts = normalized.split("/").filter(Boolean);
   if (parts.length >= 2) {
@@ -445,7 +445,7 @@ function formatAuditFieldValue(key, value) {
   if (value == null || value === "") return null;
 
   if (Array.isArray(value)) {
-    return value.length ? `${value.length} Eintraege` : null;
+    return value.length ? `${value.length} Einträge` : null;
   }
 
   if (typeof value === "boolean") {
@@ -572,7 +572,7 @@ function buildAuditTargetFallback(entry, payload) {
     payload?.body?.type,
     payload?.params?.id ? `ID ${payload.params.id}` : null,
     payload?.params?.classId ? `Klasse ID ${payload.params.classId}` : null,
-    payload?.params?.studentId ? `Schueler ID ${payload.params.studentId}` : null
+    payload?.params?.studentId ? `Schüler ID ${payload.params.studentId}` : null
   ];
 
   for (const candidate of candidates) {
@@ -1026,7 +1026,7 @@ router.post("/users", async (req, res, next) => {
   if (!email || !normalizedRole || (!password && !wantsInitial)) {
     res.status(400);
     return renderCreateUserPage(req, res, {
-      error: "Bitte E-Mail, Rolle und eine gueltige Passwort-Option angeben.",
+      error: "Bitte E-Mail, Rolle und eine gültige Passwort-Option angeben.",
       mode: "single",
       singleForm
     });
@@ -1034,7 +1034,7 @@ router.post("/users", async (req, res, next) => {
   if (normalizedRole === "teacher" && wantsInitial) {
     res.status(400);
     return renderCreateUserPage(req, res, {
-      error: "Fuer Lehrer darf kein Initial-Passwort vergeben werden.",
+      error: "Für Lehrer darf kein Initial-Passwort vergeben werden.",
       mode: "single",
       singleForm
     });
@@ -1072,7 +1072,7 @@ router.post("/users", async (req, res, next) => {
   if (!email || !role || (!password && !wantsInitial)) {
     res.status(400);
     return renderCreateUserPage(req, res, {
-      error: "Bitte E-Mail, Rolle und eine gueltige Passwort-Option angeben.",
+      error: "Bitte E-Mail, Rolle und eine gültige Passwort-Option angeben.",
       mode: "single",
       singleForm
     });
@@ -1155,7 +1155,7 @@ router.post("/users/bulk", async (req, res, next) => {
   if (!normalizedBulkRole) {
     res.status(400);
     return renderCreateUserPage(req, res, {
-      error: "Bitte waehle eine Rolle fuer neue Nutzer.",
+      error: "Bitte wähle eine Rolle für neue Nutzer.",
       mode: "bulk",
       bulkForm
     });
@@ -1163,7 +1163,7 @@ router.post("/users/bulk", async (req, res, next) => {
   if (wantsInitial && normalizedBulkRole === "teacher") {
     res.status(400);
     return renderCreateUserPage(req, res, {
-      error: "Lehrer duerfen kein Initial-Passwort erhalten.",
+      error: "Lehrer dürfen kein Initial-Passwort erhalten.",
       mode: "bulk",
       bulkForm
     });
@@ -1902,7 +1902,7 @@ router.post("/classes/:id/students/add", async (req, res, next) => {
     const legacyUserRow = await getAsync("SELECT id, role FROM users WHERE email = ?", [resolvedEmail]);
     if (!legacyUserRow || legacyUserRow.role !== "student") {
       return renderAddStudentPage(req, res, classData, {
-        error: "E-Mail nicht gefunden oder nicht als Schueler registriert.",
+        error: "E-Mail nicht gefunden oder nicht als Schüler registriert.",
         mode: "single",
         singleForm: { name: resolvedName, email: resolvedEmail }
       });
@@ -1911,7 +1911,7 @@ router.post("/classes/:id/students/add", async (req, res, next) => {
     const legacyDuplicate = await getAsync("SELECT id FROM students WHERE email = ? AND class_id = ?", [resolvedEmail, classId]);
     if (legacyDuplicate) {
       return renderAddStudentPage(req, res, classData, {
-        error: "Dieser Schueler ist bereits in der Klasse.",
+        error: "Dieser Schüler ist bereits in der Klasse.",
         mode: "single",
         singleForm: { name: resolvedName, email: resolvedEmail }
       });
@@ -1924,7 +1924,7 @@ router.post("/classes/:id/students/add", async (req, res, next) => {
         csrfToken: req.csrfToken(),
         currentUser: req.session.user,
         activePath: `/admin/classes/${classId}/students/add`,
-        error: "E-Mail nicht gefunden oder nicht als SchÇ¬ler registriert.",
+        error: "E-Mail nicht gefunden oder nicht als Schüler registriert.",
         bulkResult: null
       });
     }
@@ -1936,7 +1936,7 @@ router.post("/classes/:id/students/add", async (req, res, next) => {
         csrfToken: req.csrfToken(),
         currentUser: req.session.user,
         activePath: `/admin/classes/${classId}/students/add`,
-        error: "Dieser SchÇ¬ler ist bereits in der Klasse.",
+        error: "Dieser Schüler ist bereits in der Klasse.",
         bulkResult: null
       });
     }

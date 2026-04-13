@@ -55,7 +55,7 @@
   function normalizeReturn(entry) {
     return {
       ...entry,
-      title: entry.title || "Rueckgabe",
+      title: entry.title || "Rückgabe",
       category: entry.category || "",
       subject: entry.subject || "",
       note: entry.note || "",
@@ -217,7 +217,7 @@
     if (stats.totalCount > 0) {
       return { label: "Beantwortet", className: "answered" };
     }
-    return { label: "Noch keine Rueckfrage", className: "idle" };
+    return { label: "Noch keine Rückfrage", className: "idle" };
   }
 
   function getTaskStatus(task) {
@@ -226,7 +226,7 @@
     }
     const due = task.due_at ? new Date(task.due_at) : null;
     if (due && !Number.isNaN(due.getTime()) && due < new Date()) {
-      return { label: "Ueberfaellig", className: "overdue" };
+      return { label: "Überfällig", className: "overdue" };
     }
     return { label: "Offen", className: "open" };
   }
@@ -414,7 +414,7 @@
 
     if (!items.length) {
       container.innerHTML =
-        '<p class="empty-state">Keine Fachdaten fuer die aktuellen Filter vorhanden.</p>';
+        '<p class="empty-state">Keine Fachdaten für die aktuellen Filter vorhanden.</p>';
       return;
     }
 
@@ -422,7 +422,7 @@
       <div class="subject-list-header">
         <span>Fach</span>
         <span>Durchschnitt</span>
-        <span>Eintraege</span>
+        <span>Einträge</span>
         <span>Letztes Update</span>
       </div>
     ` + items
@@ -450,8 +450,8 @@
     if (!selectedSubject) {
       container.innerHTML = `
         <div class="grade-subject-detail-empty">
-          <strong>Fach auswaehlen</strong>
-          <p>Waehle oben ein Fach, um den aktuellen Stand und das Beurteilungsprotokoll im Detail zu sehen.</p>
+          <strong>Fach auswählen</strong>
+          <p>Wähle oben ein Fach, um den aktuellen Stand und das Beurteilungsprotokoll im Detail zu sehen.</p>
         </div>
       `;
       return;
@@ -477,7 +477,7 @@
         </div>
         <div class="overview-stats-strip">
           <div class="stat-inline"><span class="stat-inline-label">Fachdurchschnitt</span><strong class="stat-inline-value">${averages.overall == null ? "-" : Number(averages.overall).toFixed(2)}</strong></div>
-          <div class="stat-inline"><span class="stat-inline-label">Eintraege</span><strong class="stat-inline-value">${subjectGrades.length}</strong></div>
+          <div class="stat-inline"><span class="stat-inline-label">Einträge</span><strong class="stat-inline-value">${subjectGrades.length}</strong></div>
           <div class="stat-inline"><span class="stat-inline-label">Letzte Bewertung</span><strong class="stat-inline-value">${latest?.value == null ? "-" : formatGradeValue(latest.value)}</strong></div>
           <div class="stat-inline"><span class="stat-inline-label">Klassenvergleich</span><strong class="stat-inline-value">${classAverage == null ? "-" : Number(classAverage).toFixed(2)}</strong></div>
         </div>
@@ -494,11 +494,11 @@
 
     if (!selectedSubject) {
       const subjectCount = getSubjectOverviewItems(baseGrades).length;
-      const subjectLabel = subjectCount === 1 ? "Fach" : "Faecher";
+      const subjectLabel = subjectCount === 1 ? "Fach" : "Fächer";
       title.textContent = "Beurteilungsprotokoll";
       copy.textContent = !visibleGrades.length
-        ? "Keine sichtbaren Eintraege fuer die aktuellen Filter."
-        : `${visibleGrades.length} sichtbare Eintraege ueber ${subjectCount} ${subjectLabel}. Waehle oben ein Fach fuer Details und deinen aktuellen Stand.`;
+        ? "Keine sichtbaren Einträge für die aktuellen Filter."
+        : `${visibleGrades.length} sichtbare Einträge über ${subjectCount} ${subjectLabel}. Wähle oben ein Fach für Details und deinen aktuellen Stand.`;
       return;
     }
 
@@ -506,11 +506,11 @@
     const classAverage = getClassAverageForSubject(selectedSubject)?.average ?? null;
     const averageText = averages.overall == null ? "-" : Number(averages.overall).toFixed(2);
     const classAverageText =
-      classAverage == null ? "kein Klassenschnitt verfuegbar" : `Klassenschnitt ${Number(classAverage).toFixed(2)}`;
+      classAverage == null ? "kein Klassenschnitt verfügbar" : `Klassenschnitt ${Number(classAverage).toFixed(2)}`;
     title.textContent = `Beurteilungsprotokoll: ${selectedSubject}`;
     copy.textContent = !visibleGrades.length
-      ? `Keine sichtbaren Eintraege fuer ${selectedSubject}.`
-      : `${visibleGrades.length} sichtbare Eintraege, aktueller Stand ${averageText}, ${classAverageText}.`;
+      ? `Keine sichtbaren Einträge für ${selectedSubject}.`
+      : `${visibleGrades.length} sichtbare Einträge, aktueller Stand ${averageText}, ${classAverageText}.`;
   }
 
   function setText(id, value) {
@@ -597,7 +597,7 @@
       const selectedSubject = getGradeFilterValues().subject;
       container.innerHTML = `<p class="empty-state">${
         selectedSubject
-          ? `Keine Noten fuer ${escapeHtml(selectedSubject)} mit den aktuellen Filtern vorhanden.`
+          ? `Keine Noten für ${escapeHtml(selectedSubject)} mit den aktuellen Filtern vorhanden.`
           : "Keine Noten vorhanden."
       }</p>`;
       return;
@@ -693,7 +693,7 @@
               <div class="overview-row">
                 <div class="overview-row-main">
                   ${buildRowHead(task.title, task.subject, task.category)}
-                  ${buildMetaLine([`Faellig: ${formatDate(task.due_at)}`])}
+                  ${buildMetaLine([`Fällig: ${formatDate(task.due_at)}`])}
                 </div>
                 <div class="overview-row-side">
                   <span class="status-pill ${getTaskStatus(task).className}">${getTaskStatus(task).label}</span>
@@ -748,7 +748,7 @@
 
       if (!recentReturns.length) {
         recentReturnsContainer.innerHTML =
-          '<p class="empty-state">Noch keine Rueckgaben vorhanden.</p>';
+          '<p class="empty-state">Noch keine Rückgaben vorhanden.</p>';
       } else {
         recentReturnsContainer.innerHTML = recentReturns
           .map((entry) => {
@@ -759,7 +759,7 @@
                 <div class="overview-row-main">
                   ${buildRowHead(entry.title, entry.subject, entry.category)}
                   ${buildMetaLine([
-                    `Rueckgabe: ${formatDate(entry.graded_at)}`,
+                    `Rückgabe: ${formatDate(entry.graded_at)}`,
                     `${stats.totalCount} Nachricht${stats.totalCount === 1 ? "" : "en"}`
                   ])}
                 </div>
@@ -849,7 +849,7 @@
 
     if (!state.tasks.length) {
       setCount("task-count", 0);
-      container.innerHTML = '<p class="empty-state">Keine aktiven Pruefungen vorhanden.</p>';
+      container.innerHTML = '<p class="empty-state">Keine aktiven Prüfungen vorhanden.</p>';
       return;
     }
 
@@ -864,7 +864,7 @@
     setCount("task-count", filtered.length);
 
     if (!filtered.length) {
-      container.innerHTML = '<p class="empty-state">Keine aktiven Pruefungen gefunden.</p>';
+      container.innerHTML = '<p class="empty-state">Keine aktiven Prüfungen gefunden.</p>';
       return;
     }
 
@@ -913,7 +913,7 @@
           <div class="row-main">
             ${buildRowHead(task.title, task.subject, task.category)}
             ${buildMetaLine([
-              `Faellig: ${formatDate(task.due_at)}`,
+              `Fällig: ${formatDate(task.due_at)}`,
               `Gewichtung: ${formatWeight(task.weight)}`,
               task.graded_at ? `Benotet: ${formatDate(task.graded_at)}` : ""
             ])}
@@ -942,7 +942,7 @@
           ${
             tasks.length
               ? tasks.map((task) => renderTaskRow(task)).join("")
-              : '<p class="empty-state">Keine Eintraege in diesem Bereich.</p>'
+              : '<p class="empty-state">Keine Einträge in diesem Bereich.</p>'
           }
         </div>
       </section>
@@ -951,12 +951,12 @@
     container.innerHTML = [
       renderTaskGroup(
         "Bevorstehend",
-        "Aufgaben mit Termin in den naechsten 14 Tagen.",
+        "Aufgaben mit Termin in den nächsten 14 Tagen.",
         groups.upcoming
       ),
       renderTaskGroup(
         "Weiter anstehend",
-        "Aufgaben mit spaeterem Termin. Eintraege ohne Datum stehen ebenfalls hier.",
+        "Aufgaben mit späterem Termin. Einträge ohne Datum stehen ebenfalls hier.",
         groups.later
       ),
       renderTaskGroup(
@@ -975,7 +975,7 @@
 
     if (!state.archivedTasks.length) {
       setCount("archive-count", 0);
-      container.innerHTML = '<p class="empty-state">Keine archivierten Pruefungen vorhanden.</p>';
+      container.innerHTML = '<p class="empty-state">Keine archivierten Prüfungen vorhanden.</p>';
       return;
     }
 
@@ -990,7 +990,7 @@
     setCount("archive-count", filtered.length);
 
     if (!filtered.length) {
-      container.innerHTML = '<p class="empty-state">Keine archivierten Pruefungen gefunden.</p>';
+      container.innerHTML = '<p class="empty-state">Keine archivierten Prüfungen gefunden.</p>';
       return;
     }
 
@@ -1006,7 +1006,7 @@
             <div class="row-main">
               ${buildRowHead(task.title, task.subject, task.category)}
               ${buildMetaLine([
-                `Pruefungsdatum: ${formatDate(task.due_at)}`,
+                `Prüfungsdatum: ${formatDate(task.due_at)}`,
                 `Gewichtung: ${formatWeight(task.weight)}`
               ])}
               ${task.description ? `<div class="nav-note">${escapeHtml(task.description)}</div>` : ""}
@@ -1048,7 +1048,7 @@
       (a, b) => dateSortValue(b.graded_at, 0) - dateSortValue(a.graded_at, 0)
     );
 
-    const options = ['<option value="">Alle Rueckgaben</option>'];
+    const options = ['<option value="">Alle Rückgaben</option>'];
     ordered.forEach((entry) => {
       const label = `${entry.subject ? `${entry.subject} | ` : ""}${entry.title}`;
       options.push(`<option value="${String(entry.id)}">${escapeHtml(label)}</option>`);
@@ -1089,14 +1089,14 @@
       const summary = document.createElement("summary");
       summary.className = "return-message-summary request-ticket-summary";
       const summaryLastActivity = stats.lastActivityAt
-        ? `Letzte Aktivitaet: ${formatDate(stats.lastActivityAt, true)}`
-        : "Noch keine Aktivitaet";
+        ? `Letzte Aktivität: ${formatDate(stats.lastActivityAt, true)}`
+        : "Noch keine Aktivität";
       const closedMeta = stats.closedAt
         ? `<span>Geschlossen: ${formatDate(stats.closedAt, true)}</span>`
         : "";
       summary.innerHTML = `
         <div class="return-summary-main">
-          <span>Rueckfragen</span>
+          <span>Rückfragen</span>
           <span class="return-status-pill ${status.className}">${status.label}</span>
         </div>
         <div class="return-summary-meta">
@@ -1125,7 +1125,7 @@
       thread.innerHTML = entry.messages.length
         ? `${entry.messages
             .map((message) => {
-              const studentAuthor = currentUserEmail || "Schueler";
+              const studentAuthor = currentUserEmail || "Schüler";
               const teacherAuthor =
                 message.teacher_reply_by_email || entry.teacher || "Lehrkraft";
               const teacherPart = message.teacher_reply
@@ -1154,7 +1154,7 @@
               `;
             })
             .join("")}${closedMessageHtml}`
-        : '<article class="return-message-row pending"><small>Noch keine Rueckfragen vorhanden.</small></article>';
+        : '<article class="return-message-row pending"><small>Noch keine Rückfragen vorhanden.</small></article>';
       details.appendChild(thread);
 
       if (entry.can_message) {
@@ -1268,7 +1268,7 @@
 
     if (!state.returns.length) {
       setCount("return-count", 0);
-      container.innerHTML = '<p class="empty-state">Keine Rueckgaben vorhanden.</p>';
+      container.innerHTML = '<p class="empty-state">Keine Rückgaben vorhanden.</p>';
       return;
     }
 
@@ -1283,7 +1283,7 @@
     setCount("return-count", filtered.length);
 
     if (!filtered.length) {
-      container.innerHTML = '<p class="empty-state">Keine Rueckgaben gefunden.</p>';
+      container.innerHTML = '<p class="empty-state">Keine Rückgaben gefunden.</p>';
       return;
     }
 
@@ -1301,7 +1301,7 @@
         const externalLink = entry.external_link ? escapeHtml(entry.external_link) : "";
         const attachmentName = entry.attachment_name ? escapeHtml(entry.attachment_name) : "Datei";
         const attachmentHtml = externalLink
-          ? `<div class="return-actions"><a class="btn small secondary" href="${externalLink}" target="_blank" rel="noopener noreferrer">Link oeffnen</a></div>`
+          ? `<div class="return-actions"><a class="btn small secondary" href="${externalLink}" target="_blank" rel="noopener noreferrer">Link öffnen</a></div>`
           : downloadUrl
             ? `<div class="return-actions"><a class="btn small secondary" href="${downloadUrl}">Datei herunterladen</a><small>${attachmentName}</small></div>`
             : "";
@@ -1314,14 +1314,14 @@
             <div class="row-main">
               ${buildRowHead(entry.title, entry.subject, entry.category)}
               ${buildMetaLine([
-                `Rueckgabe: ${formatDate(entry.graded_at, true)}`,
+                `Rückgabe: ${formatDate(entry.graded_at, true)}`,
                 `Gewichtung: ${formatWeight(entry.weight)}`
               ])}
               <div class="return-insights">
                 <span class="return-status-pill ${status.className}">${status.label}</span>
                 <span>${stats.totalCount} Nachricht${stats.totalCount === 1 ? "" : "en"}</span>
-                <span>Letzte Aktivitaet: ${
-                  stats.lastActivityAt ? formatDate(stats.lastActivityAt, true) : "Noch keine Rueckfragen"
+                <span>Letzte Aktivität: ${
+                  stats.lastActivityAt ? formatDate(stats.lastActivityAt, true) : "Noch keine Rückfragen"
                 }</span>
                 ${stats.closedAt ? `<span>Geschlossen: ${formatDate(stats.closedAt, true)}</span>` : ""}
               </div>
@@ -1357,7 +1357,7 @@
     if (!sourceEntries.length) {
       setCount("request-count", 0);
       container.innerHTML =
-        '<p class="empty-state">Noch keine Tickets vorhanden. Neue Anfragen startest du direkt bei der jeweiligen Rueckgabe.</p>';
+        '<p class="empty-state">Noch keine Tickets vorhanden. Neue Anfragen startest du direkt bei der jeweiligen Rückgabe.</p>';
       return;
     }
 
@@ -1411,7 +1411,7 @@
         const status = getReturnStatus(stats);
         const deleteButtonHtml =
           Array.isArray(entry.messages) && entry.messages.length > 0 && !stats.closedAt
-            ? `<button class="btn small secondary request-delete-button" type="button" data-request-delete="${String(entry.id)}">Anfrage schliessen</button>`
+            ? `<button class="btn small secondary request-delete-button" type="button" data-request-delete="${String(entry.id)}">Anfrage schließen</button>`
             : "";
         return `
           <article class="request-card request-row" data-grade-id="${String(entry.id)}">
@@ -1420,7 +1420,7 @@
                 <div class="row-main">
                   ${buildRowHead(entry.title, entry.subject, entry.category)}
                   ${buildMetaLine([
-                    `Rueckgabe: ${formatDate(entry.graded_at, true)}`,
+                    `Rückgabe: ${formatDate(entry.graded_at, true)}`,
                     `Gewichtung: ${formatWeight(entry.weight)}`
                   ])}
                 </div>
@@ -1432,8 +1432,8 @@
               <div class="return-insights">
                 <span class="return-status-pill ${status.className}">${status.label}</span>
                 <span>${stats.totalCount} Nachricht${stats.totalCount === 1 ? "" : "en"}</span>
-                <span>Letzte Aktivitaet: ${
-                  stats.lastActivityAt ? formatDate(stats.lastActivityAt, true) : "Noch keine Rueckfragen"
+                <span>Letzte Aktivität: ${
+                  stats.lastActivityAt ? formatDate(stats.lastActivityAt, true) : "Noch keine Rückfragen"
                 }</span>
               </div>
               ${entry.note ? `<div class="nav-note request-note">${escapeHtml(entry.note)}</div>` : ""}
@@ -1458,7 +1458,7 @@
           await loadReturnsFromServer();
         } catch (err) {
           console.error(err);
-          window.alert(err.message || "Ticket konnte nicht geloescht werden.");
+          window.alert(err.message || "Ticket konnte nicht gelöscht werden.");
           button.removeAttribute("disabled");
         }
       });
@@ -1552,7 +1552,7 @@
       renderRequests();
       renderOverview();
     } catch (err) {
-      console.error("Konnte Rueckgaben nicht laden:", err);
+      console.error("Konnte Rückgaben nicht laden:", err);
     }
   }
 

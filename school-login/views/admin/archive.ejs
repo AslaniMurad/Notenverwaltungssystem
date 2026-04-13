@@ -37,9 +37,9 @@
     : null;
   const selectedYearLabel = selectedSchoolYear
     ? formatDateRange(selectedSchoolYear.start_date, selectedSchoolYear.end_date)
-    : 'Kein Schuljahr ausgewaehlt';
+    : 'Kein Schuljahr ausgewählt';
   const jumpLinks = [
-    { href: '#archive-overview', label: 'Uebersicht', count: archiveStats?.totalRecords || 0 },
+    { href: '#archive-overview', label: 'Übersicht', count: archiveStats?.totalRecords || 0 },
     { href: '#archive-log', label: 'Archivstatus', count: archiveEntries.length },
     { href: '#archive-classes', label: 'Klassen', count: classes.length },
     { href: '#archive-assignments', label: 'Zuordnungen', count: assignments.length },
@@ -91,7 +91,7 @@
               <dd><%= selectedYearLabel %></dd>
             </div>
             <div class="archive-meta-item">
-              <dt>Datensaetze</dt>
+              <dt>Datensätze</dt>
               <dd><%= formatNumber(totalRecords) %></dd>
             </div>
             <div class="archive-meta-item">
@@ -99,11 +99,11 @@
               <dd><%= formatAverageGrade(archiveStats?.averageGrade) %></dd>
             </div>
             <div class="archive-meta-item">
-              <dt>Schueler</dt>
+              <dt>Schüler</dt>
               <dd><%= formatNumber(archiveStats?.uniqueStudents || 0) %></dd>
             </div>
             <div class="archive-meta-item">
-              <dt>Lehrkraefte</dt>
+              <dt>Lehrkräfte</dt>
               <dd><%= formatNumber(archiveStats?.uniqueTeachers || 0) %></dd>
             </div>
             <div class="archive-meta-item">
@@ -111,7 +111,7 @@
               <dd><%= formatNumber(archiveStats?.archiveTypes || 0) %></dd>
             </div>
             <div class="archive-meta-item">
-              <dt>Letzte Aktivitaet</dt>
+              <dt>Letzte Aktivität</dt>
               <dd><%= formatDateTime(archiveStats?.latestActivityAt) %></dd>
             </div>
           </dl>
@@ -198,7 +198,7 @@
               <h2>Archivstatus</h2>
             </div>
             <div class="archive-section-actions">
-              <span class="admin-badge"><%= formatNumber(archiveEntries.length) %> Eintraege</span>
+              <span class="admin-badge"><%= formatNumber(archiveEntries.length) %> Einträge</span>
               <% if (buildExportUrl('archives')) { %>
                 <a class="btn btn-secondary" href="<%= buildExportUrl('archives') %>">CSV herunterladen</a>
               <% } %>
@@ -206,7 +206,7 @@
           </div>
 
           <% if (!archiveEntries.length) { %>
-            <div class="admin-empty">Fuer dieses Schuljahr wurden noch keine Archiv-Eintraege protokolliert.</div>
+            <div class="admin-empty">Für dieses Schuljahr wurden noch keine Archiv-Einträge protokolliert.</div>
           <% } else { %>
             <div class="archive-section-tools">
               <label class="archive-search-field">
@@ -241,13 +241,13 @@
                   </tbody>
                 </table>
               </div>
-              <div class="archive-filter-empty" data-archive-filter-empty hidden>Keine Eintraege fuer den aktuellen Filter gefunden.</div>
+              <div class="archive-filter-empty" data-archive-filter-empty hidden>Keine Einträge für den aktuellen Filter gefunden.</div>
               <div class="archive-table-footer">
                 <span class="archive-table-summary" data-archive-summary>Alle <%= formatNumber(archiveEntries.length) %> Zeilen geladen.</span>
                 <div class="archive-table-actions" data-archive-actions hidden>
                   <button class="btn btn-secondary" type="button" data-archive-more hidden>Mehr laden</button>
                   <button class="btn btn-secondary" type="button" data-archive-all hidden>Alle zeigen</button>
-                  <button class="btn btn-secondary" type="button" data-archive-reset hidden>Zuruecksetzen</button>
+                  <button class="btn btn-secondary" type="button" data-archive-reset hidden>Zurücksetzen</button>
                 </div>
               </div>
             </div>
@@ -269,7 +269,7 @@
           </div>
 
           <% if (!classes.length) { %>
-            <div class="admin-empty">Keine Klassen fuer dieses Schuljahr gefunden.</div>
+            <div class="admin-empty">Keine Klassen für dieses Schuljahr gefunden.</div>
           <% } else { %>
             <div class="archive-section-tools">
               <label class="archive-search-field">
@@ -277,7 +277,7 @@
                 <input type="search" placeholder="Nach Klasse, Fach oder Datum filtern" data-archive-search>
               </label>
               <div class="archive-inline-stats">
-                <span class="archive-inline-stat"><%= formatNumber(classes.length) %> Datensaetze</span>
+                <span class="archive-inline-stat"><%= formatNumber(classes.length) %> Datensätze</span>
                 <span class="archive-inline-stat">CSV komplett</span>
               </div>
             </div>
@@ -307,13 +307,13 @@
                   </tbody>
                 </table>
               </div>
-              <div class="archive-filter-empty" data-archive-filter-empty hidden>Keine Klassen fuer den aktuellen Filter gefunden.</div>
+              <div class="archive-filter-empty" data-archive-filter-empty hidden>Keine Klassen für den aktuellen Filter gefunden.</div>
               <div class="archive-table-footer">
                 <span class="archive-table-summary" data-archive-summary>Alle <%= formatNumber(classes.length) %> Zeilen geladen.</span>
                 <div class="archive-table-actions" data-archive-actions hidden>
                   <button class="btn btn-secondary" type="button" data-archive-more hidden>Mehr laden</button>
                   <button class="btn btn-secondary" type="button" data-archive-all hidden>Alle zeigen</button>
-                  <button class="btn btn-secondary" type="button" data-archive-reset hidden>Zuruecksetzen</button>
+                  <button class="btn btn-secondary" type="button" data-archive-reset hidden>Zurücksetzen</button>
                 </div>
               </div>
             </div>
@@ -335,7 +335,7 @@
           </div>
 
           <% if (!assignments.length) { %>
-            <div class="admin-empty">Keine Zuordnungen fuer dieses Schuljahr gefunden.</div>
+            <div class="admin-empty">Keine Zuordnungen für dieses Schuljahr gefunden.</div>
           <% } else { %>
             <div class="archive-section-tools">
               <label class="archive-search-field">
@@ -343,7 +343,7 @@
                 <input type="search" placeholder="Nach Klasse, Fach oder Lehrkraft filtern" data-archive-search>
               </label>
               <div class="archive-inline-stats">
-                <span class="archive-inline-stat"><%= formatNumber(archiveStats?.uniqueTeachers || 0) %> Lehrkraefte beteiligt</span>
+                <span class="archive-inline-stat"><%= formatNumber(archiveStats?.uniqueTeachers || 0) %> Lehrkräfte beteiligt</span>
                 <span class="archive-inline-stat">CSV komplett</span>
               </div>
             </div>
@@ -355,7 +355,7 @@
                     <tr>
                       <th>Klasse</th>
                       <th>Fach</th>
-                      <th>Lehrkraefte</th>
+                      <th>Lehrkräfte</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -369,13 +369,13 @@
                   </tbody>
                 </table>
               </div>
-              <div class="archive-filter-empty" data-archive-filter-empty hidden>Keine Zuordnungen fuer den aktuellen Filter gefunden.</div>
+              <div class="archive-filter-empty" data-archive-filter-empty hidden>Keine Zuordnungen für den aktuellen Filter gefunden.</div>
               <div class="archive-table-footer">
                 <span class="archive-table-summary" data-archive-summary>Alle <%= formatNumber(assignments.length) %> Zeilen geladen.</span>
                 <div class="archive-table-actions" data-archive-actions hidden>
                   <button class="btn btn-secondary" type="button" data-archive-more hidden>Mehr laden</button>
                   <button class="btn btn-secondary" type="button" data-archive-all hidden>Alle zeigen</button>
-                  <button class="btn btn-secondary" type="button" data-archive-reset hidden>Zuruecksetzen</button>
+                  <button class="btn btn-secondary" type="button" data-archive-reset hidden>Zurücksetzen</button>
                 </div>
               </div>
             </div>
@@ -397,15 +397,15 @@
           </div>
 
           <% if (!grades.length) { %>
-            <div class="admin-empty">Keine Noten fuer dieses Schuljahr gefunden.</div>
+            <div class="admin-empty">Keine Noten für dieses Schuljahr gefunden.</div>
           <% } else { %>
             <div class="archive-section-tools archive-section-tools-wide">
               <label class="archive-search-field">
                 <span>Noten durchsuchen</span>
-                <input type="search" placeholder="Nach Klasse, Schueler, Fach, Note oder Kommentar filtern" data-archive-search>
+                <input type="search" placeholder="Nach Klasse, Schüler, Fach, Note oder Kommentar filtern" data-archive-search>
               </label>
               <div class="archive-inline-stats">
-                <span class="archive-inline-stat"><%= formatNumber(archiveStats?.uniqueStudents || 0) %> Schueler</span>
+                <span class="archive-inline-stat"><%= formatNumber(archiveStats?.uniqueStudents || 0) %> Schüler</span>
                 <span class="archive-inline-stat">Durchschnitt: <%= formatAverageGrade(archiveStats?.averageGrade) %></span>
                 <span class="archive-inline-stat">CSV: <%= formatNumber(totalGrades) %> Noten</span>
               </div>
@@ -417,7 +417,7 @@
                   <thead>
                     <tr>
                       <th>Klasse</th>
-                      <th>Schueler</th>
+                      <th>Schüler</th>
                       <th>Fach</th>
                       <th>Note</th>
                       <th>Kommentar</th>
@@ -442,13 +442,13 @@
                   </tbody>
                 </table>
               </div>
-              <div class="archive-filter-empty" data-archive-filter-empty hidden>Keine Noten fuer den aktuellen Filter gefunden.</div>
+              <div class="archive-filter-empty" data-archive-filter-empty hidden>Keine Noten für den aktuellen Filter gefunden.</div>
               <div class="archive-table-footer">
                 <span class="archive-table-summary" data-archive-summary>Alle <%= formatNumber(totalGrades) %> Zeilen geladen.</span>
                 <div class="archive-table-actions" data-archive-actions hidden>
                   <button class="btn btn-secondary" type="button" data-archive-more hidden>Mehr laden</button>
                   <button class="btn btn-secondary" type="button" data-archive-all hidden>Alle zeigen</button>
-                  <button class="btn btn-secondary" type="button" data-archive-reset hidden>Zuruecksetzen</button>
+                  <button class="btn btn-secondary" type="button" data-archive-reset hidden>Zurücksetzen</button>
                 </div>
               </div>
             </div>

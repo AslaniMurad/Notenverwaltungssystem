@@ -21,11 +21,16 @@
           "wunschpr-fung": "wunschprufung"
         })[
           String(value || "")
-            .replace(/Ã¤/g, "ä")
-            .replace(/Ã¶/g, "ö")
-            .replace(/Ã¼/g, "ü")
-            .replace(/ÃŸ/g, "ß")
-            .replace(/Â/g, "")
+            .replace(/\u00c3\u0192\u00c2\u00a4/g, "ä")
+            .replace(/\u00c3\u0192\u00c2\u00b6/g, "ö")
+            .replace(/\u00c3\u0192\u00c2\u00bc/g, "ü")
+            .replace(/\u00c3\u0192\u00c5\u00b8/g, "ß")
+            .replace(/\u00c3\u201a/g, "")
+            .replace(/\u00c3\u00a4/g, "ä")
+            .replace(/\u00c3\u00b6/g, "ö")
+            .replace(/\u00c3\u00bc/g, "ü")
+            .replace(/\u00c3\u0178/g, "ß")
+            .replace(/\u00c2/g, "")
             .normalize("NFD")
             .replace(/[\u0300-\u036f]/g, "")
             .toLowerCase()
@@ -33,11 +38,16 @@
             .replace(/^-+|-+$/g, "")
         ] ||
         String(value || "")
-          .replace(/Ã¤/g, "ä")
-          .replace(/Ã¶/g, "ö")
-          .replace(/Ã¼/g, "ü")
-          .replace(/ÃŸ/g, "ß")
-          .replace(/Â/g, "")
+          .replace(/\u00c3\u0192\u00c2\u00a4/g, "ä")
+            .replace(/\u00c3\u0192\u00c2\u00b6/g, "ö")
+            .replace(/\u00c3\u0192\u00c2\u00bc/g, "ü")
+            .replace(/\u00c3\u0192\u00c5\u00b8/g, "ß")
+            .replace(/\u00c3\u201a/g, "")
+            .replace(/\u00c3\u00a4/g, "ä")
+            .replace(/\u00c3\u00b6/g, "ö")
+            .replace(/\u00c3\u00bc/g, "ü")
+            .replace(/\u00c3\u0178/g, "ß")
+            .replace(/\u00c2/g, "")
           .normalize("NFD")
           .replace(/[\u0300-\u036f]/g, "")
           .toLowerCase()
@@ -55,7 +65,7 @@
             <a href="/teacher/create-class">Fach erstellen</a>
             <a href="/teacher/settings">Einstellungen</a>
             <div class="nav-section-title">Klasse: <%= classData.name %> / <%= classData.subject %></div>
-            <a href="/teacher/students/<%= classData.id %>">Schueler</a>
+            <a href="/teacher/students/<%= classData.id %>">Schüler</a>
             <a class="<%= (typeof openMessageCount !== 'undefined' && openMessageCount > 0) ? 'is-alert' : '' %>" href="/teacher/test-questions/<%= classData.id %>">Fragen zu Tests<% if (typeof openMessageCount !== 'undefined' && openMessageCount > 0) { %><span class="nav-notification-badge"><%= openMessageCount %></span><% } %></a>
             <a href="/teacher/grades/<%= classData.id %>">Noten</a>
             <a href="/teacher/special-assessments/<%= classData.id %>">Sonderleistungen</a>
@@ -137,7 +147,7 @@
             </button>
           </div>
           <% if ((wishGradeRows || []).length === 0) { %>
-            <p class="teacher-muted"><%= student.is_excluded ? 'Keine aktive Berechnung, weil der Schueler in diesem Fach ausgeschlossen ist.' : 'Noch keine gewichteten Einträge vorhanden.' %></p>
+            <p class="teacher-muted"><%= student.is_excluded ? 'Keine aktive Berechnung, weil der Schüler in diesem Fach ausgeschlossen ist.' : 'Noch keine gewichteten Einträge vorhanden.' %></p>
           <% } else { %>
             <p class="teacher-muted">Der Rechner berücksichtigt Noten und Mitarbeit aus der Gesamtnote.</p>
           <% } %>
@@ -162,7 +172,7 @@
           <% } else if ((participationEntries || []).length === 0) { %>
             <div class="teacher-empty">
               <h4><%= student.is_excluded ? 'Keine aktive Mitarbeit' : 'Noch keine Mitarbeit' %></h4>
-              <p><%= student.is_excluded ? 'Der Schueler ist in diesem Fach ausgeschlossen. Historische MA-Eintraege wuerden hier erscheinen.' : 'In der Notenübersicht kannst du mit dem MA-Button Einträge erfassen.' %></p>
+              <p><%= student.is_excluded ? 'Der Schüler ist in diesem Fach ausgeschlossen. Historische MA-Einträge würden hier erscheinen.' : 'In der Notenübersicht kannst du mit dem MA-Button Einträge erfassen.' %></p>
             </div>
           <% } else { %>
             <div class="grades-table-wrapper">
@@ -214,7 +224,7 @@
             <% if (grades.length === 0) { %>
               <div class="teacher-empty">
                 <h4><%= student.is_excluded ? 'Keine aktiven Bewertungen' : 'Noch keine Noten' %></h4>
-                <p><%= student.is_excluded ? 'Der Schueler ist in diesem Fach ausgeschlossen. Historische Eintraege wuerden hier erscheinen.' : 'Füge die erste Note für diesen Schüler hinzu.' %></p>
+                <p><%= student.is_excluded ? 'Der Schüler ist in diesem Fach ausgeschlossen. Historische Einträge würden hier erscheinen.' : 'Füge die erste Note für diesen Schüler hinzu.' %></p>
                 <% if (!student.is_excluded) { %>
                   <a class="btn btn-primary" href="/teacher/add-grade/<%= classData.id %>/<%= student.id %>">Bewertung hinzufügen</a>
                 <% } %>
@@ -298,7 +308,7 @@
                           <% grade.messages.forEach(message => { %>
                             <div class="teacher-message-item">
                               <div class="teacher-message-bubble student">
-                                <p class="teacher-message-author"><%= student.email || 'Schueler' %></p>
+                                <p class="teacher-message-author"><%= student.email || 'Schüler' %></p>
                                 <p><%= message.student_message %></p>
                                 <small class="teacher-muted"><%= new Date(message.created_at).toLocaleString('de-DE') %></small>
                               </div>
@@ -312,7 +322,7 @@
                                 <form class="teacher-form teacher-reply-form" method="POST" action="/teacher/students/<%= classData.id %>/messages/<%= message.id %>/reply">
                                   <input type="hidden" name="_csrf" value="<%= csrfToken %>">
                                   <label for="reply-grade-<%= grade.id %>-<%= message.id %>">Antwort</label>
-                                  <textarea id="reply-grade-<%= grade.id %>-<%= message.id %>" name="reply" rows="3" maxlength="1000" required placeholder="Antwort an den Schueler..."></textarea>
+                                  <textarea id="reply-grade-<%= grade.id %>-<%= message.id %>" name="reply" rows="3" maxlength="1000" required placeholder="Antwort an den Schüler..."></textarea>
                                   <div class="teacher-form-actions">
                                     <button class="btn btn-primary" type="submit">Antwort senden</button>
                                   </div>
@@ -369,7 +379,7 @@
           </div>
         </div>
         <div class="modal-footer">
-          <button class="btn btn-secondary" type="button" id="closeWishGradeModal">Schliessen</button>
+          <button class="btn btn-secondary" type="button" id="closeWishGradeModal">Schließen</button>
         </div>
       </div>
     </div>

@@ -1,6 +1,6 @@
 ﻿<%
   const page = {
-    title: `Lehrer - Pruefung benoten (${classData.name})`,
+    title: `Lehrer - Prüfung benoten (${classData.name})`,
     headerTitle: 'Lehrerbereich',
     styles: ['/css/teacher-pages.css'],
     scripts: ['/js/app.js'],
@@ -20,15 +20,15 @@
 
         <div class="app-nav">
           <div class="nav-section">
-            <div class="nav-section-title">Menue</div>
+            <div class="nav-section-title">Menü</div>
             <a href="/teacher/classes">Fächer</a>
             <a href="/teacher/create-class">Fach erstellen</a>
             <a href="/teacher/settings">Einstellungen</a>
             <div class="nav-section-title">Klasse: <%= classData.name %> / <%= classData.subject %></div>
-            <a href="/teacher/students/<%= classData.id %>">Schueler</a>
+            <a href="/teacher/students/<%= classData.id %>">Schüler</a>
             <a href="/teacher/grades/<%= classData.id %>">Noten</a>
             <a href="/teacher/special-assessments/<%= classData.id %>">Sonderleistungen</a>
-            <a class="is-active" href="/teacher/grade-templates/<%= classData.id %>">Pruefungen</a>
+            <a class="is-active" href="/teacher/grade-templates/<%= classData.id %>">Prüfungen</a>
             <a href="/teacher/class-statistics/<%= classData.id %>">Statistiken</a>
             <form class="logout-form" method="POST" action="/logout">
               <input type="hidden" name="_csrf" value="<%= csrfToken %>">
@@ -48,7 +48,7 @@
             </p>
           </div>
           <div class="teacher-actions-inline">
-            <a class="btn btn-secondary" href="/teacher/grade-templates/<%= classData.id %>">Zurueck zu Pruefungen</a>
+            <a class="btn btn-secondary" href="/teacher/grade-templates/<%= classData.id %>">Zurück zu Prüfungen</a>
           </div>
         </header>
 
@@ -72,10 +72,10 @@
         <div class="teacher-card">
           <div class="teacher-card-header">
             <div>
-              <p class="teacher-eyebrow">Pruefungsdaten</p>
-              <h3>Schuelerliste zum Benoten</h3>
+              <p class="teacher-eyebrow">Prüfungsdaten</p>
+              <h3>Schülerliste zum Benoten</h3>
             </div>
-            <div class="teacher-meta-chip"><%= rows.length %> Schueler</div>
+            <div class="teacher-meta-chip"><%= rows.length %> Schüler</div>
           </div>
 
           <div class="teacher-alert info">
@@ -100,7 +100,7 @@
               <table class="grades-table bulk-grade-table">
                 <thead>
                   <tr>
-                    <th>Schueler</th>
+                    <th>Schüler</th>
                     <th>Status</th>
                     <th>Note (1-5)</th>
                     <th>Punkte</th>
@@ -192,10 +192,10 @@
             </div>
 
             <small class="form-hint">
-              Bereits vorhandene Bewertungen sind vorausgefuellt und koennen bei Bedarf direkt angepasst werden.
+              Bereits vorhandene Bewertungen sind vorausgefüllt und können bei Bedarf direkt angepasst werden.
             </small>
             <p class="form-hint">
-              Tipp: Dezimalwerte koennen mit Punkt oder Komma eingegeben werden.
+              Tipp: Dezimalwerte können mit Punkt oder Komma eingegeben werden.
             </p>
 
             <div class="teacher-form-actions">

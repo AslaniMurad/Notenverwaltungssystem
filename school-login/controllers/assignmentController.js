@@ -143,7 +143,7 @@ async function getClassTeachers(req, res, next) {
     const classId = Number(req.params.classId);
     const subjectId = Number(req.query.subject_id) || null;
     if (!Number.isInteger(classId) || classId <= 0) {
-      return res.status(400).json({ error: "Ungueltige Klasse." });
+      return res.status(400).json({ error: "Ungültige Klasse." });
     }
     const rows = await assignmentModel.listAssignmentRows();
     const teacherIds = rows
@@ -177,7 +177,7 @@ async function createAssignment(req, res, next) {
 
     if (!Number.isInteger(classId) || teacherIds.length === 0) {
       return flashAndRedirect(req, res, redirectUrl, {
-        error: "Bitte Klasse und mindestens einen Lehrer waehlen.",
+        error: "Bitte Klasse und mindestens einen Lehrer wählen.",
         formData: flashFormData
       });
     }
@@ -199,7 +199,7 @@ async function createAssignment(req, res, next) {
       return flashAndRedirect(req, res, redirectUrl, {
         error: newSubjectName
           ? "Fach konnte nicht angelegt werden."
-          : "Bitte ein bestehendes Fach waehlen oder ein neues Fach anlegen.",
+          : "Bitte ein bestehendes Fach wählen oder ein neues Fach anlegen.",
         formData: flashFormData
       });
     }
@@ -216,7 +216,7 @@ async function createAssignment(req, res, next) {
     const validTeacherIds = teacherRows.map((row) => Number(row.id));
     if (!validTeacherIds.length) {
       return flashAndRedirect(req, res, redirectUrl, {
-        error: "Keine gueltigen Lehrer ausgewaehlt.",
+        error: "Keine gültigen Lehrer ausgewählt.",
         formData: flashFormData
       });
     }
@@ -241,7 +241,7 @@ async function deleteAssignment(req, res, next) {
     const assignmentId = Number(req.body?.assignment_id);
     if (!Number.isInteger(assignmentId) || assignmentId <= 0) {
       return flashAndRedirect(req, res, "/admin/assignments", {
-        error: "Ungueltige Zuordnung."
+        error: "Ungültige Zuordnung."
       });
     }
 

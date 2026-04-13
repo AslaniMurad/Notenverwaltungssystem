@@ -1,6 +1,6 @@
 ﻿<%
   const page = {
-    title: 'Lehrer â€” SchÃ¼ler hinzufÃ¼gen',
+    title: 'Lehrer - Schüler hinzufügen',
     headerTitle: 'Lehrerbereich',
     styles: ['/css/teacher-pages.css'],
     scripts: ['/js/app.js'],
@@ -14,16 +14,16 @@
 
         <div class="app-nav">
           <div class="nav-section">
-            <div class="nav-section-title">MenÃ¼</div>
+            <div class="nav-section-title">Menü</div>
             <a href="/teacher/classes">Fächer</a>
             <a href="/teacher/create-class">Fach erstellen</a>
             <a href="/teacher/settings">Einstellungen</a>
             <div class="nav-section-title">Klasse: <%= classData.name %> / <%= classData.subject %></div>
-            <a class="is-active" href="/teacher/students/<%= classData.id %>">Schueler</a>
+            <a class="is-active" href="/teacher/students/<%= classData.id %>">Schüler</a>
             <a class="<%= (typeof openMessageCount !== 'undefined' && openMessageCount > 0) ? 'is-alert' : '' %>" href="/teacher/test-questions/<%= classData.id %>">Fragen zu Tests<% if (typeof openMessageCount !== 'undefined' && openMessageCount > 0) { %><span class="nav-notification-badge"><%= openMessageCount %></span><% } %></a>
             <a href="/teacher/grades/<%= classData.id %>">Noten</a>
             <a href="/teacher/special-assessments/<%= classData.id %>">Sonderleistungen</a>
-            <a href="/teacher/grade-templates/<%= classData.id %>">PrÃ¼fungen</a>
+            <a href="/teacher/grade-templates/<%= classData.id %>">Prüfungen</a>
             <a href="/teacher/class-statistics/<%= classData.id %>">Statistiken</a>
             <form class="logout-form" method="POST" action="/logout">
               <input type="hidden" name="_csrf" value="<%= csrfToken %>">
@@ -36,9 +36,9 @@
       <section class="teacher-main">
         <header class="teacher-main-header">
           <div>
-            <p class="teacher-eyebrow">SchÃ¼ler hinzufÃ¼gen</p>
+            <p class="teacher-eyebrow">Schüler hinzufügen</p>
             <h1>Klasse <%= classData.name %></h1>
-            <p class="teacher-muted">Rolle: Lehrer Â· <%= email %></p>
+            <p class="teacher-muted">Rolle: Lehrer · <%= email %></p>
           </div>
           <div class="teacher-actions-inline">
             <a class="btn btn-secondary" href="/teacher/students/<%= classData.id %>">Abbrechen</a>
@@ -48,7 +48,7 @@
         <div class="teacher-card">
           <div class="teacher-card-header">
             <div>
-              <p class="teacher-eyebrow">Neuen SchÃ¼ler verknÃ¼pfen</p>
+              <p class="teacher-eyebrow">Neuen Schüler verknüpfen</p>
               <h3>Bestehenden Benutzer einer Klasse zuweisen</h3>
             </div>
           </div>
@@ -57,20 +57,20 @@
             <div class="teacher-alert error"><%= error %></div>
           <% } %>
 
-          <div class="teacher-alert info">ðŸ’¡ Der SchÃ¼ler muss bereits als Benutzer mit der Rolle "student" existieren.</div>
+          <div class="teacher-alert info">Hinweis: Der Schüler muss bereits als Benutzer mit der Rolle "student" existieren.</div>
 
           <form class="teacher-form" method="POST" action="/teacher/add-student/<%= classData.id %>">
             <input type="hidden" name="_csrf" value="<%= csrfToken %>">
-            <label for="name">Name des SchÇ¬lers</label>
+            <label for="name">Name des Schülers</label>
             <input type="text" id="name" name="name" placeholder="Max Mustermann" data-student-name>
             <p class="teacher-muted">Wird automatisch gesetzt bei E-Mail im Format vorname.nachname@xy.</p>
 
-            <label for="email">E-Mail des SchÇ¬lers</label>
+            <label for="email">E-Mail des Schülers</label>
             <input type="email" id="email" name="email" required placeholder="max.mustermann@schule.at" data-student-email>
 
             <div class="teacher-form-actions">
-              <button class="btn btn-primary" type="submit">SchÃ¼ler hinzufÃ¼gen</button>
-              <a class="btn btn-secondary" href="/teacher/students/<%= classData.id %>">ZurÃ¼ck</a>
+              <button class="btn btn-primary" type="submit">Schüler hinzufügen</button>
+              <a class="btn btn-secondary" href="/teacher/students/<%= classData.id %>">Zurück</a>
             </div>
           </form>
         </div>

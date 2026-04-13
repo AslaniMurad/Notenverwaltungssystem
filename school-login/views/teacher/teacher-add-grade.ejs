@@ -1,6 +1,6 @@
 ﻿<%
   const page = {
-    title: `Lehrer â€” Bewertung hinzufÃ¼gen`,
+    title: `Lehrer - Bewertung hinzufügen`,
     headerTitle: 'Lehrerbereich',
     styles: ['/css/teacher-pages.css'],
     scripts: ['/js/app.js'],
@@ -25,16 +25,16 @@
 
         <div class="app-nav">
           <div class="nav-section">
-            <div class="nav-section-title">MenÃ¼</div>
+            <div class="nav-section-title">Menü</div>
             <a href="/teacher/classes">Fächer</a>
             <a href="/teacher/create-class">Fach erstellen</a>
             <a href="/teacher/settings">Einstellungen</a>
             <div class="nav-section-title">Klasse: <%= classData.name %> / <%= classData.subject %></div>
-            <a href="/teacher/students/<%= classData.id %>">SchÃ¼ler</a>
+            <a href="/teacher/students/<%= classData.id %>">Schüler</a>
             <a class="<%= (typeof openMessageCount !== 'undefined' && openMessageCount > 0) ? 'is-alert' : '' %>" href="/teacher/test-questions/<%= classData.id %>">Fragen zu Tests<% if (typeof openMessageCount !== 'undefined' && openMessageCount > 0) { %><span class="nav-notification-badge"><%= openMessageCount %></span><% } %></a>
             <a href="/teacher/grades/<%= classData.id %>">Noten</a>
             <a href="/teacher/special-assessments/<%= classData.id %>">Sonderleistungen</a>
-            <a href="/teacher/grade-templates/<%= classData.id %>">PrÃ¼fungen</a>
+            <a href="/teacher/grade-templates/<%= classData.id %>">Prüfungen</a>
             <a href="/teacher/class-statistics/<%= classData.id %>">Statistiken</a>
             <form class="logout-form" method="POST" action="/logout">
               <input type="hidden" name="_csrf" value="<%= csrfToken %>">
@@ -47,9 +47,9 @@
       <section class="teacher-main">
         <header class="teacher-main-header">
           <div>
-            <p class="teacher-eyebrow">Bewertung hinzufÃ¼gen</p>
+            <p class="teacher-eyebrow">Bewertung hinzufügen</p>
             <h1><%= student.name %></h1>
-            <p class="teacher-muted">Klasse: <%= classData.name %> Â· <%= classData.subject %></p>
+            <p class="teacher-muted">Klasse: <%= classData.name %> · <%= classData.subject %></p>
           </div>
           <div class="teacher-actions-inline">
             <a class="btn btn-secondary" href="/teacher/student-grades/<%= classData.id %>/<%= student.id %>">Abbrechen</a>
@@ -60,7 +60,7 @@
           <div class="teacher-card-header">
             <div>
               <p class="teacher-eyebrow">Neue Bewertung</p>
-              <h3>Bewertung fÃ¼r <%= student.name %> eintragen</h3>
+              <h3>Bewertung für <%= student.name %> eintragen</h3>
             </div>
           </div>
 
@@ -75,7 +75,7 @@
             </div>
           <% } else if (templates.length === 0) { %>
             <div class="teacher-alert error">
-              âš ï¸ Noch keine PrÃ¼fungsvorlagen vorhanden. <a href="/teacher/grade-templates/<%= classData.id %>">Jetzt PrÃ¼fung anlegen</a>
+              Hinweis: Noch keine Prüfungsvorlagen vorhanden. <a href="/teacher/grade-templates/<%= classData.id %>">Jetzt Prüfung anlegen</a>
             </div>
           <% } else { %>
             <form class="teacher-form" method="POST" action="/teacher/add-grade/<%= classData.id %>/<%= student.id %>" enctype="multipart/form-data">
@@ -85,19 +85,19 @@
                 Bewertungsmodus dieses Profils: <strong><%= scoringModeLabel || 'Punkte oder Noten' %></strong>
               </div>
 
-              <label for="template_search">PrÃ¼fung *</label>
+              <label for="template_search">Prüfung *</label>
               <div class="template-picker" id="templatePicker">
                 <div class="template-picker-toolbar">
                   <input
                     type="search"
                     id="template_search"
                     class="template-picker-search"
-                    placeholder="PrÃ¼fung suchen (Name, Kategorie, Datum)"
+                    placeholder="Prüfung suchen (Name, Kategorie, Datum)"
                     autocomplete="off"
                   >
                   <select id="template_sort" class="template-picker-sort" aria-label="Sortierung">
                     <option value="date_desc">Datum: Neueste zuerst</option>
-                    <option value="date_asc">Datum: Ã„lteste zuerst</option>
+                    <option value="date_asc">Datum: Älteste zuerst</option>
                   </select>
                 </div>
 
@@ -150,7 +150,7 @@
                               <%= selected && !isGraded ? 'checked' : '' %>
                               <%= isGraded ? 'disabled' : '' %>
                               required
-                              aria-label="PrÃ¼fung <%= template.name %> auswÃ¤hlen"
+                              aria-label="Prüfung <%= template.name %> auswählen"
                             >
                           </td>
                           <td><strong><%= template.name %></strong></td>
@@ -168,7 +168,7 @@
                         </tr>
                       <% }) %>
                       <tr id="templateNoResults" class="template-empty-row" hidden>
-                        <td colspan="7">Keine passenden PrÃ¼fungen gefunden.</td>
+                        <td colspan="7">Keine passenden Prüfungen gefunden.</td>
                       </tr>
                     </tbody>
                   </table>
@@ -176,7 +176,7 @@
 
                 <p id="templateSelectionInfo" class="template-picker-selection"></p>
               </div>
-              <small class="form-hint">StandardmÃ¤ssig werden die neuesten 3 PrÃ¼fungen gezeigt. Mit Suche oder Sortierung siehst du alle.</small>
+              <small class="form-hint">Standardmäßig werden die neuesten 3 Prüfungen gezeigt. Mit Suche oder Sortierung siehst du alle.</small>
 
               <label class="checkbox-line" for="is_absent">
                 <input
@@ -186,7 +186,7 @@
                   value="1"
                   <%= formData.is_absent ? 'checked' : '' %>
                 >
-                SchÃ¼ler war bei dieser PrÃ¼fung nicht da
+                Schüler war bei dieser Prüfung nicht da
               </label>
               <small class="form-hint">Aktuelle Regel aus Einstellungen: <%= absenceModeLabel %>.</small>
 
@@ -203,7 +203,7 @@
                   placeholder="z.B. 2 oder 2.5"
                   value="<%= formData.grade || '' %>"
                 >
-                <small class="form-hint">Notenskala: 1 (Sehr gut) bis 5 (Nicht genÃ¼gend)</small>
+                <small class="form-hint">Notenskala: 1 (Sehr gut) bis 5 (Nicht genügend)</small>
               <% } %>
 
               <% if (allowsPoints) { %>
@@ -226,7 +226,7 @@
 
               <label for="note">Notiz (optional)</label>
               <textarea id="note" name="note" rows="2" placeholder="z.B. Sehr gute Mitarbeit, kleine Fehler bei Aufgabe 3"><%= formData.note || '' %></textarea>
-              <small class="form-hint">Optional kannst du eine korrigierte Arbeit anhÃ¤ngen oder einen externen Link angeben.</small>
+              <small class="form-hint">Optional kannst du eine korrigierte Arbeit anhängen oder einen externen Link angeben.</small>
 
               <label for="attachment_file">Korrigierte Arbeit hochladen (optional)</label>
               <input type="file" id="attachment_file" name="attachment_file" accept=".pdf,.jpg,.jpeg,.png,application/pdf,image/jpeg,image/png">
@@ -238,7 +238,7 @@
 
               <div class="teacher-form-actions">
                 <button class="btn btn-primary" type="submit">Bewertung speichern</button>
-                <a class="btn btn-secondary" href="/teacher/student-grades/<%= classData.id %>/<%= student.id %>">ZurÃ¼ck</a>
+                <a class="btn btn-secondary" href="/teacher/student-grades/<%= classData.id %>/<%= student.id %>">Zurück</a>
               </div>
             </form>
           <% } %>
@@ -290,11 +290,11 @@
               const date = cells[5] ? cells[5].innerText.trim() : "";
               selectedMaxPoints = row.dataset.templateMaxPoints || "-";
               selectedLabel = date && date !== "-"
-                ? "AusgewÃ¤hlt: " + name + " (" + date + ")"
-                : "AusgewÃ¤hlt: " + name;
+                ? "Ausgewählt: " + name + " (" + date + ")"
+                : "Ausgewählt: " + name;
             }
           });
-          selectionInfo.textContent = selectedLabel || "Noch keine PrÃ¼fung ausgewÃ¤hlt.";
+          selectionInfo.textContent = selectedLabel || "Noch keine Prüfung ausgewählt.";
           if (templateMaxPointsInfo) {
             templateMaxPointsInfo.textContent = "Maximale Punkte aus Vorlage: " + selectedMaxPoints;
           }

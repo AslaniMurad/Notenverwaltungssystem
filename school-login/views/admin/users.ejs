@@ -75,10 +75,10 @@
                     <form
                       method="POST"
                       action="/admin/users/<%= u.id %>/delete"
-                      data-confirm-title="Nutzer loeschen"
-                      data-confirm-message="Moechtest du diesen Nutzer wirklich loeschen?"
+                      data-confirm-title="Nutzer löschen"
+                      data-confirm-message="Möchtest du diesen Nutzer wirklich löschen?"
                       data-confirm-note="Der Nutzer wird per Soft-Delete deaktiviert."
-                      data-confirm-action="Loeschen"
+                      data-confirm-action="Löschen"
                       data-confirm-variant="danger"
                     >
                       <input type="hidden" name="_csrf" value="<%= csrfToken %>">

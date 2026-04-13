@@ -4,7 +4,7 @@
   const bulkValues = bulkForm || {};
   const hasBulkResult = Boolean(bulkResult);
   const page = {
-    title: 'Admin - Schueler hinzufuegen',
+    title: 'Admin - Schüler hinzufügen',
     headerTitle: 'Adminbereich',
     styles: ['/css/admin.css'],
     scripts: ['/js/app.js'],
@@ -19,21 +19,21 @@
         <div class="app-main-header admin-create-header">
           <div>
             <p class="app-main-subtitle">Klasse <%= classData.name %></p>
-            <h1>Schueler hinzufuegen</h1>
-            <p class="admin-muted admin-create-copy">Nur vorhandene Student-Konten koennen der Klasse zugeordnet werden. Wechsle zwischen Einzelzuordnung und Bulk-Modus.</p>
+            <h1>Schüler hinzufügen</h1>
+            <p class="admin-muted admin-create-copy">Nur vorhandene Student-Konten können der Klasse zugeordnet werden. Wechsle zwischen Einzelzuordnung und Bulk-Modus.</p>
           </div>
-          <a class="btn btn-secondary" href="/admin/classes/<%= classData.id %>/students">Zurueck</a>
+          <a class="btn btn-secondary" href="/admin/classes/<%= classData.id %>/students">Zurück</a>
         </div>
 
         <div class="admin-create-shell" data-create-switcher data-default-mode="<%= resolvedMode %>">
           <div class="admin-create-overview">
             <div class="admin-create-overview-card">
               <strong>Einzeln</strong>
-              <span>Geeignet fuer neue Eintritte oder gezielte Korrekturen einzelner Zuordnungen.</span>
+              <span>Geeignet für neue Eintritte oder gezielte Korrekturen einzelner Zuordnungen.</span>
             </div>
             <div class="admin-create-overview-card">
               <strong>Bulk</strong>
-              <span>Mehrere registrierte Schueler per E-Mail-Liste in einem Schritt der Klasse zuweisen.</span>
+              <span>Mehrere registrierte Schüler per E-Mail-Liste in einem Schritt der Klasse zuweisen.</span>
             </div>
           </div>
 
@@ -52,7 +52,7 @@
               <div class="admin-panel-card">
                 <div class="admin-panel-head">
                   <div>
-                    <h3>Einzelnen Schueler zuordnen</h3>
+                    <h3>Einzelnen Schüler zuordnen</h3>
                     <p class="admin-muted">Der Name kann automatisch aus `vorname.nachname@...` abgeleitet werden.</p>
                   </div>
                 </div>
@@ -76,7 +76,7 @@
                   </div>
 
                   <div class="admin-panel-actions">
-                    <button class="btn btn-primary" type="submit">Schueler zuordnen</button>
+                    <button class="btn btn-primary" type="submit">Schüler zuordnen</button>
                   </div>
                 </form>
               </div>
@@ -87,7 +87,7 @@
                 <div class="admin-panel-head">
                   <div>
                     <h3>Bulk-Zuordnung</h3>
-                    <p class="admin-muted">Eine registrierte Schueler-E-Mail pro Zeile. Der Name wird aus der Adresse abgeleitet.</p>
+                    <p class="admin-muted">Eine registrierte Schüler-E-Mail pro Zeile. Der Name wird aus der Adresse abgeleitet.</p>
                   </div>
                 </div>
 
@@ -146,7 +146,7 @@
                           <% }); %>
                         </ul>
                       <% } else { %>
-                        <p class="admin-muted">Keine fehlgeschlagenen Eintraege.</p>
+                        <p class="admin-muted">Keine fehlgeschlagenen Einträge.</p>
                       <% } %>
                     </div>
                   </div>

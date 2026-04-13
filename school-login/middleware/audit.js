@@ -24,7 +24,7 @@ const SUMMARY_LABELS = {
   profile_name: "Profil",
   scoring_mode: "Bewertung",
   absence_mode: "Abwesenheit",
-  student_id: "Schueler",
+  student_id: "Schüler",
   type: "Typ",
   category: "Kategorie",
   weight: "Gewichtung",
@@ -46,7 +46,7 @@ const SUMMARY_LABELS = {
   head_teacher_id: "Klassenvorstand",
   id: "ID",
   classId: "Klasse",
-  studentId: "Schueler",
+  studentId: "Schüler",
   profileId: "Profil",
   gradeId: "Note",
   templateId: "Vorlage",
@@ -56,10 +56,10 @@ const SUMMARY_LABELS = {
 const VALUE_LABELS = {
   admin: "Admin",
   teacher: "Lehrer",
-  student: "Schueler",
+  student: "Schüler",
   active: "Aktiv",
   locked: "Gesperrt",
-  deleted: "Geloescht",
+  deleted: "Gelöscht",
   points_or_grade: "Punkte oder Note",
   points_and_grade: "Punkte und Note",
   points_only: "Nur Punkte",
@@ -71,13 +71,13 @@ const VALUE_LABELS = {
   Wiederholung: "Wiederholung",
   Mitarbeit: "Mitarbeit",
   Projekt: "Projekt",
-  Hausuebung: "Hausuebung",
+  Hausübung: "Hausübung",
   Hausaufgabe: "Hausaufgabe",
-  Praesentation: "Praesentation",
-  Wunschpruefung: "Wunschpruefung",
+  Präsentation: "Präsentation",
+  Wunschprüfung: "Wunschprüfung",
   Benutzerdefiniert: "Benutzerdefiniert",
-  include: "Einschliessen",
-  exclude: "Ausschliessen",
+  include: "Einschließen",
+  exclude: "Ausschließen",
   plus: "+",
   plus_tilde: "+/-",
   neutral: "neutral",
@@ -87,9 +87,9 @@ const VALUE_LABELS = {
 const ENTITY_LABELS = {
   user: "Benutzer",
   class: "Klasse",
-  student: "Schueler",
+  student: "Schüler",
   assignment: "Fachzuordnung",
-  exam_template: "Pruefung",
+  exam_template: "Prüfung",
   grade: "Note",
   special_assessment: "Sonderleistung",
   participation: "Mitarbeit",
@@ -176,7 +176,7 @@ function formatSummaryValue(key, value) {
   if (value == null || value === "") return null;
 
   if (Array.isArray(value)) {
-    return value.length ? `${value.length} Eintraege` : null;
+    return value.length ? `${value.length} Einträge` : null;
   }
 
   if (typeof value === "boolean") {
@@ -271,13 +271,13 @@ function buildScopeLabel(routePath, entityType) {
   if (normalizedPath.startsWith("/admin/assignments")) return "Admin / Fachzuordnungen";
   if (normalizedPath.startsWith("/admin/audit-logs")) return "Admin / Audit";
   if (normalizedPath.startsWith("/teacher/settings")) return "Teacher / Einstellungen";
-  if (normalizedPath.startsWith("/teacher/grade-templates") || normalizedPath.startsWith("/teacher/create-template") || normalizedPath.startsWith("/teacher/edit-template") || normalizedPath.startsWith("/teacher/bulk-grade-template")) return "Teacher / Pruefungen";
+  if (normalizedPath.startsWith("/teacher/grade-templates") || normalizedPath.startsWith("/teacher/create-template") || normalizedPath.startsWith("/teacher/edit-template") || normalizedPath.startsWith("/teacher/bulk-grade-template")) return "Teacher / Prüfungen";
   if (normalizedPath.startsWith("/teacher/add-grade") || normalizedPath.startsWith("/teacher/grades") || normalizedPath.startsWith("/teacher/delete-grade")) return "Teacher / Noten";
   if (normalizedPath.startsWith("/teacher/special-assessments")) return "Teacher / Sonderleistungen";
-  if (normalizedPath.startsWith("/teacher/students") || normalizedPath.startsWith("/teacher/add-student") || normalizedPath.startsWith("/teacher/delete-student") || normalizedPath.startsWith("/teacher/student-exclusion")) return "Teacher / Schueler";
-  if (normalizedPath.startsWith("/teacher/classes") || normalizedPath.startsWith("/teacher/create-class") || normalizedPath.startsWith("/teacher/delete-class")) return "Teacher / Faecher";
-  if (normalizedPath.startsWith("/teacher/test-questions")) return "Teacher / Rueckfragen";
-  if (normalizedPath.startsWith("/student/returns")) return "Student / Rueckgaben";
+  if (normalizedPath.startsWith("/teacher/students") || normalizedPath.startsWith("/teacher/add-student") || normalizedPath.startsWith("/teacher/delete-student") || normalizedPath.startsWith("/teacher/student-exclusion")) return "Teacher / Schüler";
+  if (normalizedPath.startsWith("/teacher/classes") || normalizedPath.startsWith("/teacher/create-class") || normalizedPath.startsWith("/teacher/delete-class")) return "Teacher / Fächer";
+  if (normalizedPath.startsWith("/teacher/test-questions")) return "Teacher / Rückfragen";
+  if (normalizedPath.startsWith("/student/returns")) return "Student / Rückgaben";
   if (normalizedPath.startsWith("/student/notifications")) return "Student / Benachrichtigungen";
 
   const parts = normalizedPath.split("/").filter(Boolean);
@@ -334,14 +334,14 @@ function buildAuditDescription(req, routePath, entityType, entityId) {
   if (/^\/admin\/users\/[^/]+\/reset$/i.test(routePath)) {
     return buildAuditEntry({
       scopeLabel,
-      actionTitle: body.useInitial === "1" ? "Passwort auf Initial-Passwort gesetzt" : "Passwort geaendert",
+      actionTitle: body.useInitial === "1" ? "Passwort auf Initial-Passwort gesetzt" : "Passwort geändert",
       targetLabel: entityTarget
     });
   }
   if (/^\/admin\/users\/[^/]+\/delete$/i.test(routePath)) {
     return buildAuditEntry({
       scopeLabel,
-      actionTitle: "Benutzer geloescht",
+      actionTitle: "Benutzer gelöscht",
       targetLabel: entityTarget
     });
   }
@@ -364,14 +364,14 @@ function buildAuditDescription(req, routePath, entityType, entityId) {
   if (/^\/admin\/classes\/[^/]+\/delete$/i.test(routePath)) {
     return buildAuditEntry({
       scopeLabel,
-      actionTitle: "Klasse geloescht",
+      actionTitle: "Klasse gelöscht",
       targetLabel: entityTarget
     });
   }
   if (/^\/admin\/classes\/[^/]+\/students\/add$/i.test(routePath)) {
     return buildAuditEntry({
       scopeLabel,
-      actionTitle: "Schueler zur Klasse hinzugefuegt",
+      actionTitle: "Schüler zur Klasse hinzugefügt",
       targetLabel: buildTargetLabel(getFormattedSourceValue(body, "email"), getFormattedSourceValue(body, "name"), buildEntityTarget("student", params.studentId)),
       detailEntries: buildSummaryFromSource(params, ["id"])
     });
@@ -379,15 +379,15 @@ function buildAuditDescription(req, routePath, entityType, entityId) {
   if (/^\/admin\/classes\/[^/]+\/students\/add-bulk$/i.test(routePath)) {
     return buildAuditEntry({
       scopeLabel,
-      actionTitle: "Schueler gesammelt zur Klasse hinzugefuegt",
-      targetLabel: buildTargetLabel(getFormattedSourceValue(body, "bulkEmails"), "Mehrere Schueler"),
+      actionTitle: "Schüler gesammelt zur Klasse hinzugefügt",
+      targetLabel: buildTargetLabel(getFormattedSourceValue(body, "bulkEmails"), "Mehrere Schüler"),
       detailEntries: buildSummaryFromSource(params, ["id"])
     });
   }
   if (/^\/admin\/classes\/[^/]+\/students\/[^/]+\/delete$/i.test(routePath)) {
     return buildAuditEntry({
       scopeLabel,
-      actionTitle: "Schueler aus Klasse entfernt",
+      actionTitle: "Schüler aus Klasse entfernt",
       targetLabel: buildEntityTarget("student", params.studentId),
       detailEntries: buildSummaryFromSource(params, ["classId"])
     });
@@ -418,14 +418,14 @@ function buildAuditDescription(req, routePath, entityType, entityId) {
   if (/^\/teacher\/add-student\/[^/]+$/i.test(routePath)) {
     return buildAuditEntry({
       scopeLabel,
-      actionTitle: "Schueler hinzugefuegt",
+      actionTitle: "Schüler hinzugefügt",
       targetLabel: buildTargetLabel(getFormattedSourceValue(body, "email"), getFormattedSourceValue(body, "name"), entityTarget)
     });
   }
   if (/^\/teacher\/delete-student\/[^/]+\/[^/]+$/i.test(routePath)) {
     return buildAuditEntry({
       scopeLabel,
-      actionTitle: "Schueler entfernt",
+      actionTitle: "Schüler entfernt",
       targetLabel: buildEntityTarget("student", params.studentId),
       detailEntries: buildSummaryFromSource(params, ["classId"])
     });
@@ -434,7 +434,7 @@ function buildAuditDescription(req, routePath, entityType, entityId) {
     const actionValue = String(body.action || "").trim().toLowerCase();
     return buildAuditEntry({
       scopeLabel,
-      actionTitle: actionValue === "include" ? "Schueler im Fach eingeschlossen" : "Schueler im Fach ausgeschlossen",
+      actionTitle: actionValue === "include" ? "Schüler im Fach eingeschlossen" : "Schüler im Fach ausgeschlossen",
       targetLabel: buildEntityTarget("student", params.studentId),
       detailEntries: [
         buildSummaryFromSource(params, ["classId"]),
@@ -460,15 +460,15 @@ function buildAuditDescription(req, routePath, entityType, entityId) {
   if (/^\/teacher\/settings\/delete-profile\/[^/]+$/i.test(routePath)) {
     return buildAuditEntry({
       scopeLabel,
-      actionTitle: "Benotungsprofil geloescht",
+      actionTitle: "Benotungsprofil gelöscht",
       targetLabel: buildEntityTarget("system", params.profileId)
     });
   }
   if (/^\/teacher\/students\/[^/]+\/messages\/[^/]+\/reply$/i.test(routePath)) {
     return buildAuditEntry({
       scopeLabel,
-      actionTitle: "Antwort auf Rueckfrage gesendet",
-      targetLabel: buildEntityTarget("student", params.studentId) || "Rueckfrage",
+      actionTitle: "Antwort auf Rückfrage gesendet",
+      targetLabel: buildEntityTarget("student", params.studentId) || "Rückfrage",
       detailEntries: buildSummaryFromSource(body, ["reply"])
     });
   }
@@ -483,7 +483,7 @@ function buildAuditDescription(req, routePath, entityType, entityId) {
   if (/^\/teacher\/delete-participation\/[^/]+\/[^/]+\/[^/]+$/i.test(routePath)) {
     return buildAuditEntry({
       scopeLabel,
-      actionTitle: "Mitarbeit geloescht",
+      actionTitle: "Mitarbeit gelöscht",
       targetLabel: buildEntityTarget("student", params.studentId),
       detailEntries: buildSummaryFromSource(params, ["markId"])
     });
@@ -491,7 +491,7 @@ function buildAuditDescription(req, routePath, entityType, entityId) {
   if (/^\/teacher\/delete-grade\/[^/]+\/[^/]+$/i.test(routePath)) {
     return buildAuditEntry({
       scopeLabel,
-      actionTitle: "Note geloescht",
+      actionTitle: "Note gelöscht",
       targetLabel: buildEntityTarget("grade", params.gradeId),
       detailEntries: buildSummaryFromSource(params, ["classId"])
     });
@@ -516,7 +516,7 @@ function buildAuditDescription(req, routePath, entityType, entityId) {
   if (/^\/teacher\/create-template\/[^/]+$/i.test(routePath)) {
     return buildAuditEntry({
       scopeLabel,
-      actionTitle: "Pruefung erstellt",
+      actionTitle: "Prüfung erstellt",
       targetLabel: buildTargetLabel(getFormattedSourceValue(body, "name"), entityTarget),
       detailEntries: buildSummaryFromSource(body, ["category", "weight", "max_points", "date"])
     });
@@ -524,7 +524,7 @@ function buildAuditDescription(req, routePath, entityType, entityId) {
   if (/^\/teacher\/edit-template\/[^/]+\/[^/]+$/i.test(routePath)) {
     return buildAuditEntry({
       scopeLabel,
-      actionTitle: "Pruefung bearbeitet",
+      actionTitle: "Prüfung bearbeitet",
       targetLabel: buildTargetLabel(getFormattedSourceValue(body, "name"), buildEntityTarget("exam_template", params.templateId)),
       detailEntries: buildSummaryFromSource(body, ["category", "weight", "max_points", "date"])
     });
@@ -532,7 +532,7 @@ function buildAuditDescription(req, routePath, entityType, entityId) {
   if (/^\/teacher\/delete-template\/[^/]+\/[^/]+$/i.test(routePath)) {
     return buildAuditEntry({
       scopeLabel,
-      actionTitle: "Pruefung geloescht",
+      actionTitle: "Prüfung gelöscht",
       targetLabel: buildEntityTarget("exam_template", params.templateId)
     });
   }
@@ -547,14 +547,14 @@ function buildAuditDescription(req, routePath, entityType, entityId) {
   if (/^\/teacher\/delete-special-assessment\/[^/]+\/[^/]+$/i.test(routePath)) {
     return buildAuditEntry({
       scopeLabel,
-      actionTitle: "Sonderleistung geloescht",
+      actionTitle: "Sonderleistung gelöscht",
       targetLabel: buildEntityTarget("special_assessment", params.assessmentId)
     });
   }
   if (/^\/student\/returns\/[^/]+\/message$/i.test(routePath)) {
     return buildAuditEntry({
       scopeLabel,
-      actionTitle: "Nachricht zur Rueckgabe gesendet",
+      actionTitle: "Nachricht zur Rückgabe gesendet",
       targetLabel: buildEntityTarget("grade", params.gradeId),
       detailEntries: buildSummaryFromSource(body, ["message"])
     });
@@ -562,7 +562,7 @@ function buildAuditDescription(req, routePath, entityType, entityId) {
   if (/^\/student\/returns\/[^/]+\/messages\/seen$/i.test(routePath)) {
     return buildAuditEntry({
       scopeLabel,
-      actionTitle: "Rueckgabe-Nachrichten gelesen",
+      actionTitle: "Rückgabe-Nachrichten gelesen",
       targetLabel: buildEntityTarget("grade", params.gradeId)
     });
   }
@@ -578,7 +578,7 @@ function buildAuditDescription(req, routePath, entityType, entityId) {
   if (/delete|remove/i.test(routePath)) {
     return buildAuditEntry({
       scopeLabel,
-      actionTitle: "Eintrag geloescht",
+      actionTitle: "Eintrag gelöscht",
       targetLabel: entityTarget,
       detailEntries: fallbackSummary
     });

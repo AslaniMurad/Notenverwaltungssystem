@@ -14,7 +14,7 @@
 
         <div class="app-nav">
           <div class="nav-section">
-            <div class="nav-section-title">Menue</div>
+            <div class="nav-section-title">Menü</div>
             <a href="/teacher/classes">Fächer</a>
             <a class="is-active" href="/teacher/create-class">Fach erstellen</a>
             <a href="/teacher/settings">Einstellungen</a>
@@ -55,7 +55,7 @@
 
             <label for="class_id">Klasse</label>
             <select id="class_id" name="class_id" required>
-              <option value="">Bitte waehlen</option>
+              <option value="">Bitte wählen</option>
               <% (classes || []).forEach((entry) => { %>
                 <option value="<%= entry.id %>" <%= String((formData && formData.class_id) || '') === String(entry.id) ? 'selected' : '' %>>
                   <%= entry.name %>
@@ -75,7 +75,7 @@
 
             <div class="teacher-form-actions">
               <button class="btn btn-primary" type="submit">Fach erstellen</button>
-              <a class="btn btn-secondary" href="/teacher/classes">Zurueck</a>
+              <a class="btn btn-secondary" href="/teacher/classes">Zurück</a>
             </div>
           </form>
         </div>

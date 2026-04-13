@@ -817,7 +817,7 @@ router.post("/returns/:gradeId/message", async (req, res, next) => {
 
     const gradeId = Number(req.params.gradeId);
     if (!gradeId) {
-      return res.status(400).json({ error: "Ungueltige Rueckgabe-ID." });
+      return res.status(400).json({ error: "Ungültige Rückgabe-ID." });
     }
 
     const grade = await getAsync(
@@ -825,10 +825,10 @@ router.post("/returns/:gradeId/message", async (req, res, next) => {
       [gradeId, context.student.id]
     );
     if (!grade) {
-      return res.status(404).json({ error: "Rueckgabe nicht gefunden." });
+      return res.status(404).json({ error: "Rückgabe nicht gefunden." });
     }
     if (!grade.grade_template_id) {
-      return res.status(400).json({ error: "Nachrichten sind nur fuer Rueckgaben aus Pruefungen moeglich." });
+      return res.status(400).json({ error: "Nachrichten sind nur für Rückgaben aus Prüfungen möglich." });
     }
 
     const message = String(req.body?.message || "").trim();
@@ -864,7 +864,7 @@ router.post("/returns/:gradeId/messages/hide", async (req, res, next) => {
 
     const gradeId = Number(req.params.gradeId);
     if (!gradeId) {
-      return res.status(400).json({ error: "Ungueltige Rueckgabe-ID." });
+      return res.status(400).json({ error: "Ungültige Rückgabe-ID." });
     }
 
     const grade = await getAsync(
@@ -872,10 +872,10 @@ router.post("/returns/:gradeId/messages/hide", async (req, res, next) => {
       [gradeId, context.student.id]
     );
     if (!grade) {
-      return res.status(404).json({ error: "Rueckgabe nicht gefunden." });
+      return res.status(404).json({ error: "Rückgabe nicht gefunden." });
     }
     if (!grade.grade_template_id) {
-      return res.status(400).json({ error: "Tickets sind nur fuer Rueckgaben aus Pruefungen verfuegbar." });
+      return res.status(400).json({ error: "Tickets sind nur für Rückgaben aus Prüfungen verfügbar." });
     }
 
     await runAsync(
@@ -900,7 +900,7 @@ router.post("/returns/:gradeId/messages/seen", async (req, res, next) => {
 
     const gradeId = Number(req.params.gradeId);
     if (!gradeId) {
-      return res.status(400).json({ error: "Ungueltige Rueckgabe-ID." });
+      return res.status(400).json({ error: "Ungültige Rückgabe-ID." });
     }
 
     const grade = await getAsync("SELECT id FROM grades WHERE id = ? AND student_id = ?", [
@@ -908,7 +908,7 @@ router.post("/returns/:gradeId/messages/seen", async (req, res, next) => {
       context.student.id
     ]);
     if (!grade) {
-      return res.status(404).json({ error: "Rueckgabe nicht gefunden." });
+      return res.status(404).json({ error: "Rückgabe nicht gefunden." });
     }
 
     await runAsync(
@@ -1062,8 +1062,8 @@ router.get("/grades.pdf", async (req, res, next) => {
     const grades = gradeRows.map((row) => mapGradeRow(row, classInfo));
 
     const lines = [
-      "Notenuebersicht",
-      `Schueler: ${student.name}`,
+      "Notenübersicht",
+      `Schüler: ${student.name}`,
       `Klasse: ${student.class_name || classInfo?.name || ""}`,
       "",
       "Fach | Datum | Note | Gewicht | Kommentar"

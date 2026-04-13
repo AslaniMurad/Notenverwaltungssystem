@@ -5,8 +5,8 @@ const ROLLOVER_WIZARD_SESSION_KEY = "rolloverWizard";
 const ROLLOVER_STEPS = [
   { key: "start", label: "Start" },
   { key: "classes", label: "Klassen" },
-  { key: "students", label: "Schueler" },
-  { key: "review", label: "Pruefen" }
+  { key: "students", label: "Schüler" },
+  { key: "review", label: "Prüfen" }
 ];
 
 function normalizeStep(value) {
@@ -207,7 +207,7 @@ async function saveStudentStep(req, res, next) {
     if (shouldAdvance && hasBlockingErrors) {
       return renderRolloverPage(req, res, next, {
         step: "students",
-        error: result.validation.errors[0] || "Bitte Eingaben im Schueler-Schritt pruefen.",
+        error: result.validation.errors[0] || "Bitte Eingaben im Schüler-Schritt prüfen.",
         intakeParseErrors: result.intakeParseErrors
       });
     }
@@ -216,7 +216,7 @@ async function saveStudentStep(req, res, next) {
   } catch (err) {
     return renderRolloverPage(req, res, next, {
       step: "students",
-      error: err.message || "Schuelerplanung konnte nicht gespeichert werden."
+      error: err.message || "Schülerplanung konnte nicht gespeichert werden."
     });
   }
 }
@@ -225,11 +225,11 @@ async function resetWizard(req, res, next) {
   try {
     clearWizardDraft(req);
     await saveSession(req);
-    return res.redirect("/admin/rollover?step=start&message=Rollover-Assistent wurde zurueckgesetzt.");
+    return res.redirect("/admin/rollover?step=start&message=Rollover-Assistent wurde zurückgesetzt.");
   } catch (err) {
     return renderRolloverPage(req, res, next, {
       step: "start",
-      error: err.message || "Assistent konnte nicht zurueckgesetzt werden."
+      error: err.message || "Assistent konnte nicht zurückgesetzt werden."
     });
   }
 }
@@ -247,12 +247,12 @@ async function executeRollover(req, res, next) {
     await saveSession(req);
 
     return res.redirect(`/admin/rollover?step=start&message=${encodeURIComponent(
-      `Schuljahreswechsel nach ${executionResult.preview.nextSchoolYear.name} erfolgreich ausgefuehrt.`
+      `Schuljahreswechsel nach ${executionResult.preview.nextSchoolYear.name} erfolgreich ausgeführt.`
     )}`);
   } catch (err) {
     return renderRolloverPage(req, res, next, {
       step: "review",
-      error: err.message || "Schuljahreswechsel konnte nicht ausgefuehrt werden."
+      error: err.message || "Schuljahreswechsel konnte nicht ausgeführt werden."
     });
   }
 }
@@ -264,11 +264,11 @@ async function restoreSchoolYear(req, res, next) {
     const logRow = logs.find((entry) => Number(entry.id) === logId);
 
     if (!logRow || !logRow.backup_path) {
-      throw new Error("Ausgewaehlter Backup-Eintrag wurde nicht gefunden.");
+      throw new Error("Ausgewählter Backup-Eintrag wurde nicht gefunden.");
     }
 
     if (String(logRow.status || "").toLowerCase() !== "success") {
-      throw new Error("Nur erfolgreiche Schuljahreswechsel koennen wiederhergestellt werden.");
+      throw new Error("Nur erfolgreiche Schuljahreswechsel können wiederhergestellt werden.");
     }
 
     const restoreResult = await rolloverService.restoreSchoolYearFromBackup({
@@ -280,7 +280,7 @@ async function restoreSchoolYear(req, res, next) {
     await saveSession(req);
 
     return res.redirect(`/admin/rollover?step=start&message=${encodeURIComponent(
-      `${restoreResult.targetSchoolYearName} wurde auf ${restoreResult.previousSchoolYearName} zurueckgesetzt.`
+      `${restoreResult.targetSchoolYearName} wurde auf ${restoreResult.previousSchoolYearName} zurückgesetzt.`
     )}`);
   } catch (err) {
     return renderRolloverPage(req, res, next, {
