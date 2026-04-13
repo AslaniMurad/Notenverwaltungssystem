@@ -78,65 +78,33 @@
         <main class="student-main">
           <% if (currentPage === "overview") { %>
             <section id="overview">
-              <div class="card">
-                <div class="dataset-head">
-                  <div>
-                    <h3>Uebersicht</h3>
-                    <p class="dataset-copy">Schneller Einstieg fuer aktuelle Noten, Aufgaben und Rueckmeldungen.</p>
-                  </div>
-                </div>
-                <div class="info-grid">
-                  <div class="stat-tile">
-                    <h4>Durchschnitt</h4>
-                    <strong id="overview-average">-</strong>
-                  </div>
-                  <div class="stat-tile">
-                    <h4>Faecher</h4>
-                    <strong id="overview-subject-count"><%= safeSubjects.length %></strong>
-                  </div>
-                  <div class="stat-tile">
-                    <h4>Offene Aufgaben</h4>
-                    <strong id="overview-open-tasks">-</strong>
-                  </div>
-                  <div class="stat-tile">
-                    <h4>Rueckgaben</h4>
-                    <strong id="overview-return-count">-</strong>
-                  </div>
-                  <div class="stat-tile">
-                    <h4>Offene Rueckfragen</h4>
-                    <strong id="overview-open-requests">-</strong>
-                  </div>
-                </div>
+              <div class="overview-stats-strip">
+                <div class="stat-inline"><span class="stat-inline-label">Durchschnitt</span><strong class="stat-inline-value" id="overview-average">-</strong></div>
+                <div class="stat-inline"><span class="stat-inline-label">Faecher</span><strong class="stat-inline-value" id="overview-subject-count"><%= safeSubjects.length %></strong></div>
+                <div class="stat-inline"><span class="stat-inline-label">Offene Aufgaben</span><strong class="stat-inline-value" id="overview-open-tasks">-</strong></div>
+                <div class="stat-inline"><span class="stat-inline-label">Rueckgaben</span><strong class="stat-inline-value" id="overview-return-count">-</strong></div>
+                <div class="stat-inline"><span class="stat-inline-label">Offene Rueckfragen</span><strong class="stat-inline-value" id="overview-open-requests">-</strong></div>
               </div>
 
-              <div class="card">
-                <div class="dataset-head">
-                  <div>
-                    <h3>Naechste Aufgaben</h3>
-                    <p class="dataset-copy">Die naechsten faelligen Leistungen mit Fachbezug.</p>
-                  </div>
+              <div class="section-block">
+                <div class="section-block-head">
+                  <h3>Naechste Aufgaben</h3>
                   <span class="dataset-count" id="overview-upcoming-count">-</span>
                 </div>
                 <div id="overview-upcoming" class="overview-list"></div>
               </div>
 
-              <div class="card">
-                <div class="dataset-head">
-                  <div>
-                    <h3>Letzte Benotungen</h3>
-                    <p class="dataset-copy">Die zuletzt eingetragenen Bewertungen ueber alle Faecher.</p>
-                  </div>
+              <div class="section-block">
+                <div class="section-block-head">
+                  <h3>Letzte Benotungen</h3>
                   <span class="dataset-count" id="overview-latest-grade-count">-</span>
                 </div>
                 <div id="overview-latest-grades" class="overview-list"></div>
               </div>
 
-              <div class="card">
-                <div class="dataset-head">
-                  <div>
-                    <h3>Letzte Rueckgaben</h3>
-                    <p class="dataset-copy">Rueckgaben mit Notenstand und Aktivitaet.</p>
-                  </div>
+              <div class="section-block">
+                <div class="section-block-head">
+                  <h3>Letzte Rueckgaben</h3>
                   <span class="dataset-count" id="overview-recent-return-count">-</span>
                 </div>
                 <div id="overview-recent-returns" class="overview-list"></div>
@@ -230,28 +198,24 @@
             <% const gradeFilterValues = (typeof gradeFilters !== "undefined" && gradeFilters) ? gradeFilters : {}; %>
             <section id="grades">
               <% if (!selectedGradeSubject) { %>
-                <div class="card">
-                  <div class="dataset-head grades-header">
-                    <div>
-                      <h3>Fach auswaehlen</h3>
-                      <p class="dataset-copy">Waehle ein Fach. Danach oeffnet sich die Detailansicht mit deinem aktuellen Stand und dem Beurteilungsprotokoll.</p>
-                    </div>
+                <div class="section-block">
+                  <div class="section-block-head">
+                    <h3>Fach auswaehlen</h3>
                     <div class="button-row">
                       <a class="btn small secondary" href="/student/grades.csv">CSV Export</a>
                       <a class="btn small secondary" href="/student/grades.pdf">PDF Export</a>
                     </div>
                   </div>
-                  <div id="grade-subject-overview" class="grade-subject-grid" aria-live="polite"></div>
+                  <div id="grade-subject-overview" class="subject-list" aria-live="polite"></div>
                 </div>
               <% } else { %>
-                <div class="card">
-                  <div class="dataset-head grades-header">
+                <div class="section-block">
+                  <div class="section-block-head">
                     <div>
                       <div class="grade-back-link-row">
                         <a class="btn small secondary" href="/student/grades">Zur Faecheruebersicht</a>
                       </div>
                       <h3><%= selectedGradeSubject %></h3>
-                      <p class="dataset-copy">Beurteilungsprotokoll und aktueller Stand fuer dieses Fach.</p>
                     </div>
                     <div class="button-row">
                       <a class="btn small secondary" href="/student/grades.csv">CSV Export</a>
@@ -280,33 +244,14 @@
                     </label>
                   </form>
 
-                  <div class="dataset-head grade-protocol-head">
-                    <div>
-                      <h3 id="grade-protocol-title">Beurteilungsprotokoll</h3>
-                      <p class="dataset-copy" id="grade-protocol-copy">Alle sichtbaren Eintraege nach deinen Filtern.</p>
-                    </div>
+                  <div class="grade-stats-strip" id="grade-insights">
+                    <div class="stat-inline"><span class="stat-inline-label">Fachdurchschnitt</span><strong class="stat-inline-value" id="avg-overall">-</strong></div>
+                    <div class="stat-inline"><span class="stat-inline-label">Trend</span><span class="stat-inline-value" id="avg-trend">-</span></div>
+                    <div class="stat-inline"><span class="stat-inline-label">Aktualisierung</span><span class="stat-inline-value" id="avg-updated">-</span></div>
+                    <div class="stat-inline"><span class="stat-inline-label">Eintraege</span><strong class="stat-inline-value" id="grade-count">-</strong></div>
                   </div>
 
-                  <div class="info-grid" id="grade-insights">
-                    <div class="stat-tile">
-                      <h4>Fachdurchschnitt</h4>
-                      <strong id="avg-overall">-</strong>
-                    </div>
-                    <div class="stat-tile">
-                      <h4>Trend</h4>
-                      <div id="avg-trend" class="badge-inline">-</div>
-                    </div>
-                    <div class="stat-tile">
-                      <h4>Letzte Aktualisierung</h4>
-                      <small id="avg-updated">-</small>
-                    </div>
-                    <div class="stat-tile">
-                      <h4>Sichtbare Eintraege</h4>
-                      <strong id="grade-count">-</strong>
-                    </div>
-                  </div>
-
-                  <div id="grade-list" aria-live="polite" class="dataset-block"></div>
+                  <div id="grade-list" aria-live="polite" class="grade-list-flat"></div>
                 </div>
               <% } %>
             </section>

@@ -194,13 +194,12 @@ header.dashboard-hero {
   color: var(--primary-contrast);
   font-weight: 700;
   text-decoration: none;
-  transition: background 0.15s ease, border-color 0.15s ease, transform 0.15s ease;
+  transition: background 0.15s ease, border-color 0.15s ease;
 }
 
 .logout-form .logout-button:hover,
 .page-student .btn:hover {
   background: var(--primary-hover);
-  transform: translateY(-1px);
 }
 
 .page-student .btn.secondary {
@@ -358,17 +357,6 @@ header.dashboard-hero {
   text-align: left;
   text-decoration: none;
   cursor: pointer;
-  transition:
-    border-color 0.16s ease,
-    background 0.16s ease,
-    box-shadow 0.16s ease,
-    transform 0.16s ease;
-}
-
-.grade-subject-card:hover {
-  border-color: var(--student-accent);
-  background: var(--student-surface);
-  transform: translateY(-1px);
 }
 
 .grade-subject-card:focus-visible {
@@ -379,7 +367,6 @@ header.dashboard-hero {
 .grade-subject-card.is-active {
   border-color: var(--student-accent);
   background: var(--student-surface);
-  box-shadow: 0 0 0 3px var(--student-accent-soft);
 }
 
 .grade-subject-card-head {
@@ -964,6 +951,188 @@ header.dashboard-hero {
   padding: 10px 2px;
 }
 
+/* --- Redesigned sections: stats strips, section blocks, subject list, flat grade list --- */
+
+.overview-stats-strip,
+.grade-stats-strip {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0;
+  padding: 12px 16px;
+  border: 1px solid var(--student-border);
+  border-radius: 14px;
+  background: var(--student-surface);
+}
+
+.stat-inline {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 16px 6px 0;
+  border-right: 1px solid var(--student-border);
+}
+
+.stat-inline:last-child {
+  border-right: none;
+  padding-right: 0;
+}
+
+.stat-inline-label {
+  font-size: 0.82rem;
+  color: var(--student-muted);
+  white-space: nowrap;
+}
+
+.stat-inline-value {
+  font-size: 1rem;
+  font-weight: 800;
+  white-space: nowrap;
+}
+
+.section-block {
+  padding: 18px 0 0;
+}
+
+.section-block-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 12px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid var(--student-border);
+}
+
+.section-block-head h3 {
+  margin: 0;
+  font-size: 1rem;
+}
+
+.section-block .overview-list {
+  gap: 0;
+}
+
+.section-block .overview-row {
+  border: none;
+  border-radius: 0;
+  background: none;
+  border-bottom: 1px solid var(--student-border);
+}
+
+.section-block .overview-row:last-child {
+  border-bottom: none;
+}
+
+/* Subject list (grades overview) */
+
+.subject-list {
+  display: grid;
+  gap: 0;
+}
+
+.subject-list-header,
+.subject-list-row {
+  display: grid;
+  grid-template-columns: minmax(120px, 1.5fr) 110px 90px 120px;
+  gap: 12px;
+  align-items: center;
+  padding: 10px 4px;
+  border-bottom: 1px solid var(--student-border);
+}
+
+.subject-list-header {
+  font-size: 0.78rem;
+  font-weight: 700;
+  color: var(--student-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.subject-list-row {
+  color: var(--student-text);
+  text-decoration: none;
+}
+
+.subject-list-row:last-child {
+  border-bottom: none;
+}
+
+.subject-list-avg {
+  font-weight: 800;
+  font-size: 1.05rem;
+}
+
+.subject-list-avg.success {
+  color: var(--student-success-text);
+}
+
+.subject-list-avg.warning {
+  color: var(--student-warning-text);
+}
+
+.subject-list-avg.danger {
+  color: var(--student-danger-text);
+}
+
+.subject-list-count,
+.subject-list-date {
+  font-size: 0.86rem;
+  color: var(--student-muted);
+}
+
+/* Flat grade list (grade detail) */
+
+.grade-list-flat {
+  display: grid;
+  gap: 0;
+}
+
+.grade-list-flat .dataset-row {
+  border: none;
+  border-radius: 0;
+  border-bottom: 1px solid var(--student-border);
+  background: none;
+  padding: 14px 4px;
+}
+
+.grade-list-flat .dataset-row:last-child {
+  border-bottom: none;
+}
+
+.grade-list-flat .grade-value {
+  font-size: 1.35rem;
+}
+
+.grade-list-flat .grade-side {
+  min-width: 120px;
+}
+
+.grade-list-flat .row-badges {
+  gap: 6px;
+}
+
+.grade-list-flat .grade-pill {
+  min-height: 26px;
+  font-size: 0.76rem;
+}
+
+/* Compact subject detail */
+
+.grade-subject-detail-compact {
+  margin-bottom: 18px;
+  padding: 14px 16px;
+  border: 1px solid var(--student-border);
+  border-radius: 14px;
+  background: var(--student-surface);
+}
+
+.grade-subject-detail-head-compact {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 12px;
+}
+
 @media (max-width: 1100px) {
   .page-student .app-shell {
     grid-template-columns: 1fr;
@@ -993,6 +1162,11 @@ header.dashboard-hero {
 
   .dashboard-identity-meta {
     justify-content: flex-start;
+  }
+
+  .subject-list-header,
+  .subject-list-row {
+    grid-template-columns: minmax(80px, 1.5fr) 90px 70px 100px;
   }
 }
 
@@ -1029,6 +1203,36 @@ header.dashboard-hero {
   .grade-subject-grid,
   .grade-subject-detail-grid {
     grid-template-columns: 1fr;
+  }
+
+  .overview-stats-strip,
+  .grade-stats-strip {
+    flex-direction: column;
+    gap: 0;
+  }
+
+  .stat-inline {
+    border-right: none;
+    padding: 6px 0;
+    border-bottom: 1px solid var(--student-border);
+  }
+
+  .stat-inline:last-child {
+    border-bottom: none;
+  }
+
+  .subject-list-header,
+  .subject-list-row {
+    grid-template-columns: minmax(80px, 1fr) 80px;
+  }
+
+  .subject-list-count,
+  .subject-list-date {
+    display: none;
+  }
+
+  .grade-list-flat .dataset-row {
+    padding: 12px 0;
   }
 
   .chart-bar {

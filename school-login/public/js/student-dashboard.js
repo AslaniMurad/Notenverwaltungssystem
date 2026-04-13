@@ -418,29 +418,24 @@
       return;
     }
 
-    container.innerHTML = items
+    container.innerHTML = `
+      <div class="subject-list-header">
+        <span>Fach</span>
+        <span>Durchschnitt</span>
+        <span>Eintraege</span>
+        <span>Letztes Update</span>
+      </div>
+    ` + items
       .map((item) => {
         const avgText = item.average == null ? "-" : Number(item.average).toFixed(2);
-        const classAvgText =
-          item.classAverage == null ? "Kein Vergleich" : `Klasse ${Number(item.classAverage).toFixed(2)}`;
         const latestText = item.latestAt ? formatDate(item.latestAt) : "-";
         const subjectUrl = `/student/grades?subject=${encodeURIComponent(item.subject)}`;
         return `
-          <a
-            class="grade-subject-card"
-            href="${subjectUrl}"
-          >
-            <div class="grade-subject-card-head">
-              ${buildSubjectBadge(item.subject)}
-              <span class="grade-subject-card-count">${item.count} Eintrag${item.count === 1 ? "" : "e"}</span>
-            </div>
-            <div class="grade-subject-card-value">${avgText}</div>
-            <div class="grade-subject-card-copy">${escapeHtml(item.standingLabel)}</div>
-            <div class="grade-subject-card-meta">
-              <span>Letzte Note: ${item.latestValue == null ? "-" : formatGradeValue(item.latestValue)}</span>
-              <span>Letztes Update: ${latestText}</span>
-              <span>${escapeHtml(classAvgText)}</span>
-            </div>
+          <a class="subject-list-row" href="${subjectUrl}">
+            <span>${escapeHtml(item.subject)}</span>
+            <span class="subject-list-avg ${gradeColor(item.average)}">${avgText}</span>
+            <span class="subject-list-count">${item.count}</span>
+            <span class="subject-list-date">${latestText}</span>
           </a>
         `;
       })
@@ -475,33 +470,16 @@
     const standing = getSubjectStandingLabel(averages.overall);
 
     container.innerHTML = `
-      <div class="grade-subject-detail-shell">
-        <div class="grade-subject-detail-head">
+      <div class="grade-subject-detail-compact">
+        <div class="grade-subject-detail-head-compact">
           ${buildSubjectBadge(selectedSubject)}
-          <div>
-            <strong>${escapeHtml(standing)}</strong>
-            <p>Aktueller Stand basierend auf allen sichtbaren Bewertungen in diesem Fach.</p>
-          </div>
+          <strong>${escapeHtml(standing)}</strong>
         </div>
-        <div class="grade-subject-detail-grid">
-          <div class="stat-tile">
-            <h4>Fachdurchschnitt</h4>
-            <strong>${averages.overall == null ? "-" : Number(averages.overall).toFixed(2)}</strong>
-          </div>
-          <div class="stat-tile">
-            <h4>Eintraege</h4>
-            <strong>${subjectGrades.length}</strong>
-          </div>
-          <div class="stat-tile">
-            <h4>Letzte Bewertung</h4>
-            <strong>${latest?.value == null ? "-" : formatGradeValue(latest.value)}</strong>
-            <small>${latest?.title ? escapeHtml(latest.title) : "-"}</small>
-          </div>
-          <div class="stat-tile">
-            <h4>Klassenvergleich</h4>
-            <strong>${classAverage == null ? "-" : Number(classAverage).toFixed(2)}</strong>
-            <small>${delta == null ? "Kein Vergleich verfuegbar" : delta <= 0 ? `${Math.abs(delta).toFixed(2)} besser/gleich als Klasse` : `${delta.toFixed(2)} ueber Klassenschnitt`}</small>
-          </div>
+        <div class="overview-stats-strip">
+          <div class="stat-inline"><span class="stat-inline-label">Fachdurchschnitt</span><strong class="stat-inline-value">${averages.overall == null ? "-" : Number(averages.overall).toFixed(2)}</strong></div>
+          <div class="stat-inline"><span class="stat-inline-label">Eintraege</span><strong class="stat-inline-value">${subjectGrades.length}</strong></div>
+          <div class="stat-inline"><span class="stat-inline-label">Letzte Bewertung</span><strong class="stat-inline-value">${latest?.value == null ? "-" : formatGradeValue(latest.value)}</strong></div>
+          <div class="stat-inline"><span class="stat-inline-label">Klassenvergleich</span><strong class="stat-inline-value">${classAverage == null ? "-" : Number(classAverage).toFixed(2)}</strong></div>
         </div>
       </div>
     `;
@@ -648,12 +626,9 @@
             </div>
             <div class="row-side grade-side">
               <div class="grade-value">${grade.is_absent ? "n.a." : gradeText}</div>
-              <div class="row-badges">
-                <span class="grade-pill ${gradeColor(grade.value)}">${
-                  grade.is_absent ? "Abwesend" : `Note ${gradeText}`
-                }</span>
-                <span class="grade-pill">${weightText}</span>
-              </div>
+              <span class="grade-pill ${gradeColor(grade.value)}">${
+                grade.is_absent ? "Abwesend" : `Note ${gradeText}`
+              }</span>
             </div>
           </article>
         `;
@@ -671,7 +646,7 @@
       const icon =
         trend.direction === "improving" ? "+" : trend.direction === "declining" ? "-" : "=";
       trendEl.textContent = `${icon} ${trend.change ?? 0}`;
-      trendEl.className = `badge-inline trend-badge ${trend.direction || "steady"}`;
+      trendEl.className = `stat-inline-value trend-badge ${trend.direction || "steady"}`;
     }
 
     if (!state.grades.length) {
