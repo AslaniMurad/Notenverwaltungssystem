@@ -309,7 +309,7 @@ test("student and teacher can complete the full grade message workflow", async (
 
   const teacherCsrf = await fetchCsrfToken("/teacher/test-questions/1", teacherLogin.cookies);
   const messageId = studentThread.messages[0].id;
-  const replyText = "Teilaufgabe 3 war unvollstaendig, deshalb wurden Punkte abgezogen.";
+  const replyText = "Teilaufgabe 3 war unvollständig, deshalb wurden Punkte abgezogen.";
   const replyParams = new URLSearchParams({
     _csrf: teacherCsrf,
     reply: replyText
@@ -467,7 +467,7 @@ test("admin archive renders the optimized overview and exports CSV", async () =>
 
   const archivePage = await fetchWithCookies("/archive", {}, loginResult.cookies);
   assert.strictEqual(archivePage.response.status, 200);
-  assert.match(archivePage.body, /Historische Schuljahre fuer viel Datenvolumen aufbereitet/);
+  assert.match(archivePage.body, /Historische Schuljahre für viel Datenvolumen aufbereitet/);
   assert.match(archivePage.body, /CSV Noten/);
 
   const csvResponse = await fetchWithCookies(
@@ -478,7 +478,7 @@ test("admin archive renders the optimized overview and exports CSV", async () =>
   assert.strictEqual(csvResponse.response.status, 200);
   assert.match(csvResponse.response.headers.get("content-type") || "", /text\/csv/);
   assert.match(csvResponse.response.headers.get("content-disposition") || "", /archiv-.*-noten\.csv/);
-  assert.match(csvResponse.body, /"Schueler"/);
+  assert.match(csvResponse.body, /"Schüler"/);
   assert.match(csvResponse.body, /"Kommentar"/);
 });
 

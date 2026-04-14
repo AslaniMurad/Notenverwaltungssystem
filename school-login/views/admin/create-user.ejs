@@ -48,7 +48,7 @@
                 <div class="admin-panel-head">
                   <div>
                     <h3>Einzelnen Nutzer anlegen</h3>
-                    <p class="admin-muted">Fuer einzelne Korrekturen, Admin-Konten oder neue Eintritte.</p>
+                    <p class="admin-muted">Für einzelne Korrekturen, Admin-Konten oder neue Eintritte.</p>
                   </div>
                 </div>
 
@@ -64,7 +64,7 @@
                     <label class="admin-field">
                       <span>Rolle</span>
                       <select name="role">
-                        <option value="student" <%= (singleValues.role || 'student') === 'student' ? 'selected' : '' %>>Schueler</option>
+                        <option value="student" <%= (singleValues.role || 'student') === 'student' ? 'selected' : '' %>>Schüler</option>
                         <option value="teacher" <%= singleValues.role === 'teacher' ? 'selected' : '' %>>Lehrer</option>
                         <option value="admin" <%= singleValues.role === 'admin' ? 'selected' : '' %>>Admin</option>
                       </select>
@@ -93,7 +93,7 @@
                 <div class="admin-panel-head">
                   <div>
                     <h3>Bulk-Anlage</h3>
-                    <p class="admin-muted">Eine E-Mail pro Zeile. Rolle und Passwortregel gelten fuer alle Eintraege.</p>
+                    <p class="admin-muted">Eine E-Mail pro Zeile. Rolle und Passwortregel gelten für alle Einträge.</p>
                   </div>
                 </div>
 
@@ -143,7 +143,7 @@
                     <label class="admin-field">
                       <span>Rolle</span>
                       <select name="bulkRole">
-                        <option value="student" <%= (bulkValues.bulkRole || 'student') === 'student' ? 'selected' : '' %>>Schueler</option>
+                        <option value="student" <%= (bulkValues.bulkRole || 'student') === 'student' ? 'selected' : '' %>>Schüler</option>
                         <option value="teacher" <%= bulkValues.bulkRole === 'teacher' ? 'selected' : '' %>>Lehrer</option>
                         <option value="admin" <%= bulkValues.bulkRole === 'admin' ? 'selected' : '' %>>Admin</option>
                       </select>
@@ -151,7 +151,7 @@
 
                     <label class="admin-field">
                       <span>Gemeinsames Passwort</span>
-                      <input name="bulkPassword" type="password" placeholder="Ein Passwort fuer alle">
+                      <input name="bulkPassword" type="password" placeholder="Ein Passwort für alle">
                     </label>
                   </div>
 
@@ -189,7 +189,7 @@
                           <% }) %>
                         </ul>
                       <% } else { %>
-                        <p class="admin-muted">Keine fehlgeschlagenen Eintraege.</p>
+                        <p class="admin-muted">Keine fehlgeschlagenen Einträge.</p>
                       <% } %>
                     </div>
                   </div>

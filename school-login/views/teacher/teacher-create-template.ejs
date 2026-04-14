@@ -1,6 +1,6 @@
 ﻿<%
   const page = {
-    title: 'Lehrer - PrÃ¼fung erstellen',
+    title: 'Lehrer - Prüfung erstellen',
     headerTitle: 'Lehrerbereich',
     styles: ['/css/teacher-pages.css'],
     scripts: ['/js/app.js'],
@@ -18,16 +18,16 @@
 
         <div class="app-nav">
           <div class="nav-section">
-            <div class="nav-section-title">MenÃ¼</div>
+            <div class="nav-section-title">Menü</div>
             <a href="/teacher/classes">Fächer</a>
             <a href="/teacher/create-class">Fach erstellen</a>
             <a href="/teacher/settings">Einstellungen</a>
             <div class="nav-section-title">Klasse: <%= classData.name %> / <%= classData.subject %></div>
-            <a href="/teacher/students/<%= classData.id %>">Schueler</a>
+            <a href="/teacher/students/<%= classData.id %>">Schüler</a>
             <a class="<%= (typeof openMessageCount !== 'undefined' && openMessageCount > 0) ? 'is-alert' : '' %>" href="/teacher/test-questions/<%= classData.id %>">Fragen zu Tests<% if (typeof openMessageCount !== 'undefined' && openMessageCount > 0) { %><span class="nav-notification-badge"><%= openMessageCount %></span><% } %></a>
             <a href="/teacher/grades/<%= classData.id %>">Noten</a>
             <a href="/teacher/special-assessments/<%= classData.id %>">Sonderleistungen</a>
-            <a class="is-active" href="/teacher/grade-templates/<%= classData.id %>">PrÃ¼fungen</a>
+            <a class="is-active" href="/teacher/grade-templates/<%= classData.id %>">Prüfungen</a>
             <a href="/teacher/class-statistics/<%= classData.id %>">Statistiken</a>
             <form class="logout-form" method="POST" action="/logout">
               <input type="hidden" name="_csrf" value="<%= csrfToken %>">
@@ -40,9 +40,9 @@
       <section class="teacher-main">
         <header class="teacher-main-header">
           <div>
-            <p class="teacher-eyebrow">PrÃ¼fung anlegen</p>
+            <p class="teacher-eyebrow">Prüfung anlegen</p>
             <h1>Klasse <%= classData.name %></h1>
-            <p class="teacher-muted">Profil: <strong><%= activeProfile.name %></strong> Â· Modus: Punkte</p>
+            <p class="teacher-muted">Profil: <strong><%= activeProfile.name %></strong> · Modus: Punkte</p>
           </div>
           <div class="teacher-actions-inline">
             <a class="btn btn-secondary" href="/teacher/grade-templates/<%= classData.id %>">Abbrechen</a>
@@ -52,7 +52,7 @@
         <div class="teacher-card">
           <div class="teacher-card-header">
             <div>
-              <p class="teacher-eyebrow">Neue PrÃ¼fungsvorlage</p>
+              <p class="teacher-eyebrow">Neue Prüfungsvorlage</p>
               <h3>Gewichtung wird in Punkten festgelegt</h3>
             </div>
           </div>
@@ -62,13 +62,13 @@
           <% } %>
 
           <div class="teacher-alert info">
-            Du kannst den vorgeschlagenen Punktewert aus dem Profil Ã¼bernehmen oder manuell anpassen.
+            Du kannst den vorgeschlagenen Punktewert aus dem Profil übernehmen oder manuell anpassen.
           </div>
 
           <form class="teacher-form" method="POST" action="/teacher/create-template/<%= classData.id %>">
             <input type="hidden" name="_csrf" value="<%= csrfToken %>">
 
-            <label for="name">Name der PrÃ¼fung *</label>
+            <label for="name">Name der Prüfung *</label>
             <input
               type="text"
               id="name"
@@ -80,7 +80,7 @@
 
             <label for="category">Kategorie *</label>
             <select id="category" name="category" required>
-              <option value="">-- Kategorie wÃ¤hlen --</option>
+              <option value="">-- Kategorie wählen --</option>
               <% categoryDefinitions.forEach(category => { %>
                 <option
                   value="<%= category.key %>"
@@ -101,7 +101,7 @@
               >
               Gespeicherte Einstellungen aus dem aktiven Profil verwenden
             </label>
-            <small class="form-hint" id="profile-settings-hint">Wenn aktiv, werden Gewichtung und weitere Profilwerte automatisch uebernommen und gesperrt.</small>
+            <small class="form-hint" id="profile-settings-hint">Wenn aktiv, werden Gewichtung und weitere Profilwerte automatisch übernommen und gesperrt.</small>
 
             <label for="weight">Gewichtung (<span id="weight-unit-label"><%= unitLabel %></span>) *</label>
             <input
@@ -111,7 +111,7 @@
               min="0"
               step="0.5"
               data-manual-required="0"
-              placeholder="Wert leer lassen fÃ¼r Profil-Vorschlag"
+              placeholder="Wert leer lassen für Profil-Vorschlag"
               value="<%= formData && formData.weight !== '' ? formData.weight : '' %>"
               <%= useProfileSettings ? 'disabled' : '' %>
             >
@@ -142,8 +142,8 @@
             ><%= formData && formData.description ? formData.description : '' %></textarea>
 
             <div class="teacher-form-actions">
-              <button class="btn btn-primary" type="submit">PrÃ¼fung anlegen</button>
-              <a class="btn btn-secondary" href="/teacher/grade-templates/<%= classData.id %>">ZurÃ¼ck</a>
+              <button class="btn btn-primary" type="submit">Prüfung anlegen</button>
+              <a class="btn btn-secondary" href="/teacher/grade-templates/<%= classData.id %>">Zurück</a>
             </div>
           </form>
         </div>
@@ -195,13 +195,13 @@
 
           if (profileSettingsHint) {
             profileSettingsHint.textContent = useProfileSettings
-              ? 'Aktives Profil ist eingeschaltet: Gewichtung wird automatisch gesetzt und Maximalpunkte sind schreibgeschuetzt.'
-              : 'Wenn aktiv, werden Gewichtung und weitere Profilwerte automatisch uebernommen und gesperrt.';
+              ? 'Aktives Profil ist eingeschaltet: Gewichtung wird automatisch gesetzt und Maximalpunkte sind schreibgeschützt.'
+              : 'Wenn aktiv, werden Gewichtung und weitere Profilwerte automatisch übernommen und gesperrt.';
           }
 
           if (maxPointsHint) {
             maxPointsHint.textContent = useProfileSettings
-              ? 'Maximalpunkte koennen bei aktiven Profileinstellungen nicht manuell geaendert werden.'
+              ? 'Maximalpunkte können bei aktiven Profileinstellungen nicht manuell geändert werden.'
               : 'Wenn gesetzt, wird bei der Benotung nur noch "Erreichte Punkte" abgefragt.';
           }
         }
@@ -216,8 +216,8 @@
           if (!selectedCategory) {
             if (weightHint) {
               weightHint.textContent = useProfileSettings
-                ? 'Waehle zuerst eine Kategorie, damit das Profil die Gewichtung setzen kann.'
-                : 'WÃ¤hle zuerst eine Kategorie.';
+                ? 'Wähle zuerst eine Kategorie, damit das Profil die Gewichtung setzen kann.'
+                : 'Wähle zuerst eine Kategorie.';
             }
             syncManagedFieldState(null);
             return;
@@ -233,7 +233,7 @@
               weightInput.value = formatWeight(suggestion);
             }
           } else if (weightHint) {
-            weightHint.textContent = 'Keine Profil-Gewichtung fÃ¼r diese Kategorie gefunden.';
+            weightHint.textContent = 'Keine Profil-Gewichtung für diese Kategorie gefunden.';
           }
           syncManagedFieldState(suggestion);
         }

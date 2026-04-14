@@ -115,7 +115,7 @@
 
     lastFocusedElement = document.activeElement instanceof HTMLElement ? document.activeElement : null;
 
-    instance.title.textContent = options.title || "Bestaetigung";
+    instance.title.textContent = options.title || "Bestätigung";
     instance.message.textContent = options.message || "";
 
     if (options.note) {
@@ -169,8 +169,8 @@
   window.AppModal = {
     confirm: function (options) {
       return open(Object.assign({
-        title: "Bestaetigung",
-        confirmText: "Bestaetigen",
+        title: "Bestätigung",
+        confirmText: "Bestätigen",
         cancelText: "Abbrechen",
         intent: "danger",
         hideCancel: false
@@ -200,10 +200,10 @@
     event.preventDefault();
 
     window.AppModal.confirm({
-      title: form.dataset.confirmTitle || "Bestaetigung",
+      title: form.dataset.confirmTitle || "Bestätigung",
       message: form.dataset.confirmMessage,
       note: form.dataset.confirmNote || "",
-      confirmText: form.dataset.confirmAction || "Bestaetigen",
+      confirmText: form.dataset.confirmAction || "Bestätigen",
       cancelText: form.dataset.confirmCancel || "Abbrechen",
       intent: form.dataset.confirmVariant === "primary" ? "primary" : "danger"
     }).then(function (confirmed) {

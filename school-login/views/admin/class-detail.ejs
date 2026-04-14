@@ -22,10 +22,10 @@
             </p>
           </div>
           <div class="admin-actions-row">
-            <a class="btn btn-primary" href="/admin/classes/<%= classData.id %>/students">Schueler</a>
+            <a class="btn btn-primary" href="/admin/classes/<%= classData.id %>/students">Schüler</a>
             <a class="btn btn-secondary" href="/admin/assignments/new?class=<%= classData.id %>&create_subject=1">Fach erstellen</a>
             <a class="btn btn-secondary" href="/admin/classes/<%= classData.id %>/edit">Bearbeiten</a>
-            <a class="btn" href="/admin/classes">Zurueck</a>
+            <a class="btn" href="/admin/classes">Zurück</a>
           </div>
         </div>
 
@@ -35,11 +35,11 @@
             <strong><%= stats.teacher_count %></strong>
           </div>
           <div class="admin-stat-card">
-            <p class="admin-eyebrow">Schueler</p>
+            <p class="admin-eyebrow">Schüler</p>
             <strong><%= stats.student_count %></strong>
           </div>
           <div class="admin-stat-card">
-            <p class="admin-eyebrow">Faecher</p>
+            <p class="admin-eyebrow">Fächer</p>
             <strong><%= stats.subject_count %></strong>
           </div>
         </div>
@@ -49,12 +49,12 @@
             <div class="admin-topbar">
               <div>
                 <p class="admin-eyebrow">Lehrer</p>
-                <h3>Lehreruebersicht</h3>
+                <h3>Lehrerübersicht</h3>
               </div>
-              <span class="admin-badge"><%= teacherRows.length %> Eintraege</span>
+              <span class="admin-badge"><%= teacherRows.length %> Einträge</span>
             </div>
             <% if (!teacherRows.length) { %>
-              <div class="admin-empty">Noch keine Lehrer ueber Faecher zugeordnet.</div>
+              <div class="admin-empty">Noch keine Lehrer über Fächer zugeordnet.</div>
             <% } else { %>
               <div class="admin-table-wrap">
                 <table class="admin-table">
@@ -62,7 +62,7 @@
                     <tr>
                       <th>Name</th>
                       <th>E-Mail</th>
-                      <th>Faecher</th>
+                      <th>Fächer</th>
                       <th>Anzahl</th>
                     </tr>
                   </thead>
@@ -89,13 +89,13 @@
           <div class="admin-card">
             <div class="admin-topbar">
               <div>
-                <p class="admin-eyebrow">Schueler</p>
-                <h3>Schuelerliste</h3>
+                <p class="admin-eyebrow">Schüler</p>
+                <h3>Schülerliste</h3>
               </div>
-              <span class="admin-badge"><%= students.length %> Eintraege</span>
+              <span class="admin-badge"><%= students.length %> Einträge</span>
             </div>
             <% if (!students.length) { %>
-              <div class="admin-empty">Noch keine Schueler in dieser Klasse.</div>
+              <div class="admin-empty">Noch keine Schüler in dieser Klasse.</div>
             <% } else { %>
               <div class="admin-table-wrap">
                 <table class="admin-table">
@@ -121,13 +121,13 @@
           <div class="admin-card">
             <div class="admin-topbar">
               <div>
-                <p class="admin-eyebrow">Faecher</p>
-                <h3>Fachuebersicht</h3>
+                <p class="admin-eyebrow">Fächer</p>
+                <h3>Fachübersicht</h3>
               </div>
-              <span class="admin-badge"><%= subjectRows.length %> Eintraege</span>
+              <span class="admin-badge"><%= subjectRows.length %> Einträge</span>
             </div>
             <% if (!subjectRows.length) { %>
-              <div class="admin-empty">Noch keine Faecher zugeordnet.</div>
+              <div class="admin-empty">Noch keine Fächer zugeordnet.</div>
             <% } else { %>
               <div class="admin-table-wrap">
                 <table class="admin-table">

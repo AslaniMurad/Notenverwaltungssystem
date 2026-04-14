@@ -118,7 +118,7 @@ const archiveCsvConfigs = {
     columns: [
       { header: "ID", key: "id" },
       { header: "Archivtyp", key: "archive_type" },
-      { header: "Anzahl Eintraege", key: "entity_count" },
+      { header: "Anzahl Einträge", key: "entity_count" },
       { header: "Erstellt am", key: "created_at" }
     ]
   },
@@ -128,7 +128,7 @@ const archiveCsvConfigs = {
     columns: [
       { header: "Klasse", key: "class_name" },
       { header: "Fach", key: "subject_name" },
-      { header: "Lehrkraefte", key: "teacher_names" }
+      { header: "Lehrkräfte", key: "teacher_names" }
     ]
   },
   classes: {
@@ -148,7 +148,7 @@ const archiveCsvConfigs = {
     columns: [
       { header: "ID", key: "id" },
       { header: "Klasse", key: "class_name" },
-      { header: "Schueler", key: "student_name" },
+      { header: "Schüler", key: "student_name" },
       { header: "Fach", key: "subject" },
       { header: "Note", key: "grade" },
       { header: "Kommentar", value: (row) => row.note || "" },
@@ -219,7 +219,7 @@ async function downloadArchiveCsv(req, res, next) {
 
     if (!selectedSchoolYear) {
       return res.status(404).render("error", {
-        message: "Kein Schuljahr fuer den Export verfuegbar.",
+        message: "Kein Schuljahr für den Export verfügbar.",
         status: 404,
         backUrl: "/archive"
       });

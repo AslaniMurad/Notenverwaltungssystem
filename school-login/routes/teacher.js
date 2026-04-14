@@ -210,12 +210,12 @@ function validateThresholds(thresholds) {
   const t = normalizeThresholds(thresholds);
   const values = [t.grade1_min_percent, t.grade2_min_percent, t.grade3_min_percent, t.grade4_min_percent];
   if (values.some((value) => !Number.isFinite(value) || value < 0 || value > 100)) {
-    return "Grenzen muessen zwischen 0 und 100 liegen.";
+    return "Grenzen müssen zwischen 0 und 100 liegen.";
   }
   if (!(t.grade1_min_percent > t.grade2_min_percent &&
         t.grade2_min_percent > t.grade3_min_percent &&
         t.grade3_min_percent > t.grade4_min_percent)) {
-    return "Grenzen muessen streng fallend sein (1er > 2er > 3er > 4er).";
+    return "Grenzen müssen streng fallend sein (1er > 2er > 3er > 4er).";
   }
   return null;
 }
@@ -682,9 +682,9 @@ function isExcludedStudent(student) {
 }
 
 function buildExcludedStudentMessage(student, classData) {
-  const studentName = String(student?.name || "Der Schueler");
+  const studentName = String(student?.name || "Der Schüler");
   const subjectName = String(classData?.subject || "diesem Fach");
-  return `${studentName} ist im Fach ${subjectName} ausgeschlossen. Bestehende Eintraege bleiben nur historisch sichtbar und werden nicht gewertet.`;
+  return `${studentName} ist im Fach ${subjectName} ausgeschlossen. Bestehende Einträge bleiben nur historisch sichtbar und werden nicht gewertet.`;
 }
 
 async function renderAddGradeForm(req, res, payload) {
@@ -953,7 +953,7 @@ async function requireClassAccessForTeacher(req, res, classId, backUrl = "/teach
     ? await teacherCanAccessClassSubject(req.session.user.id, classId, requestedSubjectId)
     : await teacherCanAccessClass(req.session.user.id, classId);
   if (!canAccess) {
-    renderError(res, req, "Keine Berechtigung fuer diese Klasse/Fach-Zuordnung.", 403, backUrl);
+    renderError(res, req, "Keine Berechtigung für diese Klasse/Fach-Zuordnung.", 403, backUrl);
     return null;
   }
 
@@ -963,7 +963,7 @@ async function requireClassAccessForTeacher(req, res, classId, backUrl = "/teach
     hasSubjectConstraint ? requestedSubjectId : null
   );
   if (!classData) {
-    renderError(res, req, "Keine Berechtigung fuer diese Klasse/Fach-Zuordnung.", 403, backUrl);
+    renderError(res, req, "Keine Berechtigung für diese Klasse/Fach-Zuordnung.", 403, backUrl);
     return null;
   }
   req.session.teacherSubjectSelections = {
@@ -1623,7 +1623,7 @@ router.post("/create-class", async (req, res, next) => {
         status: 400,
         classes,
         formData,
-        error: "Ungueltige Klasse."
+        error: "Ungültige Klasse."
       });
     }
 
@@ -1723,7 +1723,7 @@ router.post("/delete-class/:id", async (req, res, next) => {
     const classId = Number(req.params.id);
     const subjectId = Number(req.body?.subject_id || req.query?.subject_id);
     if (!Number.isFinite(classId) || !Number.isFinite(subjectId)) {
-      return renderError(res, req, "Ungueltige Fachzuordnung.", 400, "/teacher/classes");
+      return renderError(res, req, "Ungültige Fachzuordnung.", 400, "/teacher/classes");
     }
 
     const assignments = await getTeacherAssignments(req.session.user.id);
@@ -2229,7 +2229,7 @@ router.post("/students/:classId/messages/:messageId/reply", async (req, res, nex
       return renderError(res, req, "Nachricht nicht gefunden.", 404, `/teacher/test-questions/${classId}`);
     }
     if (messageRow.student_hidden_at) {
-      return renderError(res, req, "Ticket wurde vom Schueler geschlossen.", 400, `/teacher/test-questions/${classId}`);
+      return renderError(res, req, "Ticket wurde vom Schüler geschlossen.", 400, `/teacher/test-questions/${classId}`);
     }
 
     const reply = String(req.body?.reply || "").trim();
@@ -2310,7 +2310,7 @@ router.post("/add-student/:classId", async (req, res, next) => {
         email: req.session.user.email,
         classData,
         csrfToken: req.csrfToken(),
-        error: "E-Mail nicht gefunden oder nicht als SchǬler registriert."
+        error: "E-Mail nicht gefunden oder nicht als Schüler registriert."
       });
     }
 
@@ -2320,7 +2320,7 @@ router.post("/add-student/:classId", async (req, res, next) => {
         email: req.session.user.email,
         classData,
         csrfToken: req.csrfToken(),
-        error: "Dieser SchǬler ist bereits in der Klasse."
+        error: "Dieser Schüler ist bereits in der Klasse."
       });
     }
 
@@ -2357,7 +2357,7 @@ router.post("/student-exclusion/:classId/:studentId", async (req, res, next) => 
     const students = await loadStudents(classId, req.session.user.id, classData.subject_id);
     const student = students.find((entry) => Number(entry.id) === studentId);
     if (!student) {
-      return renderError(res, req, "Schueler nicht gefunden.", 404, `/teacher/students/${classId}`);
+      return renderError(res, req, "Schüler nicht gefunden.", 404, `/teacher/students/${classId}`);
     }
 
     if (action === "include") {
@@ -2549,7 +2549,7 @@ router.post("/grades/:classId/participation", async (req, res, next) => {
       return renderError(
         res,
         req,
-        "Schueler ist in diesem Fach ausgeschlossen und kann nicht bewertet werden.",
+        "Schüler ist in diesem Fach ausgeschlossen und kann nicht bewertet werden.",
         400,
         `/teacher/grades/${classId}`
       );
@@ -2853,7 +2853,7 @@ router.get("/student-grades/:classId/:studentId/details", async (req, res, next)
 
       let includeReason = "Gewichtet in Gesamtnote.";
       if (studentExcluded) {
-        includeReason = "Nicht gewichtet (Schueler im Fach ausgeschlossen).";
+        includeReason = "Nicht gewichtet (Schüler im Fach ausgeschlossen).";
       } else if (excludedFromAverage) {
         includeReason = "Nicht gewichtet (Gewichtung entfernt).";
       } else if (skippedForAbsence) {
@@ -2914,7 +2914,7 @@ router.get("/student-grades/:classId/:studentId/details", async (req, res, next)
 
       let includeReason = "Gewichtet in Gesamtnote.";
       if (studentExcluded) {
-        includeReason = "Nicht gewichtet (Schueler im Fach ausgeschlossen).";
+        includeReason = "Nicht gewichtet (Schüler im Fach ausgeschlossen).";
       } else if (!participationEnabledForAverage) {
         includeReason = "Nicht gewichtet (MA im Profil deaktiviert oder Gewichtung 0).";
       } else if (!hasValidGrade) {
@@ -3042,7 +3042,7 @@ router.get("/student-grades/:classId/:studentId/details", async (req, res, next)
         .replace(/[^a-zA-Z0-9_-]/g, "_")
         .slice(0, 80);
 
-      pushCsv(["Sektion", "Schluessel", "Wert"]);
+      pushCsv(["Sektion", "Schlüssel", "Wert"]);
       pushCsv(["Meta", "Klasse", classData.name || ""]);
       pushCsv(["Meta", "Schüler", student.name || ""]);
       pushCsv(["Meta", "Fach", classData.subject || ""]);
@@ -3339,7 +3339,7 @@ router.post("/add-grade/:classId/:studentId", handleUpload, async (req, res, nex
     if (isExcludedStudent(student)) {
       return renderValidationError(
         400,
-        "Schueler ist in diesem Fach ausgeschlossen und kann nicht bewertet werden."
+        "Schüler ist in diesem Fach ausgeschlossen und kann nicht bewertet werden."
       );
     }
 
@@ -3352,7 +3352,7 @@ router.post("/add-grade/:classId/:studentId", handleUpload, async (req, res, nex
     }
 
     if (hasPoints && (!Number.isFinite(pointsAchievedInput.value) || pointsAchievedInput.value < 0)) {
-      return renderValidationError(400, "Erreichte Punkte muessen mindestens 0 sein.");
+      return renderValidationError(400, "Erreichte Punkte müssen mindestens 0 sein.");
     }
 
     const templateRow = await getAsync(
@@ -3376,7 +3376,7 @@ router.post("/add-grade/:classId/:studentId", handleUpload, async (req, res, nex
     if (hasPoints && templateHasMaxPoints && pointsAchievedInput.value > templateMaxPointsRaw) {
       return renderValidationError(
         400,
-        `Erreichte Punkte duerfen die maximalen Punkte (${templateMaxPointsRaw}) nicht uebersteigen.`
+        `Erreichte Punkte dürfen die maximalen Punkte (${templateMaxPointsRaw}) nicht übersteigen.`
       );
     }
 
@@ -3433,7 +3433,7 @@ router.post("/add-grade/:classId/:studentId", handleUpload, async (req, res, nex
         if (!templateHasMaxPoints) {
           return renderValidationError(
             400,
-            "Fuer 'Mit 0% werten' braucht die Prüfung maximale Punkte in der Vorlage."
+            "Für 'Mit 0% werten' braucht die Prüfung maximale Punkte in der Vorlage."
           );
         }
         resolvedPointsAchieved = 0;
@@ -3654,7 +3654,7 @@ router.get("/bulk-grade-template/:classId/:templateId", async (req, res, next) =
 
     const template = await loadTemplateForClass(classId, classData.subject_id, templateId);
     if (!template) {
-      return renderError(res, req, "Pruefung nicht gefunden.", 404, `/teacher/grade-templates/${classId}`);
+      return renderError(res, req, "Prüfung nicht gefunden.", 404, `/teacher/grade-templates/${classId}`);
     }
 
     const activeProfile = await loadActiveTeacherProfile(req.session.user.id);
@@ -3689,7 +3689,7 @@ router.get("/bulk-grade-template/:classId/:templateId", async (req, res, next) =
       messageParts.push(`${duplicates} Eintrag${duplicates === 1 ? "" : "e"} waren bereits vorhanden.`);
     }
     if (Number.isFinite(invalid) && invalid > 0) {
-      messageParts.push(`${invalid} Eingabe${invalid === 1 ? "" : "n"} wurden wegen Validierungsfehlern uebersprungen.`);
+      messageParts.push(`${invalid} Eingabe${invalid === 1 ? "" : "n"} wurden wegen Validierungsfehlern übersprungen.`);
     }
     if (hasResultQuery && messageParts.length === 0) {
       messageParts.push("Keine Bewertung gespeichert.");
@@ -3719,7 +3719,7 @@ router.post("/bulk-grade-template/:classId/:templateId", async (req, res, next) 
 
     const template = await loadTemplateForClass(classId, classData.subject_id, templateId);
     if (!template) {
-      return renderError(res, req, "Pruefung nicht gefunden.", 404, `/teacher/grade-templates/${classId}`);
+      return renderError(res, req, "Prüfung nicht gefunden.", 404, `/teacher/grade-templates/${classId}`);
     }
 
     const activeProfile = await loadActiveTeacherProfile(req.session.user.id);
@@ -3747,7 +3747,7 @@ router.post("/bulk-grade-template/:classId/:templateId", async (req, res, next) 
 
     rows.forEach((row) => {
       const studentId = row.student.id;
-      const studentName = row.student.name || `Schueler ${studentId}`;
+      const studentName = row.student.name || `Schüler ${studentId}`;
       const noteText = String(row.form.note || "").trim();
       const gradeInput = parseOptionalNumber(row.form.grade);
       const pointsInput = parseOptionalNumber(row.form.points_achieved);
@@ -3758,7 +3758,7 @@ router.post("/bulk-grade-template/:classId/:templateId", async (req, res, next) 
       if (!touched) return;
 
       if (isExcludedStudent(row.student)) {
-        validationErrors.push(`${studentName}: Schueler ist in diesem Fach ausgeschlossen.`);
+        validationErrors.push(`${studentName}: Schüler ist in diesem Fach ausgeschlossen.`);
         return;
       }
 
@@ -3768,20 +3768,20 @@ router.post("/bulk-grade-template/:classId/:templateId", async (req, res, next) 
       }
 
       if (hasPoints && (!Number.isFinite(pointsInput.value) || pointsInput.value < 0)) {
-        validationErrors.push(`${studentName}: Erreichte Punkte muessen mindestens 0 sein.`);
+        validationErrors.push(`${studentName}: Erreichte Punkte müssen mindestens 0 sein.`);
         return;
       }
 
       if (hasPoints && !templateHasMaxPoints) {
         validationErrors.push(
-          `${studentName}: Diese Pruefung hat keine maximalen Punkte in der Vorlage.`
+          `${studentName}: Diese Prüfung hat keine maximalen Punkte in der Vorlage.`
         );
         return;
       }
 
       if (hasPoints && templateHasMaxPoints && pointsInput.value > templateMaxPointsRaw) {
         validationErrors.push(
-          `${studentName}: Erreichte Punkte duerfen ${templateMaxPointsRaw} nicht uebersteigen.`
+          `${studentName}: Erreichte Punkte dürfen ${templateMaxPointsRaw} nicht übersteigen.`
         );
         return;
       }
@@ -3821,7 +3821,7 @@ router.post("/bulk-grade-template/:classId/:templateId", async (req, res, next) 
         if (absenceMode === ABSENCE_MODE_INCLUDE_ZERO) {
           if (!templateHasMaxPoints) {
             validationErrors.push(
-              `${studentName}: Fuer Abwesenheit mit 0% braucht die Vorlage maximale Punkte.`
+              `${studentName}: Für Abwesenheit mit 0% braucht die Vorlage maximale Punkte.`
             );
             return;
           }
@@ -3865,7 +3865,7 @@ router.post("/bulk-grade-template/:classId/:templateId", async (req, res, next) 
         existingGradesByStudent,
         activeProfile,
         formData: req.body || {},
-        error: "Einige Eingaben sind ungueltig. Bitte pruefen.",
+        error: "Einige Eingaben sind ungültig. Bitte prüfen.",
         validationErrors
       });
     }
@@ -3888,7 +3888,7 @@ router.post("/bulk-grade-template/:classId/:templateId", async (req, res, next) 
     const classSchoolYearId = Number(classData.school_year_id);
 
     if (!Number.isFinite(classSchoolYearId)) {
-      throw new Error(`Klasse ${classId} hat kein gueltiges school_year_id.`);
+      throw new Error(`Klasse ${classId} hat kein gültiges school_year_id.`);
     }
 
     for (const row of preparedRows) {
@@ -4041,7 +4041,7 @@ router.post("/create-template/:classId", async (req, res, next) => {
         categoryDefinitions: TEMPLATE_CATEGORY_DEFINITIONS,
         formData,
         csrfToken: req.csrfToken(),
-        error: "Fuer diese Kategorie ist im aktiven Profil keine gespeicherte Gewichtung vorhanden."
+        error: "Für diese Kategorie ist im aktiven Profil keine gespeicherte Gewichtung vorhanden."
       });
     }
     if (weightValue < 0) {
@@ -4063,7 +4063,7 @@ router.post("/create-template/:classId", async (req, res, next) => {
         categoryDefinitions: TEMPLATE_CATEGORY_DEFINITIONS,
         formData,
         csrfToken: req.csrfToken(),
-        error: "Maximale Punkte muessen groesser als 0 sein."
+        error: "Maximale Punkte müssen größer als 0 sein."
       });
     }
 
@@ -4198,7 +4198,7 @@ router.post("/edit-template/:classId/:templateId", async (req, res, next) => {
         templateId,
         formData,
         csrfToken: req.csrfToken(),
-        error: "Fuer diese Kategorie ist im aktiven Profil keine gespeicherte Gewichtung vorhanden."
+        error: "Für diese Kategorie ist im aktiven Profil keine gespeicherte Gewichtung vorhanden."
       });
     }
     if (weightValue < 0) {
@@ -4222,7 +4222,7 @@ router.post("/edit-template/:classId/:templateId", async (req, res, next) => {
         templateId,
         formData,
         csrfToken: req.csrfToken(),
-        error: "Maximale Punkte muessen groesser als 0 sein."
+        error: "Maximale Punkte müssen größer als 0 sein."
       });
     }
 
@@ -4472,7 +4472,7 @@ router.post("/special-assessments/:classId", async (req, res, next) => {
           weight,
           grade
         },
-        error: "Schueler ist in diesem Fach ausgeschlossen und kann nicht bewertet werden.",
+        error: "Schüler ist in diesem Fach ausgeschlossen und kann nicht bewertet werden.",
         csrfToken: req.csrfToken()
       });
     }

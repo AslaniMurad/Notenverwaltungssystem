@@ -43,7 +43,7 @@
             <h1>Audit-Log</h1>
           </div>
           <div class="admin-audit-hero-actions">
-            <a class="btn btn-secondary" href="<%= returnTo %>">Zurueck</a>
+            <a class="btn btn-secondary" href="<%= returnTo %>">Zurück</a>
           </div>
         </div>
       </div>
@@ -52,7 +52,7 @@
         <div class="admin-topbar">
           <div>
             <p class="admin-eyebrow">Filter</p>
-            <h3>Eintraege suchen</h3>
+            <h3>Einträge suchen</h3>
           </div>
         </div>
         <% if (filterError) { %>
@@ -83,7 +83,7 @@
               <input type="text" name="route" placeholder="/teacher/add-grade" value="<%= search.route || '' %>">
             </label>
             <label class="admin-audit-filter-field">
-              <span>Entitaet</span>
+              <span>Entität</span>
               <input type="text" name="entity" placeholder="user, class, grade" value="<%= search.entity || '' %>">
             </label>
             <label class="admin-audit-filter-field">
@@ -101,7 +101,7 @@
           </div>
           <div class="admin-audit-filter-actions">
             <button class="btn btn-secondary" type="submit">Suchen</button>
-            <a class="btn" href="<%= resetHref %>">Zuruecksetzen</a>
+            <a class="btn" href="<%= resetHref %>">Zurücksetzen</a>
           </div>
         </form>
       </div>
@@ -113,14 +113,14 @@
             <h3 class="admin-heading-spaced"><%= activeCategoryLabel || 'Hauptlog' %></h3>
             <p class="admin-muted">
               <% if (hasLogs) { %>
-                Zeige <strong><%= pageState.rangeStart %></strong> bis <strong><%= pageState.rangeEnd %></strong> von <strong><%= Number(totalCount || 0) %></strong> Eintraegen.
+                Zeige <strong><%= pageState.rangeStart %></strong> bis <strong><%= pageState.rangeEnd %></strong> von <strong><%= Number(totalCount || 0) %></strong> Einträgen.
               <% } else { %>
-                Keine Audit-Eintraege gefunden.
+                Keine Audit-Einträge gefunden.
               <% } %>
             </p>
           </div>
           <div class="admin-audit-summary">
-            <span class="admin-badge"><%= Number(totalCount || 0) %> Eintraege</span>
+            <span class="admin-badge"><%= Number(totalCount || 0) %> Einträge</span>
             <span class="admin-badge admin-badge-neutral">Seite <%= pageState.currentPage %> / <%= pageState.totalPages %></span>
             <span class="admin-badge admin-badge-neutral">Max. <%= pageState.maxPageSize %> pro Seite</span>
           </div>
@@ -141,7 +141,7 @@
           <nav class="admin-pagination" aria-label="Audit-Log Seiten oben">
             <div class="admin-pagination-group">
               <a class="btn <%= pageState.hasPrev ? '' : 'is-disabled' %>" href="<%= pageState.hasPrev ? pageState.firstHref : '#' %>">Erste</a>
-              <a class="btn <%= pageState.hasPrev ? '' : 'is-disabled' %>" href="<%= pageState.hasPrev ? pageState.prevHref : '#' %>">Zurueck</a>
+              <a class="btn <%= pageState.hasPrev ? '' : 'is-disabled' %>" href="<%= pageState.hasPrev ? pageState.prevHref : '#' %>">Zurück</a>
             </div>
             <div class="admin-pagination-pages">
               <% pageState.pages.forEach(function (pageLink) { %>
@@ -164,7 +164,7 @@
                 <th>Akteur</th>
                 <th>Bereich</th>
                 <th>Aktion</th>
-                <th>Ziel / Entitaet</th>
+                <th>Ziel / Entität</th>
                 <th>Details / Eingaben</th>
                 <th>Parameter / Filter</th>
                 <th>Request / Client</th>
@@ -173,7 +173,7 @@
             <tbody>
               <% if (!hasLogs) { %>
                 <tr>
-                  <td colspan="9" class="admin-muted">Keine Audit-Eintraege gefunden.</td>
+                  <td colspan="9" class="admin-muted">Keine Audit-Einträge gefunden.</td>
                 </tr>
               <% } %>
               <% logs.forEach(function(entry){ %>
@@ -226,7 +226,7 @@
           <nav class="admin-pagination admin-pagination-bottom" aria-label="Audit-Log Seiten unten">
             <div class="admin-pagination-group">
               <a class="btn <%= pageState.hasPrev ? '' : 'is-disabled' %>" href="<%= pageState.hasPrev ? pageState.firstHref : '#' %>">Erste</a>
-              <a class="btn <%= pageState.hasPrev ? '' : 'is-disabled' %>" href="<%= pageState.hasPrev ? pageState.prevHref : '#' %>">Zurueck</a>
+              <a class="btn <%= pageState.hasPrev ? '' : 'is-disabled' %>" href="<%= pageState.hasPrev ? pageState.prevHref : '#' %>">Zurück</a>
             </div>
             <div class="admin-pagination-pages">
               <% pageState.pages.forEach(function (pageLink) { %>

@@ -36,7 +36,7 @@
   function updateCountBadge() {
     if (!countBadge) return;
     countBadge.dataset.totalCount = String(totalCount);
-    countBadge.textContent = `${totalCount} Eintraege`;
+    countBadge.textContent = `${totalCount} Einträge`;
   }
 
   function createCell(text) {
@@ -58,7 +58,7 @@
     const onlyRow = tbody.querySelector("tr");
     if (!onlyRow) return;
     if (tbody.querySelectorAll("tr").length !== 1) return;
-    if (!onlyRow.textContent.includes("Keine Audit-Eintraege")) return;
+    if (!onlyRow.textContent.includes("Keine Audit-Einträge")) return;
     tbody.innerHTML = "";
   }
 
@@ -134,7 +134,7 @@
       appendOlderLogs(data.logs || []);
       hasMoreOlder = Boolean(data.hasMore);
       if (!hasMoreOlder) {
-        sentinel.textContent = "Alle vorhandenen Eintraege wurden geladen.";
+        sentinel.textContent = "Alle vorhandenen Einträge wurden geladen.";
       }
     } catch (err) {
       sentinel.textContent = "Fehler beim Nachladen der Logs.";
