@@ -942,23 +942,13 @@ router.use(async (req, res, next) => {
 
 router.get("/", async (req, res, next) => {
   try {
-    const [userCount, classCount, studentCount, activeSchoolYear] = await Promise.all([
-      getAsync("SELECT COUNT(*) AS count FROM users"),
-      getAsync("SELECT COUNT(*) AS count FROM classes"),
-      getAsync("SELECT COUNT(*) AS count FROM students"),
-      schoolYearModel.getActiveSchoolYear()
-    ]);
+    const activeSchoolYear = await schoolYearModel.getActiveSchoolYear();
 
     res.render("admin/home-school-year", {
       csrfToken: req.csrfToken(),
       currentUser: req.session.user,
       activePath: req.originalUrl,
-      activeSchoolYear,
-      stats: {
-        users: userCount?.count || 0,
-        classes: classCount?.count || 0,
-        students: studentCount?.count || 0
-      }
+      activeSchoolYear
     });
   } catch (err) {
     console.error("DB error fetching admin home stats:", err);
