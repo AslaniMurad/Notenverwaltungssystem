@@ -145,6 +145,27 @@ const getAsync = (sql, params = []) =>
     });
   });
 
+async function buildAdminHomeStats(activeSchoolYear) {
+  const activeSchoolYearId = Number.parseInt(String(activeSchoolYear?.id ?? ""), 10);
+  const hasActiveSchoolYear = Number.isInteger(activeSchoolYearId) && activeSchoolYearId > 0;
+
+  const [userCountRow, classCountRow, studentCountRow] = await Promise.all([
+    getAsync("SELECT COUNT(*) AS count FROM users"),
+    hasActiveSchoolYear
+      ? schoolYearModel.countClassesBySchoolYear(activeSchoolYearId)
+      : Promise.resolve({ count: 0 }),
+    hasActiveSchoolYear
+      ? schoolYearModel.countStudentsBySchoolYear(activeSchoolYearId)
+      : Promise.resolve({ count: 0 })
+  ]);
+
+  return {
+    users: Number(userCountRow?.count || 0),
+    classes: Number(classCountRow?.count || 0),
+    students: Number(studentCountRow?.count || 0)
+  };
+}
+
 function parseAuditFilters(req) {
   const actor = String(req.query.actor || "").trim();
   const action = String(req.query.action || "").trim();
@@ -943,12 +964,14 @@ router.use(async (req, res, next) => {
 router.get("/", async (req, res, next) => {
   try {
     const activeSchoolYear = await schoolYearModel.getActiveSchoolYear();
+    const stats = await buildAdminHomeStats(activeSchoolYear);
 
     res.render("admin/home-school-year", {
       csrfToken: req.csrfToken(),
       currentUser: req.session.user,
       activePath: req.originalUrl,
-      activeSchoolYear
+      activeSchoolYear,
+      stats
     });
   } catch (err) {
     console.error("DB error fetching admin home stats:", err);

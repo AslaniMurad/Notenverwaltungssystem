@@ -235,6 +235,9 @@ test("admin can log in with seeded credentials", async () => {
   const dashboard = await fetchWithCookies("/admin", {}, loginResult.cookies);
   assert.strictEqual(dashboard.response.status, 200);
   assert.match(dashboard.body, /admin@test\.local/);
+  assert.match(dashboard.body, /Nutzer[\s\S]*?<strong>3<\/strong>/);
+  assert.match(dashboard.body, /Klassen[\s\S]*?<strong>1<\/strong>/);
+  assert.match(dashboard.body, /Sch[\s\S]*?<strong>1<\/strong>/);
 });
 
 test("student can view grades and profile after login", async () => {

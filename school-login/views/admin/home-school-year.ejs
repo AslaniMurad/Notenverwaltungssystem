@@ -1,5 +1,11 @@
 <%
   const hasActiveSchoolYear = Boolean(activeSchoolYear?.name);
+  const statsSource = typeof stats === 'object' && stats !== null ? stats : {};
+  const safeStats = {
+    users: Number(statsSource.users || 0),
+    classes: Number(statsSource.classes || 0),
+    students: Number(statsSource.students || 0)
+  };
   const now = new Date();
   const formattedDate = new Intl.DateTimeFormat('de-AT', {
     timeZone: 'Europe/Vienna',
@@ -80,17 +86,17 @@
           <div class="admin-home-stats">
             <a class="admin-home-stat" href="/admin/users" aria-label="Nutzerverwaltung öffnen">
               <span class="admin-eyebrow">Nutzer</span>
-              <strong><%= stats.users %></strong>
+              <strong><%= safeStats.users %></strong>
             </a>
 
             <a class="admin-home-stat" href="/admin/classes" aria-label="Klassenbereich öffnen">
               <span class="admin-eyebrow">Klassen</span>
-              <strong><%= stats.classes %></strong>
+              <strong><%= safeStats.classes %></strong>
             </a>
 
             <a class="admin-home-stat" href="/admin/classes" aria-label="Schülerbereich öffnen">
               <span class="admin-eyebrow">Schüler</span>
-              <strong><%= stats.students %></strong>
+              <strong><%= safeStats.students %></strong>
             </a>
           </div>
 
