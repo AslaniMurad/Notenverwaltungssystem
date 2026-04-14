@@ -39,7 +39,6 @@
       ]
     }
   ];
-
   const qaPlaceholders = [
     {
       question: 'Lorem ipsum dolor sit amet?',
@@ -77,26 +76,39 @@
           </div>
         </header>
 
-          <div class="admin-home-stats">
-            <a class="admin-home-stat" href="/admin/users" aria-label="Nutzerverwaltung öffnen">
-              <span class="admin-eyebrow">Nutzer</span>
-              <strong><%= stats.users %></strong>
-            </a>
+        <section class="admin-home-overview-groups" aria-label="Admin Schnellzugriff">
+          <% groups.forEach((group) => { %>
+            <article class="admin-home-overview-group <%= group.themeClass %>">
+              <div class="admin-home-overview-group-head">
+                <p class="admin-eyebrow"><%= group.eyebrow %></p>
+                <h2><%= group.title %></h2>
+              </div>
 
-            <a class="admin-home-stat" href="/admin/classes" aria-label="Klassenbereich öffnen">
-              <span class="admin-eyebrow">Klassen</span>
-              <strong><%= stats.classes %></strong>
-            </a>
+              <div class="admin-home-overview-links">
+                <% group.links.forEach((link) => { %>
+                  <a class="admin-home-overview-link" href="<%= link.href %>">
+                    <span class="admin-home-overview-link-title"><%= link.title %></span>
+                    <span class="admin-home-overview-link-arrow" aria-hidden="true">&gt;</span>
+                  </a>
+                <% }) %>
+              </div>
+            </article>
+          <% }) %>
+        </section>
 
-            <a class="admin-home-stat" href="/admin/classes" aria-label="Schülerbereich öffnen">
-              <span class="admin-eyebrow">Schüler</span>
-              <strong><%= stats.students %></strong>
-            </a>
+        <section class="admin-home-qa-section" aria-label="Q and A Platzhalter">
+          <div class="admin-home-qa-head">
+            <p class="admin-eyebrow">Q and A</p>
+            <h2>Platzhalter fuer spaeter</h2>
           </div>
 
-            <button class="btn admin-home-disabled-button" type="button" disabled>
-              Tutorial-Seite noch nicht verfügbar
-            </button>
+          <div class="admin-home-qa-list">
+            <% qaPlaceholders.forEach((item) => { %>
+              <details class="admin-home-qa-item">
+                <summary><%= item.question %></summary>
+                <p><%= item.answer %></p>
+              </details>
+            <% }) %>
           </div>
         </section>
       </section>
