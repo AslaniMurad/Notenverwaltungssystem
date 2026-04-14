@@ -106,25 +106,6 @@ async function countGradesBySchoolYear(schoolYearId) {
   );
 }
 
-async function countClassesBySchoolYear(schoolYearId) {
-  return getAsync(
-    `SELECT COUNT(*) AS count
-     FROM classes
-     WHERE school_year_id = ?`,
-    [schoolYearId]
-  );
-}
-
-async function countStudentsBySchoolYear(schoolYearId) {
-  return getAsync(
-    `SELECT COUNT(*) AS count
-     FROM students s
-     JOIN classes c ON c.id = s.class_id
-     WHERE c.school_year_id = ?`,
-    [schoolYearId]
-  );
-}
-
 async function listArchivesBySchoolYear(schoolYearId) {
   return allAsync(
     `SELECT id, school_year_id, archive_type, entity_count, created_at
@@ -160,9 +141,7 @@ async function createRolloverLog({ executedBy, oldSchoolYear, newSchoolYear, sta
 }
 
 module.exports = {
-  countClassesBySchoolYear,
   countGradesBySchoolYear,
-  countStudentsBySchoolYear,
   createRolloverLog,
   getActiveSchoolYear,
   getSchoolYearById,

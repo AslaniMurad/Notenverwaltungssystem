@@ -1424,19 +1424,6 @@ function createFakeDb() {
             teacher_id: classRow.teacher_id
           };
         }
-      } else if (/SELECT COUNT\(\*\) AS count\s+FROM classes\s+WHERE school_year_id = \?/i.test(sql)) {
-        const [schoolYearId] = params;
-        row = {
-          count: classes.filter((entry) => Number(entry.school_year_id) === Number(schoolYearId)).length
-        };
-      } else if (/SELECT COUNT\(\*\) AS count\s+FROM students s\s+JOIN classes c ON c\.id = s\.class_id\s+WHERE c\.school_year_id = \?/i.test(sql)) {
-        const [schoolYearId] = params;
-        row = {
-          count: students.filter((entry) => {
-            const classRow = classes.find((classEntry) => classEntry.id === Number(entry.class_id));
-            return classRow && Number(classRow.school_year_id) === Number(schoolYearId);
-          }).length
-        };
       } else if (/SELECT COUNT\(\*\) AS count FROM users/i.test(sql)) {
         row = { count: users.length };
       } else if (/SELECT COUNT\(\*\) AS count FROM classes/i.test(sql)) {
