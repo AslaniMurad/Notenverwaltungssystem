@@ -44,8 +44,9 @@ html[data-theme="dark"] .page-student {
 }
 
 .page-student .page-shell.app-container {
-  max-width: none;
-  padding: 0;
+  max-width: 1100px;
+  padding-left: 8px;
+  padding-right: 8px;
 }
 
 .page-student .page-shell {
