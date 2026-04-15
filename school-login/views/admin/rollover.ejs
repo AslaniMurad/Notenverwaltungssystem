@@ -19,8 +19,7 @@
   const routeNextStart = draft?.nextSchoolYear?.startDate || preview?.nextSchoolYear?.startDate || startValues.startDate;
   const routeNextEnd = draft?.nextSchoolYear?.endDate || preview?.nextSchoolYear?.endDate || startValues.endDate;
   const currentStepIndex = wizardSteps.findIndex((step) => step.key === wizardStep);
-  const extraRowCount = Math.max(extraClassPlans.length + 4, 8);
-  const extraRows = Array.from({ length: extraRowCount }, (_, index) => extraClassPlans[index] || null);
+  const visibleExtraRows = extraClassPlans.length ? extraClassPlans : [null];
   const shortDateFormatter = new Intl.DateTimeFormat('de-DE', {
     day: '2-digit',
     month: '2-digit',
@@ -334,9 +333,9 @@
                         <th>Aktiv</th>
                       </tr>
                     </thead>
-                    <tbody>
-                      <% extraRows.forEach((plan, index) => { %>
-                        <tr>
+                    <tbody data-rollover-extra-rows data-next-index="<%= visibleExtraRows.length %>">
+                      <% visibleExtraRows.forEach((plan, index) => { %>
+                        <tr data-rollover-extra-row>
                           <td>
                             <input type="hidden" name="extra_rows[<%= index %>][plan_key]" value="<%= plan?.key || '' %>">
                             <select name="extra_rows[<%= index %>][template_source_class_id]" class="form-select">
@@ -368,6 +367,41 @@
                     </tbody>
                   </table>
                 </div>
+                <div class="school-year-add-row">
+                  <button class="btn btn-secondary school-year-add-row-button" type="button" data-rollover-add-extra-row>
+                    + Weitere Zeile
+                  </button>
+                </div>
+                <template data-rollover-extra-row-template>
+                  <tr data-rollover-extra-row>
+                    <td>
+                      <input type="hidden" name="extra_rows[__INDEX__][plan_key]" value="">
+                      <select name="extra_rows[__INDEX__][template_source_class_id]" class="form-select">
+                        <option value="">Vorlage wählen</option>
+                        <% sourceClasses.forEach((classRow) => { %>
+                          <option value="<%= classRow.id %>">
+                            <%= classRow.name %> / <%= classRow.subject %>
+                          </option>
+                        <% }) %>
+                      </select>
+                    </td>
+                    <td><input type="text" name="extra_rows[__INDEX__][target_name]" value="" class="form-input"></td>
+                    <td>
+                      <input type="hidden" name="extra_rows[__INDEX__][copy_teachers]" value="0">
+                      <label class="school-year-checkline">
+                        <input type="checkbox" name="extra_rows[__INDEX__][copy_teachers]" value="1">
+                        <span>kopieren</span>
+                      </label>
+                    </td>
+                    <td>
+                      <input type="hidden" name="extra_rows[__INDEX__][enabled]" value="0">
+                      <label class="school-year-checkline">
+                        <input type="checkbox" name="extra_rows[__INDEX__][enabled]" value="1">
+                        <span>aktiv</span>
+                      </label>
+                    </td>
+                  </tr>
+                </template>
               </section>
 
               <div class="school-year-button-row">

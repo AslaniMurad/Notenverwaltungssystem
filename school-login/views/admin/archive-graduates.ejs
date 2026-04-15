@@ -1,0 +1,585 @@
+<%
+  const numberFormatter = new Intl.NumberFormat('de-AT');
+  const shortDateFormatter = new Intl.DateTimeFormat('de-DE', {
+    day: '2-digit',
+    month: '2-digit',
+    year: 'numeric'
+  });
+  const formatNumber = (value) => numberFormatter.format(Number(value || 0));
+  const formatDate = (value) => {
+    if (!value) return '-';
+    const parsed = new Date(value);
+    return Number.isNaN(parsed.getTime()) ? String(value) : shortDateFormatter.format(parsed);
+  };
+  const buildSearchText = (...values) => values
+    .filter((value) => value != null && String(value).trim() !== '')
+    .join(' ')
+    .toLowerCase();
+  const selectedActions = selection?.personActions || {};
+  const includedClassKeys = new Set(selection?.includedClassKeys || []);
+  const selectedYearLabel = selectedSchoolYear
+    ? `${formatDate(selectedSchoolYear.start_date)} bis ${formatDate(selectedSchoolYear.end_date)}`
+    : 'Kein Schuljahr ausgewählt';
+  const page = {
+    title: 'Admin - Schulabgänger bereinigen',
+    headerTitle: 'Adminbereich',
+    styles: ['/css/admin.css', '/css/admin-archive.css', '/css/admin-archive-danger.css'],
+    scripts: ['/js/app.js', '/js/archive.js'],
+    bodyClass: 'page-admin',
+    hideHeader: true,
+    hideFooter: true,
+    content: function () { %>
+    <div class="app-shell">
+      <%- include('./nav-school-year', { csrfToken, currentUser, activePath, activeSchoolYear }) %>
+
+      <section class="app-main archive-page archive-danger-page">
+        <section class="admin-card archive-hero archive-danger-hero" id="archive-graduates-overview">
+          <div class="archive-hero-head">
+            <div>
+              <p class="app-main-subtitle">Danger-Zone</p>
+              <h1>Schulabgänger bereinigen</h1>
+              <p class="archive-hero-copy">
+                Personenbezogene Schülerdaten aus archivierten Schuljahren gezielt auswählen, prüfen und danach endgültig entfernen.
+              </p>
+            </div>
+            <div class="archive-toolbar-actions">
+              <a class="btn btn-secondary" href="/archive">Zurück zum Archiv</a>
+            </div>
+          </div>
+
+          <% if (selectedSchoolYear) { %>
+            <div class="archive-context-note">
+              Auswahl: <strong><%= selectedSchoolYear.name %></strong> | Zeitraum: <%= selectedYearLabel %>
+            </div>
+          <% } %>
+        </section>
+
+        <% if (flash?.message) { %>
+          <section class="admin-card archive-status-banner archive-status-banner-<%= flash.type || 'info' %>">
+            <strong>Sicherheitsaktion</strong>
+            <span><%= flash.message %></span>
+          </section>
+        <% } %>
+
+        <% if (error) { %>
+          <section class="admin-card archive-status-banner archive-status-banner-error">
+            <strong>Prüfung fehlgeschlagen</strong>
+            <span><%= error %></span>
+          </section>
+        <% } %>
+
+        <% if (!archivedSchoolYears.length) { %>
+          <section class="admin-card archive-toolbar">
+            <div class="archive-toolbar-head">
+              <div>
+                <p class="admin-eyebrow">Schritt 1</p>
+                <h2>Archiviertes Schuljahr wählen</h2>
+              </div>
+            </div>
+            <div class="admin-empty">Es gibt aktuell keine archivierten Schuljahre für diese Bereinigung.</div>
+          </section>
+        <% } else { %>
+          <section class="admin-card archive-toolbar">
+            <div class="archive-toolbar-head">
+              <div>
+                <p class="admin-eyebrow">Schritt 1</p>
+                <h2>Archiviertes Schuljahr laden</h2>
+              </div>
+            </div>
+
+            <form method="GET" action="/archive/graduates" class="admin-form archive-filter-form archive-danger-form">
+              <label class="archive-search-field archive-select-field">
+                <span>Archiviertes Schuljahr</span>
+                <select name="school_year_id" required>
+                  <% archivedSchoolYears.forEach((schoolYear) => { %>
+                    <option value="<%= schoolYear.id %>" <%= Number(selectedSchoolYear?.id) === Number(schoolYear.id) ? 'selected' : '' %>>
+                      <%= schoolYear.name %> | <%= formatDate(schoolYear.start_date) %> bis <%= formatDate(schoolYear.end_date) %>
+                    </option>
+                  <% }) %>
+                </select>
+              </label>
+              <button class="btn btn-secondary" type="submit">Archiv laden</button>
+            </form>
+
+            <div class="archive-context-note">
+              Klassen bilden die Grundauswahl. Einzelpersonen können danach mit <strong>Include</strong> oder <strong>Exclude</strong> gezielt übersteuert werden.
+            </div>
+          </section>
+
+          <% if (selectedSchoolYear) { %>
+            <form method="POST" action="/archive/graduates/preview" class="archive-danger-graduates-form">
+              <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+              <input type="hidden" name="school_year_id" value="<%= selectedSchoolYear.id %>">
+
+              <section class="admin-card archive-section" id="graduates-classes" data-archive-section data-archive-page-size="20">
+                <div class="archive-section-head">
+                  <div>
+                    <p class="admin-eyebrow">Grundauswahl</p>
+                    <h2>Ganze Klassen einschließen</h2>
+                  </div>
+                  <div class="archive-section-actions">
+                    <span class="admin-badge"><%= formatNumber(classGroups.length) %> Klassen</span>
+                  </div>
+                </div>
+
+                <% if (!classGroups.length) { %>
+                  <div class="admin-empty">Keine Klassen im gewählten Archiv gefunden.</div>
+                <% } else { %>
+                  <div class="archive-section-tools">
+                    <label class="archive-search-field">
+                      <span>Klassen durchsuchen</span>
+                      <input type="search" placeholder="Nach Klasse, Fach oder Anzahl filtern" data-archive-search>
+                    </label>
+                    <div class="archive-inline-stats">
+                      <span class="archive-inline-stat"><%= formatNumber(classGroups.length) %> Datensätze</span>
+                      <span class="archive-inline-stat">Checkbox-Auswahl bleibt beim Filtern erhalten</span>
+                    </div>
+                  </div>
+
+                  <div class="archive-table-shell">
+                    <div class="archive-table-scroller">
+                      <table class="archive-data-table archive-data-table-graduates-classes">
+                        <thead>
+                          <tr>
+                            <th>Include</th>
+                            <th>Klasse</th>
+                            <th>Schüler</th>
+                            <th>Zuordnungen</th>
+                            <th>Fächer</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          <% classGroups.forEach((entry) => { %>
+                            <tr
+                              data-archive-row
+                              data-search-text="<%= buildSearchText(entry.className, entry.subjects.join(' '), entry.studentCount, entry.membershipCount) %>"
+                            >
+                              <td>
+                                <input
+                                  class="archive-danger-checkbox"
+                                  type="checkbox"
+                                  name="included_class_keys"
+                                  value="<%= entry.selectionKey %>"
+                                  <%= includedClassKeys.has(entry.selectionKey) ? 'checked' : '' %>
+                                >
+                              </td>
+                              <td><span class="archive-table-title"><%= entry.className %></span></td>
+                              <td class="archive-cell-number"><%= formatNumber(entry.studentCount) %></td>
+                              <td class="archive-cell-number"><%= formatNumber(entry.membershipCount) %></td>
+                              <td><span class="archive-note" title="<%= entry.subjects.join(', ') || '-' %>"><%= entry.subjects.join(', ') || '-' %></span></td>
+                            </tr>
+                          <% }) %>
+                        </tbody>
+                      </table>
+                    </div>
+                    <div class="archive-filter-empty" data-archive-filter-empty hidden>Keine Klassen für den aktuellen Filter gefunden.</div>
+                    <div class="archive-table-footer">
+                      <span class="archive-table-summary" data-archive-summary>Alle <%= formatNumber(classGroups.length) %> Zeilen geladen.</span>
+                      <div class="archive-table-actions" data-archive-actions hidden>
+                        <button class="btn btn-secondary" type="button" data-archive-more hidden>Mehr laden</button>
+                        <button class="btn btn-secondary" type="button" data-archive-all hidden>Alle zeigen</button>
+                        <button class="btn btn-secondary" type="button" data-archive-reset hidden>Zurücksetzen</button>
+                      </div>
+                    </div>
+                  </div>
+                <% } %>
+              </section>
+
+              <section class="admin-card archive-section archive-section-wide" id="graduates-people" data-archive-section data-archive-page-size="30">
+                <div class="archive-section-head">
+                  <div>
+                    <p class="admin-eyebrow">Übersteuerung</p>
+                    <h2>Einzelpersonen mit Include / Exclude</h2>
+                  </div>
+                  <div class="archive-section-actions">
+                    <span class="admin-badge"><%= formatNumber(personRows.length) %> Personen</span>
+                  </div>
+                </div>
+
+                <% if (!personRows.length) { %>
+                  <div class="admin-empty">Keine Personen im gewählten Archiv gefunden.</div>
+                <% } else { %>
+                  <div class="archive-section-tools archive-section-tools-wide">
+                    <label class="archive-search-field">
+                      <span>Personen durchsuchen</span>
+                      <input type="search" placeholder="Nach Name, E-Mail oder Klasse filtern" data-archive-search>
+                    </label>
+                    <div class="archive-inline-stats">
+                      <span class="archive-inline-stat"><%= formatNumber(personRows.length) %> Personen</span>
+                      <span class="archive-inline-stat"><%= formatNumber(classGroups.length) %> Klassen als Basis</span>
+                    </div>
+                  </div>
+
+                  <div class="archive-table-shell archive-table-shell-tall">
+                    <div class="archive-table-scroller">
+                      <table class="archive-data-table archive-data-table-graduates-people">
+                        <thead>
+                          <tr>
+                            <th>Aktion</th>
+                            <th>Name</th>
+                            <th>E-Mail</th>
+                            <th>Klassen</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          <% personRows.forEach((entry) => { %>
+                            <% const personAction = selectedActions[entry.selectionKey] || 'inherit'; %>
+                            <tr
+                              data-archive-row
+                              data-search-text="<%= buildSearchText(entry.name, entry.email, entry.classLabels.join(' '), entry.classNames.join(' '), entry.membershipCount) %>"
+                            >
+                              <td>
+                                <select class="archive-danger-select" name="person_actions[<%= entry.selectionKey %>]">
+                                  <option value="inherit" <%= personAction === 'inherit' ? 'selected' : '' %>>Vererben</option>
+                                  <option value="include" <%= personAction === 'include' ? 'selected' : '' %>>Include</option>
+                                  <option value="exclude" <%= personAction === 'exclude' ? 'selected' : '' %>>Exclude</option>
+                                </select>
+                              </td>
+                              <td><span class="archive-table-title"><%= entry.name %></span></td>
+                              <td class="archive-nowrap"><%= entry.email %></td>
+                              <td><span class="archive-note" title="<%= entry.classLabels.join(' | ') %>"><%= entry.classLabels.join(' | ') %></span></td>
+                            </tr>
+                          <% }) %>
+                        </tbody>
+                      </table>
+                    </div>
+                    <div class="archive-filter-empty" data-archive-filter-empty hidden>Keine Personen für den aktuellen Filter gefunden.</div>
+                    <div class="archive-table-footer">
+                      <span class="archive-table-summary" data-archive-summary>Alle <%= formatNumber(personRows.length) %> Zeilen geladen.</span>
+                      <div class="archive-table-actions" data-archive-actions hidden>
+                        <button class="btn btn-secondary" type="button" data-archive-more hidden>Mehr laden</button>
+                        <button class="btn btn-secondary" type="button" data-archive-all hidden>Alle zeigen</button>
+                        <button class="btn btn-secondary" type="button" data-archive-reset hidden>Zurücksetzen</button>
+                      </div>
+                    </div>
+                  </div>
+                <% } %>
+              </section>
+
+              <section class="admin-card archive-toolbar archive-danger-action-bar">
+                <div class="archive-toolbar-head">
+                  <div>
+                    <p class="admin-eyebrow">Nächster Schritt</p>
+                    <h2>Vorschau erzeugen</h2>
+                  </div>
+                </div>
+                <div class="archive-danger-button-row">
+                  <button class="btn btn-primary" type="submit">Bereinigungsvorschau laden</button>
+                </div>
+              </section>
+            </form>
+          <% } %>
+        <% } %>
+
+        <% if (preview) { %>
+          <section class="admin-card archive-toolbar archive-danger-summary">
+            <div class="archive-toolbar-head">
+              <div>
+                <p class="admin-eyebrow">Schritt 2</p>
+                <h2>Betroffene Schülerdaten prüfen</h2>
+              </div>
+              <span class="archive-danger-year-pill"><%= selectedSchoolYear?.name || '-' %></span>
+            </div>
+
+            <dl class="archive-meta-grid">
+              <div class="archive-meta-item">
+                <dt>Klassen via Include</dt>
+                <dd><%= formatNumber(preview.counts.selectedClassCount) %></dd>
+              </div>
+              <div class="archive-meta-item">
+                <dt>Personen</dt>
+                <dd><%= formatNumber(preview.counts.selectedPersonCount) %></dd>
+              </div>
+              <div class="archive-meta-item">
+                <dt>Klassenzuordnungen</dt>
+                <dd><%= formatNumber(preview.counts.membershipCount) %></dd>
+              </div>
+              <div class="archive-meta-item">
+                <dt>Noten</dt>
+                <dd><%= formatNumber(preview.counts.gradeCount) %></dd>
+              </div>
+              <div class="archive-meta-item">
+                <dt>Schüler-Logins</dt>
+                <dd><%= formatNumber(preview.counts.deactivatedUserCount) %></dd>
+              </div>
+              <div class="archive-meta-item">
+                <dt>Sicherheitscode</dt>
+                <dd><%= preview.confirmationText %></dd>
+              </div>
+            </dl>
+          </section>
+
+          <section class="admin-card archive-section" id="graduates-selected-classes" data-archive-section data-archive-page-size="20">
+            <div class="archive-section-head">
+              <div>
+                <p class="admin-eyebrow">Auswahl</p>
+                <h2>Direkt ausgewählte Klassen</h2>
+              </div>
+              <div class="archive-section-actions">
+                <span class="admin-badge"><%= formatNumber(preview.selectedClassNames.length) %> Klassen</span>
+              </div>
+            </div>
+
+            <% if (!preview.selectedClassNames.length) { %>
+              <div class="admin-empty">Keine Klasse direkt per Include gewählt.</div>
+            <% } else { %>
+              <div class="archive-section-tools">
+                <label class="archive-search-field">
+                  <span>Klassen durchsuchen</span>
+                  <input type="search" placeholder="Nach Klassenname filtern" data-archive-search>
+                </label>
+                <div class="archive-inline-stats">
+                  <span class="archive-inline-stat"><%= formatNumber(preview.selectedClassNames.length) %> Klassen</span>
+                </div>
+              </div>
+
+              <div class="archive-table-shell">
+                <div class="archive-table-scroller">
+                  <table class="archive-data-table archive-data-table-graduates-simple">
+                    <thead>
+                      <tr>
+                        <th>Klasse</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      <% preview.selectedClassNames.forEach((entry) => { %>
+                        <tr data-archive-row data-search-text="<%= buildSearchText(entry) %>">
+                          <td><span class="archive-table-title"><%= entry %></span></td>
+                        </tr>
+                      <% }) %>
+                    </tbody>
+                  </table>
+                </div>
+                <div class="archive-filter-empty" data-archive-filter-empty hidden>Keine Klassen für den aktuellen Filter gefunden.</div>
+                <div class="archive-table-footer">
+                  <span class="archive-table-summary" data-archive-summary>Alle <%= formatNumber(preview.selectedClassNames.length) %> Zeilen geladen.</span>
+                  <div class="archive-table-actions" data-archive-actions hidden>
+                    <button class="btn btn-secondary" type="button" data-archive-more hidden>Mehr laden</button>
+                    <button class="btn btn-secondary" type="button" data-archive-all hidden>Alle zeigen</button>
+                    <button class="btn btn-secondary" type="button" data-archive-reset hidden>Zurücksetzen</button>
+                  </div>
+                </div>
+              </div>
+            <% } %>
+          </section>
+
+          <section class="admin-card archive-section" id="graduates-affected-classes" data-archive-section data-archive-page-size="24">
+            <div class="archive-section-head">
+              <div>
+                <p class="admin-eyebrow">Auswirkung</p>
+                <h2>Betroffene Klassen / Fächer</h2>
+              </div>
+              <div class="archive-section-actions">
+                <span class="admin-badge"><%= formatNumber(preview.affectedClassLabels.length) %> Einträge</span>
+              </div>
+            </div>
+
+            <% if (!preview.affectedClassLabels.length) { %>
+              <div class="admin-empty">Keine betroffenen Klassen oder Fächer gefunden.</div>
+            <% } else { %>
+              <div class="archive-section-tools">
+                <label class="archive-search-field">
+                  <span>Einträge durchsuchen</span>
+                  <input type="search" placeholder="Nach Klasse oder Fach filtern" data-archive-search>
+                </label>
+                <div class="archive-inline-stats">
+                  <span class="archive-inline-stat"><%= formatNumber(preview.affectedClassLabels.length) %> Einträge</span>
+                </div>
+              </div>
+
+              <div class="archive-table-shell">
+                <div class="archive-table-scroller">
+                  <table class="archive-data-table archive-data-table-graduates-simple">
+                    <thead>
+                      <tr>
+                        <th>Klasse / Fach</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      <% preview.affectedClassLabels.forEach((entry) => { %>
+                        <tr data-archive-row data-search-text="<%= buildSearchText(entry) %>">
+                          <td><span class="archive-table-title"><%= entry %></span></td>
+                        </tr>
+                      <% }) %>
+                    </tbody>
+                  </table>
+                </div>
+                <div class="archive-filter-empty" data-archive-filter-empty hidden>Keine Einträge für den aktuellen Filter gefunden.</div>
+                <div class="archive-table-footer">
+                  <span class="archive-table-summary" data-archive-summary>Alle <%= formatNumber(preview.affectedClassLabels.length) %> Zeilen geladen.</span>
+                  <div class="archive-table-actions" data-archive-actions hidden>
+                    <button class="btn btn-secondary" type="button" data-archive-more hidden>Mehr laden</button>
+                    <button class="btn btn-secondary" type="button" data-archive-all hidden>Alle zeigen</button>
+                    <button class="btn btn-secondary" type="button" data-archive-reset hidden>Zurücksetzen</button>
+                  </div>
+                </div>
+              </div>
+            <% } %>
+          </section>
+
+          <section class="admin-card archive-section archive-section-wide" id="graduates-preview-people" data-archive-section data-archive-page-size="30">
+            <div class="archive-section-head">
+              <div>
+                <p class="admin-eyebrow">Auswirkung</p>
+                <h2>Betroffene Personen</h2>
+              </div>
+              <div class="archive-section-actions">
+                <span class="admin-badge"><%= formatNumber(preview.selectedPeople.length) %> Personen</span>
+              </div>
+            </div>
+
+            <% if (!preview.selectedPeople.length) { %>
+              <div class="admin-empty">Keine Personen für die Bereinigung ausgewählt.</div>
+            <% } else { %>
+              <div class="archive-section-tools archive-section-tools-wide">
+                <label class="archive-search-field">
+                  <span>Personen durchsuchen</span>
+                  <input type="search" placeholder="Nach Name, E-Mail oder Klasse filtern" data-archive-search>
+                </label>
+                <div class="archive-inline-stats">
+                  <span class="archive-inline-stat"><%= formatNumber(preview.selectedPeople.length) %> Datensätze</span>
+                  <span class="archive-inline-stat"><%= formatNumber(preview.counts.membershipCount) %> Klassenzuordnungen</span>
+                </div>
+              </div>
+
+              <div class="archive-table-shell archive-table-shell-tall">
+                <div class="archive-table-scroller">
+                  <table class="archive-data-table archive-data-table-graduates-people">
+                    <thead>
+                      <tr>
+                        <th>Name</th>
+                        <th>E-Mail</th>
+                        <th>Zuordnungen</th>
+                        <th>Klassen</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      <% preview.selectedPeople.forEach((entry) => { %>
+                        <tr
+                          data-archive-row
+                          data-search-text="<%= buildSearchText(entry.name, entry.email, entry.membershipCount, entry.classLabels.join(' ')) %>"
+                        >
+                          <td><span class="archive-table-title"><%= entry.name %></span></td>
+                          <td class="archive-nowrap"><%= entry.email %></td>
+                          <td class="archive-cell-number"><%= formatNumber(entry.membershipCount) %></td>
+                          <td><span class="archive-note" title="<%= entry.classLabels.join(' | ') %>"><%= entry.classLabels.join(' | ') %></span></td>
+                        </tr>
+                      <% }) %>
+                    </tbody>
+                  </table>
+                </div>
+                <div class="archive-filter-empty" data-archive-filter-empty hidden>Keine Personen für den aktuellen Filter gefunden.</div>
+                <div class="archive-table-footer">
+                  <span class="archive-table-summary" data-archive-summary>Alle <%= formatNumber(preview.selectedPeople.length) %> Zeilen geladen.</span>
+                  <div class="archive-table-actions" data-archive-actions hidden>
+                    <button class="btn btn-secondary" type="button" data-archive-more hidden>Mehr laden</button>
+                    <button class="btn btn-secondary" type="button" data-archive-all hidden>Alle zeigen</button>
+                    <button class="btn btn-secondary" type="button" data-archive-reset hidden>Zurücksetzen</button>
+                  </div>
+                </div>
+              </div>
+            <% } %>
+          </section>
+
+          <section class="admin-card archive-section" id="graduates-logins" data-archive-section data-archive-page-size="20">
+            <div class="archive-section-head">
+              <div>
+                <p class="admin-eyebrow">Konten</p>
+                <h2>Schüler-Logins, die deaktiviert werden</h2>
+              </div>
+              <div class="archive-section-actions">
+                <span class="admin-badge"><%= formatNumber(preview.deactivatedUsers.length) %> Logins</span>
+              </div>
+            </div>
+
+            <% if (!preview.deactivatedUsers.length) { %>
+              <div class="admin-empty">Es werden keine zusätzlichen Schüler-Logins deaktiviert.</div>
+            <% } else { %>
+              <div class="archive-section-tools">
+                <label class="archive-search-field">
+                  <span>Logins durchsuchen</span>
+                  <input type="search" placeholder="Nach E-Mail oder Status filtern" data-archive-search>
+                </label>
+                <div class="archive-inline-stats">
+                  <span class="archive-inline-stat"><%= formatNumber(preview.deactivatedUsers.length) %> Konten</span>
+                </div>
+              </div>
+
+              <div class="archive-table-shell">
+                <div class="archive-table-scroller">
+                  <table class="archive-data-table archive-data-table-compact">
+                    <thead>
+                      <tr>
+                        <th>E-Mail</th>
+                        <th>Status</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      <% preview.deactivatedUsers.forEach((entry) => { %>
+                        <tr data-archive-row data-search-text="<%= buildSearchText(entry.email, entry.status) %>">
+                          <td class="archive-nowrap"><span class="archive-table-title"><%= entry.email %></span></td>
+                          <td><%= entry.status %> → deleted</td>
+                        </tr>
+                      <% }) %>
+                    </tbody>
+                  </table>
+                </div>
+                <div class="archive-filter-empty" data-archive-filter-empty hidden>Keine Logins für den aktuellen Filter gefunden.</div>
+                <div class="archive-table-footer">
+                  <span class="archive-table-summary" data-archive-summary>Alle <%= formatNumber(preview.deactivatedUsers.length) %> Zeilen geladen.</span>
+                  <div class="archive-table-actions" data-archive-actions hidden>
+                    <button class="btn btn-secondary" type="button" data-archive-more hidden>Mehr laden</button>
+                    <button class="btn btn-secondary" type="button" data-archive-all hidden>Alle zeigen</button>
+                    <button class="btn btn-secondary" type="button" data-archive-reset hidden>Zurücksetzen</button>
+                  </div>
+                </div>
+              </div>
+            <% } %>
+          </section>
+
+          <section class="admin-card archive-toolbar archive-danger-confirm-card">
+            <div class="archive-toolbar-head">
+              <div>
+                <p class="admin-eyebrow">Schritt 3</p>
+                <h2>Endgültig bestätigen</h2>
+              </div>
+            </div>
+
+            <form method="POST" action="/archive/graduates/execute" class="archive-danger-confirm-form">
+              <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+              <input type="hidden" name="preview_token" value="<%= previewToken %>">
+              <input type="hidden" name="school_year_id" value="<%= selectedSchoolYear?.id || '' %>">
+
+              <div class="archive-danger-confirm-grid">
+                <label class="archive-search-field">
+                  <span>Sicherheitsbestätigung</span>
+                  <input
+                    class="form-input"
+                    type="text"
+                    name="confirmation_text"
+                    placeholder="<%= preview.confirmationText %>"
+                    autocomplete="off"
+                    required
+                  >
+                </label>
+
+                <label class="archive-search-field">
+                  <span>Admin-Passwort erneut eingeben</span>
+                  <input class="form-input" type="password" name="admin_password" autocomplete="current-password" required>
+                </label>
+              </div>
+
+              <div class="archive-context-note archive-danger-confirm-note">
+                Gib exakt <strong><%= preview.confirmationText %></strong> ein. Danach werden nur die oben gelisteten Schülerdaten entfernt.
+              </div>
+
+              <div class="archive-danger-button-row">
+                <button class="btn btn-danger" type="submit">Schulabgänger endgültig bereinigen</button>
+              </div>
+            </form>
+          </section>
+        <% } %>
+      </section>
+    </div>
+<% } }; %>
+<%- include('../layout', page) %>

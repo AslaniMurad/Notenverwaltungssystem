@@ -44,8 +44,9 @@ html[data-theme="dark"] .page-student {
 }
 
 .page-student .page-shell.app-container {
-  max-width: none;
-  padding: 0;
+  max-width: 1100px;
+  padding-left: 8px;
+  padding-right: 8px;
 }
 
 .page-student .page-shell {
@@ -1295,7 +1296,19 @@ html[data-theme="dark"] .page-student .subject-list-row:focus-visible::before {
     grid-template-columns: 1fr;
   }
 
+  .page-student .app-sidebar {
+    position: relative;
+    top: 0;
+    max-height: none;
+    overflow: visible;
+  }
+
+  .page-student .app-nav {
+    overflow: visible;
+  }
+
   .page-student .app-main {
+    grid-column: auto;
     padding: 18px;
   }
 

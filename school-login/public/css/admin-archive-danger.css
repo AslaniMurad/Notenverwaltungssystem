@@ -1,0 +1,473 @@
+.archive-danger-page {
+  display: grid;
+  gap: 18px;
+  align-content: start;
+  align-items: start;
+  grid-auto-rows: max-content;
+}
+
+.archive-danger-page-before-preview {
+  gap: 14px;
+}
+
+.archive-danger-page-before-preview .archive-danger-hero,
+.archive-danger-page-before-preview .archive-toolbar {
+  width: min(100%, 980px);
+}
+
+.archive-danger-page-before-preview .archive-context-note {
+  width: fit-content;
+  max-width: 100%;
+}
+
+.archive-danger-panel {
+  display: grid;
+  gap: 16px;
+  padding: 22px 24px;
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  background: var(--surface);
+}
+
+.archive-danger-panel-hero {
+  border-color: rgba(185, 28, 28, 0.22);
+  background:
+    linear-gradient(180deg, rgba(185, 28, 28, 0.06), rgba(185, 28, 28, 0)),
+    var(--surface);
+}
+
+.archive-danger-panel-head,
+.archive-danger-subpanel-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 14px;
+}
+
+.archive-danger-panel-head h1,
+.archive-danger-panel-head h2,
+.archive-danger-subpanel-head h3 {
+  margin: 4px 0 0;
+  color: var(--text);
+}
+
+.archive-danger-lead {
+  max-width: 56rem;
+  margin: 10px 0 0;
+  color: var(--text-muted);
+  line-height: 1.55;
+}
+
+.archive-danger-actions,
+.archive-danger-button-row {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.archive-danger-protection {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.archive-danger-protection span,
+.archive-danger-year-pill,
+.archive-danger-chip {
+  display: inline-flex;
+  align-items: center;
+  min-height: 34px;
+  padding: 8px 10px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--surface-2);
+  color: var(--text-muted);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.archive-danger-year-pill {
+  border-color: rgba(185, 28, 28, 0.2);
+  background: rgba(185, 28, 28, 0.08);
+  color: #b91c1c;
+}
+
+.archive-danger-alert {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.archive-danger-alert-success {
+  border-color: rgba(22, 163, 74, 0.25);
+  background: rgba(22, 163, 74, 0.08);
+}
+
+.archive-danger-alert-info {
+  border-color: rgba(37, 99, 235, 0.22);
+  background: rgba(37, 99, 235, 0.08);
+}
+
+.archive-danger-alert-error {
+  border-color: rgba(185, 28, 28, 0.25);
+  background: rgba(185, 28, 28, 0.08);
+}
+
+.archive-danger-form-stack,
+.archive-danger-confirm-form {
+  display: grid;
+  gap: 16px;
+}
+
+.archive-danger-form-grid,
+.archive-danger-confirm-form label,
+.archive-danger-search {
+  display: grid;
+  gap: 6px;
+}
+
+.archive-danger-form-grid span,
+.archive-danger-confirm-form span,
+.archive-danger-search span {
+  color: var(--text-muted);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.archive-danger-form-grid select,
+.archive-danger-search input,
+.archive-danger-table select,
+.archive-danger-confirm-form input {
+  width: 100%;
+  min-height: 42px;
+}
+
+.archive-danger-selection-grid,
+.archive-danger-preview-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.archive-danger-subpanel {
+  display: grid;
+  gap: 12px;
+  padding: 16px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--surface-2);
+}
+
+.archive-danger-subpanel-head small {
+  color: var(--text-muted);
+}
+
+.archive-danger-subpanel-head-spaced {
+  margin-top: 6px;
+}
+
+.archive-danger-stats {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 10px;
+}
+
+.archive-danger-stats div {
+  display: grid;
+  gap: 6px;
+  padding: 14px 16px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--surface-2);
+}
+
+.archive-danger-stats span {
+  color: var(--text-muted);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.archive-danger-stats strong {
+  color: var(--text);
+  font-size: 1.4rem;
+  line-height: 1;
+}
+
+.archive-danger-table-wrap {
+  overflow: auto;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--surface);
+}
+
+.archive-danger-table-wrap-tall {
+  max-height: 32rem;
+}
+
+.archive-danger-table {
+  width: 100%;
+  min-width: 720px;
+  border-collapse: collapse;
+}
+
+.archive-danger-table th,
+.archive-danger-table td {
+  padding: 12px 14px;
+  border-bottom: 1px solid var(--border);
+  text-align: left;
+  vertical-align: top;
+}
+
+.archive-danger-table thead th {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  background: var(--surface-2);
+  color: var(--text-muted);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.archive-danger-table tbody tr:last-child td {
+  border-bottom: none;
+}
+
+.archive-danger-table tbody tr:hover td {
+  background: rgba(148, 163, 184, 0.08);
+}
+
+.archive-danger-list {
+  display: grid;
+  gap: 10px;
+}
+
+.archive-danger-list-tall {
+  max-height: 24rem;
+  overflow: auto;
+  padding-right: 4px;
+}
+
+.archive-danger-list-item {
+  display: grid;
+  gap: 4px;
+  padding: 12px 14px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--surface);
+}
+
+.archive-danger-list-item span,
+.archive-danger-list-item small,
+.archive-danger-confirm-copy {
+  color: var(--text-muted);
+  line-height: 1.5;
+}
+
+.archive-danger-chip-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.archive-danger-chip-muted {
+  font-weight: 600;
+}
+
+.archive-page .archive-danger-hero,
+.archive-page .archive-danger-summary,
+.archive-page .archive-danger-confirm-card {
+  border-color: var(--border);
+  box-shadow: inset 3px 0 0 rgba(185, 28, 28, 0.18);
+}
+
+.archive-page .archive-danger-hero {
+  background: var(--surface);
+}
+
+.archive-page .archive-danger-summary .archive-meta-item:last-child dd {
+  color: #991b1b;
+}
+
+.archive-page .archive-danger-form {
+  align-items: end;
+}
+
+.archive-page .archive-danger-graduates-form {
+  display: grid;
+  gap: 16px;
+  width: 100%;
+}
+
+.archive-page .archive-danger-action-bar {
+  width: 100%;
+}
+
+.archive-page .archive-danger-action-bar .archive-danger-button-row {
+  justify-content: flex-start;
+}
+
+.archive-page .archive-danger-checkbox {
+  width: 18px;
+  height: 18px;
+  margin: 0;
+  accent-color: #2563eb;
+}
+
+.archive-page .archive-danger-select {
+  width: 100%;
+  min-height: 40px;
+  padding: 8px 10px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface);
+  color: var(--text);
+  font-size: 14px;
+  box-shadow: none;
+}
+
+.archive-page .archive-danger-select:focus {
+  outline: none;
+  border-color: #2563eb;
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1);
+}
+
+.archive-page .archive-data-table-graduates-simple {
+  min-width: 360px;
+}
+
+.archive-page .archive-data-table-graduates-classes {
+  min-width: 900px;
+}
+
+.archive-page .archive-data-table-graduates-classes th:nth-child(1),
+.archive-page .archive-data-table-graduates-classes td:nth-child(1) {
+  width: 88px;
+  text-align: center;
+}
+
+.archive-page .archive-data-table-graduates-classes th:nth-child(2),
+.archive-page .archive-data-table-graduates-classes td:nth-child(2) {
+  width: 20%;
+}
+
+.archive-page .archive-data-table-graduates-classes th:nth-child(3),
+.archive-page .archive-data-table-graduates-classes td:nth-child(3),
+.archive-page .archive-data-table-graduates-classes th:nth-child(4),
+.archive-page .archive-data-table-graduates-classes td:nth-child(4) {
+  width: 14%;
+}
+
+.archive-page .archive-data-table-graduates-classes th:nth-child(5),
+.archive-page .archive-data-table-graduates-classes td:nth-child(5) {
+  width: 52%;
+}
+
+.archive-page .archive-data-table-graduates-people {
+  min-width: 980px;
+}
+
+.archive-page .archive-data-table-graduates-people th:nth-child(1),
+.archive-page .archive-data-table-graduates-people td:nth-child(1) {
+  width: 18%;
+}
+
+.archive-page .archive-data-table-graduates-people th:nth-child(2),
+.archive-page .archive-data-table-graduates-people td:nth-child(2) {
+  width: 22%;
+}
+
+.archive-page .archive-data-table-graduates-people th:nth-child(3),
+.archive-page .archive-data-table-graduates-people td:nth-child(3) {
+  width: 16%;
+}
+
+.archive-page .archive-data-table-graduates-people th:nth-child(4),
+.archive-page .archive-data-table-graduates-people td:nth-child(4) {
+  width: 44%;
+}
+
+.archive-page .archive-data-table-people {
+  min-width: 920px;
+}
+
+.archive-page .archive-data-table-people th:nth-child(1),
+.archive-page .archive-data-table-people td:nth-child(1) {
+  width: 28%;
+}
+
+.archive-page .archive-data-table-people th:nth-child(2),
+.archive-page .archive-data-table-people td:nth-child(2) {
+  width: 26%;
+}
+
+.archive-page .archive-data-table-people th:nth-child(3),
+.archive-page .archive-data-table-people td:nth-child(3) {
+  width: 46%;
+}
+
+.archive-page .archive-danger-confirm-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.archive-page .archive-danger-confirm-note {
+  border-color: rgba(185, 28, 28, 0.18);
+  background: rgba(185, 28, 28, 0.06);
+}
+
+.archive-page .archive-status-banner-error {
+  border-color: rgba(185, 28, 28, 0.25);
+  background: rgba(185, 28, 28, 0.08);
+}
+
+@media (max-width: 1080px) {
+  .archive-danger-selection-grid,
+  .archive-danger-preview-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .archive-page .archive-danger-confirm-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 820px) {
+  .archive-danger-panel,
+  .archive-danger-subpanel {
+    padding: 18px;
+  }
+
+  .archive-danger-panel-head,
+  .archive-danger-subpanel-head {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+}
+
+@media (max-width: 560px) {
+  .archive-danger-button-row .btn,
+  .archive-danger-actions .btn {
+    width: 100%;
+    justify-content: center;
+  }
+
+  .archive-page .archive-data-table-graduates-classes {
+    min-width: 760px;
+  }
+
+  .archive-page .archive-data-table-graduates-people {
+    min-width: 820px;
+  }
+
+  .archive-page .archive-data-table-people {
+    min-width: 760px;
+  }
+}

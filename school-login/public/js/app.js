@@ -137,4 +137,105 @@ document.querySelectorAll('[data-bulk-format-switcher]').forEach((root) => {
   setDelimiter(root.getAttribute('data-default-delimiter') || hiddenInput.value || fallbackDelimiter);
 });
 
+function isScrollableInYAxis(element) {
+  const style = window.getComputedStyle(element);
+  const overflowY = style.overflowY;
+  return (overflowY === 'auto' || overflowY === 'scroll' || overflowY === 'overlay')
+    && element.scrollHeight > element.clientHeight + 2;
+}
+
+function getSidebarScrollTarget(sidebar) {
+  const nav = sidebar.querySelector('.app-nav');
+  if (nav && isScrollableInYAxis(nav)) return nav;
+  if (isScrollableInYAxis(sidebar)) return sidebar;
+  return null;
+}
+
+function ensureSidebarScrollButton(sidebar, direction) {
+  const existing = sidebar.querySelector(`[data-sidebar-scroll-jump="${direction}"]`);
+  if (existing) return existing;
+
+  const button = document.createElement('button');
+  button.type = 'button';
+  button.className = `sidebar-scroll-jump sidebar-scroll-jump-${direction}`;
+  button.dataset.sidebarScrollJump = direction;
+  button.setAttribute(
+    'aria-label',
+    direction === 'up'
+      ? 'In der Sidebar ganz nach oben scrollen'
+      : 'In der Sidebar ganz nach unten scrollen'
+  );
+  button.textContent = direction === 'up' ? '↑' : '↓';
+  button.hidden = true;
+  sidebar.appendChild(button);
+  return button;
+}
+
+function initSidebarScrollJumps() {
+  const sidebars = Array.from(document.querySelectorAll('.app-sidebar, .teacher-sidebar'));
+  if (!sidebars.length) return;
+
+  sidebars.forEach((sidebar) => {
+    const upButton = ensureSidebarScrollButton(sidebar, 'up');
+    const downButton = ensureSidebarScrollButton(sidebar, 'down');
+    let activeTarget = null;
+
+    const syncSidebarScrollJumps = () => {
+      const nextTarget = getSidebarScrollTarget(sidebar);
+
+      if (activeTarget !== nextTarget) {
+        if (activeTarget) activeTarget.removeEventListener('scroll', syncSidebarScrollJumps);
+        activeTarget = nextTarget;
+        if (activeTarget) activeTarget.addEventListener('scroll', syncSidebarScrollJumps, { passive: true });
+      }
+
+      if (!activeTarget) {
+        upButton.hidden = true;
+        downButton.hidden = true;
+        return;
+      }
+
+      const regionTop = activeTarget === sidebar ? 0 : activeTarget.offsetTop;
+      const regionHeight = activeTarget.clientHeight;
+      const maxScrollTop = Math.max(activeTarget.scrollHeight - activeTarget.clientHeight, 0);
+
+      sidebar.style.setProperty('--sidebar-scroll-region-top', `${regionTop}px`);
+      sidebar.style.setProperty('--sidebar-scroll-region-height', `${regionHeight}px`);
+
+      if (maxScrollTop <= 4) {
+        upButton.hidden = true;
+        downButton.hidden = true;
+        return;
+      }
+
+      upButton.hidden = activeTarget.scrollTop <= 8;
+      downButton.hidden = activeTarget.scrollTop >= maxScrollTop - 8;
+    };
+
+    upButton.addEventListener('click', () => {
+      const target = getSidebarScrollTarget(sidebar);
+      target.scrollTo({ top: 0, behavior: 'smooth' });
+    });
+
+    downButton.addEventListener('click', () => {
+      const target = getSidebarScrollTarget(sidebar);
+      target.scrollTo({ top: target.scrollHeight, behavior: 'smooth' });
+    });
+
+    if (typeof ResizeObserver === 'function') {
+      const resizeObserver = new ResizeObserver(() => {
+        syncSidebarScrollJumps();
+      });
+      resizeObserver.observe(sidebar);
+      const nav = sidebar.querySelector('.app-nav');
+      if (nav) resizeObserver.observe(nav);
+    }
+
+    window.addEventListener('resize', syncSidebarScrollJumps, { passive: true });
+    syncSidebarScrollJumps();
+  });
+}
+
+initSidebarScrollJumps();
+
 console.debug('School Panel assets loaded');

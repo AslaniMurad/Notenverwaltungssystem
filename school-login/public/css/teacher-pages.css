@@ -13,12 +13,16 @@
 }
 
 .teacher-shell {
+  --app-shell-sidebar-width: 280px;
+  --app-shell-max-width: 1200px;
   width: 100%;
   max-width: 1200px;
   margin: 0 auto;
 }
 
 .teacher-sidebar {
+  display: flex;
+  flex-direction: column;
   background: var(--teacher-surface);
   border: 1px solid var(--teacher-border);
   border-radius: var(--teacher-radius);
@@ -27,12 +31,37 @@
   position: sticky;
   top: 16px;
   align-self: start;
+  min-height: 0;
+  max-height: calc(100vh - 32px);
+  max-height: calc(100dvh - 32px);
+  overflow: hidden;
 }
 
 .teacher-main {
   background: transparent;
   display: grid;
   gap: 18px;
+}
+
+@media (min-width: 1025px) {
+  .page-teacher .app-shell.teacher-shell {
+    --app-sidebar-fixed-top: 24px;
+    --app-sidebar-fixed-left: max(24px, calc((100vw - var(--app-shell-max-width)) / 2 + 24px));
+  }
+
+  .teacher-sidebar {
+    position: fixed;
+    top: var(--app-sidebar-fixed-top);
+    left: var(--app-sidebar-fixed-left);
+    width: var(--app-shell-sidebar-width);
+    max-height: calc(100vh - var(--app-sidebar-fixed-top) - 24px);
+    max-height: calc(100dvh - var(--app-sidebar-fixed-top) - 24px);
+  }
+
+  .teacher-main {
+    grid-column: 2;
+    min-width: 0;
+  }
 }
 
 .teacher-main-header {
@@ -1440,10 +1469,20 @@
   justify-content: flex-end;
 }
 
-@media (max-width: 980px) {
+@media (max-width: 1024px) {
   .teacher-shell { grid-template-columns: 1fr; }
   .app-shell { grid-template-columns: 1fr; }
-  .teacher-sidebar { position: relative; top: 0; }
+  .teacher-sidebar {
+    position: relative;
+    top: 0;
+    max-height: none;
+    overflow: visible;
+  }
+  .teacher-sidebar .app-nav {
+    overflow: visible;
+    padding-right: 0;
+    margin-right: 0;
+  }
   .teacher-main-header { flex-direction: column; align-items: flex-start; }
   .teacher-thread-card .teacher-collapsible-summary {
     flex-direction: column;

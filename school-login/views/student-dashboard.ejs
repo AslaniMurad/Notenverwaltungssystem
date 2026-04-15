@@ -25,7 +25,7 @@
     hideFooter: true,
     content: function () { %>
     <button class="mobile-nav-toggle" aria-label="Navigation öffnen"></button>
-    <div class="app-shell app-shell-wide">
+    <div class="app-shell">
       <aside class="app-sidebar" aria-label="Schülernavigation">
         <%- include('./partials/sidebar-user-card', { user: { email, role: 'student', name: studentProfile.name } }) %>
 

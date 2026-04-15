@@ -35,6 +35,9 @@
   const buildExportUrl = (dataset) => selectedSchoolYear
     ? `/archive/export/${dataset}?school_year_id=${encodeURIComponent(selectedSchoolYear.id)}`
     : null;
+  const buildDangerUrl = (path) => selectedSchoolYear
+    ? `${path}?school_year_id=${encodeURIComponent(selectedSchoolYear.id)}`
+    : path;
   const selectedYearLabel = selectedSchoolYear
     ? formatDateRange(selectedSchoolYear.start_date, selectedSchoolYear.end_date)
     : 'Kein Schuljahr ausgewählt';
@@ -74,6 +77,7 @@
             <div>
               <p class="app-main-subtitle">Archiv</p>
               <h1>Archivdaten</h1>
+              <p class="archive-hero-copy">Historische Schuljahre für viel Datenvolumen aufbereitet und für Admin-Exporte sauber gebündelt.</p>
             </div>
             <div class="archive-toolbar-actions">
               <a class="btn btn-secondary" href="/admin/rollover">Schuljahreswechsel</a>
@@ -125,6 +129,13 @@
             </div>
           <% } %>
         </section>
+
+        <% if (dangerFlash?.message) { %>
+          <section class="admin-card archive-status-banner archive-status-banner-<%= dangerFlash.type || 'info' %>">
+            <strong>Sicherheitsaktion</strong>
+            <span><%= dangerFlash.message %></span>
+          </section>
+        <% } %>
 
         <section class="admin-card archive-toolbar">
           <div class="archive-toolbar-head">
@@ -453,6 +464,41 @@
               </div>
             </div>
           <% } %>
+        </section>
+
+        <section class="admin-card archive-danger-zone" id="archive-danger">
+          <div class="archive-danger-head">
+            <div>
+              <p class="admin-eyebrow">Danger-Zone</p>
+              <h2>Dauerhafte Löschaktionen (NOT FINISHED YET!!!!)</h2>
+            </div>
+            <span class="archive-danger-badge">Admin-Passwort erforderlich</span>
+          </div>
+
+          <div class="archive-danger-grid">
+            <a class="archive-danger-card" href="<%= buildDangerUrl('/archive/purge') %>">
+              <span class="archive-danger-card-label">Komplettes Archiv</span>
+              <strong>Einzelnes Archiv löschen</strong>
+              <span class="archive-danger-card-copy">Entfernt ein komplettes archiviertes Schuljahr inklusive Klassen, Zuordnungen, Noten und Archivstatus.</span>
+              <span class="archive-danger-card-action">Zur Funktion</span>
+            </a>
+            <a class="archive-danger-card" href="<%= buildDangerUrl('/archive/graduates') %>">
+              <span class="archive-danger-card-label">Schülerdaten</span>
+              <strong>Schulabgänger bereinigen</strong>
+              <span class="archive-danger-card-copy">Wählt ganze Klassen oder einzelne Personen aus und löscht nur die betroffenen Schülerdaten nach finaler Vorschau.</span>
+              <span class="archive-danger-card-action">Zur Funktion</span>
+            </a>
+          </div>
+
+          <div class="archive-danger-note">
+            <% if (selectedSchoolYear?.is_active) { %>
+              Das aktive Schuljahr ist geschützt. Auf den Folgeseiten sind nur archivierte Schuljahre für Löschungen erlaubt.
+            <% } else if (selectedSchoolYear) { %>
+              Vorausgewählt wird aktuell: <strong><%= selectedSchoolYear.name %></strong>.
+            <% } else { %>
+              Auf den Folgeseiten muss zuerst ein archiviertes Schuljahr gewählt werden.
+            <% } %>
+          </div>
         </section>
       </section>
     </div>
