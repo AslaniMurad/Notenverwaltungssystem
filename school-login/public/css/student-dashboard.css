@@ -88,6 +88,21 @@ body.page-student {
   box-shadow: var(--student-shadow);
 }
 
+.page-student #tasks > .card,
+.page-student #returns > .card,
+.page-student #requests > .card,
+.page-student #archive > .card {
+  transition: none;
+}
+
+.page-student #tasks > .card:hover,
+.page-student #returns > .card:hover,
+.page-student #requests > .card:hover,
+.page-student #archive > .card:hover {
+  border-color: var(--student-border);
+  box-shadow: var(--student-shadow);
+}
+
 header.dashboard-hero {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
