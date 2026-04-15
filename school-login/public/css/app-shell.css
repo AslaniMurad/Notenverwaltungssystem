@@ -35,20 +35,24 @@
 }
 
 .app-shell {
+  --app-shell-sidebar-width: 280px;
+  --app-shell-max-width: 1400px;
   display: grid;
-  grid-template-columns: 280px 1fr;
+  grid-template-columns: var(--app-shell-sidebar-width) 1fr;
   gap: 22px;
-  max-width: 1400px;
+  max-width: var(--app-shell-max-width);
   margin: 0 auto;
   width: 100%;
   padding: 24px;
 }
 
 .app-shell-wide {
-  max-width: 1600px;
+  --app-shell-max-width: 1600px;
 }
 
 .app-sidebar {
+  display: flex;
+  flex-direction: column;
   background: var(--shell-surface);
   border: 1px solid var(--shell-border);
   border-radius: var(--shell-radius);
@@ -57,7 +61,10 @@
   position: sticky;
   top: 18px;
   align-self: start;
-  min-height: calc(100vh - 80px);
+  min-height: 0;
+  max-height: calc(100vh - 36px);
+  max-height: calc(100dvh - 36px);
+  overflow: hidden;
 }
 
 .sidebar-brand {
@@ -167,6 +174,19 @@
 .app-nav {
   display: grid;
   gap: 10px;
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+  padding-right: 0;
+  margin-right: 0;
+}
+
+.app-nav::-webkit-scrollbar {
+  width: 0;
+  height: 0;
 }
 
 .nav-section-title {
@@ -410,6 +430,37 @@
   font-size: 18px;
 }
 
+@media (min-width: 1025px) {
+  body.page-admin .app-shell,
+  body.page-admin-edit .app-shell {
+    --app-sidebar-fixed-top: 52px;
+    --app-sidebar-fixed-left: max(24px, calc((100vw - var(--app-shell-max-width)) / 2));
+  }
+
+  body.page-student .app-shell.app-shell-wide {
+    --app-sidebar-fixed-top: 24px;
+    --app-sidebar-fixed-left: max(24px, calc((100vw - var(--app-shell-max-width)) / 2 + 24px));
+  }
+
+  body.page-admin .app-main,
+  body.page-admin-edit .app-main,
+  body.page-student .app-main {
+    grid-column: 2;
+    min-width: 0;
+  }
+
+  body.page-admin .app-sidebar,
+  body.page-admin-edit .app-sidebar,
+  body.page-student .app-sidebar {
+    position: fixed;
+    top: var(--app-sidebar-fixed-top);
+    left: var(--app-sidebar-fixed-left);
+    width: var(--app-shell-sidebar-width);
+    max-height: calc(100vh - var(--app-sidebar-fixed-top) - 24px);
+    max-height: calc(100dvh - var(--app-sidebar-fixed-top) - 24px);
+  }
+}
+
 @media (max-width: 1024px) {
   .app-shell {
     grid-template-columns: 1fr;
@@ -418,7 +469,14 @@
   .app-sidebar {
     position: relative;
     top: 0;
-    min-height: auto;
+    max-height: none;
+    overflow: visible;
+  }
+
+  .app-nav {
+    overflow: visible;
+    padding-right: 0;
+    margin-right: 0;
   }
 
   .sidebar-brand {
