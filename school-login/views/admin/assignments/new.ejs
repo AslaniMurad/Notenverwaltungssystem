@@ -1,11 +1,16 @@
 <%
-  const selClassId = selectedClassId ? String(selectedClassId) : (classes.length ? String(classes[0].id) : '');
-  const selSubjectId = selectedSubjectId ? String(selectedSubjectId) : (subjects.length ? String(subjects[0].id) : '');
+  const selClassId = selectedClassId ? String(selectedClassId) : '';
+  const selSubjectId = selectedSubjectId ? String(selectedSubjectId) : '';
   const selectedClass = classes.find((entry) => String(entry.id) === selClassId) || null;
-  const selectedSubject = subjects.find((entry) => String(entry.id) === selSubjectId) || null;
-  const assignedSet = new Set(assignedTeacherIds.map(Number));
+  const selectedSubject = classSubjects.find((entry) => String(entry.subject_id) === selSubjectId) || null;
   const newSubjectName = formData && formData.new_subject ? String(formData.new_subject) : '';
   const canAssign = Boolean(selectedClass && (createSubjectMode || selectedSubject));
+  const existingModeHref = selClassId
+    ? `/admin/assignments/new?class=${encodeURIComponent(selClassId)}`
+    : '/admin/assignments/new';
+  const createModeHref =
+    `/admin/assignments/new?${selClassId ? `class=${encodeURIComponent(selClassId)}&` : ''}create_subject=1` +
+    `${subjectPrefillId ? `&subject=${encodeURIComponent(subjectPrefillId)}` : ''}`;
   const page = {
     title: 'Admin - Lehrer zuordnen',
     headerTitle: 'Adminbereich',
@@ -23,7 +28,7 @@
           <div>
             <p class="app-main-subtitle">Unterrichtszuordnungen</p>
             <h1>Lehrer einem Klassenfach zuordnen</h1>
-            <p class="admin-muted">Klassen können ohne Fach starten. Hier wird das Fach pro Zuordnung festgelegt.</p>
+            <p class="admin-muted">Wähle zuerst eine Klasse. Danach arbeitest du nur mit den Fächern dieser Klasse oder legst ein neues Fach direkt für diese Klasse an.</p>
           </div>
           <a class="btn btn-secondary" href="/admin/assignments">Zur Übersicht</a>
         </div>
@@ -36,43 +41,90 @@
         <% } %>
 
         <div class="admin-card">
-          <% if (createSubjectMode) { %>
-            <form class="admin-form" method="GET" action="/admin/assignments/new">
-              <select name="class">
-                <% (classes || []).forEach((entry) => { %>
-                  <option value="<%= entry.id %>" <%= selClassId === String(entry.id) ? 'selected' : '' %>><%= entry.name %></option>
-                <% }) %>
-              </select>
+          <div class="admin-create-shell assign-mode-shell" data-active-mode="<%= createSubjectMode ? 'bulk' : 'single' %>">
+            <div class="admin-mode-switch" role="tablist" aria-label="Zuordnungsmodus">
+              <span class="admin-mode-switch-indicator" aria-hidden="true"></span>
+              <button
+                type="button"
+                class="admin-mode-switch-option <%= createSubjectMode ? '' : 'is-active' %>"
+                data-assign-mode-href="<%= existingModeHref %>"
+                role="tab"
+                aria-selected="<%= createSubjectMode ? 'false' : 'true' %>"
+              >
+                Bestehendes Klassenfach
+              </button>
+              <button
+                type="button"
+                class="admin-mode-switch-option <%= createSubjectMode ? 'is-active' : '' %>"
+                data-assign-mode-href="<%= createModeHref %>"
+                role="tab"
+                aria-selected="<%= createSubjectMode ? 'true' : 'false' %>"
+              >
+                Neues Fach für Klasse
+              </button>
+            </div>
+
+            <form class="admin-form assign-selection-form" id="assignment-selection-form" method="GET" action="/admin/assignments/new">
+            <select name="class" required>
+              <option value="">Klasse wählen</option>
+              <% (classes || []).forEach((entry) => { %>
+                <option value="<%= entry.id %>" <%= selClassId === String(entry.id) ? 'selected' : '' %>><%= entry.name %></option>
+              <% }) %>
+            </select>
+
+            <% if (createSubjectMode) { %>
               <input type="hidden" name="create_subject" value="1">
-              <button class="btn btn-secondary" type="submit">Klasse laden</button>
-              <a class="btn" href="/admin/assignments/new?class=<%= encodeURIComponent(selClassId) %>">Bestehendes Fach wählen</a>
-            </form>
-          <% } else { %>
-            <form class="admin-form" method="GET" action="/admin/assignments/new">
-              <select name="class">
-                <% (classes || []).forEach((entry) => { %>
-                  <option value="<%= entry.id %>" <%= selClassId === String(entry.id) ? 'selected' : '' %>><%= entry.name %></option>
+              <% if (subjectPrefillId) { %>
+                <input type="hidden" name="subject" value="<%= subjectPrefillId %>">
+              <% } %>
+            <% } else { %>
+              <select name="subject" <%= !selectedClass || !classSubjects.length ? 'disabled' : '' %>>
+                <option value="">Klassenfach wählen</option>
+                <% (classSubjects || []).forEach((entry) => { %>
+                  <option value="<%= entry.subject_id %>" <%= selSubjectId === String(entry.subject_id) ? 'selected' : '' %>>
+                    <%= entry.subject_name %> (<%= entry.teacher_count %> Lehrer)
+                  </option>
                 <% }) %>
               </select>
-              <select name="subject">
-                <% (subjects || []).forEach((entry) => { %>
-                  <option value="<%= entry.id %>" <%= selSubjectId === String(entry.id) ? 'selected' : '' %>><%= entry.name %></option>
-                <% }) %>
-              </select>
+            <% } %>
+
+            <noscript>
               <button class="btn btn-secondary" type="submit">Ansicht laden</button>
-              <a class="btn" href="/admin/assignments/new?class=<%= encodeURIComponent(selClassId) %>&create_subject=1">Neues Fach anlegen</a>
+            </noscript>
             </form>
-          <% } %>
+          </div>
+
           <% if (!classes.length) { %>
             <p class="admin-muted">Es gibt noch keine Klassen im aktiven Schuljahr.</p>
-          <% } else if (!subjects.length) { %>
-            <p class="admin-muted">Es gibt noch keine Fächer. Lege unten ein neues Fach an und ordne es direkt Lehrern zu.</p>
+          <% } else if (!selectedClass) { %>
+            <p class="admin-muted">Wähle zuerst eine Klasse. Erst danach werden passende Klassenfächer und Lehrkräfte geladen.</p>
+          <% } else if (!createSubjectMode && !classSubjects.length) { %>
+            <p class="admin-muted">Diese Klasse hat noch keine Fächer. Wechsle oben auf <strong>Neues Fach für Klasse</strong>, um das erste Fach anzulegen.</p>
+          <% } %>
+
+          <% if (selectedClass && classSubjects.length) { %>
+            <div class="assign-subject-summary">
+              <% classSubjects.forEach((entry) => { %>
+                <span class="assign-subject-chip <%= !createSubjectMode && selSubjectId === String(entry.subject_id) ? 'is-active' : '' %>">
+                  <span><%= entry.subject_name %></span>
+                  <small><%= entry.teacher_count %> Lehrer</small>
+                </span>
+              <% }) %>
+            </div>
           <% } %>
         </div>
 
         <% if (canAssign) { %>
           <div class="admin-card">
-            <form class="admin-form vertical" id="assignment-form" method="POST" action="/admin/assignments">
+            <form
+              class="admin-form vertical"
+              id="assignment-form"
+              method="POST"
+              action="/admin/assignments"
+              data-page-size="<%= teacherPageSize %>"
+              data-teacher-api="/admin/assignments/api/class/<%= selectedClass.id %>/teachers"
+              data-subject-id="<%= createSubjectMode ? '' : selSubjectId %>"
+            >
               <input type="hidden" name="_csrf" value="<%= csrfToken %>">
               <input type="hidden" name="class_id" value="<%= selClassId %>">
               <input type="hidden" name="create_subject" value="<%= createSubjectMode ? '1' : '0' %>">
@@ -80,9 +132,9 @@
               <div class="assign-class-info">
                 <span class="assign-class-info-label">Klasse:</span>
                 <span class="assign-class-info-value"><%= selectedClass.name %></span>
-                <span class="assign-class-info-sep">&mdash;</span>
+                <span class="assign-class-info-sep">-</span>
                 <span class="assign-class-info-label">Fach:</span>
-                <span class="assign-class-info-value"><%= createSubjectMode ? 'Neues Fach' : selectedSubject.name %></span>
+                <span class="assign-class-info-value" id="assignment-subject-preview"><%= createSubjectMode ? (newSubjectName || 'Neues Fach für diese Klasse') : selectedSubject.subject_name %></span>
               </div>
 
               <% if (createSubjectMode) { %>
@@ -95,65 +147,78 @@
                   placeholder="z.B. Mathematik"
                   required
                 >
-                <p class="admin-muted">Dieses Fach wird angelegt und direkt der gewählten Klasse mit den markierten Lehrern zugeordnet.</p>
+                <p class="admin-muted">Das Fach wird im Kontext dieser Klasse angelegt. Besteht der Fachname bereits, wird der vorhandene Fachdatensatz verwendet und nur die Lehrerzuordnung ergänzt.</p>
               <% } else { %>
                 <input type="hidden" name="subject_id" value="<%= selSubjectId %>">
+                <p class="admin-muted">Hier ordnest du Lehrkräfte nur einem bereits vorhandenen Klassenfach zu.</p>
               <% } %>
 
               <div class="assign-teacher-section">
-                <label>Lehrer auswählen</label>
-                <input
-                  type="text"
-                  id="teacher-search"
-                  class="assign-search-input"
-                  placeholder="Lehrer suchen..."
-                  autocomplete="off"
-                >
+                <div class="assign-teacher-toolbar">
+                  <div>
+                    <label for="teacher-search">Lehrer auswählen</label>
+                  </div>
+                  <span class="admin-muted assign-selection-count" id="selection-count"></span>
+                </div>
 
-                <div id="assigned-section" class="assign-group" style="<%= assignedSet.size ? '' : 'display:none' %>">
-                  <p class="assign-group-title">Bereits zugeordnet (<span id="assigned-count"><%= assignedSet.size %></span>)</p>
+                <div class="assign-search-row">
+                  <input
+                    type="text"
+                    id="teacher-search"
+                    class="assign-search-input"
+                    placeholder="Lehrer nach E-Mail suchen..."
+                    autocomplete="off"
+                  >
+                  <button class="btn btn-secondary" type="button" id="teacher-search-reset">Zurücksetzen</button>
+                  <button class="btn btn-secondary" type="button" id="teacher-load-more" hidden>Mehr laden</button>
+                </div>
+
+                <p class="admin-muted" id="teacher-summary">Lehrer werden geladen...</p>
+
+                <div id="assigned-section" class="assign-group" hidden>
+                  <p class="assign-group-title">Bereits zugeordnet</p>
                   <div class="assign-new-table-wrap">
                     <table class="assign-new-table" id="assigned-list">
-                      <thead><tr><th>Name</th><th>E-Mail</th><th>Status</th></tr></thead>
-                      <tbody>
-                        <% teachers.filter((t) => assignedSet.has(t.id)).forEach((teacher) => { %>
-                          <tr data-teacher-id="<%= teacher.id %>" data-search="<%= teacher.display_name.toLowerCase() %> <%= teacher.email.toLowerCase() %>" class="is-assigned">
-                            <td><%= teacher.display_name %></td>
-                            <td class="assign-email-cell"><%= teacher.email %></td>
-                            <td><span class="assign-badge-assigned">Zugeordnet</span></td>
-                          </tr>
-                        <% }) %>
-                      </tbody>
+                      <thead>
+                        <tr>
+                          <th>Name</th>
+                          <th>E-Mail</th>
+                          <th>Status</th>
+                        </tr>
+                      </thead>
+                      <tbody></tbody>
                     </table>
                   </div>
                 </div>
 
                 <div id="available-section" class="assign-group">
-                  <p class="assign-group-title">Verfügbare Lehrer (<span id="available-count"><%= teachers.filter((t) => !assignedSet.has(t.id)).length %></span>)</p>
+                  <p class="assign-group-title">Verfügbare Lehrer</p>
                   <div class="assign-new-table-wrap">
                     <table class="assign-new-table" id="available-list">
-                      <thead><tr><th class="assign-col-check"></th><th>Name</th><th>E-Mail</th></tr></thead>
-                      <tbody>
-                        <% teachers.filter((t) => !assignedSet.has(t.id)).forEach((teacher) => { %>
-                          <tr data-teacher-id="<%= teacher.id %>" data-search="<%= teacher.display_name.toLowerCase() %> <%= teacher.email.toLowerCase() %>">
-                            <td><label class="assign-check-cell"><input type="checkbox" class="assign-card-checkbox" name="teacher_ids" value="<%= teacher.id %>"></label></td>
-                            <td><%= teacher.display_name %></td>
-                            <td class="assign-email-cell"><%= teacher.email %></td>
-                          </tr>
-                        <% }) %>
-                      </tbody>
+                      <thead>
+                        <tr>
+                          <th class="assign-col-check"></th>
+                          <th>Name</th>
+                          <th>E-Mail</th>
+                        </tr>
+                      </thead>
+                      <tbody></tbody>
                     </table>
                   </div>
                 </div>
 
-                <p class="admin-muted assign-no-results" id="no-results" style="display:none">Keine Lehrer gefunden.</p>
+                <p class="admin-muted assign-no-results" id="no-results" hidden>Keine Lehrer gefunden.</p>
+                <div id="selected-inputs"></div>
               </div>
 
               <div class="admin-row wrap" style="margin-top: 8px">
                 <button class="btn btn-primary" type="submit" id="submit-btn">Lehrer zuordnen</button>
-                <span class="admin-muted assign-selection-count" id="selection-count"></span>
               </div>
             </form>
+
+            <noscript>
+              <p class="admin-muted">Für die Lehrersuche auf dieser Seite ist JavaScript erforderlich.</p>
+            </noscript>
           </div>
         <% } %>
       </section>
@@ -161,48 +226,272 @@
 
     <script>
       (function () {
-        var searchInput = document.getElementById('teacher-search');
-        var assignedSection = document.getElementById('assigned-section');
-        var availableSection = document.getElementById('available-section');
-        var noResults = document.getElementById('no-results');
-        var selectionCount = document.getElementById('selection-count');
-        var assignmentForm = document.getElementById('assignment-form');
-
-        if (!searchInput || !assignedSection || !availableSection || !selectionCount || !assignmentForm) return;
-
-        function filterTeachers() {
-          var query = searchInput.value.trim().toLowerCase();
-          var assignedRows = assignedSection.querySelectorAll('tbody tr[data-search]');
-          var availableRows = availableSection.querySelectorAll('tbody tr[data-search]');
-          var visibleAssigned = 0;
-          var visibleAvailable = 0;
-
-          assignedRows.forEach(function(row) {
-            var match = !query || (row.getAttribute('data-search') || '').indexOf(query) !== -1;
-            row.style.display = match ? 'table-row' : 'none';
-            if (match) visibleAssigned++;
+        Array.prototype.forEach.call(document.querySelectorAll('[data-assign-mode-href]'), function (button) {
+          button.addEventListener('click', function () {
+            var targetUrl = button.getAttribute('data-assign-mode-href');
+            if (!targetUrl) return;
+            window.location.href = targetUrl;
           });
-
-          availableRows.forEach(function(row) {
-            var match = !query || (row.getAttribute('data-search') || '').indexOf(query) !== -1;
-            row.style.display = match ? 'table-row' : 'none';
-            if (match) visibleAvailable++;
-          });
-
-          assignedSection.style.display = (assignedRows.length && visibleAssigned > 0) ? '' : 'none';
-          availableSection.style.display = visibleAvailable > 0 ? '' : 'none';
-          if (noResults) noResults.style.display = (visibleAvailable + visibleAssigned === 0) ? '' : 'none';
-        }
-
-        function updateSelectionCount() {
-          var checked = document.querySelectorAll('#available-list input[type="checkbox"]:checked');
-          selectionCount.textContent = checked.length ? checked.length + ' Lehrer ausgewählt' : '';
-        }
-
-        searchInput.addEventListener('input', filterTeachers);
-        assignmentForm.addEventListener('change', function(e) {
-          if (e.target.type === 'checkbox') updateSelectionCount();
         });
+
+        var selectionForm = document.getElementById('assignment-selection-form');
+        if (selectionForm) {
+          Array.prototype.forEach.call(selectionForm.querySelectorAll('select[name]'), function (select) {
+            select.addEventListener('change', function () {
+              if (select.disabled) return;
+              if (selectionForm.requestSubmit) {
+                selectionForm.requestSubmit();
+                return;
+              }
+              selectionForm.submit();
+            });
+          });
+        }
+
+        var newSubjectInput = document.getElementById('new_subject');
+        var subjectPreview = document.getElementById('assignment-subject-preview');
+        if (newSubjectInput && subjectPreview) {
+          var syncSubjectPreview = function () {
+            var value = newSubjectInput.value.trim();
+            subjectPreview.textContent = value || 'Neues Fach für diese Klasse';
+          };
+
+          newSubjectInput.addEventListener('input', syncSubjectPreview);
+          syncSubjectPreview();
+        }
+
+        var assignmentForm = document.getElementById('assignment-form');
+        if (!assignmentForm) return;
+
+        var apiUrl = assignmentForm.getAttribute('data-teacher-api');
+        var subjectId = assignmentForm.getAttribute('data-subject-id');
+        var pageSize = Number(assignmentForm.getAttribute('data-page-size') || 50);
+        var searchInput = document.getElementById('teacher-search');
+        var resetButton = document.getElementById('teacher-search-reset');
+        var loadMoreButton = document.getElementById('teacher-load-more');
+        var summary = document.getElementById('teacher-summary');
+        var noResults = document.getElementById('no-results');
+        var assignedSection = document.getElementById('assigned-section');
+        var assignedBody = document.querySelector('#assigned-list tbody');
+        var availableBody = document.querySelector('#available-list tbody');
+        var selectedInputs = document.getElementById('selected-inputs');
+        var selectionCount = document.getElementById('selection-count');
+
+        var state = {
+          query: '',
+          offset: 0,
+          totalAvailable: 0,
+          hasMore: false,
+          availableTeachers: [],
+          selectedTeachers: new Map(),
+          activeRequestId: 0
+        };
+        var searchTimer = null;
+
+        function syncSelectedInputs() {
+          selectedInputs.innerHTML = '';
+          state.selectedTeachers.forEach(function (teacher) {
+            var input = document.createElement('input');
+            input.type = 'hidden';
+            input.name = 'teacher_ids';
+            input.value = String(teacher.id);
+            selectedInputs.appendChild(input);
+          });
+        }
+
+        function updateSelectionCount(messageOverride) {
+          if (messageOverride) {
+            selectionCount.textContent = messageOverride;
+            return;
+          }
+          selectionCount.textContent = state.selectedTeachers.size
+            ? state.selectedTeachers.size + ' Lehrer ausgewählt'
+            : '';
+        }
+
+        function appendEmptyRow(tbody, colspan, message) {
+          var row = document.createElement('tr');
+          var cell = document.createElement('td');
+          cell.colSpan = colspan;
+          cell.className = 'assign-table-empty';
+          cell.textContent = message;
+          row.appendChild(cell);
+          tbody.appendChild(row);
+        }
+
+        function renderAssigned(teachers) {
+          assignedBody.innerHTML = '';
+          if (!teachers.length) {
+            assignedSection.hidden = true;
+            return;
+          }
+
+          assignedSection.hidden = false;
+          teachers.forEach(function (teacher) {
+            var row = document.createElement('tr');
+            row.className = 'is-assigned';
+
+            var nameCell = document.createElement('td');
+            nameCell.textContent = teacher.display_name;
+            row.appendChild(nameCell);
+
+            var emailCell = document.createElement('td');
+            emailCell.className = 'assign-email-cell';
+            emailCell.textContent = teacher.email;
+            row.appendChild(emailCell);
+
+            var statusCell = document.createElement('td');
+            var badge = document.createElement('span');
+            badge.className = 'assign-badge-assigned';
+            badge.textContent = 'Zugeordnet';
+            statusCell.appendChild(badge);
+            row.appendChild(statusCell);
+
+            assignedBody.appendChild(row);
+          });
+        }
+
+        function renderAvailable() {
+          availableBody.innerHTML = '';
+
+          if (!state.availableTeachers.length) {
+            appendEmptyRow(availableBody, 3, 'Keine verfügbaren Lehrer für die aktuelle Auswahl.');
+          } else {
+            state.availableTeachers.forEach(function (teacher) {
+              var row = document.createElement('tr');
+              row.setAttribute('data-teacher-id', String(teacher.id));
+
+              var checkCell = document.createElement('td');
+              checkCell.className = 'assign-col-check';
+              var checkLabel = document.createElement('label');
+              checkLabel.className = 'assign-check-cell';
+              var checkbox = document.createElement('input');
+              checkbox.type = 'checkbox';
+              checkbox.className = 'assign-card-checkbox';
+              checkbox.checked = state.selectedTeachers.has(Number(teacher.id));
+              checkbox.addEventListener('change', function () {
+                if (checkbox.checked) {
+                  state.selectedTeachers.set(Number(teacher.id), teacher);
+                } else {
+                  state.selectedTeachers.delete(Number(teacher.id));
+                }
+                syncSelectedInputs();
+                updateSelectionCount();
+              });
+              checkLabel.appendChild(checkbox);
+              checkCell.appendChild(checkLabel);
+              row.appendChild(checkCell);
+
+              var nameCell = document.createElement('td');
+              nameCell.textContent = teacher.display_name;
+              row.appendChild(nameCell);
+
+              var emailCell = document.createElement('td');
+              emailCell.className = 'assign-email-cell';
+              emailCell.textContent = teacher.email;
+              row.appendChild(emailCell);
+
+              availableBody.appendChild(row);
+            });
+          }
+
+          loadMoreButton.hidden = !state.hasMore;
+          noResults.hidden = !(state.totalAvailable === 0 && state.query);
+        }
+
+        function updateSummary() {
+          if (state.totalAvailable === 0) {
+            summary.textContent = state.query
+              ? 'Keine Treffer für die aktuelle Suche.'
+              : 'Keine verfügbaren Lehrer gefunden.';
+            return;
+          }
+
+          summary.textContent = state.query
+            ? state.availableTeachers.length + ' von ' + state.totalAvailable + ' Treffern geladen.'
+            : state.availableTeachers.length + ' von ' + state.totalAvailable + ' verfügbaren Lehrern geladen.';
+        }
+
+        function loadTeachers(reset) {
+          if (!apiUrl) return;
+          if (reset) {
+            state.offset = 0;
+            state.availableTeachers = [];
+          }
+
+          summary.textContent = 'Lehrer werden geladen...';
+          loadMoreButton.disabled = true;
+          resetButton.disabled = true;
+
+          var params = new URLSearchParams();
+          if (subjectId) params.set('subject_id', subjectId);
+          if (state.query) params.set('q', state.query);
+          params.set('limit', String(pageSize));
+          params.set('offset', String(state.offset));
+
+          var requestId = ++state.activeRequestId;
+          fetch(apiUrl + '?' + params.toString(), {
+            headers: { Accept: 'application/json' }
+          })
+            .then(function (response) {
+              if (!response.ok) throw new Error('Lehrerliste konnte nicht geladen werden.');
+              return response.json();
+            })
+            .then(function (data) {
+              if (requestId !== state.activeRequestId) return;
+
+              renderAssigned(Array.isArray(data.assignedTeachers) ? data.assignedTeachers : []);
+              var nextTeachers = Array.isArray(data.availableTeachers) ? data.availableTeachers : [];
+              state.availableTeachers = reset ? nextTeachers : state.availableTeachers.concat(nextTeachers);
+              state.totalAvailable = Number(data.totalAvailable || 0);
+              state.hasMore = Boolean(data.hasMore);
+              state.offset += nextTeachers.length;
+
+              renderAvailable();
+              updateSummary();
+              syncSelectedInputs();
+              updateSelectionCount();
+            })
+            .catch(function () {
+              summary.textContent = 'Lehrerliste konnte nicht geladen werden.';
+              availableBody.innerHTML = '';
+              appendEmptyRow(availableBody, 3, 'Beim Laden der Lehrer ist ein Fehler aufgetreten.');
+              loadMoreButton.hidden = true;
+              noResults.hidden = true;
+            })
+            .finally(function () {
+              loadMoreButton.disabled = false;
+              resetButton.disabled = false;
+            });
+        }
+
+        searchInput.addEventListener('input', function () {
+          window.clearTimeout(searchTimer);
+          searchTimer = window.setTimeout(function () {
+            state.query = String(searchInput.value || '').trim();
+            loadTeachers(true);
+          }, 250);
+        });
+
+        resetButton.addEventListener('click', function () {
+          state.query = '';
+          searchInput.value = '';
+          loadTeachers(true);
+          searchInput.focus();
+        });
+
+        loadMoreButton.addEventListener('click', function () {
+          if (!state.hasMore) return;
+          loadTeachers(false);
+        });
+
+        assignmentForm.addEventListener('submit', function (event) {
+          if (state.selectedTeachers.size > 0) return;
+          event.preventDefault();
+          updateSelectionCount('Mindestens einen Lehrer wählen.');
+        });
+
+        loadTeachers(true);
       })();
     </script>
 <% } }; %>

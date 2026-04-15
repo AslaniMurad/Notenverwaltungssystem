@@ -1210,6 +1210,62 @@ body.page-admin-edit {
 }
 
 /* ── Assignment form (new page) ── */
+.assign-subject-summary {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 14px;
+}
+
+.assign-selection-form {
+  align-items: stretch;
+}
+
+.assign-auto-hint {
+  margin-top: 10px;
+}
+
+.assign-row-actions {
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.assign-row-delete-form {
+  display: inline-flex;
+  margin: 0;
+}
+
+.assign-btn-remove {
+  min-width: 34px;
+  padding-inline: 0;
+}
+
+.assign-subject-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--surface-2);
+  color: var(--text);
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.assign-subject-chip small {
+  color: var(--text-muted, #6b7280);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.assign-subject-chip.is-active {
+  border-color: rgba(37, 99, 235, 0.35);
+  background: rgba(37, 99, 235, 0.08);
+}
+
 .assign-class-info {
   display: flex;
   align-items: center;
@@ -1240,6 +1296,26 @@ body.page-admin-edit {
 
 .assign-teacher-section {
   margin-top: 4px;
+}
+
+.assign-teacher-toolbar {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 10px;
+}
+
+.assign-search-row {
+  display: flex;
+  gap: 10px;
+  align-items: stretch;
+  flex-wrap: wrap;
+}
+
+.assign-search-row .assign-search-input {
+  flex: 1 1 320px;
+  margin-bottom: 0;
 }
 
 .assign-search-input {
@@ -1388,11 +1464,27 @@ body.page-admin-edit {
   padding: 16px;
 }
 
+.assign-table-empty {
+  color: var(--text-muted, #6b7280);
+  text-align: center;
+}
+
 .assign-selection-count {
   display: inline-flex;
   align-items: center;
   font-size: 13px;
   font-weight: 600;
+}
+
+@media (max-width: 720px) {
+  .assign-teacher-toolbar {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .assign-class-info {
+    flex-wrap: wrap;
+  }
 }
 
 /* ── Assignment index table ── */
@@ -1455,7 +1547,7 @@ body.page-admin-edit {
 }
 
 .assign-col-action {
-  width: 100px;
+  width: 180px;
   text-align: right;
 }
 

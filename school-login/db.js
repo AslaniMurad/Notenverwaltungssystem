@@ -445,6 +445,24 @@ function createFakeDb() {
         for (let i = teachingAssignments.length - 1; i >= 0; i -= 1) {
           if (teachingAssignments[i].id === Number(id)) teachingAssignments.splice(i, 1);
         }
+      } else if (/DELETE FROM subjects WHERE id = \?/i.test(sql)) {
+        const [id] = params;
+        const subjectRefId = Number(id);
+        const isReferenced =
+          classes.some((entry) => entry.subject_id === subjectRefId) ||
+          teachingAssignments.some((entry) => entry.subject_id === subjectRefId) ||
+          gradeTemplates.some((entry) => entry.subject_id === subjectRefId) ||
+          specialAssessments.some((entry) => entry.subject_id === subjectRefId) ||
+          participationMarks.some((entry) => entry.subject_id === subjectRefId) ||
+          teacherStudentExclusions.some((entry) => entry.subject_id === subjectRefId);
+
+        if (isReferenced) {
+          err = new Error("FOREIGN KEY constraint failed");
+        } else {
+          for (let i = subjects.length - 1; i >= 0; i -= 1) {
+            if (subjects[i].id === subjectRefId) subjects.splice(i, 1);
+          }
+        }
       } else if (/INSERT INTO teacher_student_exclusions/i.test(sql)) {
         const [teacher_id, class_id, subject_id, student_id, school_year_id] = params;
         const duplicate = teacherStudentExclusions.find(
@@ -1238,6 +1256,16 @@ function createFakeDb() {
         const [id] = params;
         const subject = subjects.find((entry) => entry.id === Number(id));
         row = subject ? { id: subject.id } : undefined;
+      } else if (/SELECT COUNT\(\*\) AS count FROM class_subject_teacher WHERE subject_id = \?/i.test(sql)) {
+        const [subjectIdParam] = params;
+        row = {
+          count: teachingAssignments.filter((entry) => entry.subject_id === Number(subjectIdParam)).length
+        };
+      } else if (/SELECT COUNT\(\*\) AS count FROM teacher_student_exclusions WHERE subject_id = \?/i.test(sql)) {
+        const [subjectIdParam] = params;
+        row = {
+          count: teacherStudentExclusions.filter((entry) => entry.subject_id === Number(subjectIdParam)).length
+        };
       } else if (/SELECT id, subject_id FROM classes WHERE id = \?/i.test(sql)) {
         const [id] = params;
         const classRow = classes.find((entry) => entry.id === Number(id));
@@ -1340,6 +1368,31 @@ function createFakeDb() {
         const [id] = params;
         const classRow = classes.find((c) => c.id === Number(id));
         row = classRow ? { id: classRow.id } : undefined;
+      } else if (/SELECT COUNT\(\*\) AS count\s+FROM users\s+WHERE role = 'teacher' AND status = 'active'/i.test(sql)) {
+        const hasSearch = /LOWER\(email\) LIKE LOWER\(\?\)/i.test(sql);
+        const hasExclude = /id NOT IN \(/i.test(sql);
+        let paramIndex = 0;
+        let searchNeedle = "";
+
+        if (hasSearch) {
+          searchNeedle = String(params[paramIndex++] || "").toLowerCase().replace(/%/g, "");
+        }
+
+        let excludedIds = [];
+        if (hasExclude) {
+          const placeholderMatch = sql.match(/id NOT IN \(([^)]+)\)/i);
+          const excludeCount = placeholderMatch ? (placeholderMatch[1].match(/\?/g) || []).length : 0;
+          excludedIds = params.slice(paramIndex, paramIndex + excludeCount).map((entry) => Number(entry));
+        }
+
+        row = {
+          count: users.filter((user) => {
+            if (user.role !== "teacher" || user.status !== "active") return false;
+            if (searchNeedle && !String(user.email || "").toLowerCase().includes(searchNeedle)) return false;
+            if (excludedIds.includes(Number(user.id))) return false;
+            return true;
+          }).length
+        };
       } else if (/SELECT COUNT\(\*\) AS count FROM class_subject_teacher WHERE teacher_id = \?/i.test(sql)) {
         const [teacher_id] = params;
         row = {
@@ -1830,6 +1883,34 @@ function createFakeDb() {
           )
           .sort((a, b) => String(a.name || "").localeCompare(String(b.name || "")))
           .map((entry) => ({ name: entry.name }));
+      } else if (/SELECT cst.subject_id,\s*s.name AS subject_name,\s*COUNT\(\*\) AS teacher_count\s+FROM class_subject_teacher cst/i.test(sql) && /WHERE cst.class_id = \? AND sy.is_active = \?/i.test(sql)) {
+        const [classIdParam, isActiveParam] = params;
+        const activeYearIds = schoolYears
+          .filter((entry) => Boolean(entry.is_active) === Boolean(isActiveParam))
+          .map((entry) => Number(entry.id));
+        const subjectMap = new Map();
+
+        teachingAssignments
+          .filter(
+            (entry) =>
+              entry.class_id === Number(classIdParam) &&
+              activeYearIds.includes(Number(entry.school_year_id))
+          )
+          .forEach((entry) => {
+            const subjectRow = subjects.find((subjectEntry) => subjectEntry.id === entry.subject_id) || {};
+            const key = Number(entry.subject_id);
+            if (!subjectMap.has(key)) {
+              subjectMap.set(key, {
+                subject_id: entry.subject_id,
+                subject_name: subjectRow.name || "",
+                teacher_count: 0
+              });
+            }
+            subjectMap.get(key).teacher_count += 1;
+          });
+
+        rows = [...subjectMap.values()]
+          .sort((a, b) => String(a.subject_name || "").localeCompare(String(b.subject_name || "")));
       } else if (/SELECT cst.subject_id,\s*COALESCE\(s.name, c.subject\) AS subject_name\s+FROM class_subject_teacher cst[\s\S]*WHERE cst.class_id = \? AND cst.school_year_id = c.school_year_id/i.test(sql)) {
         const [classIdParam] = params;
         const classRow = classes.find((entry) => entry.id === Number(classIdParam));
@@ -1872,6 +1953,26 @@ function createFakeDb() {
             };
           })
           .sort((a, b) => `${a.subject_name}`.localeCompare(`${b.subject_name}`));
+      } else if (/SELECT u.id,\s*u.email\s+FROM class_subject_teacher cst/i.test(sql) && /WHERE cst.class_id = \? AND cst.subject_id = \? AND sy.is_active = \?/i.test(sql)) {
+        const [classIdParam, subjectIdParam, isActiveParam] = params;
+        const activeYearIds = schoolYears
+          .filter((entry) => Boolean(entry.is_active) === Boolean(isActiveParam))
+          .map((entry) => Number(entry.id));
+        rows = teachingAssignments
+          .filter(
+            (entry) =>
+              entry.class_id === Number(classIdParam) &&
+              entry.subject_id === Number(subjectIdParam) &&
+              activeYearIds.includes(Number(entry.school_year_id))
+          )
+          .map((entry) => {
+            const teacher = users.find((userEntry) => userEntry.id === entry.teacher_id) || {};
+            return {
+              id: entry.teacher_id,
+              email: teacher.email
+            };
+          })
+          .sort((a, b) => String(a.email || "").localeCompare(String(b.email || "")));
       } else if (/SELECT cst.id AS assignment_id, c.id, c.name, s.name AS subject\s+FROM class_subject_teacher cst/i.test(sql)) {
         const [teacherIdParam] = params;
         rows = teachingAssignments
@@ -2054,6 +2155,36 @@ function createFakeDb() {
           .filter((c) => c.teacher_id === Number(teacher_id))
           .sort((a, b) => (a.created_at < b.created_at ? 1 : -1))
           .map((c) => ({ id: c.id, name: c.name, subject: c.subject }));
+      } else if (/SELECT id,\s*email\s+FROM users\s+WHERE role = 'teacher' AND status = 'active'[\s\S]*LIMIT \? OFFSET \?/i.test(sql)) {
+        const hasSearch = /LOWER\(email\) LIKE LOWER\(\?\)/i.test(sql);
+        const hasExclude = /id NOT IN \(/i.test(sql);
+        let paramIndex = 0;
+        let searchNeedle = "";
+
+        if (hasSearch) {
+          searchNeedle = String(params[paramIndex++] || "").toLowerCase().replace(/%/g, "");
+        }
+
+        let excludedIds = [];
+        if (hasExclude) {
+          const placeholderMatch = sql.match(/id NOT IN \(([^)]+)\)/i);
+          const excludeCount = placeholderMatch ? (placeholderMatch[1].match(/\?/g) || []).length : 0;
+          excludedIds = params.slice(paramIndex, paramIndex + excludeCount).map((entry) => Number(entry));
+          paramIndex += excludeCount;
+        }
+
+        const limit = Number(params[paramIndex++] || 50);
+        const offset = Number(params[paramIndex] || 0);
+        rows = users
+          .filter((user) => {
+            if (user.role !== "teacher" || user.status !== "active") return false;
+            if (searchNeedle && !String(user.email || "").toLowerCase().includes(searchNeedle)) return false;
+            if (excludedIds.includes(Number(user.id))) return false;
+            return true;
+          })
+          .sort((a, b) => String(a.email || "").localeCompare(String(b.email || "")))
+          .slice(offset, offset + limit)
+          .map((user) => ({ id: user.id, email: user.email }));
       } else if (/SELECT id, email FROM users WHERE role = 'teacher' AND status = 'active'/i.test(sql)) {
         rows = users
           .filter((u) => u.role === "teacher" && u.status === "active")

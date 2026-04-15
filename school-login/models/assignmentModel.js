@@ -22,6 +22,102 @@ async function listTeachers() {
   );
 }
 
+async function countAssignmentsForSubject(subjectId) {
+  if (!Number.isInteger(Number(subjectId)) || Number(subjectId) <= 0) return { count: 0 };
+  return getAsync(
+    "SELECT COUNT(*) AS count FROM class_subject_teacher WHERE subject_id = ?",
+    [subjectId]
+  );
+}
+
+async function countTeacherExclusionsForSubject(subjectId) {
+  if (!Number.isInteger(Number(subjectId)) || Number(subjectId) <= 0) return { count: 0 };
+  return getAsync(
+    "SELECT COUNT(*) AS count FROM teacher_student_exclusions WHERE subject_id = ?",
+    [subjectId]
+  );
+}
+
+async function listClassSubjects(classId) {
+  if (!Number.isInteger(Number(classId)) || Number(classId) <= 0) return [];
+  return allAsync(
+    `SELECT cst.subject_id,
+            s.name AS subject_name,
+            COUNT(*) AS teacher_count
+     FROM class_subject_teacher cst
+     JOIN school_years sy ON sy.id = cst.school_year_id
+     JOIN subjects s ON s.id = cst.subject_id
+     WHERE cst.class_id = ? AND sy.is_active = ?
+     GROUP BY cst.subject_id, s.name
+     ORDER BY s.name ASC`,
+    [classId, true]
+  );
+}
+
+async function listAssignedTeachersForClassSubject(classId, subjectId) {
+  if (!Number.isInteger(Number(classId)) || Number(classId) <= 0) return [];
+  if (!Number.isInteger(Number(subjectId)) || Number(subjectId) <= 0) return [];
+  return allAsync(
+    `SELECT u.id, u.email
+     FROM class_subject_teacher cst
+     JOIN school_years sy ON sy.id = cst.school_year_id
+     JOIN users u ON u.id = cst.teacher_id
+     WHERE cst.class_id = ? AND cst.subject_id = ? AND sy.is_active = ?
+     ORDER BY u.email ASC`,
+    [classId, subjectId, true]
+  );
+}
+
+async function countTeacherSearchResults({ search = "", excludeIds = [] } = {}) {
+  const normalizedSearch = String(search || "").trim();
+  const params = [];
+  const whereParts = ["role = 'teacher'", "status = 'active'"];
+
+  if (normalizedSearch) {
+    whereParts.push("LOWER(email) LIKE LOWER(?)");
+    params.push(`%${normalizedSearch}%`);
+  }
+
+  if (excludeIds.length) {
+    whereParts.push(`id NOT IN (${excludeIds.map(() => "?").join(",")})`);
+    params.push(...excludeIds);
+  }
+
+  return getAsync(
+    `SELECT COUNT(*) AS count
+     FROM users
+     WHERE ${whereParts.join(" AND ")}`,
+    params
+  );
+}
+
+async function listTeacherSearchResults({ search = "", excludeIds = [], limit = 50, offset = 0 } = {}) {
+  const normalizedSearch = String(search || "").trim();
+  const safeLimit = Math.max(Math.min(Number(limit) || 50, 200), 1);
+  const safeOffset = Math.max(Number(offset) || 0, 0);
+  const params = [];
+  const whereParts = ["role = 'teacher'", "status = 'active'"];
+
+  if (normalizedSearch) {
+    whereParts.push("LOWER(email) LIKE LOWER(?)");
+    params.push(`%${normalizedSearch}%`);
+  }
+
+  if (excludeIds.length) {
+    whereParts.push(`id NOT IN (${excludeIds.map(() => "?").join(",")})`);
+    params.push(...excludeIds);
+  }
+
+  return allAsync(
+    `SELECT id, email
+     FROM users
+     WHERE ${whereParts.join(" AND ")}
+     ORDER BY email ASC
+     LIMIT ? OFFSET ?`,
+    [...params, safeLimit, safeOffset]
+  );
+}
+
 async function getClassById(classId) {
   return getAsync("SELECT id, name, subject, subject_id, school_year_id FROM classes WHERE id = ?", [classId]);
 }
@@ -119,16 +215,27 @@ async function deleteAssignment(assignmentId) {
   return runAsync("DELETE FROM class_subject_teacher WHERE id = ?", [assignmentId]);
 }
 
+async function deleteSubject(subjectId) {
+  return runAsync("DELETE FROM subjects WHERE id = ?", [subjectId]);
+}
+
 module.exports = {
+  countAssignmentsForSubject,
+  countTeacherExclusionsForSubject,
   createAssignments,
   deleteAssignment,
+  deleteSubject,
   getClassById,
   getSubjectById,
+  countTeacherSearchResults,
+  listAssignedTeachersForClassSubject,
   listAssignedTeacherIdsForClass,
   listAssignmentGroups,
   listAssignmentRows,
+  listClassSubjects,
   listClasses,
   listSubjects,
+  listTeacherSearchResults,
   listTeachers,
   listValidTeacherIds
 };
