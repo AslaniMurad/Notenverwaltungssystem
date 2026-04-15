@@ -3,6 +3,7 @@ const { db } = require("../db");
 const SENSITIVE_KEY_PATTERN = /(password|pass|token|csrf|secret|hash)/i;
 const ALLOWED_METHODS = new Set(["POST", "PUT", "PATCH", "DELETE"]);
 const ENTITY_PATTERNS = [
+  { regex: /\/archive\/(purge|graduates)(\/|$)/i, entity: "archive" },
   { regex: /\/users(\/|$)/i, entity: "user" },
   { regex: /\/classes(\/|$)/i, entity: "class" },
   { regex: /\/students(\/|$)/i, entity: "student" },
@@ -43,6 +44,7 @@ const SUMMARY_LABELS = {
   ma_note: "Kommentar",
   grade_template_id: "Vorlage",
   subject_id: "Fach",
+  school_year_id: "Schuljahr",
   head_teacher_id: "Klassenvorstand",
   id: "ID",
   classId: "Klasse",
@@ -85,6 +87,7 @@ const VALUE_LABELS = {
   minus: "-"
 };
 const ENTITY_LABELS = {
+  archive: "Archiv",
   user: "Benutzer",
   class: "Klasse",
   student: "Schüler",
@@ -98,6 +101,7 @@ const ENTITY_LABELS = {
 const SKIPPED_SUMMARY_KEYS = new Set([
   "_csrf",
   "password",
+  "preview_token",
   "useInitial",
   "bulkUseInitial",
   "profile_id",
@@ -266,6 +270,7 @@ function buildActionText(actionTitle, targetLabel, detailSummary) {
 
 function buildScopeLabel(routePath, entityType) {
   const normalizedPath = String(routePath || "").toLowerCase();
+  if (normalizedPath.startsWith("/archive/purge") || normalizedPath.startsWith("/archive/graduates")) return "Archiv / Danger-Zone";
   if (normalizedPath.startsWith("/admin/users")) return "Admin / Benutzer";
   if (normalizedPath.startsWith("/admin/classes")) return "Admin / Klassen";
   if (normalizedPath.startsWith("/admin/assignments")) return "Admin / Fachzuordnungen";
@@ -306,6 +311,39 @@ function buildAuditDescription(req, routePath, entityType, entityId) {
   const hasFile = Boolean(req.file);
   const scopeLabel = buildScopeLabel(routePath, entityType);
   const entityTarget = buildEntityTarget(entityType, entityId);
+
+  if (/^\/archive\/purge\/preview$/i.test(routePath)) {
+    return buildAuditEntry({
+      scopeLabel,
+      actionTitle: "Archivlöschung geprüft",
+      targetLabel: buildTargetLabel(getFormattedSourceValue(body, "school_year_id"), entityTarget),
+      detailEntries: buildSummaryFromSource(body, ["school_year_id"])
+    });
+  }
+  if (/^\/archive\/purge\/execute$/i.test(routePath)) {
+    return buildAuditEntry({
+      scopeLabel,
+      actionTitle: "Archiv endgültig gelöscht",
+      targetLabel: buildTargetLabel(getFormattedSourceValue(body, "school_year_id"), entityTarget),
+      detailEntries: buildSummaryFromSource(body, ["school_year_id"])
+    });
+  }
+  if (/^\/archive\/graduates\/preview$/i.test(routePath)) {
+    return buildAuditEntry({
+      scopeLabel,
+      actionTitle: "Schulabgänger-Bereinigung geprüft",
+      targetLabel: buildTargetLabel(getFormattedSourceValue(body, "school_year_id"), entityTarget),
+      detailEntries: buildSummaryFromSource(body, ["school_year_id"])
+    });
+  }
+  if (/^\/archive\/graduates\/execute$/i.test(routePath)) {
+    return buildAuditEntry({
+      scopeLabel,
+      actionTitle: "Schulabgänger bereinigt",
+      targetLabel: buildTargetLabel(getFormattedSourceValue(body, "school_year_id"), entityTarget),
+      detailEntries: buildSummaryFromSource(body, ["school_year_id"])
+    });
+  }
 
   if (/^\/admin\/users$/i.test(routePath)) {
     return buildAuditEntry({

@@ -1,4 +1,10 @@
+const crypto = require("crypto");
+const { verifyPassword } = require("../db");
 const schoolYearModel = require("../models/schoolYearModel");
+const archiveDangerService = require("../services/archiveDangerService");
+const { getAsync } = require("../utils/dbAsync");
+
+const DANGER_PREVIEW_TTL_MS = 10 * 60 * 1000;
 
 function groupAssignments(rows) {
   const groups = new Map();
@@ -111,6 +117,103 @@ function toFilenamePart(value) {
     .replace(/^-+|-+$/g, "") || "export";
 }
 
+function getArchivePreviewStore(req) {
+  if (!req.session.archiveDangerPreviews) {
+    req.session.archiveDangerPreviews = {};
+  }
+  return req.session.archiveDangerPreviews;
+}
+
+function saveArchivePreviewState(req, key, value) {
+  const store = getArchivePreviewStore(req);
+  store[key] = value;
+}
+
+function readArchivePreviewState(req, key) {
+  return req.session?.archiveDangerPreviews?.[key] || null;
+}
+
+function clearArchivePreviewState(req, key) {
+  if (req.session?.archiveDangerPreviews) {
+    delete req.session.archiveDangerPreviews[key];
+  }
+}
+
+function createArchivePreviewToken() {
+  return crypto.randomBytes(24).toString("hex");
+}
+
+function isArchivePreviewStateValid(state, token) {
+  if (!state || !token || state.token !== token) return false;
+  const createdAt = Number(state.createdAt || 0);
+  if (!Number.isFinite(createdAt) || createdAt <= 0) return false;
+  return Date.now() - createdAt <= DANGER_PREVIEW_TTL_MS;
+}
+
+function setArchiveDangerFlash(req, type, message) {
+  req.session.archiveDangerFlash = { type, message };
+}
+
+function consumeArchiveDangerFlash(req) {
+  const flash = req.session?.archiveDangerFlash || null;
+  if (req.session?.archiveDangerFlash) {
+    delete req.session.archiveDangerFlash;
+  }
+  return flash;
+}
+
+async function verifyAdminPasswordForRequest(req, password) {
+  const normalizedPassword = String(password || "");
+  if (!normalizedPassword) return false;
+
+  const userRow = await getAsync(
+    "SELECT id, email, password_hash, role, status, must_change_password FROM users WHERE email = ?",
+    [req.session?.user?.email]
+  );
+
+  if (!userRow) return false;
+  if (String(userRow.role || "").toLowerCase() !== "admin") return false;
+  if (String(userRow.status || "").toLowerCase() !== "active") return false;
+
+  return verifyPassword(userRow.password_hash, normalizedPassword);
+}
+
+function archiveDangerBaseViewModel(req) {
+  return {
+    csrfToken: req.csrfToken(),
+    currentUser: req.session.user,
+    activePath: "/archive"
+  };
+}
+
+async function renderArchiveDeletePage(req, res, options = {}) {
+  const schoolYearId = options.schoolYearId ?? req.query.school_year_id ?? req.body?.school_year_id ?? null;
+  const pageData = options.pageData || await archiveDangerService.getArchiveDeletePageData({ schoolYearId });
+
+  return res.render("admin/archive-delete", {
+    ...archiveDangerBaseViewModel(req),
+    ...pageData,
+    error: options.error || null,
+    preview: options.preview || pageData.preview || null,
+    previewToken: options.previewToken || null,
+    flash: options.flash ?? consumeArchiveDangerFlash(req)
+  });
+}
+
+async function renderGraduateCleanupPage(req, res, options = {}) {
+  const schoolYearId = options.schoolYearId ?? req.query.school_year_id ?? req.body?.school_year_id ?? null;
+  const pageData = options.pageData || await archiveDangerService.getGraduateCleanupPageData({ schoolYearId });
+
+  return res.render("admin/archive-graduates", {
+    ...archiveDangerBaseViewModel(req),
+    ...pageData,
+    error: options.error || null,
+    preview: options.preview || pageData.preview || null,
+    previewToken: options.previewToken || null,
+    flash: options.flash ?? consumeArchiveDangerFlash(req)
+  });
+}
+
 const archiveCsvConfigs = {
   archives: {
     filenameSuffix: "archivstatus",
@@ -194,9 +297,200 @@ async function showArchive(req, res, next) {
       assignments,
       grades,
       archiveEntries,
-      archiveStats
+      archiveStats,
+      dangerFlash: consumeArchiveDangerFlash(req)
     });
   } catch (err) {
+    return next(err);
+  }
+}
+
+async function showArchiveDeletePage(req, res, next) {
+  try {
+    return await renderArchiveDeletePage(req, res);
+  } catch (err) {
+    return next(err);
+  }
+}
+
+async function previewArchiveDelete(req, res, next) {
+  try {
+    const pageData = await archiveDangerService.buildArchiveDeletePreview({
+      schoolYearId: req.body?.school_year_id
+    });
+    const previewToken = createArchivePreviewToken();
+
+    saveArchivePreviewState(req, "archiveDelete", {
+      token: previewToken,
+      createdAt: Date.now(),
+      schoolYearId: Number(pageData.selectedSchoolYear.id),
+      confirmationText: pageData.preview.confirmationText
+    });
+
+    return await renderArchiveDeletePage(req, res, {
+      pageData,
+      preview: pageData.preview,
+      previewToken
+    });
+  } catch (err) {
+    return await renderArchiveDeletePage(req, res, {
+      schoolYearId: req.body?.school_year_id,
+      error: err.message || "Archiv konnte nicht geprüft werden."
+    });
+  }
+}
+
+async function executeArchiveDelete(req, res, next) {
+  const previewToken = String(req.body?.preview_token || "");
+  const previewState = readArchivePreviewState(req, "archiveDelete");
+
+  try {
+    if (!isArchivePreviewStateValid(previewState, previewToken)) {
+      clearArchivePreviewState(req, "archiveDelete");
+      return await renderArchiveDeletePage(req, res, {
+        schoolYearId: req.body?.school_year_id,
+        error: "Die Bestätigung ist abgelaufen. Bitte die Vorschau erneut laden."
+      });
+    }
+
+    const pageData = await archiveDangerService.buildArchiveDeletePreview({
+      schoolYearId: previewState.schoolYearId
+    });
+
+    if (String(req.body?.confirmation_text || "").trim() !== previewState.confirmationText) {
+      return await renderArchiveDeletePage(req, res, {
+        pageData,
+        preview: pageData.preview,
+        previewToken: previewState.token,
+        error: "Die Sicherheitsbestätigung stimmt nicht exakt überein."
+      });
+    }
+
+    const passwordValid = await verifyAdminPasswordForRequest(req, req.body?.admin_password);
+    if (!passwordValid) {
+      return await renderArchiveDeletePage(req, res, {
+        pageData,
+        preview: pageData.preview,
+        previewToken: previewState.token,
+        error: "Das Admin-Passwort ist ungültig."
+      });
+    }
+
+    const result = await archiveDangerService.executeArchiveDelete({
+      schoolYearId: previewState.schoolYearId
+    });
+
+    clearArchivePreviewState(req, "archiveDelete");
+    setArchiveDangerFlash(req, "success", `Archiv ${result.deletedSchoolYearName} wurde endgültig gelöscht.`);
+    return res.redirect("/archive");
+  } catch (err) {
+    if (previewState?.schoolYearId) {
+      return await renderArchiveDeletePage(req, res, {
+        schoolYearId: previewState.schoolYearId,
+        error: err.message || "Archiv konnte nicht gelöscht werden."
+      });
+    }
+    return next(err);
+  }
+}
+
+async function showGraduateCleanupPage(req, res, next) {
+  try {
+    return await renderGraduateCleanupPage(req, res);
+  } catch (err) {
+    return next(err);
+  }
+}
+
+async function previewGraduateCleanup(req, res, next) {
+  try {
+    const pageData = await archiveDangerService.buildGraduateCleanupPreview({
+      schoolYearId: req.body?.school_year_id,
+      includedClassKeys: req.body?.included_class_keys,
+      personActions: req.body?.person_actions
+    });
+    const previewToken = createArchivePreviewToken();
+
+    saveArchivePreviewState(req, "graduateCleanup", {
+      token: previewToken,
+      createdAt: Date.now(),
+      schoolYearId: Number(pageData.selectedSchoolYear.id),
+      confirmationText: pageData.preview.confirmationText,
+      includedClassKeys: pageData.selection.includedClassKeys,
+      personActions: pageData.selection.personActions,
+      selectedEmailKeys: pageData.preview.selectedEmailKeys
+    });
+
+    return await renderGraduateCleanupPage(req, res, {
+      pageData,
+      preview: pageData.preview,
+      previewToken
+    });
+  } catch (err) {
+    return await renderGraduateCleanupPage(req, res, {
+      schoolYearId: req.body?.school_year_id,
+      error: err.message || "Schulabgänger-Bereinigung konnte nicht geprüft werden."
+    });
+  }
+}
+
+async function executeGraduateCleanup(req, res, next) {
+  const previewToken = String(req.body?.preview_token || "");
+  const previewState = readArchivePreviewState(req, "graduateCleanup");
+
+  try {
+    if (!isArchivePreviewStateValid(previewState, previewToken)) {
+      clearArchivePreviewState(req, "graduateCleanup");
+      return await renderGraduateCleanupPage(req, res, {
+        schoolYearId: req.body?.school_year_id,
+        error: "Die Bestätigung ist abgelaufen. Bitte die Vorschau erneut laden."
+      });
+    }
+
+    const pageData = await archiveDangerService.buildGraduateCleanupPreview({
+      schoolYearId: previewState.schoolYearId,
+      includedClassKeys: previewState.includedClassKeys,
+      personActions: previewState.personActions
+    });
+
+    if (String(req.body?.confirmation_text || "").trim() !== previewState.confirmationText) {
+      return await renderGraduateCleanupPage(req, res, {
+        pageData,
+        preview: pageData.preview,
+        previewToken: previewState.token,
+        error: "Die Sicherheitsbestätigung stimmt nicht exakt überein."
+      });
+    }
+
+    const passwordValid = await verifyAdminPasswordForRequest(req, req.body?.admin_password);
+    if (!passwordValid) {
+      return await renderGraduateCleanupPage(req, res, {
+        pageData,
+        preview: pageData.preview,
+        previewToken: previewState.token,
+        error: "Das Admin-Passwort ist ungültig."
+      });
+    }
+
+    const result = await archiveDangerService.executeGraduateCleanup({
+      schoolYearId: previewState.schoolYearId,
+      selectedEmailKeys: previewState.selectedEmailKeys
+    });
+
+    clearArchivePreviewState(req, "graduateCleanup");
+    setArchiveDangerFlash(
+      req,
+      "success",
+      `${result.cleanedPersonCount} Schulabgänger aus ${result.cleanedSchoolYearName} wurden bereinigt.`
+    );
+    return res.redirect("/archive");
+  } catch (err) {
+    if (previewState?.schoolYearId) {
+      return await renderGraduateCleanupPage(req, res, {
+        schoolYearId: previewState.schoolYearId,
+        error: err.message || "Schulabgänger konnten nicht bereinigt werden."
+      });
+    }
     return next(err);
   }
 }
@@ -239,5 +533,11 @@ async function downloadArchiveCsv(req, res, next) {
 
 module.exports = {
   downloadArchiveCsv,
-  showArchive
+  executeArchiveDelete,
+  executeGraduateCleanup,
+  previewArchiveDelete,
+  previewGraduateCleanup,
+  showArchive,
+  showArchiveDeletePage,
+  showGraduateCleanupPage
 };

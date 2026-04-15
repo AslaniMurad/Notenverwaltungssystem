@@ -313,6 +313,15 @@
   gap: 8px;
 }
 
+.school-year-rollover .school-year-add-row {
+  display: flex;
+  justify-content: flex-start;
+}
+
+.school-year-rollover .school-year-add-row-button {
+  min-height: 40px;
+}
+
 .school-year-rollover .school-year-badge {
   display: inline-flex;
   align-items: center;

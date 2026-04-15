@@ -55,6 +55,13 @@
   font-size: clamp(1.45rem, 2vw, 1.8rem);
 }
 
+.archive-hero-copy {
+  max-width: 52rem;
+  margin: 10px 0 0;
+  color: var(--text-muted);
+  line-height: 1.55;
+}
+
 .archive-toolbar-head h2,
 .archive-section-head h2 {
   font-size: clamp(1.15rem, 1.7vw, 1.35rem);
@@ -188,6 +195,23 @@
   color: var(--text-muted);
   font-size: 13px;
   line-height: 1.45;
+}
+
+.archive-status-banner {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.archive-status-banner-success {
+  border-color: rgba(22, 163, 74, 0.25);
+  background: rgba(22, 163, 74, 0.08);
+}
+
+.archive-status-banner-info {
+  border-color: rgba(37, 99, 235, 0.22);
+  background: rgba(37, 99, 235, 0.08);
 }
 
 .archive-jumpbar {
@@ -427,10 +451,128 @@
   font-size: 12px;
 }
 
+.archive-danger-zone {
+  display: grid;
+  gap: 16px;
+  border-color: var(--border);
+  background: var(--surface);
+  box-shadow: inset 3px 0 0 rgba(185, 28, 28, 0.18);
+}
+
+.archive-danger-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.archive-danger-copy {
+  max-width: 38rem;
+  margin: 8px 0 0;
+  color: var(--text-muted);
+  line-height: 1.55;
+}
+
+.archive-danger-badge {
+  display: inline-flex;
+  align-items: center;
+  min-height: 34px;
+  padding: 8px 12px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--surface-2);
+  color: #991b1b;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.archive-danger-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(260px, 1fr));
+  gap: 14px;
+}
+
+.archive-danger-card {
+  display: grid;
+  gap: 10px;
+  padding: 18px 20px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background:
+    linear-gradient(180deg, rgba(185, 28, 28, 0.03), rgba(185, 28, 28, 0)),
+    linear-gradient(90deg, rgba(185, 28, 28, 0.1) 0 4px, var(--surface) 4px 100%);
+  color: var(--text);
+  text-decoration: none;
+  box-shadow: 0 8px 18px rgba(15, 23, 42, 0.04);
+  transition: transform 0.16s ease, border-color 0.16s ease, background-color 0.16s ease, box-shadow 0.16s ease;
+}
+
+.archive-danger-card-label {
+  display: inline-flex;
+  align-items: center;
+  width: fit-content;
+  min-height: 26px;
+  padding: 4px 10px;
+  border: 1px solid rgba(185, 28, 28, 0.12);
+  border-radius: 999px;
+  background: rgba(185, 28, 28, 0.06);
+  color: #991b1b;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.archive-danger-card strong {
+  font-size: 1.05rem;
+  line-height: 1.3;
+}
+
+.archive-danger-card-copy,
+.archive-danger-note {
+  color: var(--text-muted);
+  line-height: 1.55;
+}
+
+.archive-danger-card-action {
+  display: inline-flex;
+  align-items: center;
+  width: fit-content;
+  margin-top: 4px;
+  padding: 6px 10px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--surface-2);
+  color: var(--text);
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1.2;
+}
+
+.archive-danger-card:hover {
+  transform: translateY(-1px);
+  border-color: rgba(185, 28, 28, 0.28);
+  background:
+    linear-gradient(180deg, rgba(185, 28, 28, 0.04), rgba(185, 28, 28, 0)),
+    linear-gradient(90deg, rgba(185, 28, 28, 0.14) 0 4px, var(--surface) 4px 100%);
+  box-shadow: 0 12px 24px rgba(15, 23, 42, 0.06);
+}
+
+.archive-danger-note {
+  padding: 12px 14px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface-2);
+}
+
 @media (max-width: 1080px) {
   .archive-toolbar-grid,
   .archive-section-tools,
   .archive-section-tools-wide {
+    grid-template-columns: 1fr;
+  }
+
+  .archive-danger-grid {
     grid-template-columns: 1fr;
   }
 
@@ -448,7 +590,8 @@
 
   .archive-hero-head,
   .archive-toolbar-head,
-  .archive-section-head {
+  .archive-section-head,
+  .archive-danger-head {
     flex-direction: column;
   }
 

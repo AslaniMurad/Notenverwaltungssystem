@@ -87,3 +87,22 @@ document.querySelectorAll("[data-rollover-restore-form]").forEach((restoreForm) 
     }
   })
 })
+
+const extraRowsBody = document.querySelector("[data-rollover-extra-rows]")
+const addExtraRowButton = document.querySelector("[data-rollover-add-extra-row]")
+const extraRowTemplate = document.querySelector("[data-rollover-extra-row-template]")
+
+if (extraRowsBody && addExtraRowButton && extraRowTemplate) {
+  addExtraRowButton.addEventListener("click", () => {
+    const nextIndex = Number(extraRowsBody.dataset.nextIndex || "0")
+    const templateMarkup = String(extraRowTemplate.innerHTML || "").replaceAll("__INDEX__", String(nextIndex))
+    if (!templateMarkup.trim()) return
+
+    extraRowsBody.insertAdjacentHTML("beforeend", templateMarkup)
+    extraRowsBody.dataset.nextIndex = String(nextIndex + 1)
+
+    const newRow = extraRowsBody.querySelector('[data-rollover-extra-row]:last-child')
+    const firstInput = newRow?.querySelector("select, input[type='text']")
+    if (firstInput) firstInput.focus()
+  })
+}

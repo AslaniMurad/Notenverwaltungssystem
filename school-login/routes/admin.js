@@ -115,6 +115,7 @@ const AUDIT_VALUE_LABELS = {
 };
 const AUDIT_HIDDEN_PAYLOAD_KEYS = new Set([
   "_csrf",
+  "preview_token",
   "password",
   "bulkPassword",
   "password_hash",

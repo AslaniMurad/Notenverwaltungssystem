@@ -24,6 +24,12 @@ function extractCsrfToken(html) {
   return match ? match[1] : null;
 }
 
+function extractHiddenInput(html, name) {
+  const escapedName = String(name).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const match = html.match(new RegExp(`name="${escapedName}"\\s+value="([^"]*)"`, "i"));
+  return match ? match[1] : null;
+}
+
 function buildCookieHeader(cookies) {
   if (!cookies.length) return {};
   const latestCookiesByName = new Map();
@@ -475,6 +481,7 @@ test("admin archive renders the optimized overview and exports CSV", async () =>
   assert.strictEqual(archivePage.response.status, 200);
   assert.match(archivePage.body, /Historische Schuljahre für viel Datenvolumen aufbereitet/);
   assert.match(archivePage.body, /CSV Noten/);
+  assert.match(archivePage.body, /Danger-Zone/);
 
   const csvResponse = await fetchWithCookies(
     "/archive/export/grades",
@@ -486,6 +493,168 @@ test("admin archive renders the optimized overview and exports CSV", async () =>
   assert.match(csvResponse.response.headers.get("content-disposition") || "", /archiv-.*-noten\.csv/);
   assert.match(csvResponse.body, /"Schüler"/);
   assert.match(csvResponse.body, /"Kommentar"/);
+});
+
+test("admin can delete an archived school year through the archive danger flow", async () => {
+  const loginResult = await loginAdmin();
+  const schoolYearName = "2023/2024";
+  const schoolYearInsert = await dbRun(
+    "INSERT INTO school_years (name, start_date, end_date, is_active) VALUES (?,?,?,?)",
+    [schoolYearName, "2023-09-01", "2024-06-30", 0]
+  );
+  const archivedSchoolYearId = schoolYearInsert.lastID;
+  const classInsert = await dbRun(
+    "INSERT INTO classes (name, subject, subject_id, school_year_id) VALUES (?,?,?,?)",
+    ["5AHIT", "Informatik", 1, archivedSchoolYearId]
+  );
+  await dbRun(
+    "INSERT INTO students (name, email, class_id, school_year) VALUES (?,?,?,?)",
+    ["Archiv Schüler", "archiv.schueler@example.com", classInsert.lastID, schoolYearName]
+  );
+  await dbRun(
+    "INSERT INTO archives (school_year_id, archive_type, entity_count) VALUES (?,?,?)",
+    [archivedSchoolYearId, "grades", 1]
+  );
+
+  const purgePage = await fetchWithCookies(`/archive/purge?school_year_id=${archivedSchoolYearId}`, {}, loginResult.cookies);
+  assert.strictEqual(purgePage.response.status, 200);
+  assert.match(purgePage.body, /Einzelnes Archiv löschen/);
+
+  const previewCsrf = extractCsrfToken(purgePage.body);
+  assert.ok(previewCsrf, "CSRF token missing on archive purge page");
+
+  const previewParams = new URLSearchParams({
+    _csrf: previewCsrf,
+    school_year_id: String(archivedSchoolYearId)
+  });
+  const previewResponse = await fetchWithCookies(
+    "/archive/purge/preview",
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/x-www-form-urlencoded" },
+      body: previewParams.toString()
+    },
+    purgePage.cookies
+  );
+  assert.strictEqual(previewResponse.response.status, 200);
+  assert.match(previewResponse.body, /ARCHIV LOESCHEN 2023\/2024/);
+
+  const executeCsrf = extractCsrfToken(previewResponse.body);
+  const previewToken = extractHiddenInput(previewResponse.body, "preview_token");
+  assert.ok(executeCsrf, "CSRF token missing on archive purge preview");
+  assert.ok(previewToken, "Preview token missing on archive purge preview");
+
+  const executeParams = new URLSearchParams({
+    _csrf: executeCsrf,
+    preview_token: previewToken,
+    school_year_id: String(archivedSchoolYearId),
+    confirmation_text: `ARCHIV LOESCHEN ${schoolYearName}`,
+    admin_password: "NewPass12345"
+  });
+  const executeResponse = await fetchWithCookies(
+    "/archive/purge/execute",
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/x-www-form-urlencoded" },
+      body: executeParams.toString(),
+      redirect: "manual"
+    },
+    previewResponse.cookies
+  );
+  assert.strictEqual(executeResponse.response.status, 302);
+  assert.strictEqual(executeResponse.response.headers.get("location"), "/archive");
+
+  const deletedSchoolYear = await dbGet("SELECT id, name, start_date, end_date, is_active FROM school_years WHERE id = ?", [archivedSchoolYearId]);
+  assert.strictEqual(deletedSchoolYear, undefined);
+});
+
+test("graduate cleanup can remove all memberships of a selected class name and deactivate orphaned student logins", async () => {
+  const loginResult = await loginAdmin();
+  const schoolYearName = "2022/2023";
+  const schoolYearInsert = await dbRun(
+    "INSERT INTO school_years (name, start_date, end_date, is_active) VALUES (?,?,?,?)",
+    [schoolYearName, "2022-09-01", "2023-06-30", 0]
+  );
+  const archivedSchoolYearId = schoolYearInsert.lastID;
+  const secondSubject = await dbRun("INSERT INTO subjects (name) VALUES (?)", ["Mathematik"]);
+  const firstClass = await dbRun(
+    "INSERT INTO classes (name, subject, subject_id, school_year_id) VALUES (?,?,?,?)",
+    ["5CHIT", "Informatik", 1, archivedSchoolYearId]
+  );
+  const secondClass = await dbRun(
+    "INSERT INTO classes (name, subject, subject_id, school_year_id) VALUES (?,?,?,?)",
+    ["5CHIT", "Mathematik", secondSubject.lastID, archivedSchoolYearId]
+  );
+  const studentUser = await dbRun(
+    "INSERT INTO users (email, password_hash, role, status, must_change_password) VALUES (?,?,?,?,?)",
+    ["grad.clean@example.com", "placeholder-hash", "student", "active", 0]
+  );
+  await dbRun(
+    "INSERT INTO students (name, email, class_id, school_year) VALUES (?,?,?,?)",
+    ["Grad Clean", "grad.clean@example.com", firstClass.lastID, schoolYearName]
+  );
+  await dbRun(
+    "INSERT INTO students (name, email, class_id, school_year) VALUES (?,?,?,?)",
+    ["Grad Clean", "grad.clean@example.com", secondClass.lastID, schoolYearName]
+  );
+
+  const cleanupPage = await fetchWithCookies(`/archive/graduates?school_year_id=${archivedSchoolYearId}`, {}, loginResult.cookies);
+  assert.strictEqual(cleanupPage.response.status, 200);
+  assert.match(cleanupPage.body, /Schulabgänger bereinigen/);
+
+  const previewCsrf = extractCsrfToken(cleanupPage.body);
+  assert.ok(previewCsrf, "CSRF token missing on graduate cleanup page");
+  const classSelectionKey = Buffer.from("5CHIT", "utf8").toString("base64url");
+  const previewParams = new URLSearchParams({
+    _csrf: previewCsrf,
+    school_year_id: String(archivedSchoolYearId),
+    included_class_keys: classSelectionKey
+  });
+  const previewResponse = await fetchWithCookies(
+    "/archive/graduates/preview",
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/x-www-form-urlencoded" },
+      body: previewParams.toString()
+    },
+    cleanupPage.cookies
+  );
+  assert.strictEqual(previewResponse.response.status, 200);
+  assert.match(previewResponse.body, /SCHULABGAENGER BEREINIGEN 2022\/2023/);
+  assert.match(previewResponse.body, /Grad Clean/);
+
+  const executeCsrf = extractCsrfToken(previewResponse.body);
+  const previewToken = extractHiddenInput(previewResponse.body, "preview_token");
+  assert.ok(executeCsrf, "CSRF token missing on graduate cleanup preview");
+  assert.ok(previewToken, "Preview token missing on graduate cleanup preview");
+
+  const executeParams = new URLSearchParams({
+    _csrf: executeCsrf,
+    preview_token: previewToken,
+    school_year_id: String(archivedSchoolYearId),
+    confirmation_text: `SCHULABGAENGER BEREINIGEN ${schoolYearName}`,
+    admin_password: "NewPass12345"
+  });
+  const executeResponse = await fetchWithCookies(
+    "/archive/graduates/execute",
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/x-www-form-urlencoded" },
+      body: executeParams.toString(),
+      redirect: "manual"
+    },
+    previewResponse.cookies
+  );
+  assert.strictEqual(executeResponse.response.status, 302);
+  assert.strictEqual(executeResponse.response.headers.get("location"), "/archive");
+
+  const firstMembership = await dbGet("SELECT id FROM students WHERE email = ? AND class_id = ?", ["grad.clean@example.com", firstClass.lastID]);
+  const secondMembership = await dbGet("SELECT id FROM students WHERE email = ? AND class_id = ?", ["grad.clean@example.com", secondClass.lastID]);
+  assert.strictEqual(firstMembership, undefined);
+  assert.strictEqual(secondMembership, undefined);
+
+  const studentUserRow = await dbGet("SELECT id, email, role, status, must_change_password FROM users WHERE id = ?", [studentUser.lastID]);
+  assert.strictEqual(studentUserRow.status, "deleted");
 });
 
 test("admin assignments page lists subjects without classes or teachers", async () => {
