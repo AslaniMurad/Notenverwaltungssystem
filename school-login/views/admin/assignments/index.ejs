@@ -16,8 +16,9 @@
           <div>
             <p class="app-main-subtitle">Unterrichtszuordnungen</p>
             <h1>Lehrer nach Klasse und Fach</h1>
-            <p class="admin-muted">Hier siehst du alle Lehrer-Klasse-Zuordnungen im aktuellen Schuljahr.</p>
+            <p class="admin-muted">Hier siehst du alle Lehrer-Klasse-Zuordnungen im aktuellen Schuljahr sowie Fächer ohne bestehende Zuordnung.</p>
           </div>
+          <a class="btn btn-secondary" href="/admin/assignments/new">Fächer verwalten</a>
         </div>
 
         <% if (message) { %>
@@ -31,7 +32,7 @@
           <div class="admin-topbar">
             <div>
               <p class="admin-eyebrow">Übersicht</p>
-              <h3>Aktive Zuordnungen</h3>
+              <h3>Zuordnungen und offene Fächer</h3>
             </div>
             <span class="admin-badge"><%= assignments.length %> Gruppen</span>
           </div>
@@ -61,35 +62,71 @@
                 </thead>
                 <tbody>
                   <% assignments.forEach((assignmentGroup) => { %>
+                    <%
+                      const deleteTitle = assignmentGroup.class_id ? 'Fachgruppe löschen' : 'Fach löschen';
+                      const deleteMessage = assignmentGroup.class_id
+                        ? `Möchtest du ${assignmentGroup.subject_name} aus ${assignmentGroup.class_name} wirklich löschen?`
+                        : `Möchtest du das unzugeordnete Fach ${assignmentGroup.subject_name} wirklich löschen?`;
+                      const deleteNote = assignmentGroup.class_id
+                        ? 'Alle Lehrerzuordnungen dieser Fachgruppe im aktiven Schuljahr werden entfernt. Gelöschte Daten sind möglicherweise nicht wiederherstellbar.'
+                        : 'Das Fach wird vollständig gelöscht, wenn es nirgends mehr verwendet wird. Gelöschte Daten sind möglicherweise nicht wiederherstellbar.';
+                    %>
                     <tr data-search="<%= assignmentGroup.class_name.toLowerCase() %> <%= assignmentGroup.subject_name.toLowerCase() %> <%= assignmentGroup.rows.map((r) => (r.teacher_display_name + ' ' + r.teacher_email).toLowerCase()).join(' ') %>">
                       <td class="assign-col-class">
                         <span class="assign-class-badge"><%= assignmentGroup.class_name %></span>
                       </td>
                       <td class="assign-col-subject"><%= assignmentGroup.subject_name %></td>
                       <td class="assign-col-teachers">
-                        <div class="assign-chips">
-                          <% assignmentGroup.rows.forEach((row) => { %>
-                            <span class="assign-chip">
-                              <span class="assign-chip-name"><%= row.teacher_display_name %></span>
-                              <form
-                                method="POST"
-                                action="/admin/assignments/delete"
-                                class="assign-chip-form"
-                                data-confirm-title="Zuordnung entfernen"
-                                data-confirm-message="<%= row.teacher_display_name %> (<%= row.teacher_email %>) von <%= assignmentGroup.class_name %> – <%= assignmentGroup.subject_name %> entfernen?"
-                                data-confirm-action="Entfernen"
-                                data-confirm-variant="danger"
-                              >
-                                <input type="hidden" name="_csrf" value="<%= csrfToken %>">
-                                <input type="hidden" name="assignment_id" value="<%= row.id %>">
-                                <button class="assign-chip-remove" type="submit" title="<%= row.teacher_display_name %> entfernen">&times;</button>
-                              </form>
-                            </span>
-                          <% }) %>
-                        </div>
+                        <% if (assignmentGroup.rows.length) { %>
+                          <div class="assign-chips">
+                            <% assignmentGroup.rows.forEach((row) => { %>
+                              <span class="assign-chip">
+                                <span class="assign-chip-name"><%= row.teacher_display_name %></span>
+                                <form
+                                  method="POST"
+                                  action="/admin/assignments/delete"
+                                  class="assign-chip-form"
+                                  data-confirm-title="Zuordnung entfernen"
+                                  data-confirm-message="<%= row.teacher_display_name %> (<%= row.teacher_email %>) von <%= assignmentGroup.class_name %> – <%= assignmentGroup.subject_name %> entfernen?"
+                                  data-confirm-action="Entfernen"
+                                  data-confirm-variant="danger"
+                                >
+                                  <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+                                  <input type="hidden" name="assignment_id" value="<%= row.id %>">
+                                  <button class="assign-chip-remove" type="submit" title="<%= row.teacher_display_name %> entfernen">&times;</button>
+                                </form>
+                              </span>
+                            <% }) %>
+                          </div>
+                        <% } else { %>
+                          <span class="admin-muted">Keine Lehrer zugeordnet.</span>
+                        <% } %>
                       </td>
                       <td class="assign-col-action">
-                        <a class="btn btn-secondary btn-sm assign-btn-add" href="/admin/assignments/new?class=<%= assignmentGroup.class_id %>&subject=<%= assignmentGroup.subject_id %>">+ Lehrer</a>
+                        <div class="assign-row-actions">
+                          <% if (assignmentGroup.class_id) { %>
+                            <a class="btn btn-secondary btn-sm assign-btn-add" href="/admin/assignments/new?class=<%= assignmentGroup.class_id %>&subject=<%= assignmentGroup.subject_id %>">+ Lehrer</a>
+                          <% } else { %>
+                            <a class="btn btn-secondary btn-sm assign-btn-add" href="/admin/assignments/new?subject=<%= assignmentGroup.subject_id %>">Klasse wählen</a>
+                          <% } %>
+                          <form
+                            method="POST"
+                            action="/admin/assignments/delete-group"
+                            class="assign-row-delete-form"
+                            data-confirm-title="<%= deleteTitle %>"
+                            data-confirm-message="<%= deleteMessage %>"
+                            data-confirm-note="<%= deleteNote %>"
+                            data-confirm-action="Löschen"
+                            data-confirm-variant="danger"
+                          >
+                            <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+                            <% if (assignmentGroup.class_id) { %>
+                              <input type="hidden" name="class_id" value="<%= assignmentGroup.class_id %>">
+                            <% } %>
+                            <input type="hidden" name="subject_id" value="<%= assignmentGroup.subject_id %>">
+                            <button class="btn btn-danger btn-sm assign-btn-remove" type="submit" title="<%= deleteTitle %>">X</button>
+                          </form>
+                        </div>
                       </td>
                     </tr>
                   <% }) %>

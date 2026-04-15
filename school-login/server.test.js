@@ -488,6 +488,141 @@ test("admin archive renders the optimized overview and exports CSV", async () =>
   assert.match(csvResponse.body, /"Kommentar"/);
 });
 
+test("admin assignments page lists subjects without classes or teachers", async () => {
+  const loginResult = await loginAdmin();
+  const subjectName = "Biologie ohne Zuordnung";
+
+  const insertResult = await dbRun("INSERT INTO subjects (name) VALUES (?)", [subjectName]);
+
+  const assignmentsPage = await fetchWithCookies("/admin/assignments", {}, loginResult.cookies);
+  assert.strictEqual(assignmentsPage.response.status, 200);
+  assert.match(assignmentsPage.body, /Fächer verwalten/);
+  assert.match(assignmentsPage.body, new RegExp(subjectName));
+  assert.match(assignmentsPage.body, /Keine Klasse/);
+  assert.match(assignmentsPage.body, /Keine Lehrer zugeordnet\./);
+  await dbRun("DELETE FROM subjects WHERE id = ?", [insertResult.lastID]);
+});
+
+test("admin assignment table can delete an unassigned subject with confirmation flow", async () => {
+  const loginResult = await loginAdmin();
+  const subjectName = "Darstellende Geometrie ohne Zuordnung";
+  const insertResult = await dbRun("INSERT INTO subjects (name) VALUES (?)", [subjectName]);
+  const csrfToken = await fetchCsrfToken("/admin/assignments", loginResult.cookies);
+
+  const deleteResponse = await fetchWithCookies(
+    "/admin/assignments/delete-group",
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/x-www-form-urlencoded" },
+      body: new URLSearchParams({
+        _csrf: csrfToken,
+        subject_id: String(insertResult.lastID)
+      }).toString(),
+      redirect: "manual"
+    },
+    loginResult.cookies
+  );
+
+  assert.strictEqual(deleteResponse.response.status, 302);
+  assert.strictEqual(deleteResponse.response.headers.get("location"), "/admin/assignments");
+
+  const refreshedPage = await fetchWithCookies("/admin/assignments", {}, loginResult.cookies);
+  assert.strictEqual(refreshedPage.response.status, 200);
+  assert.match(refreshedPage.body, /Unzugeordnetes Fach gelöscht\./);
+  assert.doesNotMatch(refreshedPage.body, new RegExp(subjectName));
+});
+
+test("admin assignment form only offers subjects from the selected class", async () => {
+  const loginResult = await loginAdmin();
+  const unrelatedSubject = "Deutsch ohne Klassenbezug";
+
+  const insertResult = await dbRun("INSERT INTO subjects (name) VALUES (?)", [unrelatedSubject]);
+
+  const assignmentForm = await fetchWithCookies("/admin/assignments/new?class=1", {}, loginResult.cookies);
+  assert.strictEqual(assignmentForm.response.status, 200);
+  assert.match(assignmentForm.body, /Klassenfach wählen/);
+  assert.match(assignmentForm.body, /Informatik \(1 Lehrer\)/);
+  assert.doesNotMatch(assignmentForm.body, new RegExp(unrelatedSubject));
+  await dbRun("DELETE FROM subjects WHERE id = ?", [insertResult.lastID]);
+});
+
+test("admin assignment teacher api paginates available teachers", async () => {
+  const loginResult = await loginAdmin();
+
+  await dbRun(
+    "INSERT INTO users (email, password_hash, role, status, must_change_password) VALUES (?,?,?,?,?)",
+    ["teacher.one@example.com", "hash", "teacher", "active", 0]
+  );
+  await dbRun(
+    "INSERT INTO users (email, password_hash, role, status, must_change_password) VALUES (?,?,?,?,?)",
+    ["teacher.two@example.com", "hash", "teacher", "active", 0]
+  );
+  await dbRun(
+    "INSERT INTO users (email, password_hash, role, status, must_change_password) VALUES (?,?,?,?,?)",
+    ["teacher.three@example.com", "hash", "teacher", "active", 0]
+  );
+
+  const teacherApiResponse = await fetchWithCookies(
+    "/admin/assignments/api/class/1/teachers?subject_id=1&limit=2",
+    { headers: { Accept: "application/json" } },
+    loginResult.cookies
+  );
+  assert.strictEqual(teacherApiResponse.response.status, 200);
+
+  const teacherApiData = JSON.parse(teacherApiResponse.body);
+  assert.ok(Array.isArray(teacherApiData.assignedTeachers));
+  assert.ok(Array.isArray(teacherApiData.availableTeachers));
+  assert.strictEqual(teacherApiData.assignedTeachers.length, 1);
+  assert.strictEqual(teacherApiData.availableTeachers.length, 2);
+  assert.strictEqual(Number(teacherApiData.totalAvailable), 3);
+  assert.strictEqual(teacherApiData.hasMore, true);
+});
+
+test("admin assignment table can delete a class subject group", async () => {
+  const loginResult = await loginAdmin();
+  const csrfToken = await fetchCsrfToken("/admin/assignments", loginResult.cookies);
+  const activeSchoolYear = await dbGet(
+    "SELECT id, name, start_date, end_date, is_active FROM school_years WHERE is_active = ? ORDER BY id DESC LIMIT 1",
+    [true]
+  );
+  const teacherRow = await dbGet("SELECT id, role FROM users WHERE email = ?", ["teacher@example.com"]);
+
+  try {
+  const deleteResponse = await fetchWithCookies(
+    "/admin/assignments/delete-group",
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/x-www-form-urlencoded" },
+      body: new URLSearchParams({
+        _csrf: csrfToken,
+        class_id: "1",
+        subject_id: "1"
+      }).toString(),
+      redirect: "manual"
+    },
+    loginResult.cookies
+  );
+
+  assert.strictEqual(deleteResponse.response.status, 302);
+  assert.strictEqual(deleteResponse.response.headers.get("location"), "/admin/assignments");
+
+  const assignmentsPage = await fetchWithCookies("/admin/assignments", {}, loginResult.cookies);
+  assert.strictEqual(assignmentsPage.response.status, 200);
+  assert.match(assignmentsPage.body, /Fachgruppe entfernt\. 1 Lehrerzuordnung\(en\) gelöscht\./);
+  assert.doesNotMatch(assignmentsPage.body, /teacher@example\.com/);
+  assert.match(assignmentsPage.body, /Noch keine Zuordnungen vorhanden\./);
+
+  const assignmentForm = await fetchWithCookies("/admin/assignments/new?class=1", {}, loginResult.cookies);
+  assert.strictEqual(assignmentForm.response.status, 200);
+  assert.match(assignmentForm.body, /Diese Klasse hat noch keine Fächer\./);
+  } finally {
+    await dbRun(
+      "INSERT INTO class_subject_teacher (class_id, subject_id, teacher_id, school_year_id) VALUES (?,?,?,?)",
+      [1, 1, teacherRow.id, activeSchoolYear.id]
+    );
+  }
+});
+
 test("audit logs keep appended changes and return live updates in descending order", async () => {
   const loginResult = await loginAdmin();
 
