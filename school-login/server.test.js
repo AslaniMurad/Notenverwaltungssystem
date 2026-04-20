@@ -514,6 +514,81 @@ test("teacher bulk grading resolves templates for the correct subject on multi-s
   assert.match(bulkPage.body, /Mehrfachfach Mathematik/);
 });
 
+test('teacher student grades treat "nicht da" with absence_mode=exclude as ohne Gewichtung', async () => {
+  const loginResult = await loginTeacher();
+  assert.strictEqual(loginResult.redirect, "/teacher");
+
+  const teacherRow = await dbGet("SELECT id FROM users WHERE email = ?", ["teacher@example.com"]);
+  assert.ok(teacherRow?.id, "Teacher user missing");
+
+  const classRow = await dbGet("SELECT id, subject_id FROM classes WHERE id = ?", [1]);
+  assert.ok(classRow?.subject_id, "Class subject missing");
+
+  const activeSchoolYear = await dbGet(
+    "SELECT id, name, start_date, end_date, is_active FROM school_years WHERE is_active = ? ORDER BY id DESC LIMIT 1",
+    [1]
+  );
+  assert.ok(activeSchoolYear?.id, "Active school year missing");
+
+  await dbRun("UPDATE teacher_grading_profiles SET is_active = ? WHERE teacher_id = ?", [
+    0,
+    teacherRow.id
+  ]);
+  await dbRun(
+    `INSERT INTO teacher_grading_profiles
+     (teacher_id, name, weight_mode, scoring_mode, absence_mode, grade1_min_percent, grade2_min_percent, grade3_min_percent, grade4_min_percent, ma_enabled, ma_weight, ma_grade_plus, ma_grade_plus_tilde, ma_grade_neutral, ma_grade_minus_tilde, ma_grade_minus, is_active)
+     VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+    [
+      teacherRow.id,
+      `Abwesenheit Neutral ${Date.now()}`,
+      "points",
+      "points_or_grade",
+      "exclude",
+      88.5,
+      75,
+      62.5,
+      50,
+      0,
+      5,
+      1.5,
+      2.5,
+      3,
+      3.5,
+      4.5,
+      1
+    ]
+  );
+
+  const templateInsert = await dbRun(
+    "INSERT INTO grade_templates (class_id, subject_id, name, category, weight, weight_mode, max_points, date, description) VALUES (?,?,?,?,?,?,?,?,?)",
+    [
+      1,
+      classRow.subject_id,
+      `Abwesenheitstest ${Date.now()}`,
+      "Test",
+      10,
+      "points",
+      20,
+      "2026-04-20",
+      "Regression fuer nicht da"
+    ]
+  );
+
+  await dbRun(
+    "INSERT INTO grades (student_id, class_id, grade_template_id, grade, points_achieved, points_max, note, attachment_path, attachment_original_name, attachment_mime, attachment_size, external_link, is_absent, school_year_id) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+    [1, 1, templateInsert.lastID, 5, null, null, "War nicht da", null, null, null, null, null, 1, activeSchoolYear.id]
+  );
+
+  const studentGradesPage = await fetchWithCookies("/teacher/student-grades/1/1", {}, loginResult.cookies);
+  assert.strictEqual(studentGradesPage.response.status, 200);
+  assert.match(studentGradesPage.body, /Ohne Gewichtung/);
+  assert.match(studentGradesPage.body, /Nicht gewichtet laut Einstellung bei &quot;nicht da&quot;|Nicht gewichtet laut Einstellung bei "nicht da"/);
+
+  const detailsPage = await fetchWithCookies("/teacher/student-grades/1/1/details", {}, loginResult.cookies);
+  assert.strictEqual(detailsPage.response.status, 200);
+  assert.match(detailsPage.body, /Nicht gewichtet \(Abwesenheit laut Profil\)\./);
+});
+
 test("student routes redirect when unauthenticated", async () => {
   const res = await fetchWithCookies("/student/grades", { redirect: "manual" });
   assert.strictEqual(res.response.status, 302);

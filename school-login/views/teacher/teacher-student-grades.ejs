@@ -269,6 +269,8 @@
                   <% } %>
                   <% if (grade.excluded_from_average) { %>
                     <p class="teacher-muted">Gewichtung entfernt. Der Eintrag bleibt sichtbar, zählt aber nicht zur Gesamtnote.</p>
+                  <% } else if (grade.excluded_by_absence_profile) { %>
+                    <p class="teacher-muted">Nicht gewichtet laut Einstellung bei "nicht da".</p>
                   <% } %>
                   <% if (grade.note) { %>
                     <p class="grade-description"><%= grade.note %></p>
