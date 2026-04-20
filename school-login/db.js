@@ -2265,7 +2265,7 @@ function createFakeDb() {
             student_id: entry.student_id,
             excluded_at: entry.excluded_at
           }));
-      } else if (/SELECT\s+id,\s*name,\s*email\s+FROM students\s+WHERE class_id = \?/i.test(sql) && /ORDER BY name/i.test(sql)) {
+      } else if (/SELECT\s+(DISTINCT\s+)?id,\s*name,\s*email\s+FROM students\s+WHERE class_id = \?/i.test(sql) && /ORDER BY name/i.test(sql)) {
         const hasNameFilter = /LOWER\(name\) LIKE LOWER\(\?\)/i.test(sql);
         const hasEmailFilter = /LOWER\(email\) LIKE LOWER\(\?\)/i.test(sql);
         let index = 0;
