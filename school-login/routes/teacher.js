@@ -1416,6 +1416,10 @@ function shouldSkipGradeForAbsence(grade, absenceMode) {
   return normalizeAbsenceMode(absenceMode) === ABSENCE_MODE_EXCLUDE;
 }
 
+function isGradeExcludedFromAverage(grade, absenceMode) {
+  return Boolean(grade?.excluded_from_average) || shouldSkipGradeForAbsence(grade, absenceMode);
+}
+
 function isValidGradeValue(value) {
   const numeric = Number(value);
   return Number.isFinite(numeric) && numeric >= 1 && numeric <= 5;
@@ -1441,8 +1445,7 @@ function computeWeightedAverage(grades, options = {}) {
   let weightTotal = 0;
 
   grades.forEach((grade) => {
-    if (grade?.excluded_from_average) return;
-    if (shouldSkipGradeForAbsence(grade, absenceMode)) return;
+    if (isGradeExcludedFromAverage(grade, absenceMode)) return;
     const value = Number(grade?.grade);
     const weight = grade?.weight == null ? 1 : Number(grade.weight);
     if (!isValidGradeValue(value) || !isValidWeightValue(weight)) return;
@@ -1486,8 +1489,7 @@ function computePointTotalsWithParticipation(entries, options = {}) {
   const absenceMode = normalizeAbsenceMode(options.absenceMode);
   return (entries || []).reduce(
     (acc, row) => {
-      if (row?.excluded_from_average) return acc;
-      if (shouldSkipGradeForAbsence(row, absenceMode)) return acc;
+      if (isGradeExcludedFromAverage(row, absenceMode)) return acc;
 
       const achieved = Number(row?.points_achieved);
       const max = Number(row?.points_max);
@@ -2744,6 +2746,9 @@ router.get("/student-grades/:classId/:studentId", async (req, res, next) => {
     const grades = gradeRows.map((row) => {
       const hasAttachment = Boolean(row.attachment_path);
       const resolvedWeightMode = row.is_special ? fallbackMode : resolveWeightMode(row.weight_mode);
+      const excludedFromAverage = Boolean(row.excluded_from_average);
+      const excludedByAbsenceProfile = shouldSkipGradeForAbsence(row, absenceMode);
+      const neutralizedForAverage = isGradeExcludedFromAverage(row, absenceMode);
       const pointsAchieved = Number(row.points_achieved);
       const pointsMax = Number(row.points_max);
       const hasPoints = Number.isFinite(pointsAchieved) && Number.isFinite(pointsMax) && pointsMax > 0;
@@ -2760,11 +2765,12 @@ router.get("/student-grades/:classId/:studentId", async (req, res, next) => {
         points_percent: pointsPercent,
         note: row.note,
         is_absent: Boolean(row.is_absent),
-        excluded_from_average: Boolean(row.excluded_from_average),
+        excluded_from_average: excludedFromAverage,
+        excluded_by_absence_profile: excludedByAbsenceProfile,
         category: row.category,
         weight: row.weight,
         weight_mode: resolvedWeightMode,
-        weight_label: row.excluded_from_average
+        weight_label: neutralizedForAverage
           ? "Ohne Gewichtung"
           : formatWeightLabel(row.weight, resolvedWeightMode),
         template_name: row.name,
@@ -2823,8 +2829,7 @@ router.get("/student-grades/:classId/:studentId", async (req, res, next) => {
             source: "participation"
           }))
         ]
-          .filter((row) => !row.excluded_from_average)
-          .filter((row) => !shouldSkipGradeForAbsence(row, absenceMode))
+          .filter((row) => !isGradeExcludedFromAverage(row, absenceMode))
           .filter(
             (row) =>
               isValidGradeValue(row.grade) &&
@@ -2915,12 +2920,12 @@ router.get("/student-grades/:classId/:studentId/details", async (req, res, next)
       const excludedFromAverage = Boolean(row.excluded_from_average);
       const isAbsent = Boolean(row.is_absent);
       const skippedForAbsence = shouldSkipGradeForAbsence({ is_absent: isAbsent }, absenceMode);
+      const neutralizedForAverage = excludedFromAverage || skippedForAbsence;
       const hasValidGrade = isValidGradeValue(gradeValue);
       const hasValidWeight = isValidWeightValue(effectiveWeight);
       const included =
         !studentExcluded &&
-        !excludedFromAverage &&
-        !skippedForAbsence &&
+        !neutralizedForAverage &&
         hasValidGrade &&
         hasValidWeight;
       const contributionValue = included ? gradeValue * effectiveWeight : 0;
@@ -2957,7 +2962,7 @@ router.get("/student-grades/:classId/:studentId/details", async (req, res, next)
         include_reason: includeReason,
         grade: hasValidGrade ? Number(gradeValue.toFixed(2)) : null,
         raw_weight: isValidWeightValue(rawWeight) ? Number(rawWeight.toFixed(2)) : null,
-        effective_weight: excludedFromAverage
+        effective_weight: neutralizedForAverage
           ? 0
           : hasValidWeight
             ? Number(effectiveWeight.toFixed(2))
@@ -4645,7 +4650,7 @@ router.get("/class-statistics/:classId", async (req, res, next) => {
         const student = studentMap.get(studentId);
         grades.forEach((grade) => {
           if (grade.is_special) return;
-          if (shouldSkipGradeForAbsence(grade, absenceMode)) return;
+          if (isGradeExcludedFromAverage(grade, absenceMode)) return;
           const matchesById =
             grade.template_id && Number(grade.template_id) === Number(template.id);
           const matchesByName = !grade.template_id && grade.name === template.name;
@@ -4696,7 +4701,7 @@ router.get("/class-statistics/:classId", async (req, res, next) => {
 
     gradesByStudent.forEach((grades) => {
       grades.forEach((grade) => {
-        if (shouldSkipGradeForAbsence(grade, absenceMode)) return;
+        if (isGradeExcludedFromAverage(grade, absenceMode)) return;
         const value = Number(grade.grade);
         const weight = grade?.weight == null ? 1 : Number(grade.weight);
         if (!isValidGradeValue(value) || !isValidWeightValue(weight)) return;
