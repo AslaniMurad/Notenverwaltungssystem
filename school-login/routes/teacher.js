@@ -890,6 +890,26 @@ async function loadClassSubjectsForTeacher(classId, teacherId) {
   );
 }
 
+function getRequestedSubjectSelection(req, classId) {
+  const rememberedSubjectId =
+    req.session?.teacherSubjectSelections?.[String(classId)] ?? null;
+  const subjectIdRaw =
+    req.params?.subjectId ??
+    req.query?.subject_id ??
+    req.body?.subject_id ??
+    rememberedSubjectId;
+  const hasSubjectConstraint = subjectIdRaw != null && String(subjectIdRaw).trim() !== "";
+  if (!hasSubjectConstraint) {
+    return { hasSubjectConstraint: false, requestedSubjectId: null, isValid: true };
+  }
+  const requestedSubjectId = Number(subjectIdRaw);
+  return {
+    hasSubjectConstraint: true,
+    requestedSubjectId,
+    isValid: Number.isFinite(requestedSubjectId)
+  };
+}
+
 async function loadClassForTeacher(classId, teacherId, requestedSubjectId = null) {
   const classRow = await getAsync(
     "SELECT id, name, subject, subject_id, school_year_id, created_at FROM classes WHERE id = ?",
@@ -928,6 +948,14 @@ async function loadClassForTeacher(classId, teacherId, requestedSubjectId = null
   };
 }
 
+function rememberTeacherSubjectSelection(req, classId, subjectId) {
+  if (!Number.isFinite(Number(subjectId))) return;
+  req.session.teacherSubjectSelections = {
+    ...(req.session.teacherSubjectSelections || {}),
+    [String(classId)]: Number(subjectId)
+  };
+}
+
 async function requireClassAccessForTeacher(req, res, classId, backUrl = "/teacher/classes") {
   const classExists = await getAsync("SELECT id FROM classes WHERE id = ?", [classId]);
   if (!classExists) {
@@ -935,16 +963,8 @@ async function requireClassAccessForTeacher(req, res, classId, backUrl = "/teach
     return null;
   }
 
-  const rememberedSubjectId =
-    req.session?.teacherSubjectSelections?.[String(classId)] ?? null;
-  const subjectIdRaw =
-    req.params?.subjectId ??
-    req.query?.subject_id ??
-    req.body?.subject_id ??
-    rememberedSubjectId;
-  const hasSubjectConstraint = subjectIdRaw != null && String(subjectIdRaw).trim() !== "";
-  const requestedSubjectId = hasSubjectConstraint ? Number(subjectIdRaw) : null;
-  if (hasSubjectConstraint && !Number.isFinite(requestedSubjectId)) {
+  const { hasSubjectConstraint, requestedSubjectId, isValid } = getRequestedSubjectSelection(req, classId);
+  if (hasSubjectConstraint && !isValid) {
     renderError(res, req, "Ungültiges Fach.", 400, backUrl);
     return null;
   }
@@ -966,10 +986,7 @@ async function requireClassAccessForTeacher(req, res, classId, backUrl = "/teach
     renderError(res, req, "Keine Berechtigung für diese Klasse/Fach-Zuordnung.", 403, backUrl);
     return null;
   }
-  req.session.teacherSubjectSelections = {
-    ...(req.session.teacherSubjectSelections || {}),
-    [String(classId)]: classData.subject_id
-  };
+  rememberTeacherSubjectSelection(req, classId, classData.subject_id);
   return classData;
 }
 
@@ -1039,6 +1056,69 @@ async function loadTemplateForClass(classId, subjectId, templateId) {
     [templateId, classId, subjectId]
   );
   return template ? enrichWeightData(template) : null;
+}
+
+async function loadTemplateForTeacher(classId, teacherId, templateId, requestedSubjectId = null) {
+  const subjectRows = await loadClassSubjectsForTeacher(classId, teacherId);
+  const accessibleSubjectIds = [...new Set(
+    subjectRows
+      .map((row) => Number(row.subject_id))
+      .filter((subjectId) => Number.isFinite(subjectId))
+  )];
+  if (!accessibleSubjectIds.length) return null;
+
+  let allowedSubjectIds = accessibleSubjectIds;
+  if (requestedSubjectId != null) {
+    const normalizedSubjectId = Number(requestedSubjectId);
+    if (!accessibleSubjectIds.includes(normalizedSubjectId)) return null;
+    allowedSubjectIds = [normalizedSubjectId];
+  }
+
+  const templates = await allAsync(
+    `SELECT id, name, category, weight, weight_mode, max_points, date, description, subject_id
+     FROM grade_templates
+     WHERE class_id = ?
+     ORDER BY date, name`,
+    [classId]
+  );
+  const template = (templates || []).find(
+    (entry) =>
+      Number(entry.id) === Number(templateId) &&
+      allowedSubjectIds.includes(Number(entry.subject_id))
+  );
+  return template ? enrichWeightData(template) : null;
+}
+
+async function loadTemplateContextForTeacher(req, res, classId, templateId, backUrl = `/teacher/grade-templates/${classId}`) {
+  const subjectSelection = getRequestedSubjectSelection(req, classId);
+  const classData = await requireClassAccessForTeacher(req, res, classId, backUrl);
+  if (!classData) return null;
+
+  const template = await loadTemplateForTeacher(
+    classId,
+    req.session.user.id,
+    templateId,
+    subjectSelection.hasSubjectConstraint ? subjectSelection.requestedSubjectId : null
+  );
+  if (!template) {
+    renderError(res, req, "Prüfung nicht gefunden.", 404, backUrl);
+    return null;
+  }
+  if (Number(template.subject_id) === Number(classData.subject_id)) {
+    return { classData, template };
+  }
+
+  const matchingClassData = await loadClassForTeacher(
+    classId,
+    req.session.user.id,
+    template.subject_id
+  );
+  if (!matchingClassData) {
+    renderError(res, req, "Keine Berechtigung für diese Klasse/Fach-Zuordnung.", 403, "/teacher/classes");
+    return null;
+  }
+  rememberTeacherSubjectSelection(req, classId, matchingClassData.subject_id);
+  return { classData: matchingClassData, template };
 }
 
 async function loadExistingGradesForTemplate(classId, subjectId, templateId) {
@@ -3647,15 +3727,9 @@ router.get("/bulk-grade-template/:classId/:templateId", async (req, res, next) =
   try {
     const classId = req.params.classId;
     const templateId = req.params.templateId;
-    const classData = await loadClassForTeacher(classId, req.session.user.id);
-    if (!classData) {
-      return renderError(res, req, "Klasse nicht gefunden.", 404, "/teacher/classes");
-    }
-
-    const template = await loadTemplateForClass(classId, classData.subject_id, templateId);
-    if (!template) {
-      return renderError(res, req, "Prüfung nicht gefunden.", 404, `/teacher/grade-templates/${classId}`);
-    }
+    const templateContext = await loadTemplateContextForTeacher(req, res, classId, templateId);
+    if (!templateContext) return;
+    const { classData, template } = templateContext;
 
     const activeProfile = await loadActiveTeacherProfile(req.session.user.id);
     if (!activeProfile) {
@@ -3712,15 +3786,9 @@ router.post("/bulk-grade-template/:classId/:templateId", async (req, res, next) 
   try {
     const classId = req.params.classId;
     const templateId = req.params.templateId;
-    const classData = await loadClassForTeacher(classId, req.session.user.id);
-    if (!classData) {
-      return renderError(res, req, "Klasse nicht gefunden.", 404, "/teacher/classes");
-    }
-
-    const template = await loadTemplateForClass(classId, classData.subject_id, templateId);
-    if (!template) {
-      return renderError(res, req, "Prüfung nicht gefunden.", 404, `/teacher/grade-templates/${classId}`);
-    }
+    const templateContext = await loadTemplateContextForTeacher(req, res, classId, templateId);
+    if (!templateContext) return;
+    const { classData, template } = templateContext;
 
     const activeProfile = await loadActiveTeacherProfile(req.session.user.id);
     if (!activeProfile) {

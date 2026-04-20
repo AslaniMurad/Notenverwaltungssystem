@@ -468,6 +468,52 @@ test("teacher bulk grading saves entries for numeric student ids", async () => {
   assert.doesNotMatch(resultPage.body, /Keine neuen Bewertungen zum Speichern gefunden\./);
 });
 
+test("teacher bulk grading resolves templates for the correct subject on multi-subject classes", async () => {
+  const loginResult = await loginTeacher();
+  assert.strictEqual(loginResult.redirect, "/teacher");
+
+  const teacherRow = await dbGet("SELECT id FROM users WHERE email = ?", ["teacher@example.com"]);
+  assert.ok(teacherRow?.id, "Teacher user missing");
+
+  const activeProfile = await dbGet(
+    "SELECT id FROM teacher_grading_profiles WHERE teacher_id = ? AND is_active = ? ORDER BY id ASC LIMIT 1",
+    [teacherRow.id, 1]
+  );
+  if (!activeProfile) {
+    await dbRun(
+      `INSERT INTO teacher_grading_profiles
+       (teacher_id, name, weight_mode, scoring_mode, absence_mode, grade1_min_percent, grade2_min_percent, grade3_min_percent, grade4_min_percent, ma_enabled, ma_weight, ma_grade_plus, ma_grade_plus_tilde, ma_grade_neutral, ma_grade_minus_tilde, ma_grade_minus, is_active)
+       VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+      [teacherRow.id, "Bulkprofil Mehrfachfach", "points", "points_or_grade", "include_zero", 88.5, 75, 62.5, 50, 0, 5, 1.5, 2.5, 3, 3.5, 4.5, 1]
+    );
+  }
+
+  const activeSchoolYear = await dbGet(
+    "SELECT id, name, start_date, end_date, is_active FROM school_years WHERE is_active = ? ORDER BY id DESC LIMIT 1",
+    [1]
+  );
+  assert.ok(activeSchoolYear?.id, "Active school year missing");
+
+  const subjectInsert = await dbRun("INSERT INTO subjects (name) VALUES (?)", ["Mehrfachfach Mathematik"]);
+  await dbRun(
+    "INSERT INTO class_subject_teacher (class_id, subject_id, teacher_id, school_year_id) VALUES (?,?,?,?)",
+    [1, subjectInsert.lastID, teacherRow.id, activeSchoolYear.id]
+  );
+  const templateInsert = await dbRun(
+    "INSERT INTO grade_templates (class_id, subject_id, name, category, weight, weight_mode, max_points, date, description) VALUES (?,?,?,?,?,?,?,?,?)",
+    [1, subjectInsert.lastID, "Mehrfachfach-Test", "Test", 1, "points", 20, "2026-04-20", "Regression fuer Bulk-Benotung"]
+  );
+
+  const bulkPage = await fetchWithCookies(
+    `/teacher/bulk-grade-template/1/${templateInsert.lastID}`,
+    {},
+    loginResult.cookies
+  );
+  assert.strictEqual(bulkPage.response.status, 200);
+  assert.match(bulkPage.body, /Mehrfachfach-Test/);
+  assert.match(bulkPage.body, /Mehrfachfach Mathematik/);
+});
+
 test("student routes redirect when unauthenticated", async () => {
   const res = await fetchWithCookies("/student/grades", { redirect: "manual" });
   assert.strictEqual(res.response.status, 302);
