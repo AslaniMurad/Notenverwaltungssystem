@@ -39,18 +39,90 @@
       ]
     }
   ];
-  const qaPlaceholders = [
+  const qaItems = [
     {
-      question: 'Lorem ipsum dolor sit amet?',
-      answer: 'Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua.'
+      question: 'Warum wirkt das neue Schuljahr unvollständig, obwohl ich schon einiges angelegt habe?',
+      answer: 'Oft wurde nur ein Teil der Struktur vorbereitet. Starte am besten mit dem Schuljahreswechsel, prüfe danach Nutzer und Rollen, lege die Klassen an und ergänze erst dann die Unterrichtszuordnungen.'
     },
     {
-      question: 'Consectetur adipiscing elit?',
-      answer: 'Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat.'
+      question: 'Warum kann ich eine Klasse anlegen, obwohl noch kein Fach oder Lehrer eingetragen ist?',
+      answer: 'Das ist absichtlich getrennt. So kannst du zuerst die Klassenstruktur aufbauen und danach in Ruhe Fächer und Lehrkräfte ergänzen, statt alles in einem Schritt fertig haben zu müssen.'
     },
     {
-      question: 'Sed do eiusmod tempor incididunt?',
-      answer: 'Duis aute irure dolor in reprehenderit in voluptate velit esse cillum dolore eu fugiat nulla pariatur.'
+      question: 'Warum sieht eine Lehrkraft ihre Klasse oder ihr Fach noch nicht?',
+      answer: 'Meist fehlt noch die Unterrichtszuordnung. Prüfe, ob Klasse, Fach und Lehrkraft wirklich miteinander verknüpft wurden, denn erst dann erscheint der Unterricht an der richtigen Stelle.'
+    },
+    {
+      question: 'Warum reicht es nicht, nur einen Klassenvorstand einzutragen?',
+      answer: 'Weil der Klassenvorstand nicht automatisch alle Fachzuordnungen ersetzt. Wenn eine Lehrkraft auch unterrichten soll, muss sie zusätzlich dem passenden Fach in der Klasse zugeordnet werden.'
+    },
+    {
+      question: 'Warum entsteht manchmal kein neues Fach, obwohl ich eines anlegen wollte?',
+      answer: 'Wenn der Fachname in dieser Klasse bereits existiert, wird oft der vorhandene Fachdatensatz weiterverwendet. Prüfe daher zuerst die Fachübersicht der Klasse, bevor du dasselbe Fach noch einmal anlegst.'
+    },
+    {
+      question: 'Warum funktioniert die Bulk-Zuordnung nicht wie eine automatische Kontoerstellung?',
+      answer: 'Weil die Funktion nur bestehende Student-Konten einer Klasse zuordnet. Wenn Konten noch fehlen, müssen sie zuerst in der Nutzerverwaltung angelegt werden.'
+    },
+    {
+      question: 'Warum schlagen bei der Bulk-Zuordnung nur einzelne Zeilen fehl?',
+      answer: 'Jede E-Mail wird einzeln geprüft. Schau dir die Fehlgründe im Ergebnis an und korrigiere genau diese Einträge, statt die ganze Liste neu zu machen.'
+    },
+    {
+      question: 'Warum steht der Name eines Schülers nicht automatisch richtig drin?',
+      answer: 'Die automatische Ableitung funktioniert nur, wenn das Namensfeld leer ist und die E-Mail dem Muster vorname.nachname@... folgt. Wenn das nicht passt, trage den Namen besser direkt ein.'
+    },
+    {
+      question: 'Warum kann ich für Lehrkräfte kein INITIAL_PASSWORD verwenden?',
+      answer: 'Das ist im System absichtlich eingeschränkt. Für Lehrkräfte musst du ein eigenes Passwort setzen, damit diese Konten nicht mit einer zu allgemeinen Startlogik angelegt oder zurückgesetzt werden.'
+    },
+    {
+      question: 'Warum wird ein Nutzer nach dem ersten Login direkt zum Passwortwechsel gezwungen?',
+      answer: 'Wenn ein Konto noch als Startpasswort-Konto markiert ist, verlangt das System sofort ein neues Passwort. Das ist normal und sorgt dafür, dass kein dauerhaftes Standardpasswort verwendet wird.'
+    },
+    {
+      question: 'Warum wurde bei der Bulk-Anlage nur ein Teil der Nutzer erstellt?',
+      answer: 'Die Anlage läuft zeilenweise. Erfolgreiche Einträge bleiben bestehen, während problematische E-Mails separat fehlschlagen, zum Beispiel bei Duplikaten oder ungültigen Angaben.'
+    },
+    {
+      question: 'Warum sollte ich einen Nutzer bearbeiten statt neu anzulegen?',
+      answer: 'Weil du so Rolle, Status oder Passwort ändern kannst, ohne ein zweites Konto zu erzeugen. Das ist besonders wichtig, wenn dieselbe Person im System bereits sauber verknüpft ist.'
+    },
+    {
+      question: 'Warum finde ich in der Nutzerliste allein oft nicht genug Informationen?',
+      answer: 'Die Liste zeigt nur die Grunddaten des Kontos. In der Detailansicht siehst du zusätzlich den fachlichen Zusammenhang, also etwa Klassenbezüge bei Schülern oder Unterrichtsbezüge bei Lehrkräften.'
+    },
+    {
+      question: 'Warum lohnt sich ein Blick ins Audit-Log, wenn etwas plötzlich anders aussieht?',
+      answer: 'Weil du dort nachvollziehen kannst, wer welche Aktion ausgelöst hat. Das hilft besonders dann, wenn du nicht sicher bist, ob eine Änderung absichtlich, versehentlich oder durch den falschen Bereich passiert ist.'
+    },
+    {
+      question: 'Warum finde ich im Audit-Log manche Einträge erst nach genauerem Filtern?',
+      answer: 'Weil das Protokoll viele Bereiche sammelt. Nutze Suchtext, Akteur, Route, Entität, Methode, Statuscode und Bereich zusammen, um von allgemein auf präzise einzugrenzen.'
+    },
+    {
+      question: 'Warum sollte ich alte Daten nicht einfach im aktiven Bereich stehen lassen?',
+      answer: 'Weil das aktuelle Schuljahr sonst unübersichtlicher wird. Im Archiv bleiben historische Klassen, Zuordnungen und Noten erhalten, ohne die laufende Arbeit unnötig zu belasten.'
+    },
+    {
+      question: 'Warum ist Archiv ansehen etwas ganz anderes als Archiv löschen?',
+      answer: 'Die normale Archivansicht ist zum Nachsehen, Filtern und Exportieren gedacht. Die Löschfunktionen in der Danger-Zone sind dauerhaft und sollten nur verwendet werden, wenn wirklich bewusst Daten entfernt werden sollen.'
+    },
+    {
+      question: 'Warum muss ich nicht gleich das ganze Archiv löschen, wenn nur einzelne Schulabgänger bereinigt werden sollen?',
+      answer: 'Weil es dafür eine gezielte Funktion gibt. Du kannst ganze Klassen oder einzelne Personen auswählen und nur diese Schülerdaten entfernen, ohne den Rest des archivierten Schuljahres anzutasten.'
+    },
+    {
+      question: 'Warum verlangt das System vor Archiv-Löschungen eine Vorschau und einen exakten Bestätigungstext?',
+      answer: 'Damit du vor der Ausführung siehst, wie viele Klassen, Personen, Noten, Zuordnungen und Logins betroffen sind. Erst wenn das bewusst bestätigt wird, wird die kritische Aktion freigegeben.'
+    },
+    {
+      question: 'Warum stoppt der Schuljahreswechsel-Assistent, wenn das Zielschuljahr schon existiert?',
+      answer: 'Damit keine doppelte oder widersprüchliche Struktur entsteht. Wenn Name oder Zeitraum schon auf ein vorhandenes Schuljahr zeigen, solltest du die Angaben zuerst korrigieren.'
+    },
+    {
+      question: 'Warum sollte ich den Schuljahreswechsel nicht einfach sofort ausführen?',
+      answer: 'Weil du vorher noch wichtige Dinge steuern kannst: Zielklassen planen, zusätzliche Klassen anlegen, Standardaktionen für Schüler setzen und einzelne Fälle gezielt überschreiben. Gerade diese Prüfung spart später viel Korrekturarbeit.'
     }
   ];
 %>
@@ -96,14 +168,14 @@
           <% }) %>
         </section>
 
-        <section class="admin-home-qa-section" aria-label="Q and A Platzhalter">
+        <section class="admin-home-qa-section" aria-label="Häufige Fragen für Admins">
           <div class="admin-home-qa-head">
-            <p class="admin-eyebrow">Q and A</p>
-            <h2>Platzhalter fuer spaeter</h2>
+            <p class="admin-eyebrow">FAQ</p>
+            <h2>Häufige Fragen zum Adminbereich</h2>
           </div>
 
           <div class="admin-home-qa-list">
-            <% qaPlaceholders.forEach((item) => { %>
+            <% qaItems.forEach((item) => { %>
               <details class="admin-home-qa-item">
                 <summary><%= item.question %></summary>
                 <p><%= item.answer %></p>
