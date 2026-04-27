@@ -41,84 +41,108 @@
   ];
   const qaItems = [
     {
+      question: 'Wie erstelle ich einen neuen Nutzer?',
+      answer: 'Gehe über den Schnellzugriff oder die Nutzerverwaltung auf „Nutzer anlegen“. Dort kannst du einzelne Konten oder mehrere Konten per Bulk-Eingabe erstellen.'
+    },
+    {
       question: 'Warum wirkt das neue Schuljahr unvollständig, obwohl ich schon einiges angelegt habe?',
       answer: 'Oft wurde nur ein Teil der Struktur vorbereitet. Starte am besten mit dem Schuljahreswechsel, prüfe danach Nutzer und Rollen, lege die Klassen an und ergänze erst dann die Unterrichtszuordnungen.'
     },
     {
-      question: 'Warum kann ich eine Klasse anlegen, obwohl noch kein Fach oder Lehrer eingetragen ist?',
-      answer: 'Das ist absichtlich getrennt. So kannst du zuerst die Klassenstruktur aufbauen und danach in Ruhe Fächer und Lehrkräfte ergänzen, statt alles in einem Schritt fertig haben zu müssen.'
+      question: 'Wie bearbeite ich einen bestehenden Nutzer?',
+      answer: 'Suche den Nutzer in der Nutzerliste und öffne den Bearbeiten-Bereich. Dort kannst du unter anderem E-Mail, Rolle, Status und bei Bedarf auch das Passwort anpassen.'
     },
     {
       question: 'Warum sieht eine Lehrkraft ihre Klasse oder ihr Fach noch nicht?',
       answer: 'Meist fehlt noch die Unterrichtszuordnung. Prüfe, ob Klasse, Fach und Lehrkraft wirklich miteinander verknüpft wurden, denn erst dann erscheint der Unterricht an der richtigen Stelle.'
     },
     {
+      question: 'Wie füge ich einer Klasse ein Fach oder eine Lehrkraft hinzu?',
+      answer: 'Öffne die Unterrichtszuordnung und wähle zuerst die Klasse aus. Danach kannst du entweder ein bestehendes Fach verwenden oder ein neues Fach anlegen und anschließend die passende Lehrkraft zuordnen.'
+    },
+    {
       question: 'Warum reicht es nicht, nur einen Klassenvorstand einzutragen?',
       answer: 'Weil der Klassenvorstand nicht automatisch alle Fachzuordnungen ersetzt. Wenn eine Lehrkraft auch unterrichten soll, muss sie zusätzlich dem passenden Fach in der Klasse zugeordnet werden.'
+    },
+    {
+      question: 'Wie setze ich das Passwort eines Nutzers zurück?',
+      answer: 'Öffne den Nutzer über die Nutzerliste, gehe auf Bearbeiten und nutze dort die Passwort-Funktion. So musst du das Konto nicht löschen oder neu anlegen.'
     },
     {
       question: 'Warum entsteht manchmal kein neues Fach, obwohl ich eines anlegen wollte?',
       answer: 'Wenn der Fachname in dieser Klasse bereits existiert, wird oft der vorhandene Fachdatensatz weiterverwendet. Prüfe daher zuerst die Fachübersicht der Klasse, bevor du dasselbe Fach noch einmal anlegst.'
     },
     {
+      question: 'Wie exportiere ich Archivdaten für ein bestimmtes Schuljahr?',
+      answer: 'Öffne das Archiv, lade das gewünschte Schuljahr und nutze danach die CSV-Exportlinks im Archivbereich. So kannst du je nach Bedarf Klassen, Zuordnungen, Noten oder Archivstatus herunterladen.'
+    },
+    {
       question: 'Warum funktioniert die Bulk-Zuordnung nicht wie eine automatische Kontoerstellung?',
       answer: 'Weil die Funktion nur bestehende Student-Konten einer Klasse zuordnet. Wenn Konten noch fehlen, müssen sie zuerst in der Nutzerverwaltung angelegt werden.'
+    },
+    {
+      question: 'Wie füge ich einer Klasse Schüler hinzu?',
+      answer: 'Öffne die gewünschte Klasse und gehe in die Schülerverwaltung. Dort kannst du einzelne Schüler direkt zuordnen oder mehrere bestehende Student-Konten per E-Mail-Liste gesammelt hinzufügen.'
     },
     {
       question: 'Warum schlagen bei der Bulk-Zuordnung nur einzelne Zeilen fehl?',
       answer: 'Jede E-Mail wird einzeln geprüft. Schau dir die Fehlgründe im Ergebnis an und korrigiere genau diese Einträge, statt die ganze Liste neu zu machen.'
     },
     {
+      question: 'Wie erstelle ich eine neue Klasse?',
+      answer: 'Gehe im Adminbereich auf „Klasse erstellen“, vergib den Klassennamen und speichere die Klasse. Fächer und Lehrkräfte kannst du danach Schritt für Schritt ergänzen.'
+    },
+    {
       question: 'Warum steht der Name eines Schülers nicht automatisch richtig drin?',
       answer: 'Die automatische Ableitung funktioniert nur, wenn das Namensfeld leer ist und die E-Mail dem Muster vorname.nachname@... folgt. Wenn das nicht passt, trage den Namen besser direkt ein.'
+    },
+    {
+      question: 'Wie lege ich mehrere Nutzer gleichzeitig an?',
+      answer: 'Nutze beim Anlegen von Nutzern den Bulk-Modus. Dort kannst du mehrere E-Mail-Adressen gesammelt einfügen und mit einer gemeinsamen Rolle in einem Schritt verarbeiten.'
     },
     {
       question: 'Warum kann ich für Lehrkräfte kein INITIAL_PASSWORD verwenden?',
       answer: 'Das ist im System absichtlich eingeschränkt. Für Lehrkräfte musst du ein eigenes Passwort setzen, damit diese Konten nicht mit einer zu allgemeinen Startlogik angelegt oder zurückgesetzt werden.'
     },
     {
+      question: 'Wie starte ich den Schuljahreswechsel richtig?',
+      answer: 'Öffne den Schuljahreswechsel-Assistenten, trage das neue Schuljahr mit Zeitraum ein und arbeite danach die Schritte für Klassen, Schüler und die Abschlussprüfung der Reihe nach durch.'
+    },
+    {
       question: 'Warum wird ein Nutzer nach dem ersten Login direkt zum Passwortwechsel gezwungen?',
       answer: 'Wenn ein Konto noch als Startpasswort-Konto markiert ist, verlangt das System sofort ein neues Passwort. Das ist normal und sorgt dafür, dass kein dauerhaftes Standardpasswort verwendet wird.'
-    },
-    {
-      question: 'Warum wurde bei der Bulk-Anlage nur ein Teil der Nutzer erstellt?',
-      answer: 'Die Anlage läuft zeilenweise. Erfolgreiche Einträge bleiben bestehen, während problematische E-Mails separat fehlschlagen, zum Beispiel bei Duplikaten oder ungültigen Angaben.'
-    },
-    {
-      question: 'Warum sollte ich einen Nutzer bearbeiten statt neu anzulegen?',
-      answer: 'Weil du so Rolle, Status oder Passwort ändern kannst, ohne ein zweites Konto zu erzeugen. Das ist besonders wichtig, wenn dieselbe Person im System bereits sauber verknüpft ist.'
-    },
-    {
-      question: 'Warum finde ich in der Nutzerliste allein oft nicht genug Informationen?',
-      answer: 'Die Liste zeigt nur die Grunddaten des Kontos. In der Detailansicht siehst du zusätzlich den fachlichen Zusammenhang, also etwa Klassenbezüge bei Schülern oder Unterrichtsbezüge bei Lehrkräften.'
     },
     {
       question: 'Warum lohnt sich ein Blick ins Audit-Log, wenn etwas plötzlich anders aussieht?',
       answer: 'Weil du dort nachvollziehen kannst, wer welche Aktion ausgelöst hat. Das hilft besonders dann, wenn du nicht sicher bist, ob eine Änderung absichtlich, versehentlich oder durch den falschen Bereich passiert ist.'
     },
     {
-      question: 'Warum finde ich im Audit-Log manche Einträge erst nach genauerem Filtern?',
-      answer: 'Weil das Protokoll viele Bereiche sammelt. Nutze Suchtext, Akteur, Route, Entität, Methode, Statuscode und Bereich zusammen, um von allgemein auf präzise einzugrenzen.'
+      question: 'Warum wurde bei der Bulk-Anlage nur ein Teil der Nutzer erstellt?',
+      answer: 'Die Anlage läuft zeilenweise. Erfolgreiche Einträge bleiben bestehen, während problematische E-Mails separat fehlschlagen, zum Beispiel bei Duplikaten oder ungültigen Angaben.'
     },
     {
-      question: 'Warum sollte ich alte Daten nicht einfach im aktiven Bereich stehen lassen?',
-      answer: 'Weil das aktuelle Schuljahr sonst unübersichtlicher wird. Im Archiv bleiben historische Klassen, Zuordnungen und Noten erhalten, ohne die laufende Arbeit unnötig zu belasten.'
+      question: 'Wie finde ich alte Daten oder Exporte aus einem früheren Schuljahr?',
+      answer: 'Öffne das Archiv und lade das gewünschte Schuljahr. Dort kannst du die historischen Daten durchsuchen und passende CSV-Exporte direkt herunterladen.'
     },
     {
       question: 'Warum ist Archiv ansehen etwas ganz anderes als Archiv löschen?',
       answer: 'Die normale Archivansicht ist zum Nachsehen, Filtern und Exportieren gedacht. Die Löschfunktionen in der Danger-Zone sind dauerhaft und sollten nur verwendet werden, wenn wirklich bewusst Daten entfernt werden sollen.'
     },
     {
-      question: 'Warum muss ich nicht gleich das ganze Archiv löschen, wenn nur einzelne Schulabgänger bereinigt werden sollen?',
-      answer: 'Weil es dafür eine gezielte Funktion gibt. Du kannst ganze Klassen oder einzelne Personen auswählen und nur diese Schülerdaten entfernen, ohne den Rest des archivierten Schuljahres anzutasten.'
+      question: 'Warum finde ich im Audit-Log manche Einträge erst nach genauerem Filtern?',
+      answer: 'Weil das Protokoll viele Bereiche sammelt. Nutze Suchtext, Akteur, Route, Entität, Methode, Statuscode und Bereich zusammen, um von allgemein auf präzise einzugrenzen.'
     },
     {
-      question: 'Warum verlangt das System vor Archiv-Löschungen eine Vorschau und einen exakten Bestätigungstext?',
-      answer: 'Damit du vor der Ausführung siehst, wie viele Klassen, Personen, Noten, Zuordnungen und Logins betroffen sind. Erst wenn das bewusst bestätigt wird, wird die kritische Aktion freigegeben.'
+      question: 'Wie entferne ich nur einzelne Schulabgänger aus archivierten Daten?',
+      answer: 'Nutze im Archiv die Funktion für Schulabgänger. Dort kannst du gezielt Klassen oder einzelne Personen auswählen, statt das gesamte Archiv eines Schuljahres zu löschen.'
     },
     {
       question: 'Warum stoppt der Schuljahreswechsel-Assistent, wenn das Zielschuljahr schon existiert?',
       answer: 'Damit keine doppelte oder widersprüchliche Struktur entsteht. Wenn Name oder Zeitraum schon auf ein vorhandenes Schuljahr zeigen, solltest du die Angaben zuerst korrigieren.'
+    },
+    {
+      question: 'Warum verlangt das System vor Archiv-Löschungen eine Vorschau und einen exakten Bestätigungstext?',
+      answer: 'Damit du vor der Ausführung siehst, wie viele Klassen, Personen, Noten, Zuordnungen und Logins betroffen sind. Erst wenn das bewusst bestätigt wird, wird die kritische Aktion freigegeben.'
     },
     {
       question: 'Warum sollte ich den Schuljahreswechsel nicht einfach sofort ausführen?',
