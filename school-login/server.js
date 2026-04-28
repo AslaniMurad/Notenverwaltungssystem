@@ -41,6 +41,21 @@ function parseOptionalBoolean(value) {
   return null;
 }
 
+function parseDelimitedList(value) {
+  if (value == null || value === "") return [];
+  return String(value)
+    .split(/[,\s]+/)
+    .map((entry) => entry.trim())
+    .filter(Boolean);
+}
+
+function normalizeSameSite(value) {
+  if (value == null || value === "") return null;
+  const normalized = String(value).trim().toLowerCase();
+  if (["lax", "strict", "none"].includes(normalized)) return normalized;
+  return null;
+}
+
 function isDbConnectionError(err) {
   if (!err) return false;
   if (Array.isArray(err.errors)) {
@@ -62,6 +77,28 @@ function isDbConnectionError(err) {
 const LOGIN_RATE_WINDOW_MS = Number(process.env.LOGIN_RATE_LIMIT_WINDOW_MS) || 15 * 60 * 1000;
 const LOGIN_RATE_MAX = Number(process.env.LOGIN_RATE_LIMIT_MAX) || 5;
 const loginAttempts = new Map();
+const teamsEmbedEnabled = parseOptionalBoolean(process.env.TEAMS_EMBED_ENABLED) ?? false;
+const defaultTeamsFrameAncestors = [
+  "'self'",
+  "https://teams.microsoft.com",
+  "https://*.teams.microsoft.com",
+  "https://teams.cloud.microsoft",
+  "https://*.cloud.microsoft"
+];
+const configuredFrameAncestors = parseDelimitedList(process.env.FRAME_ANCESTORS);
+const allowedFrameAncestors = configuredFrameAncestors.length
+  ? configuredFrameAncestors
+  : teamsEmbedEnabled
+    ? defaultTeamsFrameAncestors
+    : [];
+const sessionCookieSameSite =
+  normalizeSameSite(process.env.SESSION_COOKIE_SAMESITE) || (teamsEmbedEnabled ? "none" : "lax");
+const secureCookieOverride = parseOptionalBoolean(process.env.SESSION_COOKIE_SECURE);
+const useSecureSessionCookie = secureCookieOverride ?? (isProduction || sessionCookieSameSite === "none");
+
+if (sessionCookieSameSite === "none" && !useSecureSessionCookie) {
+  throw new Error("SESSION_COOKIE_SECURE must be true when SESSION_COOKIE_SAMESITE is none.");
+}
 
 function buildLoginKey(req, email) {
   const ip = req.ip || "unknown";
@@ -165,8 +202,6 @@ function renderLogin(res, req, options = {}) {
 
 // --- Session ---
 const sessionSecret = process.env.SESSION_SECRET || crypto.randomBytes(32).toString("hex");
-const secureCookieOverride = parseOptionalBoolean(process.env.SESSION_COOKIE_SECURE);
-const useSecureSessionCookie = secureCookieOverride ?? isProduction;
 app.use(
   session({
     name: "sid",
@@ -176,7 +211,7 @@ app.use(
     saveUninitialized: false,
     cookie: {
       httpOnly: true,
-      sameSite: "lax",
+      sameSite: sessionCookieSameSite,
       secure: useSecureSessionCookie,
       maxAge: 1000 * 60 * 60 // 1h
     }
@@ -214,7 +249,11 @@ app.use(detectDevice);
 // --- Simple Security Headers ---
 app.use((req, res, next) => {
   res.setHeader("X-Content-Type-Options", "nosniff");
-  res.setHeader("X-Frame-Options", "DENY");
+  if (allowedFrameAncestors.length) {
+    res.setHeader("Content-Security-Policy", `frame-ancestors ${allowedFrameAncestors.join(" ")}`);
+  } else {
+    res.setHeader("X-Frame-Options", "DENY");
+  }
   res.setHeader("Referrer-Policy", "no-referrer");
   next();
 });
