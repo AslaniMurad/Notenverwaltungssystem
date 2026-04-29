@@ -62,8 +62,8 @@
 
         <% if (!setupComplete) { %>
           <div class="teacher-alert error">
-            Bitte richte zuerst dein Bewertungsschema ein:
-            <a href="/teacher/settings?setup=1">Jetzt Einstellungen öffnen</a>
+            Bitte richte zuerst <%= Number(missingProfileCount || 0) === 1 ? "ein Bewertungsschema" : `${missingProfileCount || 0} Bewertungsschemas` %> ein:
+            <a href="<%= setupUrl || '/teacher/settings?setup=1' %>">Jetzt Einstellungen öffnen</a>
           </div>
         <% } else if (activeProfile) { %>
           <div class="teacher-alert info">
@@ -95,8 +95,16 @@
                     <p class="teacher-eyebrow">Fach</p>
                     <h4><%= cls.subject %></h4>
                     <p class="teacher-muted">Klasse: <%= cls.name %></p>
+                    <% if (cls.has_profile) { %>
+                      <p class="teacher-muted">Schema: <%= cls.profile_name %></p>
+                    <% } else { %>
+                      <p class="teacher-muted">Noch kein Schema festgelegt.</p>
+                    <% } %>
                   </div>
                   <div class="teacher-card-actions">
+                    <% if (!cls.has_profile) { %>
+                      <a class="btn btn-secondary" href="<%= cls.settings_url %>">Schema festlegen</a>
+                    <% } %>
                     <a class="btn btn-primary" href="/teacher/students/<%= cls.id %>?subject_id=<%= cls.subject_id %>">Öffnen</a>
                     <form
                       class="inline"

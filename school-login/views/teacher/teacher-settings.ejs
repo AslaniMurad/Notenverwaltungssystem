@@ -22,6 +22,19 @@
         symbolLabelByValue[option.value] = option.label;
       });
       const participation = (formData && formData.participation) || {};
+      const existingSchema = Boolean(classSubjectProfile);
+      const maToggleLocked = existingSchema;
+      const maFieldsLocked = existingSchema && !participation.ma_enabled;
+      const scoringModeValue = (formData && formData.scoring_mode) || "points_only";
+      const scoringLabel = scoringLabelByValue[scoringModeValue] || "Nur Punkte";
+      const scoringInfoByValue = {};
+      (scoringModeOptions || []).forEach((option) => {
+        scoringInfoByValue[option.value] = option.description || "";
+      });
+      const scoringDescription = scoringInfoByValue[scoringModeValue] || "";
+      const showThresholds = scoringModeValue !== "points_and_grade";
+      const showMaPoints = scoringModeValue !== "grade_only";
+      const showMaGrades = scoringModeValue !== "points_only";
 %>
     <div class="app-shell teacher-shell">
       <aside class="teacher-sidebar" aria-label="Lehrer Navigation">
@@ -44,18 +57,18 @@
       <section class="teacher-main">
         <header class="teacher-main-header">
           <div>
-            <p class="teacher-eyebrow">Persönliches Schema</p>
+            <p class="teacher-eyebrow">Fachspezifisches Schema</p>
             <h1>Bewertungseinstellungen</h1>
-            <p class="teacher-muted">Gewichtung erfolgt nur in Punkten.</p>
+            <p class="teacher-muted">Jede Klasse/Fach-Zuordnung bekommt ein Basisschema. Strukturelle Optionen bleiben danach gesperrt.</p>
           </div>
           <div class="teacher-actions-inline">
             <a class="btn btn-secondary" href="/teacher/classes">Zurück</a>
           </div>
         </header>
 
-        <% if (!setupComplete || showSetupFlow) { %>
+        <% if (!existingSchema && (!setupComplete || showSetupFlow)) { %>
           <div class="teacher-alert info">
-            Erste Konfiguration: Erstelle ein Profil. Dieses Profil wird automatisch für neue Prüfungen verwendet.
+            Erste Konfiguration: Lege das Schema fuer dieses Fach fest. Danach ist es gesperrt.
           </div>
         <% } %>
 
@@ -69,44 +82,62 @@
         <div class="teacher-card">
           <div class="teacher-card-header">
             <div>
-              <p class="teacher-eyebrow">Profile</p>
-              <h3><%= profiles.length %> gespeicherte Profile</h3>
+              <p class="teacher-eyebrow">Faecher</p>
+              <h3><%= (assignments || []).length %> Fachzuordnungen</h3>
             </div>
-            <a class="btn btn-secondary btn-sm" href="/teacher/settings?new=1">Neues Profil</a>
           </div>
 
-          <% if (profiles.length === 0) { %>
+          <% if (!assignments || assignments.length === 0) { %>
             <div class="teacher-empty">
-              <h4>Noch kein Profil vorhanden</h4>
-              <p>Starte mit einem Standardprofil und passe danach die Punkte an.</p>
+              <h4>Noch keine Fachzuordnung vorhanden</h4>
+              <p>Erstelle zuerst eine Fachzuordnung.</p>
             </div>
           <% } else { %>
+            <div class="teacher-search-form" role="search" aria-label="Fachzuordnungen suchen">
+              <input
+                class="form-input teacher-search-input"
+                type="search"
+                id="settings-assignment-search"
+                placeholder="Klasse oder Fach suchen"
+                autocomplete="off"
+              >
+            </div>
             <div class="settings-profiles">
-              <% profiles.forEach((profile) => { %>
-                <div class="settings-profile-item <%= profile.is_active ? "is-active" : "" %>">
+              <% assignments.forEach((assignment) => {
+                const isSelected = selectedAssignment &&
+                  Number(selectedAssignment.class_id) === Number(assignment.class_id) &&
+                  Number(selectedAssignment.subject_id) === Number(assignment.subject_id);
+                const profile = assignment.profile;
+                const searchText = `${assignment.class_name || ""} ${assignment.subject_name || ""}`;
+              %>
+                <div class="settings-profile-item <%= isSelected ? "is-active" : "" %>" data-settings-assignment data-search="<%= searchText %>">
                   <div>
-                    <h4><%= profile.name %></h4>
+                    <h4><%= assignment.class_name %> - <%= assignment.subject_name %></h4>
                     <p class="teacher-muted">
-                      Modus: Punkte - Eingabe: <%= scoringLabelByValue[profile.scoring_mode] || profile.scoring_mode %> - Abwesenheit: <%= absenceLabelByValue[profile.absence_mode] || profile.absence_mode || "Mit 0% werten (schlechteste Leistung)" %>
+                      <% if (profile) { %>
+                        Schema: <%= profile.name %> - festgelegt durch <%= profile.owner_email || "Lehrer" %>
+                      <% } else { %>
+                        Noch kein Schema festgelegt.
+                      <% } %>
                     </p>
                   </div>
                   <div class="settings-profile-actions">
-                    <a class="btn btn-secondary btn-sm" href="/teacher/settings?profile_id=<%= profile.id %>&edit=1">Bearbeiten</a>
-                    <% if (!profile.is_active) { %>
-                      <form class="inline" method="POST" action="/teacher/settings/activate-profile/<%= profile.id %>">
-                        <input type="hidden" name="_csrf" value="<%= csrfToken %>">
-                        <button class="btn btn-primary btn-sm" type="submit">Aktivieren</button>
-                      </form>
+                    <% if (profile) { %>
+                      <% if (isSelected) { %>
+                        <span class="teacher-meta-chip">Ausgewählt</span>
+                      <% } else { %>
+                        <a class="btn btn-secondary btn-sm" href="/teacher/settings?class_id=<%= assignment.class_id %>&subject_id=<%= assignment.subject_id %>">Bearbeiten</a>
+                      <% } %>
                     <% } else { %>
-                      <span class="teacher-meta-chip">Aktiv</span>
+                      <a class="btn btn-primary btn-sm" href="/teacher/settings?class_id=<%= assignment.class_id %>&subject_id=<%= assignment.subject_id %>&setup=1">Schema festlegen</a>
                     <% } %>
-                    <form class="inline delete-profile-form" method="POST" action="/teacher/settings/delete-profile/<%= profile.id %>" data-profile-name="<%= profile.name %>">
-                      <input type="hidden" name="_csrf" value="<%= csrfToken %>">
-                      <button class="btn btn-danger btn-sm" type="button">Löschen</button>
-                    </form>
                   </div>
                 </div>
               <% }) %>
+            </div>
+            <div class="teacher-empty" id="settings-assignment-no-results" hidden>
+              <h4>Keine Fachzuordnungen gefunden</h4>
+              <p>Ändere den Suchbegriff oder lösche ihn.</p>
             </div>
           <% } %>
         </div>
@@ -114,8 +145,8 @@
         <% if (!showConfigForm) { %>
           <div class="teacher-card">
             <div class="teacher-empty">
-              <h4>Profil auswählen</h4>
-              <p>Wähle bei einem Profil "Bearbeiten" oder erstelle ein neues Profil.</p>
+              <h4>Fach auswaehlen</h4>
+              <p>Waehle ein Fach aus der Liste.</p>
             </div>
           </div>
         <% } %>
@@ -125,7 +156,7 @@
             <div class="teacher-card-header">
               <div>
                 <p class="teacher-eyebrow">Konfiguration</p>
-                <h3><%= formData.profile_id ? "Profil bearbeiten" : "Profil erstellen" %></h3>
+                <h3><%= existingSchema ? "Schema bearbeiten" : "Schema festlegen" %></h3>
               </div>
               <div class="teacher-meta-chip">
                 Summe: <span id="profile-total"><%= selectedTotal %></span>
@@ -136,7 +167,12 @@
             <form class="teacher-form" method="POST" action="/teacher/settings/save-profile" id="settings-profile-form">
               <input type="hidden" name="_csrf" value="<%= csrfToken %>">
               <input type="hidden" name="profile_id" id="profile_id" value="<%= formData.profile_id || "" %>">
-              <input type="hidden" name="weight_mode" value="points">
+              <input type="hidden" name="class_id" value="<%= formData.class_id || (selectedAssignment && selectedAssignment.class_id) || "" %>">
+              <input type="hidden" name="subject_id" value="<%= formData.subject_id || (selectedAssignment && selectedAssignment.subject_id) || "" %>">
+              <input type="hidden" name="weight_mode" value="<%= formData.weight_mode || 'points' %>">
+              <% if (existingSchema) { %>
+                <input type="hidden" name="scoring_mode" value="<%= formData.scoring_mode || 'points_only' %>">
+              <% } %>
 
               <label for="profile_name">Profilname *</label>
               <input
@@ -147,20 +183,41 @@
                 placeholder="z.B. Informatik Standard"
                 value="<%= formData.profile_name || "" %>"
               >
-              <small class="form-hint">Lehrer legen nur Punkte je Kategorie fest.</small>
+              <small class="form-hint">Name, Abwesenheitsregel, Prozentgrenzen und Kategorie-Punkte bleiben bearbeitbar.</small>
 
-              <label for="scoring_mode">Bewertungseingabe *</label>
-              <select id="scoring_mode" name="scoring_mode" required>
-                <% (scoringModeOptions || []).forEach((option) => { %>
-                  <option
-                    value="<%= option.value %>"
-                    <%= String(formData.scoring_mode || "") === String(option.value) ? "selected" : "" %>
-                  >
-                    <%= option.label %>
-                  </option>
-                <% }) %>
-              </select>
-              <small class="form-hint">Legt fest, ob bei neuen Bewertungen Noten, Punkte oder beides eingegeben wird.</small>
+              <% if (!existingSchema) { %>
+                <label for="scoring_mode">Bewertungseingabe *</label>
+                <select id="scoring_mode" name="scoring_mode" required>
+                  <% (scoringModeOptions || []).forEach((option) => { %>
+                    <option
+                      value="<%= option.value %>"
+                      <%= String(formData.scoring_mode || "points_only") === String(option.value) ? "selected" : "" %>
+                    >
+                      <%= option.label %>
+                    </option>
+                  <% }) %>
+                </select>
+                <small class="form-hint">Diese Auswahl wird nach dem ersten Speichern gesperrt. Das Formular passt die relevanten Felder sofort an.</small>
+              <% } %>
+
+              <div class="teacher-alert info" id="scoring-mode-current-info">
+                Bewertungseingabe: <strong id="scoring-mode-current-label"><%= scoringLabel %></strong>.
+                <span id="scoring-mode-current-description"><%= scoringDescription %></span>
+                <% if (existingSchema) { %>
+                  Bewertungsmodus und MA-Aktivierung sind gesperrt, damit bestehende Einträge konsistent bleiben.
+                <% } %>
+              </div>
+
+              <% if (!existingSchema) { %>
+                <div class="settings-mode-info-list" aria-label="Erklärung der Bewertungsmodi">
+                  <% (scoringModeOptions || []).forEach((option) => { %>
+                    <div class="settings-mode-info-item <%= String(scoringModeValue) === String(option.value) ? 'is-active' : '' %>" data-scoring-info-row="<%= option.value %>">
+                      <strong><%= option.label %></strong>
+                      <span><%= option.description || "" %></span>
+                    </div>
+                  <% }) %>
+                </div>
+              <% } %>
 
               <label for="absence_mode">Bei "nicht da" *</label>
               <select id="absence_mode" name="absence_mode" required>
@@ -175,7 +232,7 @@
               </select>
               <small class="form-hint">Legt fest, ob Abwesenheiten den Schnitt verschlechtern oder neutral bleiben.</small>
 
-              <div class="settings-grid">
+              <div class="settings-grid" id="threshold-config-fields" data-threshold-section <%= showThresholds ? "" : "hidden" %>>
                 <div class="settings-weight-item">
                   <label for="grade1_min_percent">Ab Prozent Note 1</label>
                   <input
@@ -229,17 +286,20 @@
                   >
                 </div>
               </div>
-              <small class="form-hint">Nur relevant, wenn Punkte erfasst werden und die Note automatisch berechnet wird.</small>
+              <small class="form-hint" data-threshold-section <%= showThresholds ? "" : "hidden" %>>Relevant für Punkte-zu-Note und Note-zu-Punkte-Umrechnungen. Bei "Punkte und Noten" wird keine Note automatisch berechnet.</small>
 
               <label class="checkbox-line" for="ma_enabled">
-                <input type="checkbox" id="ma_enabled" name="ma_enabled" value="1" <%= participation.ma_enabled ? "checked" : "" %>>
+                <input type="checkbox" id="ma_enabled" name="ma_enabled" value="1" <%= participation.ma_enabled ? "checked" : "" %> <%= maToggleLocked ? "disabled" : "" %>>
                 Mitarbeit aktivieren (MA)
               </label>
+              <% if (maToggleLocked) { %>
+                <small class="form-hint">Die MA-Aktivierung ist nach dem Speichern gesperrt. MA-Punkte sind nur bearbeitbar, wenn MA bereits aktiv war.</small>
+              <% } %>
 
               <div id="ma-config-fields">
                 <div class="settings-grid">
                   <div class="settings-weight-item">
-                    <label for="ma_weight">MA Gewichtung (Punkte)</label>
+                    <label for="ma_weight">MA Gewichtung</label>
                     <input
                       type="number"
                       id="ma_weight"
@@ -247,82 +307,177 @@
                       min="0"
                       step="0.5"
                       required
+                      data-ma-field
+                      <%= maFieldsLocked ? "disabled" : "" %>
                       value="<%= participation.ma_weight != null ? participation.ma_weight : "" %>"
                     >
                   </div>
+                </div>
+                <small class="form-hint">Die Gewichtung legt fest, wie stark ein MA-Eintrag in die Gesamtnote einfließt.</small>
+
+                <div class="settings-grid" id="ma-points-fields" data-ma-points-section <%= showMaPoints ? "" : "hidden" %>>
                   <div class="settings-weight-item">
-                    <label for="ma_grade_plus"><%= symbolLabelByValue.plus || "+" %> als Note</label>
+                    <label for="ma_points_plus"><%= symbolLabelByValue.plus || "+" %> Punkte</label>
+                    <input
+                      type="number"
+                      id="ma_points_plus"
+                      name="ma_points_plus"
+                      min="0"
+                      step="0.5"
+                      required
+                      data-ma-field
+                      data-ma-points-field
+                      <%= maFieldsLocked ? "disabled" : "" %>
+                      value="<%= participation.ma_points_plus != null ? participation.ma_points_plus : "" %>"
+                    >
+                  </div>
+                  <div class="settings-weight-item">
+                    <label for="ma_points_plus_tilde"><%= symbolLabelByValue.plus_tilde || "+~" %> Punkte</label>
+                    <input
+                      type="number"
+                      id="ma_points_plus_tilde"
+                      name="ma_points_plus_tilde"
+                      min="0"
+                      step="0.5"
+                      required
+                      data-ma-field
+                      data-ma-points-field
+                      <%= maFieldsLocked ? "disabled" : "" %>
+                      value="<%= participation.ma_points_plus_tilde != null ? participation.ma_points_plus_tilde : "" %>"
+                    >
+                  </div>
+                  <div class="settings-weight-item">
+                    <label for="ma_points_neutral"><%= symbolLabelByValue.neutral || "~" %> Punkte</label>
+                    <input
+                      type="number"
+                      id="ma_points_neutral"
+                      name="ma_points_neutral"
+                      min="0"
+                      step="0.5"
+                      required
+                      data-ma-field
+                      data-ma-points-field
+                      <%= maFieldsLocked ? "disabled" : "" %>
+                      value="<%= participation.ma_points_neutral != null ? participation.ma_points_neutral : "" %>"
+                    >
+                  </div>
+                  <div class="settings-weight-item">
+                    <label for="ma_points_minus_tilde"><%= symbolLabelByValue.minus_tilde || "-~" %> Punkte</label>
+                    <input
+                      type="number"
+                      id="ma_points_minus_tilde"
+                      name="ma_points_minus_tilde"
+                      min="0"
+                      step="0.5"
+                      required
+                      data-ma-field
+                      data-ma-points-field
+                      <%= maFieldsLocked ? "disabled" : "" %>
+                      value="<%= participation.ma_points_minus_tilde != null ? participation.ma_points_minus_tilde : "" %>"
+                    >
+                  </div>
+                  <div class="settings-weight-item">
+                    <label for="ma_points_minus"><%= symbolLabelByValue.minus || "-" %> Punkte</label>
+                    <input
+                      type="number"
+                      id="ma_points_minus"
+                      name="ma_points_minus"
+                      min="0"
+                      step="0.5"
+                      required
+                      data-ma-field
+                      data-ma-points-field
+                      <%= maFieldsLocked ? "disabled" : "" %>
+                      value="<%= participation.ma_points_minus != null ? participation.ma_points_minus : "" %>"
+                    >
+                  </div>
+                </div>
+                <small class="form-hint" data-ma-points-section <%= showMaPoints ? "" : "hidden" %>>MA-Punkte müssen fallend sein: + &gt; +~ &gt; ~ &gt; -~ &gt; -. Bei Punkte-Modi wird daraus bei Bedarf die Note berechnet.</small>
+
+                <div class="settings-grid" id="ma-grade-fields" data-ma-grade-section <%= showMaGrades ? "" : "hidden" %>>
+                  <div class="settings-weight-item">
+                    <label for="ma_grade_plus"><%= symbolLabelByValue.plus || "+" %> Note</label>
                     <input
                       type="number"
                       id="ma_grade_plus"
                       name="ma_grade_plus"
                       min="1"
                       max="5"
-                      step="0.1"
+                      step="0.25"
                       required
+                      data-ma-field
+                      data-ma-grade-field
+                      <%= maFieldsLocked ? "disabled" : "" %>
                       value="<%= participation.ma_grade_plus != null ? participation.ma_grade_plus : "" %>"
                     >
                   </div>
                   <div class="settings-weight-item">
-                    <label for="ma_grade_plus_tilde"><%= symbolLabelByValue.plus_tilde || "+~" %> als Note</label>
+                    <label for="ma_grade_plus_tilde"><%= symbolLabelByValue.plus_tilde || "+~" %> Note</label>
                     <input
                       type="number"
                       id="ma_grade_plus_tilde"
                       name="ma_grade_plus_tilde"
                       min="1"
                       max="5"
-                      step="0.1"
+                      step="0.25"
                       required
+                      data-ma-field
+                      data-ma-grade-field
+                      <%= maFieldsLocked ? "disabled" : "" %>
                       value="<%= participation.ma_grade_plus_tilde != null ? participation.ma_grade_plus_tilde : "" %>"
                     >
                   </div>
                   <div class="settings-weight-item">
-                    <label for="ma_grade_neutral"><%= symbolLabelByValue.neutral || "~" %> als Note</label>
+                    <label for="ma_grade_neutral"><%= symbolLabelByValue.neutral || "~" %> Note</label>
                     <input
                       type="number"
                       id="ma_grade_neutral"
                       name="ma_grade_neutral"
                       min="1"
                       max="5"
-                      step="0.1"
+                      step="0.25"
                       required
+                      data-ma-field
+                      data-ma-grade-field
+                      <%= maFieldsLocked ? "disabled" : "" %>
                       value="<%= participation.ma_grade_neutral != null ? participation.ma_grade_neutral : "" %>"
                     >
                   </div>
                   <div class="settings-weight-item">
-                    <label for="ma_grade_minus_tilde"><%= symbolLabelByValue.minus_tilde || "-~" %> als Note</label>
+                    <label for="ma_grade_minus_tilde"><%= symbolLabelByValue.minus_tilde || "-~" %> Note</label>
                     <input
                       type="number"
                       id="ma_grade_minus_tilde"
                       name="ma_grade_minus_tilde"
                       min="1"
                       max="5"
-                      step="0.1"
+                      step="0.25"
                       required
+                      data-ma-field
+                      data-ma-grade-field
+                      <%= maFieldsLocked ? "disabled" : "" %>
                       value="<%= participation.ma_grade_minus_tilde != null ? participation.ma_grade_minus_tilde : "" %>"
                     >
                   </div>
                   <div class="settings-weight-item">
-                    <label for="ma_grade_minus"><%= symbolLabelByValue.minus || "-" %> als Note</label>
+                    <label for="ma_grade_minus"><%= symbolLabelByValue.minus || "-" %> Note</label>
                     <input
                       type="number"
                       id="ma_grade_minus"
                       name="ma_grade_minus"
                       min="1"
                       max="5"
-                      step="0.1"
+                      step="0.25"
                       required
+                      data-ma-field
+                      data-ma-grade-field
+                      <%= maFieldsLocked ? "disabled" : "" %>
                       value="<%= participation.ma_grade_minus != null ? participation.ma_grade_minus : "" %>"
                     >
                   </div>
                 </div>
-                <small class="form-hint">Reihenfolge muss aufsteigend sein: + &lt; +~ &lt; ~ &lt; -~ &lt; -.</small>
+                <small class="form-hint" data-ma-grade-section <%= showMaGrades ? "" : "hidden" %>>MA-Noten müssen steigend sein: + &lt; +~ &lt; ~ &lt; -~ &lt; -. Bei "Punkte und Noten" wird dieser Notenwert direkt verwendet.</small>
               </div>
-
-              <label class="checkbox-line" for="set_active">
-                <input type="checkbox" id="set_active" name="set_active" value="1" <%= formData.set_active ? "checked" : "" %>>
-                Dieses Profil nach dem Speichern aktivieren
-              </label>
 
               <div class="settings-grid">
                 <% categoryDefinitions.forEach((category) => { %>
@@ -348,7 +503,7 @@
               </div>
 
               <div class="teacher-form-actions">
-                <button class="btn btn-primary" type="submit">Schema speichern</button>
+                <button class="btn btn-primary" type="submit"><%= existingSchema ? "Änderungen speichern" : "Schema speichern" %></button>
                 <a class="btn btn-secondary" href="/teacher/settings">Abbrechen</a>
               </div>
             </form>
@@ -377,12 +532,26 @@
       (function() {
         const totalEl = document.getElementById("profile-total");
         const weightFields = Array.from(document.querySelectorAll("[data-weight-field]"));
+        const scoringSelect = document.getElementById("scoring_mode");
+        const scoringCurrentLabel = document.getElementById("scoring-mode-current-label");
+        const scoringCurrentDescription = document.getElementById("scoring-mode-current-description");
+        const scoringInfoRows = Array.from(document.querySelectorAll("[data-scoring-info-row]"));
+        const thresholdSections = Array.from(document.querySelectorAll("[data-threshold-section]"));
         const maToggle = document.getElementById("ma_enabled");
         const maFields = document.getElementById("ma-config-fields");
+        const maInputFields = Array.from(document.querySelectorAll("[data-ma-field]"));
+        const maPointsSections = Array.from(document.querySelectorAll("[data-ma-points-section]"));
+        const maGradeSections = Array.from(document.querySelectorAll("[data-ma-grade-section]"));
+        const assignmentSearch = document.getElementById("settings-assignment-search");
+        const assignmentRows = Array.from(document.querySelectorAll("[data-settings-assignment]"));
+        const assignmentNoResults = document.getElementById("settings-assignment-no-results");
         const deleteProfileModal = document.getElementById("deleteProfileModal");
         const deleteProfileName = document.getElementById("deleteProfileName");
         const cancelDeleteProfile = document.getElementById("cancelDeleteProfile");
         const confirmDeleteProfile = document.getElementById("confirmDeleteProfile");
+        const scoringModeInfo = <%- JSON.stringify((scoringModeOptions || []).map((option) => ({ value: option.value, label: option.label, description: option.description || "" }))).replace(/</g, "\\u003c") %>;
+        const initialScoringMode = "<%= scoringModeValue %>";
+        const maFieldsLocked = <%= maFieldsLocked ? "true" : "false" %>;
         let currentDeleteForm = null;
 
         function sumWeights() {
@@ -398,9 +567,83 @@
           totalEl.textContent = String(total);
         }
 
+        function getScoringMode() {
+          return scoringSelect ? scoringSelect.value : initialScoringMode;
+        }
+
+        function modeUsesThresholds(mode) {
+          return mode !== "points_and_grade";
+        }
+
+        function modeUsesMaPoints(mode) {
+          return mode !== "grade_only";
+        }
+
+        function modeUsesMaGrades(mode) {
+          return mode !== "points_only";
+        }
+
+        function setHiddenForAll(elements, hidden) {
+          elements.forEach((element) => {
+            element.hidden = hidden;
+          });
+        }
+
         function updateMaVisibility() {
           if (!maToggle || !maFields) return;
-          maFields.style.display = maToggle.checked ? "" : "none";
+          const mode = getScoringMode();
+          const maEnabled = Boolean(maToggle.checked);
+          const showPoints = modeUsesMaPoints(mode);
+          const showGrades = modeUsesMaGrades(mode);
+          maFields.style.display = maEnabled ? "" : "none";
+          setHiddenForAll(maPointsSections, !showPoints);
+          setHiddenForAll(maGradeSections, !showGrades);
+          maInputFields.forEach((input) => {
+            const isPointField = input.matches("[data-ma-points-field]");
+            const isGradeField = input.matches("[data-ma-grade-field]");
+            const relevant =
+              (!isPointField && !isGradeField) ||
+              (isPointField && showPoints) ||
+              (isGradeField && showGrades);
+            const disabled = maFieldsLocked || !maEnabled || !relevant;
+            input.disabled = disabled;
+            input.required = !disabled;
+          });
+        }
+
+        function updateScoringModeForm() {
+          const mode = getScoringMode();
+          const info = scoringModeInfo.find((entry) => entry.value === mode) || scoringModeInfo[0] || {};
+          if (scoringCurrentLabel) scoringCurrentLabel.textContent = info.label || "";
+          if (scoringCurrentDescription) scoringCurrentDescription.textContent = info.description || "";
+          scoringInfoRows.forEach((row) => {
+            row.classList.toggle("is-active", row.dataset.scoringInfoRow === mode);
+          });
+          setHiddenForAll(thresholdSections, !modeUsesThresholds(mode));
+          updateMaVisibility();
+        }
+
+        function normalizeSearch(value) {
+          return String(value || "")
+            .normalize("NFD")
+            .replace(/[\u0300-\u036f]/g, "")
+            .toLowerCase()
+            .trim();
+        }
+
+        function filterAssignments() {
+          if (!assignmentSearch) return;
+          const query = normalizeSearch(assignmentSearch.value);
+          let visibleCount = 0;
+          assignmentRows.forEach((row) => {
+            const haystack = normalizeSearch(row.getAttribute("data-search"));
+            const visible = !query || haystack.includes(query);
+            row.hidden = !visible;
+            if (visible) visibleCount += 1;
+          });
+          if (assignmentNoResults) {
+            assignmentNoResults.hidden = visibleCount !== 0;
+          }
         }
 
         weightFields.forEach((field) => {
@@ -410,7 +653,15 @@
 
         if (maToggle) {
           maToggle.addEventListener("change", updateMaVisibility);
-          updateMaVisibility();
+        }
+        if (scoringSelect) {
+          scoringSelect.addEventListener("change", updateScoringModeForm);
+        }
+        updateScoringModeForm();
+
+        if (assignmentSearch) {
+          assignmentSearch.addEventListener("input", filterAssignments);
+          filterAssignments();
         }
 
         document.querySelectorAll(".delete-profile-form button[type='button']").forEach((button) => {

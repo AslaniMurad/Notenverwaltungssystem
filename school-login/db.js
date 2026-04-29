@@ -614,10 +614,13 @@ function createFakeDb() {
           lastID = newStudent.id;
         }
       } else if (/INSERT INTO teacher_grading_profiles/i.test(sql)) {
+        const hasClassSubject = /\(\s*teacher_id\s*,\s*class_id\s*,\s*subject_id\s*,/i.test(sql);
         const teacher_id = params[0];
-        const name = params[1];
-        const weight_mode = params[2] || "points";
-        let scoring_mode = "points_or_grade";
+        const class_id = hasClassSubject ? normalizeOptionalId(params[1]) : null;
+        const subject_id = hasClassSubject ? normalizeOptionalId(params[2]) : null;
+        const name = hasClassSubject ? params[3] : params[1];
+        const weight_mode = (hasClassSubject ? params[4] : params[2]) || "points";
+        let scoring_mode = "points_only";
         let absence_mode = "include_zero";
         let grade1_min_percent = 88.5;
         let grade2_min_percent = 75;
@@ -625,14 +628,40 @@ function createFakeDb() {
         let grade4_min_percent = 50;
         let ma_enabled = false;
         let ma_weight = 5;
+        let ma_points_plus = 5;
+        let ma_points_plus_tilde = 4;
+        let ma_points_neutral = 3;
+        let ma_points_minus_tilde = 2;
+        let ma_points_minus = 0;
         let ma_grade_plus = 1.5;
         let ma_grade_plus_tilde = 2.5;
         let ma_grade_neutral = 3;
         let ma_grade_minus_tilde = 3.5;
         let ma_grade_minus = 4.5;
-        let is_active = params[3];
+        let is_active = hasClassSubject ? (params.length >= 24 ? params[23] : params[18]) : params[3];
 
-        if (params.length >= 17) {
+        if (hasClassSubject) {
+          scoring_mode = params[5] || "points_only";
+          absence_mode = params[6] || "include_zero";
+          grade1_min_percent = Number(params[7]);
+          grade2_min_percent = Number(params[8]);
+          grade3_min_percent = Number(params[9]);
+          grade4_min_percent = Number(params[10]);
+          ma_enabled = Boolean(params[11]);
+          ma_weight = Number(params[12]);
+          ma_points_plus = Number(params[13]);
+          ma_points_plus_tilde = Number(params[14]);
+          ma_points_neutral = Number(params[15]);
+          ma_points_minus_tilde = Number(params[16]);
+          ma_points_minus = Number(params[17]);
+          if (params.length >= 24) {
+            ma_grade_plus = Number(params[18]);
+            ma_grade_plus_tilde = Number(params[19]);
+            ma_grade_neutral = Number(params[20]);
+            ma_grade_minus_tilde = Number(params[21]);
+            ma_grade_minus = Number(params[22]);
+          }
+        } else if (params.length >= 17) {
           scoring_mode = params[3] || "points_or_grade";
           absence_mode = params[4] || "include_zero";
           grade1_min_percent = Number(params[5]);
@@ -671,6 +700,18 @@ function createFakeDb() {
         }
 
         if (
+          class_id != null &&
+          subject_id != null &&
+          teacherGradingProfiles.some(
+            (profile) =>
+              profile.class_id === Number(class_id) &&
+              profile.subject_id === Number(subject_id)
+          )
+        ) {
+          err = new Error("UNIQUE constraint failed: teacher_grading_profiles.class_id, teacher_grading_profiles.subject_id");
+        } else if (
+          class_id == null &&
+          subject_id == null &&
           teacherGradingProfiles.some(
             (profile) =>
               profile.teacher_id === Number(teacher_id) &&
@@ -682,6 +723,8 @@ function createFakeDb() {
           const profile = {
             id: gradingProfileId++,
             teacher_id: Number(teacher_id),
+            class_id,
+            subject_id,
             name,
             weight_mode: String(weight_mode || "points"),
             scoring_mode: String(scoring_mode || "points_or_grade"),
@@ -692,6 +735,11 @@ function createFakeDb() {
             grade4_min_percent,
             ma_enabled: Boolean(ma_enabled),
             ma_weight: Number.isFinite(ma_weight) ? ma_weight : 5,
+            ma_points_plus: Number.isFinite(ma_points_plus) ? ma_points_plus : 5,
+            ma_points_plus_tilde: Number.isFinite(ma_points_plus_tilde) ? ma_points_plus_tilde : 4,
+            ma_points_neutral: Number.isFinite(ma_points_neutral) ? ma_points_neutral : 3,
+            ma_points_minus_tilde: Number.isFinite(ma_points_minus_tilde) ? ma_points_minus_tilde : 2,
+            ma_points_minus: Number.isFinite(ma_points_minus) ? ma_points_minus : 0,
             ma_grade_plus: Number.isFinite(ma_grade_plus) ? ma_grade_plus : 1.5,
             ma_grade_plus_tilde: Number.isFinite(ma_grade_plus_tilde) ? ma_grade_plus_tilde : 2.5,
             ma_grade_neutral: Number.isFinite(ma_grade_neutral) ? ma_grade_neutral : 3,
@@ -703,6 +751,55 @@ function createFakeDb() {
           };
           teacherGradingProfiles.push(profile);
           lastID = profile.id;
+        }
+      } else if (/UPDATE teacher_grading_profiles\s+SET name = \?, absence_mode = \?, grade1_min_percent = \?, grade2_min_percent = \?, grade3_min_percent = \?, grade4_min_percent = \?, ma_weight = \?, ma_points_plus = \?, ma_points_plus_tilde = \?, ma_points_neutral = \?, ma_points_minus_tilde = \?, ma_points_minus = \?, ma_grade_plus = \?, ma_grade_plus_tilde = \?, ma_grade_neutral = \?, ma_grade_minus_tilde = \?, ma_grade_minus = \?, updated_at = current_timestamp\s+WHERE id = \? AND class_id = \? AND subject_id = \?/i.test(sql)) {
+        const [
+          name,
+          absence_mode,
+          grade1_min_percent,
+          grade2_min_percent,
+          grade3_min_percent,
+          grade4_min_percent,
+          ma_weight,
+          ma_points_plus,
+          ma_points_plus_tilde,
+          ma_points_neutral,
+          ma_points_minus_tilde,
+          ma_points_minus,
+          ma_grade_plus,
+          ma_grade_plus_tilde,
+          ma_grade_neutral,
+          ma_grade_minus_tilde,
+          ma_grade_minus,
+          id,
+          class_id,
+          subject_id
+        ] = params;
+        const profile = teacherGradingProfiles.find(
+          (entry) =>
+            entry.id === Number(id) &&
+            entry.class_id === Number(class_id) &&
+            entry.subject_id === Number(subject_id)
+        );
+        if (profile) {
+          profile.name = String(name);
+          profile.absence_mode = String(absence_mode || "include_zero");
+          profile.grade1_min_percent = Number(grade1_min_percent);
+          profile.grade2_min_percent = Number(grade2_min_percent);
+          profile.grade3_min_percent = Number(grade3_min_percent);
+          profile.grade4_min_percent = Number(grade4_min_percent);
+          profile.ma_weight = Number(ma_weight);
+          profile.ma_points_plus = Number(ma_points_plus);
+          profile.ma_points_plus_tilde = Number(ma_points_plus_tilde);
+          profile.ma_points_neutral = Number(ma_points_neutral);
+          profile.ma_points_minus_tilde = Number(ma_points_minus_tilde);
+          profile.ma_points_minus = Number(ma_points_minus);
+          profile.ma_grade_plus = Number(ma_grade_plus);
+          profile.ma_grade_plus_tilde = Number(ma_grade_plus_tilde);
+          profile.ma_grade_neutral = Number(ma_grade_neutral);
+          profile.ma_grade_minus_tilde = Number(ma_grade_minus_tilde);
+          profile.ma_grade_minus = Number(ma_grade_minus);
+          profile.updated_at = new Date().toISOString();
         }
       } else if (/UPDATE teacher_grading_profiles\s+SET name = \?, weight_mode = \?, scoring_mode = \?, absence_mode = \?, grade1_min_percent = \?, grade2_min_percent = \?, grade3_min_percent = \?, grade4_min_percent = \?, ma_enabled = \?, ma_weight = \?, ma_grade_plus = \?, ma_grade_plus_tilde = \?, ma_grade_neutral = \?, ma_grade_minus_tilde = \?, ma_grade_minus = \?, updated_at = current_timestamp\s+WHERE id = \? AND teacher_id = \?/i.test(sql)) {
         const [
@@ -770,10 +867,14 @@ function createFakeDb() {
           profile.weight_mode = "points";
           profile.updated_at = new Date().toISOString();
         }
-      } else if (/UPDATE teacher_grading_profiles SET is_active = \? WHERE teacher_id = \?/i.test(sql)) {
+      } else if (/UPDATE teacher_grading_profiles SET is_active = \? WHERE teacher_id = \?(?: AND class_id IS NULL AND subject_id IS NULL)?/i.test(sql)) {
         const [is_active, teacher_id] = params;
+        const legacyOnly = /class_id IS NULL/i.test(sql) || /subject_id IS NULL/i.test(sql);
         teacherGradingProfiles.forEach((profile) => {
-          if (profile.teacher_id === Number(teacher_id)) {
+          if (
+            profile.teacher_id === Number(teacher_id) &&
+            (!legacyOnly || (profile.class_id == null && profile.subject_id == null))
+          ) {
             profile.is_active = Boolean(is_active);
             profile.updated_at = new Date().toISOString();
           }
@@ -885,6 +986,12 @@ function createFakeDb() {
             max_points != null && max_points !== "" ? Number(max_points) : null;
           template.date = date || null;
           template.description = description || null;
+        }
+      } else if (/UPDATE grade_templates SET max_points = \? WHERE id = \?/i.test(sql)) {
+        const [max_points, id] = params;
+        const template = gradeTemplates.find((entry) => entry.id === Number(id));
+        if (template) {
+          template.max_points = max_points != null && max_points !== "" ? Number(max_points) : null;
         }
       } else if (/UPDATE grade_templates\s+SET archived_at = \?\s+WHERE class_id = \? AND archived_at IS NULL AND COALESCE\(date, created_at\) < \?/i.test(sql)) {
         const [archivedAt, classId, cutoff] = params;
@@ -1632,29 +1739,58 @@ function createFakeDb() {
               description: template.description || null
             }
           : undefined;
+      } else if (/FROM teacher_grading_profiles\s+tgp[\s\S]*WHERE tgp\.class_id = \? AND tgp\.subject_id = \?/i.test(sql)) {
+        const [class_id, subject_id] = params;
+        const profile = teacherGradingProfiles
+          .filter(
+            (entry) =>
+              entry.class_id === Number(class_id) &&
+              entry.subject_id === Number(subject_id)
+          )
+          .sort((a, b) => {
+            if (a.created_at === b.created_at) return a.id - b.id;
+            return new Date(a.created_at) - new Date(b.created_at);
+          })[0];
+        if (profile) {
+          const owner = users.find((user) => user.id === profile.teacher_id);
+          row = { ...profile, owner_email: owner?.email || null };
+        } else {
+          row = undefined;
+        }
       } else if (/FROM teacher_grading_profiles\s+WHERE id = \? AND teacher_id = \?/i.test(sql)) {
         const [id, teacher_id] = params;
+        const legacyOnly = /class_id IS NULL/i.test(sql) || /subject_id IS NULL/i.test(sql);
         const profile = teacherGradingProfiles.find(
-          (entry) => entry.id === Number(id) && entry.teacher_id === Number(teacher_id)
+          (entry) =>
+            entry.id === Number(id) &&
+            entry.teacher_id === Number(teacher_id) &&
+            (!legacyOnly || (entry.class_id == null && entry.subject_id == null))
         );
         row = profile ? { ...profile } : undefined;
       } else if (/FROM teacher_grading_profiles\s+WHERE teacher_id = \? AND is_active = \?/i.test(sql)) {
         const [teacher_id, is_active] = params;
+        const legacyOnly = /class_id IS NULL/i.test(sql) || /subject_id IS NULL/i.test(sql);
         const profile = teacherGradingProfiles
           .filter(
             (entry) =>
               entry.teacher_id === Number(teacher_id) &&
-              Boolean(entry.is_active) === Boolean(is_active)
+              Boolean(entry.is_active) === Boolean(is_active) &&
+              (!legacyOnly || (entry.class_id == null && entry.subject_id == null))
           )
           .sort((a, b) => {
             if (a.created_at === b.created_at) return a.id - b.id;
             return new Date(a.created_at) - new Date(b.created_at);
           })[0];
         row = profile ? { ...profile } : undefined;
-      } else if (/FROM teacher_grading_profiles\s+WHERE teacher_id = \?\s+ORDER BY created_at ASC, id ASC\s+LIMIT 1/i.test(sql)) {
+      } else if (/FROM teacher_grading_profiles\s+WHERE teacher_id = \?(?:\s+AND class_id IS NULL AND subject_id IS NULL)?\s+ORDER BY created_at ASC, id ASC\s+LIMIT 1/i.test(sql)) {
         const [teacher_id] = params;
+        const legacyOnly = /class_id IS NULL/i.test(sql) || /subject_id IS NULL/i.test(sql);
         const profile = teacherGradingProfiles
-          .filter((entry) => entry.teacher_id === Number(teacher_id))
+          .filter(
+            (entry) =>
+              entry.teacher_id === Number(teacher_id) &&
+              (!legacyOnly || (entry.class_id == null && entry.subject_id == null))
+          )
           .sort((a, b) => {
             if (a.created_at === b.created_at) return a.id - b.id;
             return new Date(a.created_at) - new Date(b.created_at);
@@ -3427,9 +3563,11 @@ async function initializeDatabase() {
     CREATE TABLE IF NOT EXISTS teacher_grading_profiles (
       id SERIAL PRIMARY KEY,
       teacher_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      class_id INTEGER REFERENCES classes(id) ON DELETE CASCADE,
+      subject_id INTEGER REFERENCES subjects(id) ON DELETE CASCADE,
       name TEXT NOT NULL,
       weight_mode TEXT NOT NULL DEFAULT 'points' CHECK (weight_mode IN ('percent', 'points')),
-      scoring_mode TEXT NOT NULL DEFAULT 'points_or_grade' CHECK (scoring_mode IN ('grade_only', 'points_only', 'points_or_grade', 'points_and_grade')),
+      scoring_mode TEXT NOT NULL DEFAULT 'points_only' CHECK (scoring_mode IN ('grade_only', 'points_only', 'points_or_grade', 'points_and_grade')),
       absence_mode TEXT NOT NULL DEFAULT 'include_zero' CHECK (absence_mode IN ('include_zero', 'exclude')),
       grade1_min_percent NUMERIC NOT NULL DEFAULT 88.5,
       grade2_min_percent NUMERIC NOT NULL DEFAULT 75,
@@ -3437,6 +3575,11 @@ async function initializeDatabase() {
       grade4_min_percent NUMERIC NOT NULL DEFAULT 50,
       ma_enabled BOOLEAN NOT NULL DEFAULT FALSE,
       ma_weight NUMERIC NOT NULL DEFAULT 5,
+      ma_points_plus NUMERIC NOT NULL DEFAULT 5,
+      ma_points_plus_tilde NUMERIC NOT NULL DEFAULT 4,
+      ma_points_neutral NUMERIC NOT NULL DEFAULT 3,
+      ma_points_minus_tilde NUMERIC NOT NULL DEFAULT 2,
+      ma_points_minus NUMERIC NOT NULL DEFAULT 0,
       ma_grade_plus NUMERIC NOT NULL DEFAULT 1.5,
       ma_grade_plus_tilde NUMERIC NOT NULL DEFAULT 2.5,
       ma_grade_neutral NUMERIC NOT NULL DEFAULT 3,
@@ -3452,10 +3595,16 @@ async function initializeDatabase() {
     "ALTER TABLE teacher_grading_profiles ADD COLUMN IF NOT EXISTS scoring_mode TEXT"
   );
   await pool.query(
-    "UPDATE teacher_grading_profiles SET scoring_mode = 'points_or_grade' WHERE scoring_mode IS NULL"
+    "ALTER TABLE teacher_grading_profiles ADD COLUMN IF NOT EXISTS class_id INTEGER REFERENCES classes(id) ON DELETE CASCADE"
   );
   await pool.query(
-    "ALTER TABLE teacher_grading_profiles ALTER COLUMN scoring_mode SET DEFAULT 'points_or_grade'"
+    "ALTER TABLE teacher_grading_profiles ADD COLUMN IF NOT EXISTS subject_id INTEGER REFERENCES subjects(id) ON DELETE CASCADE"
+  );
+  await pool.query(
+    "UPDATE teacher_grading_profiles SET scoring_mode = 'points_only' WHERE scoring_mode IS NULL"
+  );
+  await pool.query(
+    "ALTER TABLE teacher_grading_profiles ALTER COLUMN scoring_mode SET DEFAULT 'points_only'"
   );
   await pool.query(
     "ALTER TABLE teacher_grading_profiles ALTER COLUMN scoring_mode SET NOT NULL"
@@ -3556,6 +3705,21 @@ async function initializeDatabase() {
     "ALTER TABLE teacher_grading_profiles ADD COLUMN IF NOT EXISTS ma_weight NUMERIC DEFAULT 5"
   );
   await pool.query(
+    "ALTER TABLE teacher_grading_profiles ADD COLUMN IF NOT EXISTS ma_points_plus NUMERIC DEFAULT 5"
+  );
+  await pool.query(
+    "ALTER TABLE teacher_grading_profiles ADD COLUMN IF NOT EXISTS ma_points_plus_tilde NUMERIC DEFAULT 4"
+  );
+  await pool.query(
+    "ALTER TABLE teacher_grading_profiles ADD COLUMN IF NOT EXISTS ma_points_neutral NUMERIC DEFAULT 3"
+  );
+  await pool.query(
+    "ALTER TABLE teacher_grading_profiles ADD COLUMN IF NOT EXISTS ma_points_minus_tilde NUMERIC DEFAULT 2"
+  );
+  await pool.query(
+    "ALTER TABLE teacher_grading_profiles ADD COLUMN IF NOT EXISTS ma_points_minus NUMERIC DEFAULT 0"
+  );
+  await pool.query(
     "ALTER TABLE teacher_grading_profiles ADD COLUMN IF NOT EXISTS ma_grade_plus NUMERIC DEFAULT 1.5"
   );
   await pool.query(
@@ -3575,6 +3739,21 @@ async function initializeDatabase() {
   );
   await pool.query(
     "UPDATE teacher_grading_profiles SET ma_weight = 5 WHERE ma_weight IS NULL"
+  );
+  await pool.query(
+    "UPDATE teacher_grading_profiles SET ma_points_plus = 5 WHERE ma_points_plus IS NULL"
+  );
+  await pool.query(
+    "UPDATE teacher_grading_profiles SET ma_points_plus_tilde = 4 WHERE ma_points_plus_tilde IS NULL"
+  );
+  await pool.query(
+    "UPDATE teacher_grading_profiles SET ma_points_neutral = 3 WHERE ma_points_neutral IS NULL"
+  );
+  await pool.query(
+    "UPDATE teacher_grading_profiles SET ma_points_minus_tilde = 2 WHERE ma_points_minus_tilde IS NULL"
+  );
+  await pool.query(
+    "UPDATE teacher_grading_profiles SET ma_points_minus = 0 WHERE ma_points_minus IS NULL"
   );
   await pool.query(
     "UPDATE teacher_grading_profiles SET ma_grade_plus = 1.5 WHERE ma_grade_plus IS NULL"
@@ -3598,6 +3777,21 @@ async function initializeDatabase() {
     "ALTER TABLE teacher_grading_profiles ALTER COLUMN ma_weight SET DEFAULT 5"
   );
   await pool.query(
+    "ALTER TABLE teacher_grading_profiles ALTER COLUMN ma_points_plus SET DEFAULT 5"
+  );
+  await pool.query(
+    "ALTER TABLE teacher_grading_profiles ALTER COLUMN ma_points_plus_tilde SET DEFAULT 4"
+  );
+  await pool.query(
+    "ALTER TABLE teacher_grading_profiles ALTER COLUMN ma_points_neutral SET DEFAULT 3"
+  );
+  await pool.query(
+    "ALTER TABLE teacher_grading_profiles ALTER COLUMN ma_points_minus_tilde SET DEFAULT 2"
+  );
+  await pool.query(
+    "ALTER TABLE teacher_grading_profiles ALTER COLUMN ma_points_minus SET DEFAULT 0"
+  );
+  await pool.query(
     "ALTER TABLE teacher_grading_profiles ALTER COLUMN ma_grade_plus SET DEFAULT 1.5"
   );
   await pool.query(
@@ -3619,6 +3813,21 @@ async function initializeDatabase() {
     "ALTER TABLE teacher_grading_profiles ALTER COLUMN ma_weight SET NOT NULL"
   );
   await pool.query(
+    "ALTER TABLE teacher_grading_profiles ALTER COLUMN ma_points_plus SET NOT NULL"
+  );
+  await pool.query(
+    "ALTER TABLE teacher_grading_profiles ALTER COLUMN ma_points_plus_tilde SET NOT NULL"
+  );
+  await pool.query(
+    "ALTER TABLE teacher_grading_profiles ALTER COLUMN ma_points_neutral SET NOT NULL"
+  );
+  await pool.query(
+    "ALTER TABLE teacher_grading_profiles ALTER COLUMN ma_points_minus_tilde SET NOT NULL"
+  );
+  await pool.query(
+    "ALTER TABLE teacher_grading_profiles ALTER COLUMN ma_points_minus SET NOT NULL"
+  );
+  await pool.query(
     "ALTER TABLE teacher_grading_profiles ALTER COLUMN ma_grade_plus SET NOT NULL"
   );
   await pool.query(
@@ -3638,6 +3847,36 @@ async function initializeDatabase() {
   );
   await pool.query(
     "ALTER TABLE teacher_grading_profiles ADD CONSTRAINT teacher_grading_profiles_ma_weight_check CHECK (ma_weight >= 0)"
+  );
+  await pool.query(
+    "ALTER TABLE teacher_grading_profiles DROP CONSTRAINT IF EXISTS teacher_grading_profiles_ma_points_plus_check"
+  );
+  await pool.query(
+    "ALTER TABLE teacher_grading_profiles ADD CONSTRAINT teacher_grading_profiles_ma_points_plus_check CHECK (ma_points_plus >= 0)"
+  );
+  await pool.query(
+    "ALTER TABLE teacher_grading_profiles DROP CONSTRAINT IF EXISTS teacher_grading_profiles_ma_points_plus_tilde_check"
+  );
+  await pool.query(
+    "ALTER TABLE teacher_grading_profiles ADD CONSTRAINT teacher_grading_profiles_ma_points_plus_tilde_check CHECK (ma_points_plus_tilde >= 0)"
+  );
+  await pool.query(
+    "ALTER TABLE teacher_grading_profiles DROP CONSTRAINT IF EXISTS teacher_grading_profiles_ma_points_neutral_check"
+  );
+  await pool.query(
+    "ALTER TABLE teacher_grading_profiles ADD CONSTRAINT teacher_grading_profiles_ma_points_neutral_check CHECK (ma_points_neutral >= 0)"
+  );
+  await pool.query(
+    "ALTER TABLE teacher_grading_profiles DROP CONSTRAINT IF EXISTS teacher_grading_profiles_ma_points_minus_tilde_check"
+  );
+  await pool.query(
+    "ALTER TABLE teacher_grading_profiles ADD CONSTRAINT teacher_grading_profiles_ma_points_minus_tilde_check CHECK (ma_points_minus_tilde >= 0)"
+  );
+  await pool.query(
+    "ALTER TABLE teacher_grading_profiles DROP CONSTRAINT IF EXISTS teacher_grading_profiles_ma_points_minus_check"
+  );
+  await pool.query(
+    "ALTER TABLE teacher_grading_profiles ADD CONSTRAINT teacher_grading_profiles_ma_points_minus_check CHECK (ma_points_minus >= 0)"
   );
   await pool.query(
     "ALTER TABLE teacher_grading_profiles DROP CONSTRAINT IF EXISTS teacher_grading_profiles_ma_grade_plus_check"
@@ -3688,8 +3927,12 @@ async function initializeDatabase() {
     "ALTER TABLE teacher_grading_profile_items ADD CONSTRAINT teacher_grading_profile_items_weight_check CHECK (weight >= 0)"
   );
 
+  await pool.query("DROP INDEX IF EXISTS teacher_grading_profiles_name_idx");
   await pool.query(
-    "CREATE UNIQUE INDEX IF NOT EXISTS teacher_grading_profiles_name_idx ON teacher_grading_profiles (teacher_id, name)"
+    "CREATE UNIQUE INDEX IF NOT EXISTS teacher_grading_profiles_name_idx ON teacher_grading_profiles (teacher_id, name) WHERE class_id IS NULL AND subject_id IS NULL"
+  );
+  await pool.query(
+    "CREATE UNIQUE INDEX IF NOT EXISTS teacher_grading_profiles_class_subject_idx ON teacher_grading_profiles (class_id, subject_id) WHERE class_id IS NOT NULL AND subject_id IS NOT NULL"
   );
 
   await pool.query(`

@@ -147,7 +147,7 @@
           <div class="teacher-card-header">
             <div>
               <p class="teacher-eyebrow">MA-Skala</p>
-              <h3>Symbol zu Notenwirkung</h3>
+              <h3>Symbol zu Punktewirkung</h3>
             </div>
           </div>
           <div class="grades-table-wrapper">
@@ -155,13 +155,21 @@
               <thead>
                 <tr>
                   <th>Symbol</th>
-                  <th>Notenwirkung</th>
+                  <th>Punkte</th>
+                  <th>Note</th>
                 </tr>
               </thead>
               <tbody>
                 <% participationScale.forEach((entry) => { %>
                   <tr>
                     <td><span class="badge-count"><%= entry.symbol %></span></td>
+                    <td>
+                      <% if (entry.points != null && entry.points_max != null) { %>
+                        <%= entry.points %> / <%= entry.points_max %>
+                      <% } else { %>
+                        -
+                      <% } %>
+                    </td>
                     <td><%= entry.grade != null ? Number(entry.grade).toFixed(2) : "-" %></td>
                   </tr>
                 <% }) %>

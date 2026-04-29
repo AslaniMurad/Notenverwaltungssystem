@@ -67,12 +67,32 @@ const SCORING_MODE_POINTS_ONLY = "points_only";
 const SCORING_MODE_POINTS_OR_GRADE = "points_or_grade";
 const SCORING_MODE_POINTS_AND_GRADE = "points_and_grade";
 const SCORING_MODE_OPTIONS = [
-  { value: SCORING_MODE_GRADE_ONLY, label: "Nur Noten (1-5)" },
-  { value: SCORING_MODE_POINTS_ONLY, label: "Nur Punkte" },
-  { value: SCORING_MODE_POINTS_OR_GRADE, label: "Punkte oder Noten" },
-  { value: SCORING_MODE_POINTS_AND_GRADE, label: "Punkte und Noten" }
+  {
+    value: SCORING_MODE_POINTS_ONLY,
+    label: "Nur Punkte",
+    description:
+      "Bewertungen werden nur mit Punkten eingegeben. Die Note wird aus erreichten Punkten und Prozentgrenzen berechnet."
+  },
+  {
+    value: SCORING_MODE_GRADE_ONLY,
+    label: "Nur Noten",
+    description:
+      "Bewertungen werden nur als Note eingegeben. Wenn maximale Punkte vorhanden sind, werden interne Punkte aus der Note geschätzt."
+  },
+  {
+    value: SCORING_MODE_POINTS_OR_GRADE,
+    label: "Punkte oder Noten",
+    description:
+      "Pro Bewertung wird entweder Punkte oder Note eingegeben, nie beides. Eine reine Note wird intern in Punkte umgerechnet."
+  },
+  {
+    value: SCORING_MODE_POINTS_AND_GRADE,
+    label: "Punkte und Noten",
+    description:
+      "Pro Bewertung müssen Punkte und Note eingegeben werden. Die Note wird nicht automatisch aus Punkten berechnet."
+  }
 ];
-const DEFAULT_SCORING_MODE = SCORING_MODE_POINTS_OR_GRADE;
+const DEFAULT_SCORING_MODE = SCORING_MODE_POINTS_ONLY;
 const ABSENCE_MODE_INCLUDE_ZERO = "include_zero";
 const ABSENCE_MODE_EXCLUDE = "exclude";
 const ABSENCE_MODE_OPTIONS = [
@@ -96,6 +116,11 @@ const PARTICIPATION_SYMBOL_OPTIONS = [
 const DEFAULT_PARTICIPATION_CONFIG = {
   ma_enabled: false,
   ma_weight: 5,
+  ma_points_plus: 5,
+  ma_points_plus_tilde: 4,
+  ma_points_neutral: 3,
+  ma_points_minus_tilde: 2,
+  ma_points_minus: 0,
   ma_grade_plus: 1.5,
   ma_grade_plus_tilde: 2.5,
   ma_grade_neutral: 3,
@@ -178,6 +203,18 @@ function normalizeScoringMode(mode) {
   return validModes.has(normalized) ? normalized : DEFAULT_SCORING_MODE;
 }
 
+function scoringModeUsesMaPoints(mode) {
+  return normalizeScoringMode(mode) !== SCORING_MODE_GRADE_ONLY;
+}
+
+function scoringModeUsesMaGrades(mode) {
+  return normalizeScoringMode(mode) !== SCORING_MODE_POINTS_ONLY;
+}
+
+function scoringModeUsesThresholds(mode) {
+  return normalizeScoringMode(mode) !== SCORING_MODE_POINTS_AND_GRADE;
+}
+
 function normalizeAbsenceMode(mode) {
   const normalized = String(mode || "").trim().toLowerCase();
   const validModes = new Set(ABSENCE_MODE_OPTIONS.map((entry) => entry.value));
@@ -231,10 +268,51 @@ function buildGradeFromPercent(percent, thresholds) {
   return 5;
 }
 
+function mapGradeToEstimatedPercent(grade, thresholdsSource) {
+  const value = Number(grade);
+  if (!isValidGradeValue(value)) return null;
+
+  const thresholds = normalizeThresholds(thresholdsSource || {});
+  const anchors = [
+    { grade: 1, percent: 100 },
+    { grade: 2, percent: Number(thresholds.grade2_min_percent) },
+    { grade: 3, percent: Number(thresholds.grade3_min_percent) },
+    { grade: 4, percent: Number(thresholds.grade4_min_percent) },
+    { grade: 5, percent: 0 }
+  ];
+
+  const clamped = Math.min(5, Math.max(1, value));
+  if (clamped === 1) return 100;
+  if (clamped === 5) return 0;
+
+  const lower = Math.floor(clamped);
+  const upper = Math.ceil(clamped);
+  const lowerAnchor = anchors.find((entry) => entry.grade === lower);
+  const upperAnchor = anchors.find((entry) => entry.grade === upper);
+  if (!lowerAnchor || !upperAnchor) return null;
+  if (lower === upper) return Number(lowerAnchor.percent);
+
+  const ratio = (clamped - lower) / (upper - lower);
+  return Number((lowerAnchor.percent + (upperAnchor.percent - lowerAnchor.percent) * ratio).toFixed(4));
+}
+
+function estimatePointsFromGrade(grade, maxPoints, thresholdsSource) {
+  const percent = mapGradeToEstimatedPercent(grade, thresholdsSource);
+  const max = Number(maxPoints);
+  if (!Number.isFinite(percent) || !Number.isFinite(max) || max <= 0) return null;
+  return Number((max * (percent / 100)).toFixed(2));
+}
+
 function normalizeParticipationConfig(source = {}) {
   const pick = (key, fallback) => {
     const value = Number(source[key]);
     return Number.isFinite(value) ? value : fallback;
+  };
+  const pickPoints = (key, legacyKey, fallback) => {
+    const value = Number(source[key]);
+    if (Number.isFinite(value)) return value;
+    const legacyValue = Number(source[legacyKey]);
+    return Number.isFinite(legacyValue) ? legacyValue : fallback;
   };
   const rawEnabled = source?.ma_enabled;
   const enabled =
@@ -246,6 +324,11 @@ function normalizeParticipationConfig(source = {}) {
   return {
     ma_enabled: enabled,
     ma_weight: pick("ma_weight", DEFAULT_PARTICIPATION_CONFIG.ma_weight),
+    ma_points_plus: pickPoints("ma_points_plus", "ma_grade_plus", DEFAULT_PARTICIPATION_CONFIG.ma_points_plus),
+    ma_points_plus_tilde: pickPoints("ma_points_plus_tilde", "ma_grade_plus_tilde", DEFAULT_PARTICIPATION_CONFIG.ma_points_plus_tilde),
+    ma_points_neutral: pickPoints("ma_points_neutral", "ma_grade_neutral", DEFAULT_PARTICIPATION_CONFIG.ma_points_neutral),
+    ma_points_minus_tilde: pickPoints("ma_points_minus_tilde", "ma_grade_minus_tilde", DEFAULT_PARTICIPATION_CONFIG.ma_points_minus_tilde),
+    ma_points_minus: pickPoints("ma_points_minus", "ma_grade_minus", DEFAULT_PARTICIPATION_CONFIG.ma_points_minus),
     ma_grade_plus: pick("ma_grade_plus", DEFAULT_PARTICIPATION_CONFIG.ma_grade_plus),
     ma_grade_plus_tilde: pick("ma_grade_plus_tilde", DEFAULT_PARTICIPATION_CONFIG.ma_grade_plus_tilde),
     ma_grade_neutral: pick("ma_grade_neutral", DEFAULT_PARTICIPATION_CONFIG.ma_grade_neutral),
@@ -258,6 +341,11 @@ function parseParticipationConfigFromBody(body) {
   return normalizeParticipationConfig({
     ma_enabled: body?.ma_enabled,
     ma_weight: parseNumericInput(body?.ma_weight),
+    ma_points_plus: parseNumericInput(body?.ma_points_plus),
+    ma_points_plus_tilde: parseNumericInput(body?.ma_points_plus_tilde),
+    ma_points_neutral: parseNumericInput(body?.ma_points_neutral),
+    ma_points_minus_tilde: parseNumericInput(body?.ma_points_minus_tilde),
+    ma_points_minus: parseNumericInput(body?.ma_points_minus),
     ma_grade_plus: parseNumericInput(body?.ma_grade_plus),
     ma_grade_plus_tilde: parseNumericInput(body?.ma_grade_plus_tilde),
     ma_grade_neutral: parseNumericInput(body?.ma_grade_neutral),
@@ -266,30 +354,58 @@ function parseParticipationConfigFromBody(body) {
   });
 }
 
-function validateParticipationConfig(config) {
+function validateParticipationConfig(config, scoringMode = DEFAULT_SCORING_MODE) {
   const value = normalizeParticipationConfig(config);
+  const mode = normalizeScoringMode(scoringMode);
   if (!Number.isFinite(value.ma_weight) || value.ma_weight < 0) {
     return "MA-Gewichtung muss mindestens 0 Punkte sein.";
   }
-  const gradeValues = [
-    value.ma_grade_plus,
-    value.ma_grade_plus_tilde,
-    value.ma_grade_neutral,
-    value.ma_grade_minus_tilde,
-    value.ma_grade_minus
-  ];
-  if (gradeValues.some((entry) => !Number.isFinite(entry) || entry < 1 || entry > 5)) {
-    return "MA-Notenwirkung muss zwischen 1 und 5 liegen.";
+  if (scoringModeUsesMaPoints(mode)) {
+    const pointValues = [
+      value.ma_points_plus,
+      value.ma_points_plus_tilde,
+      value.ma_points_neutral,
+      value.ma_points_minus_tilde,
+      value.ma_points_minus
+    ];
+    if (pointValues.some((entry) => !Number.isFinite(entry) || entry < 0)) {
+      return "MA-Punkte muessen mindestens 0 sein.";
+    }
+    if (pointValues.some((entry) => entry > value.ma_weight)) {
+      return "MA-Punkte duerfen die MA-Gewichtung nicht uebersteigen.";
+    }
+    if (
+      !(
+        value.ma_points_plus > value.ma_points_plus_tilde &&
+        value.ma_points_plus_tilde > value.ma_points_neutral &&
+        value.ma_points_neutral > value.ma_points_minus_tilde &&
+        value.ma_points_minus_tilde > value.ma_points_minus
+      )
+    ) {
+      return "MA-Punkte muessen streng fallend sein (+ > +~ > ~ > -~ > -).";
+    }
   }
-  if (
-    !(
-      value.ma_grade_plus < value.ma_grade_plus_tilde &&
-      value.ma_grade_plus_tilde < value.ma_grade_neutral &&
-      value.ma_grade_neutral < value.ma_grade_minus_tilde &&
-      value.ma_grade_minus_tilde < value.ma_grade_minus
-    )
-  ) {
-    return "MA-Notenwirkung muss streng steigend sein (+ < +~ < ~ < -~ < -).";
+  if (scoringModeUsesMaGrades(mode)) {
+    const gradeValues = [
+      value.ma_grade_plus,
+      value.ma_grade_plus_tilde,
+      value.ma_grade_neutral,
+      value.ma_grade_minus_tilde,
+      value.ma_grade_minus
+    ];
+    if (gradeValues.some((entry) => !isValidGradeValue(entry))) {
+      return "MA-Noten muessen zwischen 1 und 5 liegen.";
+    }
+    if (
+      !(
+        value.ma_grade_plus < value.ma_grade_plus_tilde &&
+        value.ma_grade_plus_tilde < value.ma_grade_neutral &&
+        value.ma_grade_neutral < value.ma_grade_minus_tilde &&
+        value.ma_grade_minus_tilde < value.ma_grade_minus
+      )
+    ) {
+      return "MA-Noten muessen streng steigend sein (+ < +~ < ~ < -~ < -).";
+    }
   }
   if (value.ma_enabled && value.ma_weight <= 0) {
     return "Wenn MA aktiv ist, muss die MA-Gewichtung größer als 0 sein.";
@@ -304,7 +420,19 @@ function normalizeParticipationSymbol(symbol) {
   return PARTICIPATION_SYMBOL_OPTIONS.some((entry) => entry.value === normalized) ? normalized : null;
 }
 
-function getParticipationGrade(symbol, config) {
+function getParticipationPointsValue(symbol, config) {
+  const normalized = normalizeParticipationSymbol(symbol);
+  if (!normalized) return null;
+  const source = normalizeParticipationConfig(config);
+  if (normalized === "plus") return source.ma_points_plus;
+  if (normalized === "plus_tilde") return source.ma_points_plus_tilde;
+  if (normalized === "neutral") return source.ma_points_neutral;
+  if (normalized === "minus_tilde") return source.ma_points_minus_tilde;
+  if (normalized === "minus") return source.ma_points_minus;
+  return null;
+}
+
+function getParticipationGradeValue(symbol, config) {
   const normalized = normalizeParticipationSymbol(symbol);
   if (!normalized) return null;
   const source = normalizeParticipationConfig(config);
@@ -316,22 +444,48 @@ function getParticipationGrade(symbol, config) {
   return null;
 }
 
+function getParticipationPoints(symbol, config, thresholds = DEFAULT_GRADE_THRESHOLDS, scoringMode = DEFAULT_SCORING_MODE) {
+  const mode = normalizeScoringMode(scoringMode);
+  const source = normalizeParticipationConfig(config);
+  if (scoringModeUsesMaPoints(mode)) {
+    return getParticipationPointsValue(symbol, source);
+  }
+  return estimatePointsFromGrade(getParticipationGradeValue(symbol, source), source.ma_weight, thresholds);
+}
+
+function getParticipationGrade(symbol, config, thresholds = DEFAULT_GRADE_THRESHOLDS, scoringMode = DEFAULT_SCORING_MODE) {
+  const mode = normalizeScoringMode(scoringMode);
+  const source = normalizeParticipationConfig(config);
+  if (scoringModeUsesMaGrades(mode)) {
+    return getParticipationGradeValue(symbol, source);
+  }
+  const points = Number(getParticipationPointsValue(symbol, source));
+  const max = Number(source.ma_weight);
+  if (!Number.isFinite(points) || !Number.isFinite(max) || max <= 0) return null;
+  const percent = Math.max(0, Math.min(100, (points / max) * 100));
+  return buildGradeFromPercent(percent, thresholds);
+}
+
 function getParticipationSymbolLabel(symbol) {
   const normalized = normalizeParticipationSymbol(symbol);
   const option = PARTICIPATION_SYMBOL_OPTIONS.find((entry) => entry.value === normalized);
   return option ? option.label : String(symbol || "");
 }
 
-function buildParticipationAverageRows(marks, config) {
+function buildParticipationAverageRows(marks, config, thresholds = DEFAULT_GRADE_THRESHOLDS, scoringMode = DEFAULT_SCORING_MODE) {
   const participation = normalizeParticipationConfig(config);
   if (!participation.ma_enabled || participation.ma_weight <= 0) return [];
   return (marks || [])
     .map((mark) => {
-      const grade = getParticipationGrade(mark.symbol, participation);
+      const points = Number(getParticipationPoints(mark.symbol, participation, thresholds, scoringMode));
+      const maxPoints = Number(participation.ma_weight);
+      const grade = getParticipationGrade(mark.symbol, participation, thresholds, scoringMode);
       if (!Number.isFinite(grade)) return null;
       return {
         grade,
-        weight: participation.ma_weight,
+        weight: maxPoints,
+        points_achieved: Number.isFinite(points) ? points : null,
+        points_max: Number.isFinite(maxPoints) && maxPoints > 0 ? maxPoints : null,
         is_participation: true
       };
     })
@@ -341,7 +495,13 @@ function buildParticipationAverageRows(marks, config) {
 function getScoringModeLabel(mode) {
   const normalized = normalizeScoringMode(mode);
   const entry = SCORING_MODE_OPTIONS.find((option) => option.value === normalized);
-  return entry ? entry.label : "Punkte oder Noten";
+  return entry ? entry.label : "Nur Punkte";
+}
+
+function getScoringModeDescription(mode) {
+  const normalized = normalizeScoringMode(mode);
+  const entry = SCORING_MODE_OPTIONS.find((option) => option.value === normalized);
+  return entry?.description || "";
 }
 
 function parseNumericInput(value) {
@@ -445,7 +605,7 @@ async function loadProfileItems(profileId) {
 
 async function loadTeacherProfiles(teacherId) {
   const profiles = await allAsync(
-    `SELECT id, teacher_id, name, weight_mode, scoring_mode, absence_mode, grade1_min_percent, grade2_min_percent, grade3_min_percent, grade4_min_percent, ma_enabled, ma_weight, ma_grade_plus, ma_grade_plus_tilde, ma_grade_neutral, ma_grade_minus_tilde, ma_grade_minus, is_active, created_at, updated_at
+    `SELECT id, teacher_id, class_id, subject_id, name, weight_mode, scoring_mode, absence_mode, grade1_min_percent, grade2_min_percent, grade3_min_percent, grade4_min_percent, ma_enabled, ma_weight, ma_points_plus, ma_points_plus_tilde, ma_points_neutral, ma_points_minus_tilde, ma_points_minus, ma_grade_plus, ma_grade_plus_tilde, ma_grade_neutral, ma_grade_minus_tilde, ma_grade_minus, is_active, created_at, updated_at
      FROM teacher_grading_profiles
      WHERE teacher_id = ?
      ORDER BY is_active DESC, created_at ASC, id ASC`,
@@ -464,7 +624,7 @@ async function loadTeacherProfiles(teacherId) {
 
 async function loadTeacherProfileById(profileId, teacherId) {
   const profile = await getAsync(
-    `SELECT id, teacher_id, name, weight_mode, scoring_mode, absence_mode, grade1_min_percent, grade2_min_percent, grade3_min_percent, grade4_min_percent, ma_enabled, ma_weight, ma_grade_plus, ma_grade_plus_tilde, ma_grade_neutral, ma_grade_minus_tilde, ma_grade_minus, is_active, created_at, updated_at
+    `SELECT id, teacher_id, class_id, subject_id, name, weight_mode, scoring_mode, absence_mode, grade1_min_percent, grade2_min_percent, grade3_min_percent, grade4_min_percent, ma_enabled, ma_weight, ma_points_plus, ma_points_plus_tilde, ma_points_neutral, ma_points_minus_tilde, ma_points_minus, ma_grade_plus, ma_grade_plus_tilde, ma_grade_neutral, ma_grade_minus_tilde, ma_grade_minus, is_active, created_at, updated_at
      FROM teacher_grading_profiles
      WHERE id = ? AND teacher_id = ?`,
     [profileId, teacherId]
@@ -483,9 +643,9 @@ async function loadTeacherProfileById(profileId, teacherId) {
 
 async function loadActiveTeacherProfile(teacherId) {
   const activeProfile = await getAsync(
-    `SELECT id, teacher_id, name, weight_mode, scoring_mode, absence_mode, grade1_min_percent, grade2_min_percent, grade3_min_percent, grade4_min_percent, ma_enabled, ma_weight, ma_grade_plus, ma_grade_plus_tilde, ma_grade_neutral, ma_grade_minus_tilde, ma_grade_minus, is_active, created_at, updated_at
+    `SELECT id, teacher_id, class_id, subject_id, name, weight_mode, scoring_mode, absence_mode, grade1_min_percent, grade2_min_percent, grade3_min_percent, grade4_min_percent, ma_enabled, ma_weight, ma_points_plus, ma_points_plus_tilde, ma_points_neutral, ma_points_minus_tilde, ma_points_minus, ma_grade_plus, ma_grade_plus_tilde, ma_grade_neutral, ma_grade_minus_tilde, ma_grade_minus, is_active, created_at, updated_at
      FROM teacher_grading_profiles
-     WHERE teacher_id = ? AND is_active = ?
+     WHERE teacher_id = ? AND is_active = ? AND class_id IS NULL AND subject_id IS NULL
      ORDER BY created_at ASC, id ASC
      LIMIT 1`,
     [teacherId, true]
@@ -510,16 +670,19 @@ async function loadActiveTeacherProfile(teacherId) {
   }
 
   const fallback = await getAsync(
-    `SELECT id, teacher_id, name, weight_mode, scoring_mode, absence_mode, grade1_min_percent, grade2_min_percent, grade3_min_percent, grade4_min_percent, ma_enabled, ma_weight, ma_grade_plus, ma_grade_plus_tilde, ma_grade_neutral, ma_grade_minus_tilde, ma_grade_minus, is_active, created_at, updated_at
+    `SELECT id, teacher_id, class_id, subject_id, name, weight_mode, scoring_mode, absence_mode, grade1_min_percent, grade2_min_percent, grade3_min_percent, grade4_min_percent, ma_enabled, ma_weight, ma_points_plus, ma_points_plus_tilde, ma_points_neutral, ma_points_minus_tilde, ma_points_minus, ma_grade_plus, ma_grade_plus_tilde, ma_grade_neutral, ma_grade_minus_tilde, ma_grade_minus, is_active, created_at, updated_at
      FROM teacher_grading_profiles
-     WHERE teacher_id = ?
+     WHERE teacher_id = ? AND class_id IS NULL AND subject_id IS NULL
      ORDER BY created_at ASC, id ASC
      LIMIT 1`,
     [teacherId]
   );
   if (!fallback) return null;
 
-  await runAsync("UPDATE teacher_grading_profiles SET is_active = ? WHERE teacher_id = ?", [false, teacherId]);
+  await runAsync(
+    "UPDATE teacher_grading_profiles SET is_active = ? WHERE teacher_id = ? AND class_id IS NULL AND subject_id IS NULL",
+    [false, teacherId]
+  );
   await runAsync(
     "UPDATE teacher_grading_profiles SET is_active = ?, updated_at = current_timestamp WHERE id = ? AND teacher_id = ?",
     [true, fallback.id, teacherId]
@@ -537,6 +700,51 @@ async function loadActiveTeacherProfile(teacherId) {
     weights,
     total_weight: computeWeightsTotal(weights)
   };
+}
+
+async function loadClassSubjectGradingProfile(classId, subjectId) {
+  if (!Number.isFinite(Number(classId)) || !Number.isFinite(Number(subjectId))) return null;
+  const profile = await getAsync(
+    `SELECT tgp.id, tgp.teacher_id, tgp.class_id, tgp.subject_id, tgp.name, tgp.weight_mode, tgp.scoring_mode, tgp.absence_mode, tgp.grade1_min_percent, tgp.grade2_min_percent, tgp.grade3_min_percent, tgp.grade4_min_percent, tgp.ma_enabled, tgp.ma_weight, tgp.ma_points_plus, tgp.ma_points_plus_tilde, tgp.ma_points_neutral, tgp.ma_points_minus_tilde, tgp.ma_points_minus, tgp.ma_grade_plus, tgp.ma_grade_plus_tilde, tgp.ma_grade_neutral, tgp.ma_grade_minus_tilde, tgp.ma_grade_minus, tgp.is_active, tgp.created_at, tgp.updated_at, u.email AS owner_email
+     FROM teacher_grading_profiles tgp
+     LEFT JOIN users u ON u.id = tgp.teacher_id
+     WHERE tgp.class_id = ? AND tgp.subject_id = ?
+     ORDER BY tgp.created_at ASC, tgp.id ASC
+     LIMIT 1`,
+    [classId, subjectId]
+  );
+  if (!profile) return null;
+
+  const weights = mergeWeightsWithDefaults(await loadProfileItems(profile.id), profile.weight_mode);
+  return {
+    ...profile,
+    weight_mode: resolveWeightMode(profile.weight_mode),
+    scoring_mode: normalizeScoringMode(profile.scoring_mode),
+    absence_mode: normalizeAbsenceMode(profile.absence_mode),
+    thresholds: normalizeThresholds(profile),
+    participation: normalizeParticipationConfig(profile),
+    is_active: true,
+    is_locked: true,
+    weights,
+    total_weight: computeWeightsTotal(weights)
+  };
+}
+
+async function loadProfileForClassSubject(teacherId, classId, subjectId) {
+  return (
+    (await loadClassSubjectGradingProfile(classId, subjectId)) ||
+    (await loadActiveTeacherProfile(teacherId))
+  );
+}
+
+function getSettingsUrlForClassSubject(classData) {
+  if (!classData) return "/teacher/settings?setup=1";
+  const classId = classData.id ?? classData.class_id;
+  const subjectId = classData.subject_id;
+  if (!Number.isFinite(Number(classId)) || !Number.isFinite(Number(subjectId))) {
+    return "/teacher/settings?setup=1";
+  }
+  return `/teacher/settings?class_id=${encodeURIComponent(classId)}&subject_id=${encodeURIComponent(subjectId)}&setup=1`;
 }
 
 function enrichWeightData(entry, fallbackMode = WEIGHT_MODE_POINTS) {
@@ -621,6 +829,145 @@ function parseOptionalNumber(raw) {
   return { provided: true, value };
 }
 
+function resolveAssessmentInput({
+  scoringMode,
+  gradeInput,
+  pointsInput,
+  templateHasMaxPoints,
+  templateMaxPoints,
+  thresholds,
+  isAbsent,
+  absenceMode
+}) {
+  const mode = normalizeScoringMode(scoringMode);
+  const hasGrade = Boolean(gradeInput?.provided);
+  const gradeValue = Number(gradeInput?.value);
+  const hasPoints = Boolean(pointsInput?.provided);
+  const pointsValue = Number(pointsInput?.value);
+  const maxPoints = Number(templateMaxPoints);
+
+  if (hasGrade && !isValidGradeValue(gradeValue)) {
+    return { error: "Note muss zwischen 1 und 5 liegen." };
+  }
+  if (hasPoints && (!Number.isFinite(pointsValue) || pointsValue < 0)) {
+    return { error: "Erreichte Punkte müssen mindestens 0 sein." };
+  }
+
+  if (mode === SCORING_MODE_GRADE_ONLY && hasPoints) {
+    return { error: "Dieses Profil erlaubt nur Noten." };
+  }
+  if (mode === SCORING_MODE_POINTS_ONLY && hasGrade) {
+    return { error: "Dieses Profil erlaubt nur Punkte." };
+  }
+  if (mode === SCORING_MODE_POINTS_OR_GRADE && hasGrade && hasPoints) {
+    return { error: "Bitte entweder Note oder Punkte angeben, nicht beides." };
+  }
+
+  if (hasPoints && !templateHasMaxPoints) {
+    return {
+      error: "Diese Prüfung hat keine maximalen Punkte. Bitte in der Prüfungsvorlage setzen."
+    };
+  }
+  if (hasPoints && templateHasMaxPoints && pointsValue > maxPoints) {
+    return {
+      error: `Erreichte Punkte dürfen die maximalen Punkte (${maxPoints}) nicht übersteigen.`
+    };
+  }
+
+  if (isAbsent) {
+    if (normalizeAbsenceMode(absenceMode) === ABSENCE_MODE_INCLUDE_ZERO) {
+      if (!templateHasMaxPoints) {
+        return {
+          error: "Für 'Mit 0% werten' braucht die Prüfung maximale Punkte in der Vorlage."
+        };
+      }
+      return {
+        grade: 5,
+        pointsAchieved: 0,
+        pointsMax: maxPoints
+      };
+    }
+    return {
+      grade: 5,
+      pointsAchieved: null,
+      pointsMax: null
+    };
+  }
+
+  const hasCompletePoints = hasPoints && templateHasMaxPoints;
+
+  if (mode === SCORING_MODE_GRADE_ONLY) {
+    if (!hasGrade) return { error: "Dieses Profil verlangt eine Note." };
+    const estimatedPoints = templateHasMaxPoints
+      ? estimatePointsFromGrade(gradeValue, maxPoints, thresholds)
+      : null;
+    return {
+      grade: gradeValue,
+      pointsAchieved: Number.isFinite(estimatedPoints) ? estimatedPoints : null,
+      pointsMax: Number.isFinite(estimatedPoints) ? maxPoints : null
+    };
+  }
+
+  if (mode === SCORING_MODE_POINTS_ONLY) {
+    if (!hasCompletePoints) {
+      return {
+        error: templateHasMaxPoints
+          ? "Dieses Profil verlangt Punkte."
+          : "Dieses Profil verlangt Punkte. Bitte zuerst maximale Punkte in der Prüfungsvorlage setzen."
+      };
+    }
+    const percent = (pointsValue / maxPoints) * 100;
+    return {
+      grade: buildGradeFromPercent(percent, thresholds),
+      pointsAchieved: pointsValue,
+      pointsMax: maxPoints
+    };
+  }
+
+  if (mode === SCORING_MODE_POINTS_AND_GRADE) {
+    if (!hasGrade || !hasCompletePoints) {
+      return {
+        error: templateHasMaxPoints
+          ? "Dieses Profil verlangt Punkte und Note."
+          : "Dieses Profil verlangt Punkte und Note. Bitte zuerst maximale Punkte in der Prüfungsvorlage setzen."
+      };
+    }
+    return {
+      grade: gradeValue,
+      pointsAchieved: pointsValue,
+      pointsMax: maxPoints
+    };
+  }
+
+  if (!hasGrade && !hasCompletePoints) {
+    return {
+      error: templateHasMaxPoints
+        ? "Bitte entweder Note oder Punkte angeben."
+        : "Bitte eine Note angeben oder maximale Punkte in der Prüfungsvorlage setzen."
+    };
+  }
+  if (hasCompletePoints) {
+    const percent = (pointsValue / maxPoints) * 100;
+    return {
+      grade: buildGradeFromPercent(percent, thresholds),
+      pointsAchieved: pointsValue,
+      pointsMax: maxPoints
+    };
+  }
+
+  const estimatedPoints = estimatePointsFromGrade(gradeValue, maxPoints, thresholds);
+  if (!Number.isFinite(estimatedPoints)) {
+    return {
+      error: "Dieses Profil rechnet Noten in Punkte um. Bitte zuerst maximale Punkte in der Prüfungsvorlage setzen."
+    };
+  }
+  return {
+    grade: gradeValue,
+    pointsAchieved: estimatedPoints,
+    pointsMax: maxPoints
+  };
+}
+
 function isCheckedInput(value) {
   return value === true || value === 1 || value === "1" || value === "true" || value === "on";
 }
@@ -698,7 +1045,10 @@ async function renderAddGradeForm(req, res, payload) {
     formData = {},
     excludedMessage = null
   } = payload || {};
-  const activeProfile = await loadActiveTeacherProfile(req.session.user.id);
+  const activeProfile =
+    classData?.id && Number.isFinite(Number(classData?.subject_id))
+      ? await loadProfileForClassSubject(req.session.user.id, classData.id, classData.subject_id)
+      : await loadActiveTeacherProfile(req.session.user.id);
   const scoringMode = normalizeScoringMode(activeProfile?.scoring_mode);
   const absenceMode = normalizeAbsenceMode(activeProfile?.absence_mode);
   const thresholds = normalizeThresholds(activeProfile?.thresholds || activeProfile || {});
@@ -716,6 +1066,7 @@ async function renderAddGradeForm(req, res, payload) {
     activeProfile,
     scoringMode,
     scoringModeLabel: getScoringModeLabel(scoringMode),
+    scoringModeDescription: getScoringModeDescription(scoringMode),
     absenceMode,
     thresholds,
     openMessageCount,
@@ -1269,6 +1620,7 @@ async function renderBulkGradeTemplateForm(req, res, payload = {}) {
     activeProfile,
     scoringMode,
     scoringModeLabel: getScoringModeLabel(scoringMode),
+    scoringModeDescription: getScoringModeDescription(scoringMode),
     absenceMode: normalizeAbsenceMode(activeProfile?.absence_mode),
     templateHasMaxPoints,
     templateMaxPoints: templateHasMaxPoints ? templateMaxPoints : null,
@@ -1456,32 +1808,35 @@ function computeWeightedAverage(grades, options = {}) {
   return weightTotal ? Number((weightedSum / weightTotal).toFixed(2)) : null;
 }
 
-function mapGradeToEstimatedPercent(grade, thresholdsSource) {
-  const value = Number(grade);
-  if (!isValidGradeValue(value)) return null;
+function resolvePointsSnapshot(row, thresholds = DEFAULT_GRADE_THRESHOLDS) {
+  const achieved = Number(row?.points_achieved);
+  const max = Number(row?.points_max);
+  if (Number.isFinite(achieved) && Number.isFinite(max) && max > 0) {
+    return {
+      achieved,
+      max,
+      percent: Number(((achieved / max) * 100).toFixed(2)),
+      estimated: false
+    };
+  }
 
-  const thresholds = normalizeThresholds(thresholdsSource || {});
-  const anchors = [
-    { grade: 1, percent: 100 },
-    { grade: 2, percent: Number(thresholds.grade2_min_percent) },
-    { grade: 3, percent: Number(thresholds.grade3_min_percent) },
-    { grade: 4, percent: Number(thresholds.grade4_min_percent) },
-    { grade: 5, percent: 0 }
-  ];
+  const templateMax = Number(row?.template_max_points);
+  const estimated = estimatePointsFromGrade(row?.grade, templateMax, thresholds);
+  if (Number.isFinite(estimated) && Number.isFinite(templateMax) && templateMax > 0) {
+    return {
+      achieved: estimated,
+      max: templateMax,
+      percent: Number(((estimated / templateMax) * 100).toFixed(2)),
+      estimated: true
+    };
+  }
 
-  const clamped = Math.min(5, Math.max(1, value));
-  if (clamped === 1) return 100;
-  if (clamped === 5) return 0;
-
-  const lower = Math.floor(clamped);
-  const upper = Math.ceil(clamped);
-  const lowerAnchor = anchors.find((entry) => entry.grade === lower);
-  const upperAnchor = anchors.find((entry) => entry.grade === upper);
-  if (!lowerAnchor || !upperAnchor) return null;
-  if (lower === upper) return Number(lowerAnchor.percent);
-
-  const ratio = (clamped - lower) / (upper - lower);
-  return Number((lowerAnchor.percent + (upperAnchor.percent - lowerAnchor.percent) * ratio).toFixed(4));
+  return {
+    achieved: null,
+    max: null,
+    percent: null,
+    estimated: false
+  };
 }
 
 function computePointTotalsWithParticipation(entries, options = {}) {
@@ -1491,11 +1846,10 @@ function computePointTotalsWithParticipation(entries, options = {}) {
     (acc, row) => {
       if (isGradeExcludedFromAverage(row, absenceMode)) return acc;
 
-      const achieved = Number(row?.points_achieved);
-      const max = Number(row?.points_max);
-      if (Number.isFinite(achieved) && Number.isFinite(max) && max > 0) {
-        acc.achieved += achieved;
-        acc.max += max;
+      const points = resolvePointsSnapshot(row, thresholds);
+      if (Number.isFinite(points.achieved) && Number.isFinite(points.max) && points.max > 0) {
+        acc.achieved += points.achieved;
+        acc.max += points.max;
         return acc;
       }
 
@@ -1526,65 +1880,79 @@ async function loadParticipationMarks(classId, subjectId, studentId) {
   );
 }
 
-async function buildSettingsPageData(teacherId, selectedProfileId, formOverride = null) {
-  const profiles = await loadTeacherProfiles(teacherId);
-  const setupComplete = profiles.length > 0;
-  const activeProfile = profiles.find((profile) => profile.is_active) || profiles[0] || null;
+async function buildSettingsPageData(teacherId, selectedClassId, selectedSubjectId, formOverride = null) {
+  const assignments = await getTeacherAssignments(teacherId);
+  let selectedAssignment = null;
 
-  let selectedProfile = null;
-  if (selectedProfileId) {
-    selectedProfile = profiles.find((profile) => Number(profile.id) === Number(selectedProfileId)) || null;
+  if (Number.isFinite(Number(selectedClassId)) && Number.isFinite(Number(selectedSubjectId))) {
+    selectedAssignment = assignments.find(
+      (entry) =>
+        Number(entry.class_id) === Number(selectedClassId) &&
+        Number(entry.subject_id) === Number(selectedSubjectId)
+    ) || null;
   }
-  if (!selectedProfile) selectedProfile = activeProfile;
+  if (!selectedAssignment) selectedAssignment = assignments[0] || null;
 
-  let selectedWeights = buildDefaultWeights(WEIGHT_MODE_POINTS);
-  let selectedMode = WEIGHT_MODE_POINTS;
-  let selectedScoringMode = DEFAULT_SCORING_MODE;
-  let selectedAbsenceMode = DEFAULT_ABSENCE_MODE;
-  let selectedThresholds = normalizeThresholds();
-  let selectedParticipation = normalizeParticipationConfig();
-  if (selectedProfile) {
-    selectedMode = resolveWeightMode(selectedProfile.weight_mode);
-    selectedWeights = mergeWeightsWithDefaults(await loadProfileItems(selectedProfile.id), selectedMode);
-    selectedScoringMode = normalizeScoringMode(selectedProfile.scoring_mode);
-    selectedAbsenceMode = normalizeAbsenceMode(selectedProfile.absence_mode);
-    selectedThresholds = normalizeThresholds(selectedProfile.thresholds || selectedProfile);
-    selectedParticipation = normalizeParticipationConfig(
-      selectedProfile.participation || selectedProfile
-    );
-  }
+  const assignmentProfiles = await Promise.all(
+    assignments.map(async (assignment) => {
+      const profile = await loadClassSubjectGradingProfile(assignment.class_id, assignment.subject_id);
+      return {
+        ...assignment,
+        profile,
+        has_profile: Boolean(profile)
+      };
+    })
+  );
 
-  const selectedTotal = computeWeightsTotal(selectedWeights);
-  const defaultProfileName = selectedProfile?.name || "Standardprofil";
+  const classSubjectProfile = selectedAssignment
+    ? await loadClassSubjectGradingProfile(selectedAssignment.class_id, selectedAssignment.subject_id)
+    : null;
+
+  const selectedMode = classSubjectProfile
+    ? resolveWeightMode(classSubjectProfile.weight_mode)
+    : WEIGHT_MODE_POINTS;
+  const selectedWeights = classSubjectProfile
+    ? mergeWeightsWithDefaults(classSubjectProfile.weights || {}, selectedMode)
+    : buildDefaultWeights(selectedMode);
+  const selectedScoringMode = classSubjectProfile
+    ? normalizeScoringMode(classSubjectProfile.scoring_mode)
+    : SCORING_MODE_POINTS_ONLY;
+  const selectedAbsenceMode = normalizeAbsenceMode(classSubjectProfile?.absence_mode);
+  const selectedThresholds = normalizeThresholds(classSubjectProfile?.thresholds || classSubjectProfile || {});
+  const selectedParticipation = normalizeParticipationConfig(
+    classSubjectProfile?.participation || classSubjectProfile || {}
+  );
+  const defaultProfileName = selectedAssignment
+    ? `${selectedAssignment.class_name} - ${selectedAssignment.subject_name}`
+    : "Bewertungsschema";
   const formData =
     formOverride ||
     {
-      profile_id: selectedProfile?.id || "",
-      profile_name: defaultProfileName,
+      profile_id: classSubjectProfile?.id || "",
+      class_id: selectedAssignment?.class_id || "",
+      subject_id: selectedAssignment?.subject_id || "",
+      profile_name: classSubjectProfile?.name || defaultProfileName,
       weight_mode: selectedMode,
       scoring_mode: selectedScoringMode,
       absence_mode: selectedAbsenceMode,
       thresholds: selectedThresholds,
       participation: selectedParticipation,
-      set_active: selectedProfile ? Boolean(selectedProfile.is_active) : true,
+      set_active: false,
       weights: selectedWeights
     };
 
   return {
-    setupComplete,
-    activeProfile,
-    profiles: profiles.map((profile) => ({
-      ...profile,
-      mode_label: getWeightUnit(profile.weight_mode),
-      scoring_mode: normalizeScoringMode(profile.scoring_mode),
-      absence_mode: normalizeAbsenceMode(profile.absence_mode),
-      thresholds: normalizeThresholds(profile.thresholds || profile),
-      participation: normalizeParticipationConfig(profile.participation || profile),
-      is_active: Boolean(profile.is_active)
-    })),
-    selectedProfile,
+    setupComplete: assignments.length > 0 && assignmentProfiles.every((entry) => entry.has_profile),
+    activeProfile: classSubjectProfile,
+    classSubjectProfile,
+    selectedAssignment,
+    assignments: assignmentProfiles,
+    profiles: assignmentProfiles
+      .map((entry) => entry.profile)
+      .filter(Boolean),
+    selectedProfile: classSubjectProfile,
     selectedWeights,
-    selectedTotal,
+    selectedTotal: computeWeightsTotal(selectedWeights),
     formData
   };
 }
@@ -1614,14 +1982,22 @@ router.get("/classes", async (req, res, next) => {
       ? String(req.query.sort)
       : "newest";
 
-    const classesAll = (await getTeacherAssignments(req.session.user.id)).map((entry) => ({
-      assignment_id: Number(entry.id),
-      id: Number(entry.class_id),
-      name: entry.class_name,
-      subject: entry.subject_name,
-      subject_id: Number(entry.subject_id),
-      created_at: entry.created_at
-    }));
+    const classesAll = await Promise.all(
+      (await getTeacherAssignments(req.session.user.id)).map(async (entry) => {
+        const profile = await loadClassSubjectGradingProfile(entry.class_id, entry.subject_id);
+        return {
+          assignment_id: Number(entry.id),
+          id: Number(entry.class_id),
+          name: entry.class_name,
+          subject: entry.subject_name,
+          subject_id: Number(entry.subject_id),
+          created_at: entry.created_at,
+          has_profile: Boolean(profile),
+          profile_name: profile?.name || "",
+          settings_url: getSettingsUrlForClassSubject(entry)
+        };
+      })
+    );
     let classes = classesAll.filter((entry) => {
       if (!qFolded) return true;
       const haystack = foldText(`${entry.name || ""} ${entry.subject || ""}`);
@@ -1653,15 +2029,18 @@ router.get("/classes", async (req, res, next) => {
       }
     });
 
-    const activeProfile = await loadActiveTeacherProfile(req.session.user.id);
+    const missingProfileCount = classesAll.filter((entry) => !entry.has_profile).length;
+    const firstMissingClass = classesAll.find((entry) => !entry.has_profile) || null;
 
     res.render("teacher/teacher-classes", {
       email: req.session.user.email,
       classes,
       totalClassCount: classesAll.length,
       search: { q, sort },
-      setupComplete: Boolean(activeProfile),
-      activeProfile,
+      setupComplete: missingProfileCount === 0,
+      activeProfile: null,
+      missingProfileCount,
+      setupUrl: firstMissingClass?.settings_url || "/teacher/settings?setup=1",
       emptyStateMessage: req.query.empty
         ? "Noch keine Fachzuordnungen vorhanden."
         : "Noch keine Fachzuordnungen vorhanden.",
@@ -1845,35 +2224,15 @@ router.post("/delete-class/:id", async (req, res, next) => {
 router.get("/settings", async (req, res, next) => {
   try {
     const teacherId = req.session.user.id;
-    const selectedProfileId = req.query.profile_id ? Number(req.query.profile_id) : null;
-    const isCreateMode = String(req.query.new || "") === "1";
-    const isEditMode = String(req.query.edit || "") === "1";
+    const selectedClassId = req.query.class_id ? Number(req.query.class_id) : null;
+    const selectedSubjectId = req.query.subject_id ? Number(req.query.subject_id) : null;
 
-    let pageData = await buildSettingsPageData(teacherId, selectedProfileId);
-    if (isCreateMode) {
-      const sourceProfile = pageData.activeProfile || pageData.selectedProfile;
-      const createFormData = {
-        profile_id: "",
-        profile_name: "",
-        weight_mode: WEIGHT_MODE_POINTS,
-        scoring_mode: normalizeScoringMode(sourceProfile?.scoring_mode),
-        absence_mode: normalizeAbsenceMode(sourceProfile?.absence_mode),
-        thresholds: normalizeThresholds(sourceProfile?.thresholds || sourceProfile || {}),
-        participation: normalizeParticipationConfig(
-          sourceProfile?.participation || sourceProfile || {}
-        ),
-        set_active: !pageData.activeProfile,
-        weights: mergeWeightsWithDefaults(sourceProfile?.weights || {}, WEIGHT_MODE_POINTS)
-      };
-      pageData = await buildSettingsPageData(teacherId, null, createFormData);
-    }
-
-    const showConfigForm =
-      !pageData.setupComplete ||
-      isCreateMode ||
-      (isEditMode && Number.isInteger(selectedProfileId) && selectedProfileId > 0);
+    const pageData = await buildSettingsPageData(teacherId, selectedClassId, selectedSubjectId);
+    const showConfigForm = Boolean(pageData.selectedAssignment);
     const message = req.query.saved
       ? "Bewertungsschema gespeichert."
+      : req.query.updated
+      ? "Bearbeitbare Einstellungen gespeichert."
       : req.query.deleted
       ? "Profil gelöscht."
       : null;
@@ -1888,6 +2247,9 @@ router.get("/settings", async (req, res, next) => {
       setupComplete: pageData.setupComplete,
       showSetupFlow: !pageData.setupComplete || String(req.query.setup || "") === "1",
       showConfigForm,
+      assignments: pageData.assignments,
+      selectedAssignment: pageData.selectedAssignment,
+      classSubjectProfile: pageData.classSubjectProfile,
       profiles: pageData.profiles,
       activeProfile: pageData.activeProfile,
       selectedProfile: pageData.selectedProfile,
@@ -1904,164 +2266,170 @@ router.get("/settings", async (req, res, next) => {
 router.post("/settings/save-profile", async (req, res, next) => {
   try {
     const teacherId = req.session.user.id;
-    const requestedProfileId = Number(req.body?.profile_id);
-    const profileName = String(req.body?.profile_name || "").trim();
-    const weightMode = WEIGHT_MODE_POINTS;
-    const scoringMode = normalizeScoringMode(req.body?.scoring_mode);
-    const absenceMode = normalizeAbsenceMode(req.body?.absence_mode);
-    const thresholds = parseThresholdsFromBody(req.body || {});
-    const participation = parseParticipationConfigFromBody(req.body || {});
-    const requestedSetActive = req.body?.set_active === "1" || req.body?.set_active === "on";
-    const parsedWeights = parseWeightsFromBody(req.body || {});
-    const existingProfiles = await loadTeacherProfiles(teacherId);
+    const classId = Number(req.body?.class_id);
+    const subjectId = Number(req.body?.subject_id);
 
-    const formData = {
-      profile_id: Number.isInteger(requestedProfileId) && requestedProfileId > 0 ? requestedProfileId : "",
-      profile_name: profileName,
-      weight_mode: weightMode,
-      scoring_mode: scoringMode,
-      absence_mode: absenceMode,
-      thresholds,
-      participation,
-      set_active: requestedSetActive,
-      weights: mergeWeightsWithDefaults(parsedWeights, weightMode)
-    };
+    if (Number.isInteger(classId) && classId > 0 && Number.isInteger(subjectId) && subjectId > 0) {
+      const profileName = String(req.body?.profile_name || "").trim();
+      let weightMode = WEIGHT_MODE_POINTS;
+      let scoringMode = normalizeScoringMode(req.body?.scoring_mode);
+      const absenceMode = normalizeAbsenceMode(req.body?.absence_mode);
+      const thresholds = parseThresholdsFromBody(req.body || {});
+      let participation = parseParticipationConfigFromBody(req.body || {});
+      const parsedWeights = parseWeightsFromBody(req.body || {});
+      const formData = {
+        profile_id: "",
+        class_id: classId,
+        subject_id: subjectId,
+        profile_name: profileName,
+        weight_mode: weightMode,
+        scoring_mode: scoringMode,
+        absence_mode: absenceMode,
+        thresholds,
+        participation,
+        set_active: false,
+        weights: mergeWeightsWithDefaults(parsedWeights, weightMode)
+      };
+      const renderSettingsError = async (status, error, showConfigForm = true) => {
+        const pageData = await buildSettingsPageData(teacherId, classId, subjectId, formData);
+        return res.status(status).render("teacher/teacher-settings", {
+          email: req.session.user.email,
+          csrfToken: req.csrfToken(),
+          categoryDefinitions: TEMPLATE_CATEGORY_DEFINITIONS,
+          scoringModeOptions: SCORING_MODE_OPTIONS,
+          absenceModeOptions: ABSENCE_MODE_OPTIONS,
+          participationSymbolOptions: PARTICIPATION_SYMBOL_OPTIONS,
+          setupComplete: pageData.setupComplete,
+          showSetupFlow: true,
+          showConfigForm,
+          assignments: pageData.assignments,
+          selectedAssignment: pageData.selectedAssignment,
+          classSubjectProfile: pageData.classSubjectProfile,
+          profiles: pageData.profiles,
+          activeProfile: pageData.activeProfile,
+          selectedProfile: pageData.selectedProfile,
+          selectedTotal: computeWeightsTotal(formData.weights),
+          formData,
+          message: null,
+          error
+        });
+      };
 
-    if (!profileName) {
-      const pageData = await buildSettingsPageData(teacherId, formData.profile_id, formData);
-      return res.status(400).render("teacher/teacher-settings", {
-        email: req.session.user.email,
-        csrfToken: req.csrfToken(),
-        categoryDefinitions: TEMPLATE_CATEGORY_DEFINITIONS,
-        scoringModeOptions: SCORING_MODE_OPTIONS,
-        absenceModeOptions: ABSENCE_MODE_OPTIONS,
-        participationSymbolOptions: PARTICIPATION_SYMBOL_OPTIONS,
-        setupComplete: pageData.setupComplete,
-        showSetupFlow: !pageData.setupComplete,
-        showConfigForm: true,
-        profiles: pageData.profiles,
-        activeProfile: pageData.activeProfile,
-        selectedProfile: pageData.selectedProfile,
-        selectedTotal: computeWeightsTotal(formData.weights),
-        formData: pageData.formData,
-        message: null,
-        error: "Bitte einen Profilnamen angeben."
-      });
-    }
+      const canAccessTarget = await teacherCanAccessClassSubject(teacherId, classId, subjectId);
+      if (!canAccessTarget) {
+        return renderSettingsError(403, "Keine Berechtigung fuer diese Klasse/Fach-Zuordnung.", false);
+      }
 
-    const validationError = validateWeights(weightMode, parsedWeights);
-    if (validationError) {
-      const pageData = await buildSettingsPageData(teacherId, formData.profile_id, formData);
-      return res.status(400).render("teacher/teacher-settings", {
-        email: req.session.user.email,
-        csrfToken: req.csrfToken(),
-        categoryDefinitions: TEMPLATE_CATEGORY_DEFINITIONS,
-        scoringModeOptions: SCORING_MODE_OPTIONS,
-        absenceModeOptions: ABSENCE_MODE_OPTIONS,
-        participationSymbolOptions: PARTICIPATION_SYMBOL_OPTIONS,
-        setupComplete: pageData.setupComplete,
-        showSetupFlow: !pageData.setupComplete,
-        showConfigForm: true,
-        profiles: pageData.profiles,
-        activeProfile: pageData.activeProfile,
-        selectedProfile: pageData.selectedProfile,
-        selectedTotal: computeWeightsTotal(formData.weights),
-        formData: pageData.formData,
-        message: null,
-        error: validationError
-      });
-    }
+      const existingClassProfile = await loadClassSubjectGradingProfile(classId, subjectId);
+      if (existingClassProfile) {
+        formData.profile_id = existingClassProfile.id;
+        weightMode = resolveWeightMode(existingClassProfile.weight_mode);
+        scoringMode = normalizeScoringMode(existingClassProfile.scoring_mode);
+        formData.weight_mode = weightMode;
+        formData.scoring_mode = scoringMode;
 
-    const thresholdError = validateThresholds(thresholds);
-    if (thresholdError) {
-      const pageData = await buildSettingsPageData(teacherId, formData.profile_id, formData);
-      return res.status(400).render("teacher/teacher-settings", {
-        email: req.session.user.email,
-        csrfToken: req.csrfToken(),
-        categoryDefinitions: TEMPLATE_CATEGORY_DEFINITIONS,
-        scoringModeOptions: SCORING_MODE_OPTIONS,
-        absenceModeOptions: ABSENCE_MODE_OPTIONS,
-        participationSymbolOptions: PARTICIPATION_SYMBOL_OPTIONS,
-        setupComplete: pageData.setupComplete,
-        showSetupFlow: !pageData.setupComplete,
-        showConfigForm: true,
-        profiles: pageData.profiles,
-        activeProfile: pageData.activeProfile,
-        selectedProfile: pageData.selectedProfile,
-        selectedTotal: computeWeightsTotal(formData.weights),
-        formData: pageData.formData,
-        message: null,
-        error: thresholdError
-      });
-    }
+        const existingParticipation = normalizeParticipationConfig(
+          existingClassProfile.participation || existingClassProfile
+        );
+        participation = existingParticipation.ma_enabled
+          ? normalizeParticipationConfig({
+              ma_enabled: true,
+              ma_weight: req.body?.ma_weight != null ? participation.ma_weight : existingParticipation.ma_weight,
+              ma_points_plus: req.body?.ma_points_plus != null
+                ? participation.ma_points_plus
+                : existingParticipation.ma_points_plus,
+              ma_points_plus_tilde: req.body?.ma_points_plus_tilde != null
+                ? participation.ma_points_plus_tilde
+                : existingParticipation.ma_points_plus_tilde,
+              ma_points_neutral: req.body?.ma_points_neutral != null
+                ? participation.ma_points_neutral
+                : existingParticipation.ma_points_neutral,
+              ma_points_minus_tilde: req.body?.ma_points_minus_tilde != null
+                ? participation.ma_points_minus_tilde
+                : existingParticipation.ma_points_minus_tilde,
+              ma_points_minus: req.body?.ma_points_minus != null
+                ? participation.ma_points_minus
+                : existingParticipation.ma_points_minus,
+              ma_grade_plus: req.body?.ma_grade_plus != null
+                ? participation.ma_grade_plus
+                : existingParticipation.ma_grade_plus,
+              ma_grade_plus_tilde: req.body?.ma_grade_plus_tilde != null
+                ? participation.ma_grade_plus_tilde
+                : existingParticipation.ma_grade_plus_tilde,
+              ma_grade_neutral: req.body?.ma_grade_neutral != null
+                ? participation.ma_grade_neutral
+                : existingParticipation.ma_grade_neutral,
+              ma_grade_minus_tilde: req.body?.ma_grade_minus_tilde != null
+                ? participation.ma_grade_minus_tilde
+                : existingParticipation.ma_grade_minus_tilde,
+              ma_grade_minus: req.body?.ma_grade_minus != null
+                ? participation.ma_grade_minus
+                : existingParticipation.ma_grade_minus
+            })
+          : existingParticipation;
+        formData.participation = participation;
+        formData.weights = mergeWeightsWithDefaults(parsedWeights, weightMode);
+      }
+      if (!profileName) {
+        return renderSettingsError(400, "Bitte einen Profilnamen angeben.");
+      }
 
-    const participationError = validateParticipationConfig(participation);
-    if (participationError) {
-      const pageData = await buildSettingsPageData(teacherId, formData.profile_id, formData);
-      return res.status(400).render("teacher/teacher-settings", {
-        email: req.session.user.email,
-        csrfToken: req.csrfToken(),
-        categoryDefinitions: TEMPLATE_CATEGORY_DEFINITIONS,
-        scoringModeOptions: SCORING_MODE_OPTIONS,
-        absenceModeOptions: ABSENCE_MODE_OPTIONS,
-        participationSymbolOptions: PARTICIPATION_SYMBOL_OPTIONS,
-        setupComplete: pageData.setupComplete,
-        showSetupFlow: !pageData.setupComplete,
-        showConfigForm: true,
-        profiles: pageData.profiles,
-        activeProfile: pageData.activeProfile,
-        selectedProfile: pageData.selectedProfile,
-        selectedTotal: computeWeightsTotal(formData.weights),
-        formData: pageData.formData,
-        message: null,
-        error: participationError
-      });
-    }
+      const validationError = validateWeights(weightMode, parsedWeights);
+      if (validationError) return renderSettingsError(400, validationError);
 
-    let profileId = null;
-    let shouldSetActive = requestedSetActive;
-    const profileExists =
-      Number.isInteger(requestedProfileId) && requestedProfileId > 0
-        ? await loadTeacherProfileById(requestedProfileId, teacherId)
-        : null;
+      const thresholdError = validateThresholds(thresholds);
+      if (thresholdError) return renderSettingsError(400, thresholdError);
 
-    if (!profileExists && existingProfiles.length === 0) {
-      shouldSetActive = true;
-    }
+      const participationError = validateParticipationConfig(participation, scoringMode);
+      if (participationError) return renderSettingsError(400, participationError);
 
-    if (profileExists) {
-      await runAsync(
-        `UPDATE teacher_grading_profiles
-         SET name = ?, weight_mode = ?, scoring_mode = ?, absence_mode = ?, grade1_min_percent = ?, grade2_min_percent = ?, grade3_min_percent = ?, grade4_min_percent = ?, ma_enabled = ?, ma_weight = ?, ma_grade_plus = ?, ma_grade_plus_tilde = ?, ma_grade_neutral = ?, ma_grade_minus_tilde = ?, ma_grade_minus = ?, updated_at = current_timestamp
-         WHERE id = ? AND teacher_id = ?`,
-        [
-          profileName,
-          weightMode,
-          scoringMode,
-          absenceMode,
-          thresholds.grade1_min_percent,
-          thresholds.grade2_min_percent,
-          thresholds.grade3_min_percent,
-          thresholds.grade4_min_percent,
-          participation.ma_enabled ? 1 : 0,
-          participation.ma_weight,
-          participation.ma_grade_plus,
-          participation.ma_grade_plus_tilde,
-          participation.ma_grade_neutral,
-          participation.ma_grade_minus_tilde,
-          participation.ma_grade_minus,
-          profileExists.id,
-          teacherId
-        ]
-      );
-      profileId = profileExists.id;
-    } else {
+      if (existingClassProfile) {
+        await runAsync(
+          `UPDATE teacher_grading_profiles
+           SET name = ?, absence_mode = ?, grade1_min_percent = ?, grade2_min_percent = ?, grade3_min_percent = ?, grade4_min_percent = ?, ma_weight = ?, ma_points_plus = ?, ma_points_plus_tilde = ?, ma_points_neutral = ?, ma_points_minus_tilde = ?, ma_points_minus = ?, ma_grade_plus = ?, ma_grade_plus_tilde = ?, ma_grade_neutral = ?, ma_grade_minus_tilde = ?, ma_grade_minus = ?, updated_at = current_timestamp
+           WHERE id = ? AND class_id = ? AND subject_id = ?`,
+          [
+            profileName,
+            absenceMode,
+            thresholds.grade1_min_percent,
+            thresholds.grade2_min_percent,
+            thresholds.grade3_min_percent,
+            thresholds.grade4_min_percent,
+            participation.ma_weight,
+            participation.ma_points_plus,
+            participation.ma_points_plus_tilde,
+            participation.ma_points_neutral,
+            participation.ma_points_minus_tilde,
+            participation.ma_points_minus,
+            participation.ma_grade_plus,
+            participation.ma_grade_plus_tilde,
+            participation.ma_grade_neutral,
+            participation.ma_grade_minus_tilde,
+            participation.ma_grade_minus,
+            existingClassProfile.id,
+            classId,
+            subjectId
+          ]
+        );
+        await runAsync("DELETE FROM teacher_grading_profile_items WHERE profile_id = ?", [existingClassProfile.id]);
+        for (const category of TEMPLATE_CATEGORY_DEFINITIONS) {
+          await runAsync(
+            "INSERT INTO teacher_grading_profile_items (profile_id, category, weight) VALUES (?,?,?)",
+            [existingClassProfile.id, category.key, Number(parsedWeights[category.key] || 0)]
+          );
+        }
+
+        return res.redirect(`/teacher/settings?updated=1&class_id=${classId}&subject_id=${subjectId}`);
+      }
+
       const result = await runAsync(
         `INSERT INTO teacher_grading_profiles
-         (teacher_id, name, weight_mode, scoring_mode, absence_mode, grade1_min_percent, grade2_min_percent, grade3_min_percent, grade4_min_percent, ma_enabled, ma_weight, ma_grade_plus, ma_grade_plus_tilde, ma_grade_neutral, ma_grade_minus_tilde, ma_grade_minus, is_active)
-         VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+         (teacher_id, class_id, subject_id, name, weight_mode, scoring_mode, absence_mode, grade1_min_percent, grade2_min_percent, grade3_min_percent, grade4_min_percent, ma_enabled, ma_weight, ma_points_plus, ma_points_plus_tilde, ma_points_neutral, ma_points_minus_tilde, ma_points_minus, ma_grade_plus, ma_grade_plus_tilde, ma_grade_neutral, ma_grade_minus_tilde, ma_grade_minus, is_active)
+         VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
         [
           teacherId,
+          classId,
+          subjectId,
           profileName,
           weightMode,
           scoringMode,
@@ -2072,83 +2440,50 @@ router.post("/settings/save-profile", async (req, res, next) => {
           thresholds.grade4_min_percent,
           participation.ma_enabled ? 1 : 0,
           participation.ma_weight,
+          participation.ma_points_plus,
+          participation.ma_points_plus_tilde,
+          participation.ma_points_neutral,
+          participation.ma_points_minus_tilde,
+          participation.ma_points_minus,
           participation.ma_grade_plus,
           participation.ma_grade_plus_tilde,
           participation.ma_grade_neutral,
           participation.ma_grade_minus_tilde,
           participation.ma_grade_minus,
-          shouldSetActive
+          false
         ]
       );
-      profileId = result?.lastID;
-    }
+      const profileId = result?.lastID;
+      if (!profileId) throw new Error("Profil konnte nicht gespeichert werden.");
 
-    if (!profileId) {
-      throw new Error("Profil konnte nicht gespeichert werden.");
-    }
-
-    await runAsync("DELETE FROM teacher_grading_profile_items WHERE profile_id = ?", [profileId]);
-    for (const category of TEMPLATE_CATEGORY_DEFINITIONS) {
-      await runAsync(
-        "INSERT INTO teacher_grading_profile_items (profile_id, category, weight) VALUES (?,?,?)",
-        [profileId, category.key, Number(parsedWeights[category.key] || 0)]
-      );
-    }
-
-    if (shouldSetActive) {
-      await runAsync("UPDATE teacher_grading_profiles SET is_active = ? WHERE teacher_id = ?", [false, teacherId]);
-      await runAsync(
-        "UPDATE teacher_grading_profiles SET is_active = ?, updated_at = current_timestamp WHERE id = ? AND teacher_id = ?",
-        [true, profileId, teacherId]
-      );
-    } else {
-      const active = await getAsync(
-        "SELECT id FROM teacher_grading_profiles WHERE teacher_id = ? AND is_active = ? LIMIT 1",
-        [teacherId, true]
-      );
-      if (!active) {
+      for (const category of TEMPLATE_CATEGORY_DEFINITIONS) {
         await runAsync(
-          "UPDATE teacher_grading_profiles SET is_active = ?, updated_at = current_timestamp WHERE id = ? AND teacher_id = ?",
-          [true, profileId, teacherId]
+          "INSERT INTO teacher_grading_profile_items (profile_id, category, weight) VALUES (?,?,?)",
+          [profileId, category.key, Number(parsedWeights[category.key] || 0)]
         );
       }
+
+      return res.redirect(`/teacher/settings?saved=1&class_id=${classId}&subject_id=${subjectId}`);
     }
 
-    res.redirect(`/teacher/settings?saved=1&profile_id=${profileId}`);
+    return renderError(
+      res,
+      req,
+      "Bitte zuerst eine Klasse/Fach-Zuordnung auswaehlen.",
+      400,
+      "/teacher/settings"
+    );
+
   } catch (err) {
     if (String(err).includes("UNIQUE")) {
-      const teacherId = req.session.user.id;
-      const requestedProfileId = req.body?.profile_id ? Number(req.body.profile_id) : null;
-      const formData = {
-        profile_id: requestedProfileId || "",
-        profile_name: String(req.body?.profile_name || "").trim(),
-        weight_mode: WEIGHT_MODE_POINTS,
-        scoring_mode: normalizeScoringMode(req.body?.scoring_mode),
-        absence_mode: normalizeAbsenceMode(req.body?.absence_mode),
-        thresholds: parseThresholdsFromBody(req.body || {}),
-        participation: parseParticipationConfigFromBody(req.body || {}),
-        set_active: req.body?.set_active === "1" || req.body?.set_active === "on",
-        weights: mergeWeightsWithDefaults(parseWeightsFromBody(req.body || {}), WEIGHT_MODE_POINTS)
-      };
-      const pageData = await buildSettingsPageData(teacherId, requestedProfileId, formData);
-      return res.status(409).render("teacher/teacher-settings", {
-        email: req.session.user.email,
-        csrfToken: req.csrfToken(),
-        categoryDefinitions: TEMPLATE_CATEGORY_DEFINITIONS,
-        scoringModeOptions: SCORING_MODE_OPTIONS,
-        absenceModeOptions: ABSENCE_MODE_OPTIONS,
-        participationSymbolOptions: PARTICIPATION_SYMBOL_OPTIONS,
-        setupComplete: pageData.setupComplete,
-        showSetupFlow: !pageData.setupComplete,
-        showConfigForm: true,
-        profiles: pageData.profiles,
-        activeProfile: pageData.activeProfile,
-        selectedProfile: pageData.selectedProfile,
-        selectedTotal: computeWeightsTotal(formData.weights),
-        formData: pageData.formData,
-        message: null,
-        error: "Profilname bereits vorhanden. Bitte einen anderen Namen wählen."
-      });
+      return renderError(
+        res,
+        req,
+        "Fuer dieses Fach ist bereits ein Bewertungsschema festgelegt und gesperrt.",
+        409,
+        "/teacher/settings"
+      );
+
     }
     next(err);
   }
@@ -2162,8 +2497,20 @@ router.post("/settings/activate-profile/:profileId", async (req, res, next) => {
     if (!profile) {
       return renderError(res, req, "Profil nicht gefunden.", 404, "/teacher/settings");
     }
+    if (profile.class_id != null || profile.subject_id != null) {
+      return renderError(
+        res,
+        req,
+        "Gesperrte Fachschemas koennen nicht aktiviert werden.",
+        409,
+        "/teacher/settings"
+      );
+    }
 
-    await runAsync("UPDATE teacher_grading_profiles SET is_active = ? WHERE teacher_id = ?", [false, teacherId]);
+    await runAsync(
+      "UPDATE teacher_grading_profiles SET is_active = ? WHERE teacher_id = ? AND class_id IS NULL AND subject_id IS NULL",
+      [false, teacherId]
+    );
     await runAsync(
       "UPDATE teacher_grading_profiles SET is_active = ?, updated_at = current_timestamp WHERE id = ? AND teacher_id = ?",
       [true, profileId, teacherId]
@@ -2183,6 +2530,15 @@ router.post("/settings/delete-profile/:profileId", async (req, res, next) => {
     if (!profile) {
       return renderError(res, req, "Profil nicht gefunden.", 404, "/teacher/settings");
     }
+    if (profile.class_id != null || profile.subject_id != null) {
+      return renderError(
+        res,
+        req,
+        "Gesperrte Fachschemas koennen nicht geloescht werden.",
+        409,
+        "/teacher/settings"
+      );
+    }
 
     await runAsync("DELETE FROM teacher_grading_profiles WHERE id = ? AND teacher_id = ?", [
       profileId,
@@ -2193,16 +2549,16 @@ router.post("/settings/delete-profile/:profileId", async (req, res, next) => {
       const fallback = await getAsync(
         `SELECT id
          FROM teacher_grading_profiles
-         WHERE teacher_id = ?
+         WHERE teacher_id = ? AND class_id IS NULL AND subject_id IS NULL
          ORDER BY created_at ASC, id ASC
          LIMIT 1`,
         [teacherId]
       );
       if (fallback?.id) {
-        await runAsync("UPDATE teacher_grading_profiles SET is_active = ? WHERE teacher_id = ?", [
-          false,
-          teacherId
-        ]);
+        await runAsync(
+          "UPDATE teacher_grading_profiles SET is_active = ? WHERE teacher_id = ? AND class_id IS NULL AND subject_id IS NULL",
+          [false, teacherId]
+        );
         await runAsync(
           "UPDATE teacher_grading_profiles SET is_active = ?, updated_at = current_timestamp WHERE id = ? AND teacher_id = ?",
           [true, fallback.id, teacherId]
@@ -2495,10 +2851,15 @@ router.get("/grades/:classId", async (req, res, next) => {
       return haystack.includes(qFolded);
     });
     const templates = await loadTemplates(classId, classData.subject_id);
-    const activeProfile = await loadActiveTeacherProfile(req.session.user.id);
+    const activeProfile = await loadProfileForClassSubject(
+      req.session.user.id,
+      classId,
+      classData.subject_id
+    );
     const participation = normalizeParticipationConfig(
       activeProfile?.participation || activeProfile || {}
     );
+    const scoringMode = normalizeScoringMode(activeProfile?.scoring_mode);
     const absenceMode = normalizeAbsenceMode(activeProfile?.absence_mode);
     const thresholds = normalizeThresholds(activeProfile?.thresholds || activeProfile || {});
     const openMessageCount = await loadClassOpenMessageCount(classId, classData.subject_id);
@@ -2512,7 +2873,7 @@ router.get("/grades/:classId", async (req, res, next) => {
           student.id
         );
         const excluded = isExcludedStudent(student);
-        const participationAverageRows = buildParticipationAverageRows(participationMarks, participation);
+        const participationAverageRows = buildParticipationAverageRows(participationMarks, participation, thresholds, scoringMode);
         const average = excluded
           ? null
           : computeWeightedAverage([
@@ -2607,9 +2968,13 @@ router.post("/grades/:classId/participation", async (req, res, next) => {
     const classData = await requireClassAccessForTeacher(req, res, classId);
     if (!classData) return;
 
-    const activeProfile = await loadActiveTeacherProfile(req.session.user.id);
+    const activeProfile = await loadProfileForClassSubject(
+      req.session.user.id,
+      classId,
+      classData.subject_id
+    );
     if (!activeProfile) {
-      return res.redirect("/teacher/settings?setup=1");
+      return res.redirect(getSettingsUrlForClassSubject(classData));
     }
     const participation = normalizeParticipationConfig(
       activeProfile.participation || activeProfile
@@ -2728,10 +3093,15 @@ router.get("/student-grades/:classId/:studentId", async (req, res, next) => {
       });
       messagesByGrade.set(key, list);
     });
-    const activeProfile = await loadActiveTeacherProfile(req.session.user.id);
+    const activeProfile = await loadProfileForClassSubject(
+      req.session.user.id,
+      classId,
+      classData.subject_id
+    );
     const participationConfig = normalizeParticipationConfig(
       activeProfile?.participation || activeProfile || {}
     );
+    const scoringMode = normalizeScoringMode(activeProfile?.scoring_mode);
     const absenceMode = normalizeAbsenceMode(activeProfile?.absence_mode);
     const thresholds = normalizeThresholds(activeProfile?.thresholds || activeProfile || {});
     const participationMarks = await loadParticipationMarks(
@@ -2749,10 +3119,12 @@ router.get("/student-grades/:classId/:studentId", async (req, res, next) => {
       const excludedFromAverage = Boolean(row.excluded_from_average);
       const excludedByAbsenceProfile = shouldSkipGradeForAbsence(row, absenceMode);
       const neutralizedForAverage = isGradeExcludedFromAverage(row, absenceMode);
-      const pointsAchieved = Number(row.points_achieved);
-      const pointsMax = Number(row.points_max);
-      const hasPoints = Number.isFinite(pointsAchieved) && Number.isFinite(pointsMax) && pointsMax > 0;
-      const pointsPercent = hasPoints ? Number(((pointsAchieved / pointsMax) * 100).toFixed(2)) : null;
+      const pointsSnapshot = resolvePointsSnapshot(row, thresholds);
+      const hasPoints =
+        Number.isFinite(pointsSnapshot.achieved) &&
+        Number.isFinite(pointsSnapshot.max) &&
+        pointsSnapshot.max > 0;
+      const pointsPercent = hasPoints ? pointsSnapshot.percent : null;
       const messages = row.is_special ? [] : messagesByGrade.get(String(row.id)) || [];
       const threadClosedAt = messages.reduce((latest, message) => {
         return pickLatestTimestamp(latest, message.student_hidden_at) || latest;
@@ -2760,8 +3132,8 @@ router.get("/student-grades/:classId/:studentId", async (req, res, next) => {
       return {
         id: row.id,
         grade: row.grade,
-        points_achieved: hasPoints ? pointsAchieved : null,
-        points_max: hasPoints ? pointsMax : null,
+        points_achieved: hasPoints ? pointsSnapshot.achieved : null,
+        points_max: hasPoints ? pointsSnapshot.max : null,
         points_percent: pointsPercent,
         note: row.note,
         is_absent: Boolean(row.is_absent),
@@ -2794,11 +3166,14 @@ router.get("/student-grades/:classId/:studentId", async (req, res, next) => {
     });
     const participationAverageRows = buildParticipationAverageRows(
       participationMarks,
-      participationConfig
+      participationConfig,
+      thresholds,
+      scoringMode
     );
     const participationEntries = (participationMarks || [])
       .map((mark) => {
-        const gradeValue = getParticipationGrade(mark.symbol, participationConfig);
+        const gradeValue = getParticipationGrade(mark.symbol, participationConfig, thresholds, scoringMode);
+        const pointsValue = getParticipationPoints(mark.symbol, participationConfig, thresholds, scoringMode);
         if (!Number.isFinite(gradeValue)) return null;
         return {
           id: mark.id,
@@ -2807,8 +3182,11 @@ router.get("/student-grades/:classId/:studentId", async (req, res, next) => {
           note: mark.note || "",
           created_at: mark.created_at,
           grade: Number(gradeValue.toFixed(2)),
-          weight: Number(participationConfig.ma_weight || 0),
-          weight_label: formatWeightLabel(participationConfig.ma_weight, WEIGHT_MODE_POINTS),
+          points: Number.isFinite(Number(pointsValue)) ? Number(pointsValue) : null,
+          points_max: Number(participationConfig.ma_weight || 0),
+          points_label: Number.isFinite(Number(pointsValue))
+            ? `${Number(pointsValue)} / ${Number(participationConfig.ma_weight || 0)} Punkte`
+            : "-",
           is_subject_excluded: isExcludedStudent(student)
         };
       })
@@ -2892,7 +3270,11 @@ router.get("/student-grades/:classId/:studentId/details", async (req, res, next)
 
     const gradeRows = await loadStudentGrades(student.id, classId, classData.subject_id);
     const templates = await loadTemplates(classId, classData.subject_id);
-    const activeProfile = await loadActiveTeacherProfile(req.session.user.id);
+    const activeProfile = await loadProfileForClassSubject(
+      req.session.user.id,
+      classId,
+      classData.subject_id
+    );
     const participationConfig = normalizeParticipationConfig(
       activeProfile?.participation || activeProfile || {}
     );
@@ -2929,10 +3311,12 @@ router.get("/student-grades/:classId/:studentId/details", async (req, res, next)
         hasValidGrade &&
         hasValidWeight;
       const contributionValue = included ? gradeValue * effectiveWeight : 0;
-      const pointsAchieved = Number(row.points_achieved);
-      const pointsMax = Number(row.points_max);
-      const hasPoints = Number.isFinite(pointsAchieved) && Number.isFinite(pointsMax) && pointsMax > 0;
-      const pointsPercent = hasPoints ? Number(((pointsAchieved / pointsMax) * 100).toFixed(2)) : null;
+      const pointsSnapshot = resolvePointsSnapshot(row, thresholds);
+      const hasPoints =
+        Number.isFinite(pointsSnapshot.achieved) &&
+        Number.isFinite(pointsSnapshot.max) &&
+        pointsSnapshot.max > 0;
+      const pointsPercent = hasPoints ? pointsSnapshot.percent : null;
       const gradeFromPoints =
         pointsPercent != null ? buildGradeFromPercent(pointsPercent, thresholds) : null;
 
@@ -2968,8 +3352,8 @@ router.get("/student-grades/:classId/:studentId/details", async (req, res, next)
             ? Number(effectiveWeight.toFixed(2))
             : null,
         contribution: contributionValue,
-        points_achieved: hasPoints ? Number(pointsAchieved.toFixed(2)) : null,
-        points_max: hasPoints ? Number(pointsMax.toFixed(2)) : null,
+        points_achieved: hasPoints ? Number(pointsSnapshot.achieved.toFixed(2)) : null,
+        points_max: hasPoints ? Number(pointsSnapshot.max.toFixed(2)) : null,
         points_percent: pointsPercent,
         grade_from_points: Number.isFinite(gradeFromPoints) ? gradeFromPoints : null,
         symbol_label: null,
@@ -2979,23 +3363,18 @@ router.get("/student-grades/:classId/:studentId/details", async (req, res, next)
     });
 
     participationMarks.forEach((mark, index) => {
-      const mappedGrade = getParticipationGrade(mark.symbol, participationConfig);
+      const mappedGrade = getParticipationGrade(mark.symbol, participationConfig, thresholds, scoringMode);
       const gradeValue = Number(mappedGrade);
+      const pointsValue = Number(getParticipationPoints(mark.symbol, participationConfig, thresholds, scoringMode));
       const rawWeight = Number(participationConfig.ma_weight);
       const effectiveWeight = participationConfig.ma_weight == null ? 1 : Number(participationConfig.ma_weight);
       const hasValidGrade = isValidGradeValue(gradeValue);
       const hasValidWeight = isValidWeightValue(effectiveWeight);
+      const hasValidPoints = Number.isFinite(pointsValue) && hasValidWeight && effectiveWeight > 0;
       const included = !studentExcluded && participationEnabledForAverage && hasValidGrade && hasValidWeight;
       const contributionValue = included ? gradeValue * effectiveWeight : 0;
       const symbolLabel = getParticipationSymbolLabel(mark.symbol);
-      const estimatedPercent = hasValidGrade
-        ? mapGradeToEstimatedPercent(gradeValue, thresholds)
-        : null;
-      const hasEstimatedPoints = hasValidWeight && Number.isFinite(estimatedPercent);
-      const estimatedPointsMax = hasEstimatedPoints ? Number(effectiveWeight.toFixed(2)) : null;
-      const estimatedPointsAchieved = hasEstimatedPoints
-        ? Number((effectiveWeight * (estimatedPercent / 100)).toFixed(2))
-        : null;
+      const pointsPercent = hasValidPoints ? Number(((pointsValue / effectiveWeight) * 100).toFixed(2)) : null;
 
       let includeReason = "Gewichtet in Gesamtnote.";
       if (studentExcluded) {
@@ -3022,9 +3401,9 @@ router.get("/student-grades/:classId/:studentId/details", async (req, res, next)
         raw_weight: isValidWeightValue(rawWeight) ? Number(rawWeight.toFixed(2)) : null,
         effective_weight: hasValidWeight ? Number(effectiveWeight.toFixed(2)) : null,
         contribution: contributionValue,
-        points_achieved: estimatedPointsAchieved,
-        points_max: estimatedPointsMax,
-        points_percent: hasEstimatedPoints ? Number(estimatedPercent.toFixed(2)) : null,
+        points_achieved: hasValidPoints ? Number(pointsValue.toFixed(2)) : null,
+        points_max: hasValidWeight ? Number(effectiveWeight.toFixed(2)) : null,
+        points_percent: pointsPercent,
         grade_from_points: null,
         symbol_label: symbolLabel,
         row_origin: "participation",
@@ -3065,7 +3444,9 @@ router.get("/student-grades/:classId/:studentId/details", async (req, res, next)
 
     const participationAverageRows = buildParticipationAverageRows(
       participationMarks,
-      participationConfig
+      participationConfig,
+      thresholds,
+      scoringMode
     );
     const referenceAverage = studentExcluded
       ? null
@@ -3116,7 +3497,9 @@ router.get("/student-grades/:classId/:studentId/details", async (req, res, next)
 
     const participationScale = PARTICIPATION_SYMBOL_OPTIONS.map((option) => ({
       symbol: option.label,
-      grade: getParticipationGrade(option.value, participationConfig)
+      points: getParticipationPoints(option.value, participationConfig, thresholds, scoringMode),
+      points_max: participationConfig.ma_weight,
+      grade: getParticipationGrade(option.value, participationConfig, thresholds, scoringMode)
     }));
 
     const exportFormat = String(req.query.format || "").toLowerCase();
@@ -3384,10 +3767,14 @@ router.post("/add-grade/:classId/:studentId", handleUpload, async (req, res, nex
       classData.subject_id,
       student.id
     );
-    const activeProfile = await loadActiveTeacherProfile(req.session.user.id);
+    const activeProfile = await loadProfileForClassSubject(
+      req.session.user.id,
+      classId,
+      classData.subject_id
+    );
     if (!activeProfile) {
       await removeUploadedFile(req.file);
-      return res.redirect("/teacher/settings?setup=1");
+      return res.redirect(getSettingsUrlForClassSubject(classData));
     }
 
     const scoringMode = normalizeScoringMode(activeProfile.scoring_mode);
@@ -3395,8 +3782,6 @@ router.post("/add-grade/:classId/:studentId", handleUpload, async (req, res, nex
     const thresholds = normalizeThresholds(activeProfile.thresholds || activeProfile);
     const gradeInput = parseOptionalNumber(grade);
     const pointsAchievedInput = parseOptionalNumber(points_achieved);
-    const hasGrade = gradeInput.provided;
-    const hasPoints = pointsAchievedInput.provided;
     const isAbsent =
       is_absent === true ||
       is_absent === 1 ||
@@ -3432,14 +3817,6 @@ router.post("/add-grade/:classId/:studentId", handleUpload, async (req, res, nex
       return renderValidationError(400, "Bitte eine Prüfung auswählen.");
     }
 
-    if (hasGrade && (!Number.isFinite(gradeInput.value) || gradeInput.value < 1 || gradeInput.value > 5)) {
-      return renderValidationError(400, "Note muss zwischen 1 und 5 liegen.");
-    }
-
-    if (hasPoints && (!Number.isFinite(pointsAchievedInput.value) || pointsAchievedInput.value < 0)) {
-      return renderValidationError(400, "Erreichte Punkte müssen mindestens 0 sein.");
-    }
-
     const templateRow = await getAsync(
       "SELECT id, max_points FROM grade_templates WHERE id = ? AND class_id = ? AND subject_id = ?",
       [grade_template_id, classId, classData.subject_id]
@@ -3451,50 +3828,18 @@ router.post("/add-grade/:classId/:studentId", handleUpload, async (req, res, nex
     const templateHasMaxPoints =
       Number.isFinite(templateMaxPointsRaw) && templateMaxPointsRaw > 0;
 
-    if (hasPoints && !templateHasMaxPoints) {
-      return renderValidationError(
-        400,
-        "Diese Prüfung hat keine maximalen Punkte. Bitte in der Prüfungsvorlage setzen."
-      );
-    }
-
-    if (hasPoints && templateHasMaxPoints && pointsAchievedInput.value > templateMaxPointsRaw) {
-      return renderValidationError(
-        400,
-        `Erreichte Punkte dürfen die maximalen Punkte (${templateMaxPointsRaw}) nicht übersteigen.`
-      );
-    }
-
-    const hasCompletePoints = hasPoints && templateHasMaxPoints;
-
-    if (!isAbsent) {
-      if (scoringMode === SCORING_MODE_GRADE_ONLY && !hasGrade) {
-        return renderValidationError(400, "Dieses Profil verlangt eine Note.");
-      }
-      if (scoringMode === SCORING_MODE_POINTS_ONLY && !hasCompletePoints) {
-        return renderValidationError(
-          400,
-          templateHasMaxPoints
-            ? "Dieses Profil verlangt Punkte."
-            : "Dieses Profil verlangt Punkte. Bitte zuerst maximale Punkte in der Prüfungsvorlage setzen."
-        );
-      }
-      if (scoringMode === SCORING_MODE_POINTS_AND_GRADE && (!hasGrade || !hasCompletePoints)) {
-        return renderValidationError(
-          400,
-          templateHasMaxPoints
-            ? "Dieses Profil verlangt Punkte und Note."
-            : "Dieses Profil verlangt Punkte und Note. Bitte zuerst maximale Punkte in der Prüfungsvorlage setzen."
-        );
-      }
-      if (scoringMode === SCORING_MODE_POINTS_OR_GRADE && !hasGrade && !hasCompletePoints) {
-        return renderValidationError(
-          400,
-          templateHasMaxPoints
-            ? "Bitte mindestens Note oder Punkte angeben."
-            : "Bitte mindestens eine Note angeben oder maximale Punkte in der Prüfungsvorlage setzen."
-        );
-      }
+    const resolvedAssessment = resolveAssessmentInput({
+      scoringMode,
+      gradeInput,
+      pointsInput: pointsAchievedInput,
+      templateHasMaxPoints,
+      templateMaxPoints: templateMaxPointsRaw,
+      thresholds,
+      isAbsent,
+      absenceMode
+    });
+    if (resolvedAssessment.error) {
+      return renderValidationError(400, resolvedAssessment.error);
     }
 
     const linkResult = normalizeExternalLink(external_link);
@@ -3509,32 +3854,9 @@ router.post("/add-grade/:classId/:studentId", handleUpload, async (req, res, nex
       );
     }
 
-    let resolvedPointsAchieved = null;
-    let resolvedPointsMax = null;
-    let resolvedGrade = null;
-
-    if (isAbsent) {
-      if (absenceMode === ABSENCE_MODE_INCLUDE_ZERO) {
-        if (!templateHasMaxPoints) {
-          return renderValidationError(
-            400,
-            "Für 'Mit 0% werten' braucht die Prüfung maximale Punkte in der Vorlage."
-          );
-        }
-        resolvedPointsAchieved = 0;
-        resolvedPointsMax = templateMaxPointsRaw;
-      }
-      resolvedGrade = 5;
-    } else {
-      resolvedPointsAchieved = hasCompletePoints ? Number(pointsAchievedInput.value) : null;
-      resolvedPointsMax = hasCompletePoints ? Number(templateMaxPointsRaw) : null;
-      resolvedGrade = hasGrade ? Number(gradeInput.value) : null;
-
-      if (resolvedGrade == null && resolvedPointsAchieved != null && resolvedPointsMax != null) {
-        const percent = (resolvedPointsAchieved / resolvedPointsMax) * 100;
-        resolvedGrade = buildGradeFromPercent(percent, thresholds);
-      }
-    }
+    const resolvedPointsAchieved = resolvedAssessment.pointsAchieved;
+    const resolvedPointsMax = resolvedAssessment.pointsMax;
+    const resolvedGrade = resolvedAssessment.grade;
 
     if (!Number.isFinite(resolvedGrade) || resolvedGrade < 1 || resolvedGrade > 5) {
       return renderValidationError(400, "Note konnte nicht berechnet werden.");
@@ -3702,7 +4024,11 @@ router.get("/grade-templates/:classId", async (req, res, next) => {
     });
 
     const openMessageCount = await loadClassOpenMessageCount(classId, classData.subject_id);
-    const activeProfile = await loadActiveTeacherProfile(req.session.user.id);
+    const activeProfile = await loadProfileForClassSubject(
+      req.session.user.id,
+      classId,
+      classData.subject_id
+    );
     const totalPointWeight = Number(
       templatesAll.reduce((sum, template) => sum + Number(template.weight || 0), 0).toFixed(2)
     );
@@ -3736,9 +4062,13 @@ router.get("/bulk-grade-template/:classId/:templateId", async (req, res, next) =
     if (!templateContext) return;
     const { classData, template } = templateContext;
 
-    const activeProfile = await loadActiveTeacherProfile(req.session.user.id);
+    const activeProfile = await loadProfileForClassSubject(
+      req.session.user.id,
+      classId,
+      classData.subject_id
+    );
     if (!activeProfile) {
-      return res.redirect("/teacher/settings?setup=1");
+      return res.redirect(getSettingsUrlForClassSubject(classData));
     }
 
     const students = await loadStudents(classId, req.session.user.id, classData.subject_id);
@@ -3795,9 +4125,13 @@ router.post("/bulk-grade-template/:classId/:templateId", async (req, res, next) 
     if (!templateContext) return;
     const { classData, template } = templateContext;
 
-    const activeProfile = await loadActiveTeacherProfile(req.session.user.id);
+    const activeProfile = await loadProfileForClassSubject(
+      req.session.user.id,
+      classId,
+      classData.subject_id
+    );
     if (!activeProfile) {
-      return res.redirect("/teacher/settings?setup=1");
+      return res.redirect(getSettingsUrlForClassSubject(classData));
     }
 
     const students = await loadStudents(classId, req.session.user.id, classData.subject_id);
@@ -3835,83 +4169,24 @@ router.post("/bulk-grade-template/:classId/:templateId", async (req, res, next) 
         return;
       }
 
-      if (hasGrade && (!Number.isFinite(gradeInput.value) || gradeInput.value < 1 || gradeInput.value > 5)) {
-        validationErrors.push(`${studentName}: Note muss zwischen 1 und 5 liegen.`);
+      const resolvedAssessment = resolveAssessmentInput({
+        scoringMode,
+        gradeInput,
+        pointsInput,
+        templateHasMaxPoints,
+        templateMaxPoints: templateMaxPointsRaw,
+        thresholds,
+        isAbsent,
+        absenceMode
+      });
+      if (resolvedAssessment.error) {
+        validationErrors.push(`${studentName}: ${resolvedAssessment.error}`);
         return;
       }
 
-      if (hasPoints && (!Number.isFinite(pointsInput.value) || pointsInput.value < 0)) {
-        validationErrors.push(`${studentName}: Erreichte Punkte müssen mindestens 0 sein.`);
-        return;
-      }
-
-      if (hasPoints && !templateHasMaxPoints) {
-        validationErrors.push(
-          `${studentName}: Diese Prüfung hat keine maximalen Punkte in der Vorlage.`
-        );
-        return;
-      }
-
-      if (hasPoints && templateHasMaxPoints && pointsInput.value > templateMaxPointsRaw) {
-        validationErrors.push(
-          `${studentName}: Erreichte Punkte dürfen ${templateMaxPointsRaw} nicht übersteigen.`
-        );
-        return;
-      }
-
-      const hasCompletePoints = hasPoints && templateHasMaxPoints;
-
-      if (!isAbsent) {
-        if (scoringMode === SCORING_MODE_GRADE_ONLY && !hasGrade) {
-          validationErrors.push(`${studentName}: Dieses Profil verlangt eine Note.`);
-          return;
-        }
-        if (scoringMode === SCORING_MODE_POINTS_ONLY && !hasCompletePoints) {
-          validationErrors.push(
-            `${studentName}: Dieses Profil verlangt Punkte${templateHasMaxPoints ? "." : " (Max. Punkte fehlen in der Vorlage)."}` 
-          );
-          return;
-        }
-        if (scoringMode === SCORING_MODE_POINTS_AND_GRADE && (!hasGrade || !hasCompletePoints)) {
-          validationErrors.push(
-            `${studentName}: Dieses Profil verlangt Punkte und Note${templateHasMaxPoints ? "." : " (Max. Punkte fehlen in der Vorlage)."}` 
-          );
-          return;
-        }
-        if (scoringMode === SCORING_MODE_POINTS_OR_GRADE && !hasGrade && !hasCompletePoints) {
-          validationErrors.push(
-            `${studentName}: Bitte mindestens Note oder Punkte angeben${templateHasMaxPoints ? "." : " (oder Max. Punkte in der Vorlage setzen)."}` 
-          );
-          return;
-        }
-      }
-
-      let resolvedPointsAchieved = null;
-      let resolvedPointsMax = null;
-      let resolvedGrade = null;
-
-      if (isAbsent) {
-        if (absenceMode === ABSENCE_MODE_INCLUDE_ZERO) {
-          if (!templateHasMaxPoints) {
-            validationErrors.push(
-              `${studentName}: Für Abwesenheit mit 0% braucht die Vorlage maximale Punkte.`
-            );
-            return;
-          }
-          resolvedPointsAchieved = 0;
-          resolvedPointsMax = templateMaxPointsRaw;
-        }
-        resolvedGrade = 5;
-      } else {
-        resolvedPointsAchieved = hasCompletePoints ? Number(pointsInput.value) : null;
-        resolvedPointsMax = hasCompletePoints ? Number(templateMaxPointsRaw) : null;
-        resolvedGrade = hasGrade ? Number(gradeInput.value) : null;
-
-        if (resolvedGrade == null && resolvedPointsAchieved != null && resolvedPointsMax != null) {
-          const percent = (resolvedPointsAchieved / resolvedPointsMax) * 100;
-          resolvedGrade = buildGradeFromPercent(percent, thresholds);
-        }
-      }
+      const resolvedPointsAchieved = resolvedAssessment.pointsAchieved;
+      const resolvedPointsMax = resolvedAssessment.pointsMax;
+      const resolvedGrade = resolvedAssessment.grade;
 
       if (!Number.isFinite(resolvedGrade) || resolvedGrade < 1 || resolvedGrade > 5) {
         validationErrors.push(`${studentName}: Note konnte nicht berechnet werden.`);
@@ -4033,9 +4308,13 @@ router.get("/create-template/:classId", async (req, res, next) => {
     const classId = req.params.classId;
     const classData = await requireClassAccessForTeacher(req, res, classId);
     if (!classData) return;
-    const activeProfile = await loadActiveTeacherProfile(req.session.user.id);
+    const activeProfile = await loadProfileForClassSubject(
+      req.session.user.id,
+      classId,
+      classData.subject_id
+    );
     if (!activeProfile) {
-      return res.redirect("/teacher/settings?setup=1");
+      return res.redirect(getSettingsUrlForClassSubject(classData));
     }
 
     const openMessageCount = await loadClassOpenMessageCount(classId, classData.subject_id);
@@ -4068,13 +4347,19 @@ router.post("/create-template/:classId", async (req, res, next) => {
     const { name, category, weight, max_points, date, description } = req.body || {};
     const classData = await requireClassAccessForTeacher(req, res, classId);
     if (!classData) return;
-    const activeProfile = await loadActiveTeacherProfile(req.session.user.id);
+    const activeProfile = await loadProfileForClassSubject(
+      req.session.user.id,
+      classId,
+      classData.subject_id
+    );
     if (!activeProfile) {
-      return res.redirect("/teacher/settings?setup=1");
+      return res.redirect(getSettingsUrlForClassSubject(classData));
     }
 
     const normalizedCategory = normalizeCategoryKey(category);
     const useProfileSettings = isCheckedInput(req.body?.use_profile_settings);
+    const scoringMode = normalizeScoringMode(activeProfile.scoring_mode);
+    const maxPointsRequired = scoringMode !== SCORING_MODE_GRADE_ONLY;
     const profileSuggestedWeight = normalizedCategory
       ? Number(activeProfile.weights?.[normalizedCategory])
       : NaN;
@@ -4083,7 +4368,7 @@ router.post("/create-template/:classId", async (req, res, next) => {
       ? profileSuggestedWeight
       : (Number.isFinite(rawWeightValue) ? rawWeightValue : profileSuggestedWeight);
     const parsedMaxPoints = parseNumericInput(max_points);
-    const hasMaxPointsInput = !useProfileSettings && String(max_points || "").trim() !== "";
+    const hasMaxPointsInput = String(max_points || "").trim() !== "";
     const maxPointsValue = hasMaxPointsInput ? parsedMaxPoints : null;
     const formData = {
       name: name || "",
@@ -4139,6 +4424,17 @@ router.post("/create-template/:classId", async (req, res, next) => {
         error: "Maximale Punkte müssen größer als 0 sein."
       });
     }
+    if (maxPointsRequired && !hasMaxPointsInput) {
+      return res.status(400).render("teacher/teacher-create-template", {
+        email: req.session.user.email,
+        classData,
+        activeProfile,
+        categoryDefinitions: TEMPLATE_CATEGORY_DEFINITIONS,
+        formData,
+        csrfToken: req.csrfToken(),
+        error: "Maximale Punkte sind fuer diesen Bewertungsmodus erforderlich."
+      });
+    }
 
     await runAsync(
       "INSERT INTO grade_templates (class_id, subject_id, name, category, weight, weight_mode, max_points, date, description) VALUES (?,?,?,?,?,?,?,?,?)",
@@ -4149,7 +4445,7 @@ router.post("/create-template/:classId", async (req, res, next) => {
         normalizedCategory,
         weightValue,
         resolveWeightMode(activeProfile.weight_mode),
-        useProfileSettings ? null : (hasMaxPointsInput ? maxPointsValue : null),
+        hasMaxPointsInput ? maxPointsValue : null,
         date || null,
         description || null
       ]
@@ -4166,9 +4462,13 @@ router.get("/edit-template/:classId/:templateId", async (req, res, next) => {
     const templateId = req.params.templateId;
     const classData = await requireClassAccessForTeacher(req, res, classId);
     if (!classData) return;
-    const activeProfile = await loadActiveTeacherProfile(req.session.user.id);
+    const activeProfile = await loadProfileForClassSubject(
+      req.session.user.id,
+      classId,
+      classData.subject_id
+    );
     if (!activeProfile) {
-      return res.redirect("/teacher/settings?setup=1");
+      return res.redirect(getSettingsUrlForClassSubject(classData));
     }
 
     const template = await getAsync(
@@ -4214,9 +4514,13 @@ router.post("/edit-template/:classId/:templateId", async (req, res, next) => {
     const { name, category, weight, max_points, date, description } = req.body || {};
     const classData = await requireClassAccessForTeacher(req, res, classId);
     if (!classData) return;
-    const activeProfile = await loadActiveTeacherProfile(req.session.user.id);
+    const activeProfile = await loadProfileForClassSubject(
+      req.session.user.id,
+      classId,
+      classData.subject_id
+    );
     if (!activeProfile) {
-      return res.redirect("/teacher/settings?setup=1");
+      return res.redirect(getSettingsUrlForClassSubject(classData));
     }
 
     const existingTemplate = await getAsync(
@@ -4229,23 +4533,23 @@ router.post("/edit-template/:classId/:templateId", async (req, res, next) => {
 
     const normalizedCategory = normalizeCategoryKey(category);
     const useProfileSettings = isCheckedInput(req.body?.use_profile_settings);
+    const scoringMode = normalizeScoringMode(activeProfile.scoring_mode);
+    const maxPointsRequired = scoringMode !== SCORING_MODE_GRADE_ONLY;
     const profileSuggestedWeight = normalizedCategory
       ? Number(activeProfile.weights?.[normalizedCategory])
       : NaN;
     const rawWeightValue = parseNumericInput(weight);
     const weightValue = useProfileSettings ? profileSuggestedWeight : rawWeightValue;
     const parsedMaxPoints = parseNumericInput(max_points);
-    const hasMaxPointsInput = !useProfileSettings && String(max_points || "").trim() !== "";
+    const hasMaxPointsInput = String(max_points || "").trim() !== "";
     const maxPointsValue = hasMaxPointsInput ? parsedMaxPoints : null;
-    const resolvedMaxPointsValue = useProfileSettings
-      ? existingTemplate.max_points
-      : (hasMaxPointsInput ? maxPointsValue : null);
+    const resolvedMaxPointsValue = hasMaxPointsInput ? maxPointsValue : null;
     const formData = {
       name: name || "",
       category: normalizedCategory || category || "",
       weight: Number.isFinite(rawWeightValue) ? rawWeightValue : weight || "",
       use_profile_settings: useProfileSettings,
-      max_points: hasMaxPointsInput ? max_points : (useProfileSettings ? (existingTemplate.max_points != null ? String(existingTemplate.max_points) : "") : ""),
+      max_points: hasMaxPointsInput ? max_points : "",
       date: date || "",
       description: description || ""
     };
@@ -4286,7 +4590,7 @@ router.post("/edit-template/:classId/:templateId", async (req, res, next) => {
         error: `Gewichtung muss mindestens 0 ${getWeightUnit(activeProfile.weight_mode)} sein.`
       });
     }
-    if (!useProfileSettings && hasMaxPointsInput && (!Number.isFinite(maxPointsValue) || maxPointsValue <= 0)) {
+    if (hasMaxPointsInput && (!Number.isFinite(maxPointsValue) || maxPointsValue <= 0)) {
       return res.status(400).render("teacher/teacher-edit-template", {
         email: req.session.user.email,
         classData,
@@ -4296,6 +4600,18 @@ router.post("/edit-template/:classId/:templateId", async (req, res, next) => {
         formData,
         csrfToken: req.csrfToken(),
         error: "Maximale Punkte müssen größer als 0 sein."
+      });
+    }
+    if (maxPointsRequired && !hasMaxPointsInput) {
+      return res.status(400).render("teacher/teacher-edit-template", {
+        email: req.session.user.email,
+        classData,
+        activeProfile,
+        categoryDefinitions: TEMPLATE_CATEGORY_DEFINITIONS,
+        templateId,
+        formData,
+        csrfToken: req.csrfToken(),
+        error: "Maximale Punkte sind fuer diesen Bewertungsmodus erforderlich."
       });
     }
 
@@ -4358,7 +4674,11 @@ router.get("/special-assessments/:classId", async (req, res, next) => {
       ...entry,
       is_subject_excluded: isExcludedStudent(studentStateById.get(String(entry.student_id)))
     }));
-    const activeProfile = await loadActiveTeacherProfile(req.session.user.id);
+    const activeProfile = await loadProfileForClassSubject(
+      req.session.user.id,
+      classId,
+      classData.subject_id
+    );
     const weightMode = resolveWeightMode(activeProfile?.weight_mode);
     const openMessageCount = await loadClassOpenMessageCount(classId, classData.subject_id);
     const selectedStudent = req.query.student_id ? String(req.query.student_id) : "";
@@ -4396,7 +4716,11 @@ router.post("/special-assessments/:classId", async (req, res, next) => {
     if (!classData) return;
 
     const students = await loadStudents(classId, req.session.user.id, classData.subject_id);
-    const activeProfile = await loadActiveTeacherProfile(req.session.user.id);
+    const activeProfile = await loadProfileForClassSubject(
+      req.session.user.id,
+      classId,
+      classData.subject_id
+    );
     const weightMode = resolveWeightMode(activeProfile?.weight_mode);
     const { student_id, type, name, description, weight, grade } = req.body || {};
     const selectedStudent = students.find((entry) => String(entry.id) === String(student_id));
@@ -4621,11 +4945,17 @@ router.get("/class-statistics/:classId", async (req, res, next) => {
     const activeStudents = students.filter((student) => !isExcludedStudent(student));
     const excludedStudents = students.filter((student) => isExcludedStudent(student));
     const templates = await loadTemplates(classId, classData.subject_id);
-    const activeProfile = await loadActiveTeacherProfile(req.session.user.id);
+    const activeProfile = await loadProfileForClassSubject(
+      req.session.user.id,
+      classId,
+      classData.subject_id
+    );
     const participationConfig = normalizeParticipationConfig(
       activeProfile?.participation || activeProfile || {}
     );
+    const scoringMode = normalizeScoringMode(activeProfile?.scoring_mode);
     const absenceMode = normalizeAbsenceMode(activeProfile?.absence_mode);
+    const thresholds = normalizeThresholds(activeProfile?.thresholds || activeProfile || {});
     const openMessageCount = await loadClassOpenMessageCount(classId, classData.subject_id);
     const studentMap = new Map(activeStudents.map((student) => [String(student.id), student]));
     const gradesByStudent = new Map();
@@ -4639,7 +4969,7 @@ router.get("/class-statistics/:classId", async (req, res, next) => {
       );
       gradesByStudent.set(String(student.id), [
         ...grades,
-        ...buildParticipationAverageRows(participationMarks, participationConfig)
+        ...buildParticipationAverageRows(participationMarks, participationConfig, thresholds, scoringMode)
       ]);
     }
 

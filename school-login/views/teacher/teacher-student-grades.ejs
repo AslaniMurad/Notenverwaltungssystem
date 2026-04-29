@@ -181,7 +181,8 @@
                   <tr>
                     <th>Datum</th>
                     <th>Symbol</th>
-                    <th>Notenwirkung</th>
+                    <th>Punkte</th>
+                    <th>Note</th>
                     <th>Gewichtung</th>
                     <th>Notiz</th>
                     <th>Aktion</th>
@@ -193,9 +194,10 @@
                       <td><%= entry.created_at ? new Date(entry.created_at).toLocaleDateString("de-DE") : "-" %></td>
                       <td><span class="badge-count"><%= entry.symbol_label %></span></td>
                       <td>
-                        <span class="grade-badge grade-<%= Math.round(entry.grade) %>"><%= entry.grade %></span>
+                        <%= entry.points_label || "-" %>
                       </td>
-                      <td><%= entry.weight_label %></td>
+                      <td><span class="grade-badge grade-<%= Math.round(entry.grade) %>"><%= entry.grade %></span></td>
+                      <td><%= entry.points_max %> Punkte</td>
                       <td><%= entry.note || "-" %></td>
                       <td>
                         <form class="inline" method="POST" action="/teacher/delete-participation/<%= classData.id %>/<%= student.id %>/<%= entry.id %>">

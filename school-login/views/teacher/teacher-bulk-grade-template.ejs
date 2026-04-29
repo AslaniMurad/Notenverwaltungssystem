@@ -13,6 +13,7 @@
       const requiresPoints = mode === 'points_only' || mode === 'points_and_grade';
       const pointsAllowed = mode !== 'grade_only';
       const gradeAllowed = mode !== 'points_only';
+      const isEitherOrMode = mode === 'points_or_grade';
 %>
     <div class="app-shell teacher-shell">
       <aside class="teacher-sidebar" aria-label="Lehrer Navigation">
@@ -80,6 +81,9 @@
 
           <div class="teacher-alert info">
             Bewertungsmodus: <strong><%= scoringModeLabel || 'Punkte oder Noten' %></strong> -
+            <% if (scoringModeDescription) { %>
+              <span><%= scoringModeDescription %></span>
+            <% } %>
             <% if (templateHasMaxPoints) { %>
               Max. Punkte: <strong><%= templateMaxPoints %></strong>
             <% } else { %>
@@ -208,6 +212,7 @@
     </div>
 
     <script>
+      const bulkEitherOrMode = <%= isEitherOrMode ? "true" : "false" %>;
       document.querySelectorAll('.bulk-absent-checkbox').forEach((checkbox) => {
         const row = checkbox.closest('tr');
         if (!row) return;
@@ -229,6 +234,21 @@
         checkbox.addEventListener('change', toggleInputs);
         toggleInputs();
       });
+
+      if (bulkEitherOrMode) {
+        document.querySelectorAll('.bulk-grade-table tbody tr').forEach((row) => {
+          if (row.classList.contains('is-excluded')) return;
+          const gradeInput = row.querySelector('.bulk-grade-input:not(.bulk-points-input)');
+          const pointsInput = row.querySelector('.bulk-points-input');
+          if (!gradeInput || !pointsInput) return;
+          gradeInput.addEventListener('input', () => {
+            if (String(gradeInput.value || '').trim()) pointsInput.value = '';
+          });
+          pointsInput.addEventListener('input', () => {
+            if (String(pointsInput.value || '').trim()) gradeInput.value = '';
+          });
+        });
+      }
 
       const bulkForm = document.querySelector('form.teacher-form');
       bulkForm?.addEventListener('submit', (event) => {
