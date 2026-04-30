@@ -1889,7 +1889,9 @@ function createFakeDb() {
             }
           : undefined;
       } else if (/SELECT gm\.id, gm\.student_id, gm\.student_hidden_at\s+FROM grade_messages gm\s+JOIN grades g ON g\.id = gm\.grade_id[\s\S]*WHERE gm\.id = \? AND g\.class_id = \?/i.test(sql)) {
-        const [messageId, classIdParam, subjectId] = params;
+        const [messageId, classIdParam] = params;
+        const hasSubjectScope = /AND gt\.subject_id = \?/i.test(sql);
+        const subjectId = hasSubjectScope ? params[2] : null;
         const message = gradeMessages.find((entry) => entry.id === Number(messageId));
         if (message) {
           const grade = grades.find(
@@ -2474,6 +2476,11 @@ function createFakeDb() {
           }));
       } else if (
         (
+          /gt\.id\s+as\s+template_id/i.test(sql) &&
+          /WHERE g\.student_id = \?/i.test(sql) &&
+          /WHERE sa\.student_id = \?/i.test(sql)
+        ) ||
+        (
           /FROM grades g[\s\S]*UNION ALL[\s\S]*special_assessments/i.test(sql) &&
           /WHERE g\.student_id = \?/i.test(sql)
         ) ||
@@ -2487,9 +2494,11 @@ function createFakeDb() {
         const student_id = params[0];
         const class_id = hasTeacherScope ? params[1] : null;
         const subject_id = hasTeacherScope ? normalizeOptionalId(params[2]) : null;
+        const hasClassScope =
+          class_id != null && String(class_id).trim() !== "" && Number.isFinite(Number(class_id));
         const baseRows = grades
           .filter((g) => g.student_id === Number(student_id))
-          .filter((g) => (!Number.isFinite(Number(class_id)) ? true : g.class_id === Number(class_id)))
+          .filter((g) => (!hasClassScope ? true : g.class_id === Number(class_id)))
           .map((g) => {
             const template = gradeTemplates.find((t) => t.id === g.grade_template_id) || {};
             const cls = classes.find((c) => c.id === g.class_id) || {};
@@ -2527,7 +2536,7 @@ function createFakeDb() {
         .filter(Boolean);
         const specialRows = specialAssessments
           .filter((entry) => entry.student_id === Number(student_id))
-          .filter((entry) => (!Number.isFinite(Number(class_id)) ? true : entry.class_id === Number(class_id)))
+          .filter((entry) => (!hasClassScope ? true : entry.class_id === Number(class_id)))
           .filter((entry) => (!hasTeacherScope ? true : entry.subject_id === subject_id))
           .map((entry) => {
             const cls = classes.find((c) => c.id === entry.class_id) || {};
@@ -2652,7 +2661,7 @@ function createFakeDb() {
             created_at: entry.created_at,
             replied_at: entry.replied_at
           }));
-      } else if (/SELECT gm\.id, gm\.grade_id, gm\.student_id, gm\.student_message, gm\.teacher_reply, gm\.teacher_reply_by_email, gm\.student_hidden_at, gm\.created_at, gm\.replied_at,\s+s\.name AS student_name, s\.email AS student_email, gt\.name AS test_name, g\.grade AS grade_value\s+FROM grade_messages gm\s+JOIN grades g ON g\.id = gm\.grade_id\s+JOIN students s ON s\.id = gm\.student_id\s+LEFT JOIN grade_templates gt ON gt\.id = g\.grade_template_id\s+WHERE g\.class_id = \? AND s\.class_id = \?( AND gt\.subject_id = \?)?\s+ORDER BY gm\.created_at ASC/i.test(sql)) {
+      } else if (/SELECT gm\.id, gm\.grade_id, gm\.student_id, gm\.student_message, gm\.teacher_reply, gm\.teacher_reply_by_email, gm\.student_hidden_at, gm\.created_at, gm\.replied_at,\s+s\.name AS student_name, s\.email AS student_email, gt\.name AS test_name, g\.grade AS grade_value(,\s*gt\.subject_id AS subject_id)?\s+FROM grade_messages gm\s+JOIN grades g ON g\.id = gm\.grade_id\s+JOIN students s ON s\.id = gm\.student_id\s+LEFT JOIN grade_templates gt ON gt\.id = g\.grade_template_id\s+WHERE g\.class_id = \? AND s\.class_id = \?( AND gt\.subject_id = \?)?\s+ORDER BY gm\.created_at ASC/i.test(sql)) {
         const [class_id, studentClassId, subject_id] = params;
         rows = gradeMessages
           .filter((entry) => {
@@ -2689,7 +2698,8 @@ function createFakeDb() {
               student_name: student?.name || "",
               student_email: student?.email || "",
               test_name: template?.name || null,
-              grade_value: grade?.grade ?? null
+              grade_value: grade?.grade ?? null,
+              subject_id: template?.subject_id ?? null
             };
           });
       } else if (/SELECT gm\.id, gm\.grade_id, gm\.student_message, gm\.teacher_reply, gm\.teacher_reply_by_email, gm\.student_hidden_at, gm\.created_at, gm\.replied_at\s+FROM grade_messages gm\s+JOIN grades g ON g\.id = gm\.grade_id\s+JOIN grade_templates gt ON gt\.id = g\.grade_template_id\s+WHERE g\.class_id = \? AND gt\.subject_id = \? AND g\.student_id = \? AND gm\.student_id = \?\s+ORDER BY gm\.created_at ASC/i.test(sql)) {

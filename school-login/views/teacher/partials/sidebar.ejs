@@ -59,6 +59,11 @@
                   ? activeClassData.subject
                   : (menuClass.subject || "");
               const summarySubject = String(currentSummarySubject || "").trim() || "Ohne Fach";
+              const menuSubjectId =
+                isCurrentClass && activeClassData && activeClassData.subject_id
+                  ? activeClassData.subject_id
+                  : menuClass.subject_id;
+              const subjectQuery = menuSubjectId ? `?subject_id=${encodeURIComponent(menuSubjectId)}` : "";
               const testQuestionsClasses = [
                 isActiveClassLink("test-questions", menuClassId) ? "is-active" : "",
                 isCurrentClass && currentClassBadgeCount > 0 ? "is-alert" : ""
@@ -77,7 +82,7 @@
 
               <div class="teacher-class-nav-links">
                 <a class="<%= isActiveClassLink('students', menuClassId) ? 'is-active' : '' %>" href="/teacher/students/<%= menuClassId %>">Schueler</a>
-                <a class="<%= testQuestionsClasses %>" href="/teacher/test-questions/<%= menuClassId %>">
+                <a class="<%= testQuestionsClasses %>" href="/teacher/test-questions/<%= menuClassId %><%= subjectQuery %>">
                   Fragen zu Tests
                   <% if (isCurrentClass && currentClassBadgeCount > 0) { %>
                     <span class="nav-notification-badge"><%= currentClassBadgeCount %></span>

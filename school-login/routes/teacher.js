@@ -1643,17 +1643,35 @@ async function loadSpecialAssessments(classId, subjectId) {
 }
 
 async function loadClassGradeMessages(classId, subjectId) {
+  const resolvedSubjectId = Number(subjectId);
+  const hasSubjectScope =
+    subjectId != null && String(subjectId).trim() !== "" && Number.isFinite(resolvedSubjectId);
   return allAsync(
     `SELECT gm.id, gm.grade_id, gm.student_id, gm.student_message, gm.teacher_reply, gm.teacher_reply_by_email, gm.student_hidden_at, gm.created_at, gm.replied_at,
-            s.name AS student_name, s.email AS student_email, gt.name AS test_name, g.grade AS grade_value
+            s.name AS student_name, s.email AS student_email, gt.name AS test_name, g.grade AS grade_value, gt.subject_id AS subject_id
      FROM grade_messages gm
      JOIN grades g ON g.id = gm.grade_id
      JOIN students s ON s.id = gm.student_id
      LEFT JOIN grade_templates gt ON gt.id = g.grade_template_id
-     WHERE g.class_id = ? AND s.class_id = ? AND gt.subject_id = ?
+     WHERE g.class_id = ? AND s.class_id = ? ${hasSubjectScope ? "AND gt.subject_id = ?" : ""}
      ORDER BY gm.created_at ASC`,
-    [classId, classId, subjectId]
+    hasSubjectScope ? [classId, classId, resolvedSubjectId] : [classId, classId]
   );
+}
+
+async function loadClassGradeMessagesForTeacher(classId, teacherId) {
+  const subjectRows = await loadClassSubjectsForTeacher(classId, teacherId);
+  const subjectIds = [
+    ...new Set(
+      subjectRows
+        .map((row) => Number(row.subject_id))
+        .filter((subjectId) => Number.isFinite(subjectId))
+    )
+  ];
+  const messageGroups = await Promise.all(
+    subjectIds.map((subjectId) => loadClassGradeMessages(classId, subjectId))
+  );
+  return messageGroups.flat();
 }
 
 async function loadStudentGradeMessages(classId, subjectId, studentId) {
@@ -1691,6 +1709,7 @@ function groupClassMessageThreads(rows) {
         student_id: row.student_id,
         student_name: row.student_name,
         student_email: row.student_email,
+        subject_id: row.subject_id == null ? null : Number(row.subject_id),
         test_name: row.test_name,
         grade_value: row.grade_value,
         latest_at: rowLatestAt,
@@ -1705,6 +1724,7 @@ function groupClassMessageThreads(rows) {
       student_message: row.student_message,
       teacher_reply: row.teacher_reply || null,
       teacher_reply_by_email: row.teacher_reply_by_email || null,
+      subject_id: row.subject_id == null ? null : Number(row.subject_id),
       student_hidden_at: row.student_hidden_at || null,
       created_at: row.created_at,
       replied_at: row.replied_at || null
@@ -1742,7 +1762,8 @@ async function loadClassOpenMessageCount(classId, subjectId) {
 
 async function loadMessageForTeacher(classId, messageId, teacherId, subjectId = null) {
   const resolvedSubjectId = Number(subjectId);
-  const hasSubjectScope = Number.isFinite(resolvedSubjectId);
+  const hasSubjectScope =
+    subjectId != null && String(subjectId).trim() !== "" && Number.isFinite(resolvedSubjectId);
 
   return getAsync(
     `SELECT gm.id, gm.student_id, gm.student_hidden_at
@@ -1756,6 +1777,7 @@ async function loadMessageForTeacher(classId, messageId, teacherId, subjectId = 
          FROM class_subject_teacher cst
          WHERE cst.class_id = g.class_id
            AND cst.teacher_id = ?
+           AND cst.subject_id = gt.subject_id
            ${hasSubjectScope ? "AND cst.subject_id = ?" : ""}
        )`,
     hasSubjectScope
@@ -2626,16 +2648,45 @@ router.get("/students/:classId", async (req, res, next) => {
 router.get("/test-questions/:classId", async (req, res, next) => {
   try {
     const classId = req.params.classId;
-    const classData = await loadClassForTeacher(classId, req.session.user.id);
-    if (!classData) {
-      return renderError(res, req, "Klasse nicht gefunden.", 404, "/teacher/classes");
+    const explicitSubjectIdRaw = req.params?.subjectId ?? req.query?.subject_id;
+    const hasExplicitSubject =
+      explicitSubjectIdRaw != null && String(explicitSubjectIdRaw).trim() !== "";
+    let classData;
+
+    if (hasExplicitSubject) {
+      classData = await requireClassAccessForTeacher(req, res, classId);
+      if (!classData) {
+        return;
+      }
+    } else {
+      const classExists = await getAsync("SELECT id FROM classes WHERE id = ?", [classId]);
+      if (!classExists) {
+        return renderError(res, req, "Klasse nicht gefunden.", 404, "/teacher/classes");
+      }
+      if (!(await teacherCanAccessClass(req.session.user.id, classId))) {
+        return renderError(res, req, "Keine Berechtigung für diese Klasse.", 403, "/teacher/classes");
+      }
+      classData = await loadClassForTeacher(classId, req.session.user.id);
+      if (!classData) {
+        return renderError(res, req, "Keine Berechtigung für diese Klasse.", 403, "/teacher/classes");
+      }
     }
 
-    const messages = await loadClassGradeMessages(classId, classData.subject_id);
+    const messages = hasExplicitSubject
+      ? await loadClassGradeMessages(classId, classData.subject_id)
+      : await loadClassGradeMessagesForTeacher(classId, req.session.user.id);
     const { messageThreads, openMessageCount } = groupClassMessageThreads(messages);
+    const renderClassData =
+      !hasExplicitSubject && Array.isArray(classData.subject_names) && classData.subject_names.length > 1
+        ? {
+            ...classData,
+            subject: "Alle zugeordneten Fächer",
+            selected_subject: "Alle zugeordneten Fächer"
+          }
+        : classData;
     res.render("teacher/teacher-test-questions", {
       email: req.session.user.email,
-      classData,
+      classData: renderClassData,
       messageThreads,
       openMessageCount,
       csrfToken: req.csrfToken()
@@ -2649,33 +2700,44 @@ router.post("/students/:classId/messages/:messageId/reply", async (req, res, nex
   try {
     const classId = req.params.classId;
     const messageId = Number(req.params.messageId);
-    const classData = await loadClassForTeacher(classId, req.session.user.id);
+    const classData = await requireClassAccessForTeacher(
+      req,
+      res,
+      classId,
+      `/teacher/test-questions/${classId}`
+    );
     if (!classData) {
-      return renderError(res, req, "Klasse nicht gefunden.", 404, "/teacher/classes");
+      return;
     }
+    const replySubjectIdRaw = req.body?.subject_id ?? req.query?.subject_id;
+    const hasReplySubject =
+      replySubjectIdRaw != null && String(replySubjectIdRaw).trim() !== "";
+    const testQuestionsUrl = hasReplySubject
+      ? `/teacher/test-questions/${classId}?subject_id=${encodeURIComponent(classData.subject_id)}`
+      : `/teacher/test-questions/${classId}`;
     if (!messageId) {
-      return renderError(res, req, "Ungültige Nachrichten-ID.", 400, `/teacher/test-questions/${classId}`);
+      return renderError(res, req, "Ungültige Nachrichten-ID.", 400, testQuestionsUrl);
     }
 
     const messageRow = await loadMessageForTeacher(
       classId,
       messageId,
       req.session.user.id,
-      classData.subject_id
+      hasReplySubject ? classData.subject_id : null
     );
     if (!messageRow) {
-      return renderError(res, req, "Nachricht nicht gefunden.", 404, `/teacher/test-questions/${classId}`);
+      return renderError(res, req, "Nachricht nicht gefunden.", 404, testQuestionsUrl);
     }
     if (messageRow.student_hidden_at) {
-      return renderError(res, req, "Ticket wurde vom Schüler geschlossen.", 400, `/teacher/test-questions/${classId}`);
+      return renderError(res, req, "Ticket wurde vom Schüler geschlossen.", 400, testQuestionsUrl);
     }
 
     const reply = String(req.body?.reply || "").trim();
     if (!reply) {
-      return renderError(res, req, "Bitte eine Antwort eingeben.", 400, `/teacher/test-questions/${classId}`);
+      return renderError(res, req, "Bitte eine Antwort eingeben.", 400, testQuestionsUrl);
     }
     if (reply.length > 1000) {
-      return renderError(res, req, "Antwort darf maximal 1000 Zeichen lang sein.", 400, `/teacher/test-questions/${classId}`);
+      return renderError(res, req, "Antwort darf maximal 1000 Zeichen lang sein.", 400, testQuestionsUrl);
     }
 
     await runAsync(
@@ -2686,7 +2748,7 @@ router.post("/students/:classId/messages/:messageId/reply", async (req, res, nex
       "INSERT INTO grade_notifications (student_id, message, type) VALUES (?,?,?)",
       [messageRow.student_id, "Lehrkraft hat auf deine Rückgabe-Nachricht geantwortet.", "info"]
     );
-    res.redirect(`/teacher/test-questions/${classId}`);
+    res.redirect(testQuestionsUrl);
   } catch (err) {
     next(err);
   }

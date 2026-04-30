@@ -66,7 +66,7 @@
             <a href="/teacher/settings">Einstellungen</a>
             <div class="nav-section-title">Klasse: <%= classData.name %> / <%= classData.subject %></div>
             <a href="/teacher/students/<%= classData.id %>">Schüler</a>
-            <a class="<%= (typeof openMessageCount !== 'undefined' && openMessageCount > 0) ? 'is-alert' : '' %>" href="/teacher/test-questions/<%= classData.id %>">Fragen zu Tests<% if (typeof openMessageCount !== 'undefined' && openMessageCount > 0) { %><span class="nav-notification-badge"><%= openMessageCount %></span><% } %></a>
+            <a class="<%= (typeof openMessageCount !== 'undefined' && openMessageCount > 0) ? 'is-alert' : '' %>" href="/teacher/test-questions/<%= classData.id %>?subject_id=<%= classData.subject_id %>">Fragen zu Tests<% if (typeof openMessageCount !== 'undefined' && openMessageCount > 0) { %><span class="nav-notification-badge"><%= openMessageCount %></span><% } %></a>
             <a href="/teacher/grades/<%= classData.id %>">Noten</a>
             <a href="/teacher/special-assessments/<%= classData.id %>">Sonderleistungen</a>
             <a href="/teacher/grade-templates/<%= classData.id %>">Prüfungen</a>
@@ -325,6 +325,7 @@
                               <% } else if (!grade.thread_closed_at) { %>
                                 <form class="teacher-form teacher-reply-form" method="POST" action="/teacher/students/<%= classData.id %>/messages/<%= message.id %>/reply">
                                   <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+                                  <input type="hidden" name="subject_id" value="<%= classData.subject_id %>">
                                   <label for="reply-grade-<%= grade.id %>-<%= message.id %>">Antwort</label>
                                   <textarea id="reply-grade-<%= grade.id %>-<%= message.id %>" name="reply" rows="3" maxlength="1000" required placeholder="Antwort an den Schüler..."></textarea>
                                   <div class="teacher-form-actions">
