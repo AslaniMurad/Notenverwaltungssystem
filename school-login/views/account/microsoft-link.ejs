@@ -1,0 +1,62 @@
+<%
+  const page = {
+    title,
+    headerTitle,
+    styles,
+    scripts,
+    bodyClass,
+    hideHeader,
+    hideFooter,
+    content: function () { %>
+    <section class="account-link-shell">
+      <div class="account-link-card">
+        <div class="account-link-head">
+          <p class="account-link-eyebrow">Nutzer</p>
+          <h1>Connect with Microsoft</h1>
+          <p class="account-link-copy">
+            Bestaetige zuerst dein NVS-Konto mit E-Mail und Passwort. Danach verknuepfen wir es mit deinem Microsoft-Konto.
+          </p>
+        </div>
+
+        <% if (feedback && feedback.message) { %>
+          <div class="account-link-alert is-<%= feedback.tone %>" role="alert">
+            <strong><%= feedback.tone === 'success' ? 'Verknuepfung erfolgreich' : 'Verknuepfung fehlgeschlagen' %></strong>
+            <span><%= feedback.message %></span>
+          </div>
+        <% } %>
+
+        <div class="account-link-status">
+          <div>
+            <span class="account-link-status-label">Aktuelles NVS-Konto</span>
+            <strong><%= currentUser.email %></strong>
+          </div>
+          <div>
+            <span class="account-link-status-label">Microsoft</span>
+            <strong><%= microsoftConnected ? (microsoftEmail || 'Verbunden') : 'Noch nicht verknuepft' %></strong>
+          </div>
+        </div>
+
+        <form class="account-link-form" method="POST" action="/account/microsoft-link">
+          <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+
+          <label for="email">NVS E-Mail-Adresse</label>
+          <input id="email" name="email" type="email" required value="<%= formEmail %>" placeholder="dein.nvs@konto.at">
+
+          <label for="password">NVS Passwort</label>
+          <input id="password" name="password" type="password" required placeholder="Dein aktuelles Passwort">
+
+          <% if (microsoftAuthEnabled) { %>
+            <button class="btn btn-primary account-link-submit" type="submit">Connect with Microsoft</button>
+          <% } else { %>
+            <button class="btn btn-primary account-link-submit" type="button" disabled>Connect with Microsoft</button>
+          <% } %>
+        </form>
+
+        <div class="account-link-foot">
+          <a class="btn btn-secondary" href="<%= backUrl %>">Zurueck</a>
+          <a class="btn" href="/login">Zum Login</a>
+        </div>
+      </div>
+    </section>
+<% } }; %>
+<%- include('../layout', page) %>

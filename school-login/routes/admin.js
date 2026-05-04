@@ -986,7 +986,7 @@ router.get("/users", async (req, res, next) => {
 
     const whereClause = filters.length ? `WHERE ${filters.join(" AND ")}` : "";
     const users = await allAsync(
-      `SELECT id, email, role, status, created_at, must_change_password FROM users ${whereClause} ORDER BY id DESC`,
+      `SELECT id, email, role, status, created_at, must_change_password, microsoft_email, microsoft_connected_at FROM users ${whereClause} ORDER BY id DESC`,
       params
     );
     res.render("admin/users", {
@@ -1301,7 +1301,7 @@ router.get("/users/:id", async (req, res, next) => {
   const id = req.params.id;
   try {
     const user = await getAsync(
-      "SELECT id, email, role, status, created_at, must_change_password FROM users WHERE id = ?",
+      "SELECT id, email, role, status, created_at, must_change_password, microsoft_email, microsoft_connected_at FROM users WHERE id = ?",
       [id]
     );
     if (!user) {
@@ -1360,7 +1360,7 @@ router.get("/users/:id/edit", async (req, res, next) => {
   const id = req.params.id;
   try {
     const user = await getAsync(
-      "SELECT id, email, role, status, must_change_password FROM users WHERE id = ?",
+      "SELECT id, email, role, status, must_change_password, microsoft_email, microsoft_connected_at FROM users WHERE id = ?",
       [id]
     );
     if (!user)

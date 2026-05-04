@@ -211,10 +211,32 @@ function createFakeDb() {
             role: resolvedRole,
             status: resolvedStatus,
             created_at: new Date().toISOString(),
-            must_change_password: must_change_password ? 1 : 0
+            must_change_password: must_change_password ? 1 : 0,
+            microsoft_oid: null,
+            microsoft_tenant_id: null,
+            microsoft_email: null,
+            microsoft_connected_at: null
           };
           users.push(newUser);
           lastID = newUser.id;
+        }
+      } else if (/UPDATE users SET microsoft_oid = \?, microsoft_tenant_id = \?, microsoft_email = \?, microsoft_connected_at = current_timestamp WHERE id = \?/i.test(sql)) {
+        const [microsoft_oid, microsoft_tenant_id, microsoft_email, id] = params;
+        const user = users.find((u) => u.id === Number(id));
+        if (user) {
+          user.microsoft_oid = microsoft_oid || null;
+          user.microsoft_tenant_id = microsoft_tenant_id || null;
+          user.microsoft_email = microsoft_email || null;
+          user.microsoft_connected_at = new Date().toISOString();
+        }
+      } else if (/UPDATE users SET microsoft_oid = NULL, microsoft_tenant_id = NULL, microsoft_email = NULL, microsoft_connected_at = NULL WHERE id = \?/i.test(sql)) {
+        const [id] = params;
+        const user = users.find((u) => u.id === Number(id));
+        if (user) {
+          user.microsoft_oid = null;
+          user.microsoft_tenant_id = null;
+          user.microsoft_email = null;
+          user.microsoft_connected_at = null;
         }
       } else if (/UPDATE users SET email = \?, role = \?, status = \? WHERE id = \?/i.test(sql)) {
         const [email, role, status, id] = params;
@@ -1231,6 +1253,22 @@ function createFakeDb() {
               Number(entry.school_year_id) === Number(school_year_id)
           )
           .sort((a, b) => new Date(b.created_at) - new Date(a.created_at) || b.id - a.id)[0];
+      } else if (/SELECT id, email, password_hash, role, status, must_change_password, microsoft_oid, microsoft_tenant_id, microsoft_email FROM users WHERE email = \?/i.test(sql)) {
+        const [email] = params;
+        const user = users.find((u) => u.email === email);
+        row = user
+          ? {
+              id: user.id,
+              email: user.email,
+              password_hash: user.password_hash,
+              role: user.role,
+              status: user.status,
+              must_change_password: user.must_change_password || 0,
+              microsoft_oid: user.microsoft_oid || null,
+              microsoft_tenant_id: user.microsoft_tenant_id || null,
+              microsoft_email: user.microsoft_email || null
+            }
+          : undefined;
       } else if (/SELECT id, email, password_hash, role, status, must_change_password FROM users WHERE email = \?/i.test(sql)) {
         const [email] = params;
         const user = users.find((u) => u.email === email);
@@ -1244,10 +1282,41 @@ function createFakeDb() {
               must_change_password: user.must_change_password || 0
             }
           : undefined;
+      } else if (/SELECT id, email, password_hash, role, status, must_change_password, microsoft_oid, microsoft_tenant_id, microsoft_email FROM users WHERE microsoft_oid = \? AND microsoft_tenant_id = \?/i.test(sql)) {
+        const [microsoft_oid, microsoft_tenant_id] = params;
+        const user = users.find(
+          (entry) => entry.microsoft_oid === microsoft_oid && entry.microsoft_tenant_id === microsoft_tenant_id
+        );
+        row = user
+          ? {
+              id: user.id,
+              email: user.email,
+              password_hash: user.password_hash,
+              role: user.role,
+              status: user.status,
+              must_change_password: user.must_change_password || 0,
+              microsoft_oid: user.microsoft_oid || null,
+              microsoft_tenant_id: user.microsoft_tenant_id || null,
+              microsoft_email: user.microsoft_email || null
+            }
+          : undefined;
       } else if (/SELECT id, role FROM users WHERE email = \?/i.test(sql)) {
         const [email] = params;
         const user = users.find((u) => u.email === email);
         row = user ? { id: user.id, role: user.role } : undefined;
+      } else if (/SELECT id, email, status, microsoft_oid, microsoft_tenant_id, microsoft_email FROM users WHERE id = \?/i.test(sql)) {
+        const [id] = params;
+        const user = users.find((u) => u.id === Number(id));
+        row = user
+          ? {
+              id: user.id,
+              email: user.email,
+              status: user.status,
+              microsoft_oid: user.microsoft_oid || null,
+              microsoft_tenant_id: user.microsoft_tenant_id || null,
+              microsoft_email: user.microsoft_email || null
+            }
+          : undefined;
       } else if (/SELECT id FROM subjects WHERE LOWER\(name\) = LOWER\(\?\)/i.test(sql)) {
         const [name] = params;
         const subject = subjects.find((entry) => String(entry.name).toLowerCase() === String(name).toLowerCase());
@@ -1270,6 +1339,21 @@ function createFakeDb() {
         const [id] = params;
         const classRow = classes.find((entry) => entry.id === Number(id));
         row = classRow ? { id: classRow.id, subject_id: classRow.subject_id } : undefined;
+      } else if (/SELECT id, email, role, status, created_at, must_change_password, microsoft_email, microsoft_connected_at FROM users WHERE id = \?/i.test(sql)) {
+        const [id] = params;
+        const user = users.find((u) => u.id === Number(id));
+        row = user
+          ? {
+              id: user.id,
+              email: user.email,
+              role: user.role,
+              status: user.status,
+              created_at: user.created_at,
+              must_change_password: user.must_change_password || 0,
+              microsoft_email: user.microsoft_email || null,
+              microsoft_connected_at: user.microsoft_connected_at || null
+            }
+          : undefined;
       } else if (/SELECT id, email, role, status, created_at, must_change_password FROM users WHERE id = \?/i.test(sql)) {
         const [id] = params;
         const user = users.find((u) => u.id === Number(id));
@@ -1281,6 +1365,20 @@ function createFakeDb() {
               status: user.status,
               created_at: user.created_at,
               must_change_password: user.must_change_password || 0
+            }
+          : undefined;
+      } else if (/SELECT id, email, role, status, must_change_password, microsoft_email, microsoft_connected_at FROM users WHERE id = \?/i.test(sql)) {
+        const [id] = params;
+        const user = users.find((u) => u.id === Number(id));
+        row = user
+          ? {
+              id: user.id,
+              email: user.email,
+              role: user.role,
+              status: user.status,
+              must_change_password: user.must_change_password || 0,
+              microsoft_email: user.microsoft_email || null,
+              microsoft_connected_at: user.microsoft_connected_at || null
             }
           : undefined;
       } else if (/SELECT id, email, role, status, must_change_password FROM users WHERE id = \?/i.test(sql)) {
@@ -1816,6 +1914,19 @@ function createFakeDb() {
               executed_by_email: user?.email || null
             };
           });
+      } else if (/SELECT id, email, role, status, created_at, must_change_password, microsoft_email, microsoft_connected_at FROM users ORDER BY id DESC/i.test(sql)) {
+        rows = [...users]
+          .sort((a, b) => b.id - a.id)
+          .map((u) => ({
+            id: u.id,
+            email: u.email,
+            role: u.role,
+            status: u.status,
+            created_at: u.created_at,
+            must_change_password: u.must_change_password || 0,
+            microsoft_email: u.microsoft_email || null,
+            microsoft_connected_at: u.microsoft_connected_at || null
+          }));
       } else if (/SELECT id, email, role, status, created_at, must_change_password FROM users ORDER BY id DESC/i.test(sql)) {
         rows = [...users]
           .sort((a, b) => b.id - a.id)
@@ -3090,6 +3201,13 @@ async function initializeDatabase() {
       last_login TIMESTAMPTZ
     )
   `);
+  await pool.query("ALTER TABLE users ADD COLUMN IF NOT EXISTS microsoft_oid TEXT");
+  await pool.query("ALTER TABLE users ADD COLUMN IF NOT EXISTS microsoft_tenant_id TEXT");
+  await pool.query("ALTER TABLE users ADD COLUMN IF NOT EXISTS microsoft_email TEXT");
+  await pool.query("ALTER TABLE users ADD COLUMN IF NOT EXISTS microsoft_connected_at TIMESTAMPTZ");
+  await pool.query(
+    "CREATE UNIQUE INDEX IF NOT EXISTS users_microsoft_link_unique_idx ON users (microsoft_tenant_id, microsoft_oid) WHERE microsoft_oid IS NOT NULL AND microsoft_tenant_id IS NOT NULL"
+  );
 
   await pool.query(`
     CREATE TABLE IF NOT EXISTS school_years (

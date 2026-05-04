@@ -12,8 +12,16 @@ const { buildSessionStore } = require("./sessionStore");
 const { getPasswordValidationError } = require("./utils/password");
 const userDisplay = require("./utils/userDisplay");
 const schoolYearModel = require("./models/schoolYearModel");
+const {
+  microsoftAuthConfig,
+  createMicrosoftAuthorizationRequest,
+  exchangeMicrosoftCodeForProfile,
+  isAllowedMicrosoftDomain,
+  normalizeEmail
+} = require("./services/microsoftAuth");
 
 const adminRouter = require("./routes/admin");
+const accountRouter = require("./routes/account");
 const assignmentRouter = require("./routes/assignmentRoutes");
 const archiveRouter = require("./routes/archiveRoutes");
 const rolloverRouter = require("./routes/rolloverRoutes");
@@ -126,6 +134,7 @@ app.locals.assetVersion = assetVersion;
 app.locals.userDisplay = userDisplay;
 app.use((req, res, next) => {
   res.locals.assetVersion = assetVersion;
+  res.locals.currentPath = req.originalUrl || "/";
   next();
 });
 
@@ -159,6 +168,99 @@ function renderLogin(res, req, options = {}) {
     csrfToken: req.csrfToken(),
     errorType,
     errorMessage,
+    email,
+    microsoftAuthEnabled: microsoftAuthConfig.enabled
+  });
+}
+
+function isMicrosoftLinked(user) {
+  return Boolean(user?.microsoft_oid && user?.microsoft_tenant_id);
+}
+
+function buildSessionUser(user) {
+  return {
+    id: user.id,
+    email: user.email,
+    role: user.role,
+    status: user.status,
+    must_change_password: shouldRequirePasswordChange(user),
+    microsoft_connected: isMicrosoftLinked(user),
+    microsoft_email: user.microsoft_email || null
+  };
+}
+
+function shouldRequirePasswordChange(user) {
+  return Boolean(user && user.must_change_password);
+}
+
+function logTeacherAssignments(user) {
+  if (user.role !== "teacher") {
+    return Promise.resolve();
+  }
+
+  return new Promise((resolve) => {
+    db.get(
+      "SELECT COUNT(*) AS count FROM class_subject_teacher WHERE teacher_id = ?",
+      [user.id],
+      (assignmentErr, assignmentRow) => {
+        if (assignmentErr) {
+          console.error("Assignment count check failed:", assignmentErr);
+          console.log("Assignments found: 0");
+        } else {
+          console.log(`Assignments found: ${Number(assignmentRow?.count || 0)}`);
+        }
+        resolve();
+      }
+    );
+  });
+}
+
+function createUserSession(req, user, loginKey) {
+  return new Promise((resolve, reject) => {
+    req.session.regenerate((regenErr) => {
+      if (regenErr) return reject(regenErr);
+
+      req.session.user = buildSessionUser(user);
+
+      if (loginKey) {
+        resetLoginAttempts(loginKey);
+      }
+
+      db.run("UPDATE users SET last_login = current_timestamp WHERE id = ?", [user.id], () => {});
+
+      req.session.save((saveErr) => {
+        if (saveErr) return reject(saveErr);
+        resolve(
+          shouldRequirePasswordChange(user)
+            ? "/force-password-change"
+            : getRedirectForRole(user.role)
+        );
+      });
+    });
+  });
+}
+
+async function completeLogin(req, user, loginKey) {
+  await logTeacherAssignments(user);
+  return createUserSession(req, user, loginKey);
+}
+
+async function findUserByMicrosoftAccount(profile) {
+  if (!profile?.oid || !profile?.tid) {
+    return null;
+  }
+
+  return getAsync(
+    "SELECT id, email, password_hash, role, status, must_change_password, microsoft_oid, microsoft_tenant_id, microsoft_email FROM users WHERE microsoft_oid = ? AND microsoft_tenant_id = ?",
+    [profile.oid, profile.tid]
+  );
+}
+
+function renderMicrosoftAuthError(res, req, message, status = 401, email = "") {
+  return renderLogin(res, req, {
+    status,
+    errorType: "invalid",
+    errorMessage: message,
     email
   });
 }
@@ -182,6 +284,10 @@ app.use(
     }
   })
 );
+app.use((req, res, next) => {
+  res.locals.sessionUser = req.session?.user || null;
+  next();
+});
 
 // --- CSRF ---
 const multipartAllowList = [/^\/teacher\/add-grade\/\d+\/\d+$/];
@@ -309,6 +415,172 @@ app.get("/login", (req, res) => {
   renderLogin(res, req);
 });
 
+app.get("/auth/microsoft", (req, res, next) => {
+  if (req.session.user) {
+    return res.redirect("/");
+  }
+  if (!microsoftAuthConfig.enabled) {
+    return renderMicrosoftAuthError(
+      res,
+      req,
+      "Microsoft-Anmeldung ist derzeit nicht konfiguriert.",
+      503
+    );
+  }
+
+  const authorizationRequest = createMicrosoftAuthorizationRequest();
+  if (!authorizationRequest) {
+    return renderMicrosoftAuthError(
+      res,
+      req,
+      "Microsoft-Anmeldung ist derzeit nicht verfuegbar.",
+      503
+    );
+  }
+
+  req.session.microsoftAuth = {
+    state: authorizationRequest.state,
+    nonce: authorizationRequest.nonce,
+    createdAt: Date.now()
+  };
+
+  req.session.save((saveErr) => {
+    if (saveErr) return next(saveErr);
+    res.redirect(authorizationRequest.url);
+  });
+});
+
+app.get("/auth/microsoft/callback", async (req, res, next) => {
+  const authState = req.session.microsoftAuth;
+  const isLinkMode = authState?.mode === "link";
+
+  if (req.session.user && !isLinkMode) {
+    return res.redirect("/");
+  }
+  if (!microsoftAuthConfig.enabled) {
+    return renderMicrosoftAuthError(
+      res,
+      req,
+      "Microsoft-Anmeldung ist derzeit nicht konfiguriert.",
+      503
+    );
+  }
+
+  const { code, state, error } = req.query || {};
+  delete req.session.microsoftAuth;
+
+  if (error) {
+    if (isLinkMode) {
+      return res.redirect("/account/microsoft-link?error=microsoft-cancelled");
+    }
+    return renderMicrosoftAuthError(
+      res,
+      req,
+      "Die Microsoft-Anmeldung wurde abgebrochen oder verweigert."
+    );
+  }
+
+  const isExpired = !authState?.createdAt || Date.now() - authState.createdAt > 10 * 60 * 1000;
+  if (!code || !state || !authState || authState.state !== state || isExpired) {
+    if (isLinkMode) {
+      return res.redirect("/account/microsoft-link?error=microsoft-state");
+    }
+    return renderMicrosoftAuthError(
+      res,
+      req,
+      "Die Microsoft-Anmeldung konnte nicht bestaetigt werden."
+    );
+  }
+
+  try {
+    const profile = await exchangeMicrosoftCodeForProfile(String(code));
+    const email = normalizeEmail(profile.email);
+
+    if (!isAllowedMicrosoftDomain(email)) {
+      if (isLinkMode) {
+        return res.redirect("/account/microsoft-link?error=domain-blocked");
+      }
+      return renderMicrosoftAuthError(
+        res,
+        req,
+        "Dieses Microsoft-Konto ist fuer die Schulanmeldung nicht freigegeben.",
+        403,
+        email
+      );
+    }
+
+    if (isLinkMode) {
+      if (!req.session.user || Number(req.session.user.id) !== Number(authState.userId)) {
+        return res.redirect("/account/microsoft-link?error=session-expired");
+      }
+
+      const linkingUser = await getAsync(
+        "SELECT id, email, status, microsoft_oid, microsoft_tenant_id, microsoft_email FROM users WHERE id = ?",
+        [authState.userId]
+      );
+
+      if (!linkingUser || linkingUser.status !== "active") {
+        return res.redirect("/account/microsoft-link?error=account-missing");
+      }
+
+      const existingLinkedUser = await findUserByMicrosoftAccount(profile);
+      if (existingLinkedUser && Number(existingLinkedUser.id) !== Number(linkingUser.id)) {
+        return res.redirect("/account/microsoft-link?error=already-linked");
+      }
+
+      await new Promise((resolve, reject) => {
+        db.run(
+          "UPDATE users SET microsoft_oid = ?, microsoft_tenant_id = ?, microsoft_email = ?, microsoft_connected_at = current_timestamp WHERE id = ?",
+          [profile.oid, profile.tid, email, linkingUser.id],
+          (updateErr) => (updateErr ? reject(updateErr) : resolve())
+        );
+      });
+
+      req.session.user = {
+        ...req.session.user,
+        microsoft_connected: true,
+        microsoft_email: email
+      };
+
+      return req.session.save((saveErr) => {
+        if (saveErr) return next(saveErr);
+        return res.redirect("/account/microsoft-link?linked=1");
+      });
+    }
+
+    const user = await findUserByMicrosoftAccount(profile);
+    if (!user || user.status !== "active") {
+      return renderMicrosoftAuthError(
+        res,
+        req,
+        "Dieses Microsoft-Konto ist noch mit keinem NVS-Konto verknuepft.",
+        401,
+        email
+      );
+    }
+
+    const redirectTarget = await completeLogin(req, user);
+    return res.redirect(redirectTarget);
+  } catch (err) {
+    if (err?.isMicrosoftAuthError) {
+      console.error("Microsoft auth failed:", {
+        message: err.message,
+        status: err.status,
+        details: err.details || null
+      });
+      if (isLinkMode) {
+        return res.redirect("/account/microsoft-link?error=microsoft-failed");
+      }
+      return renderMicrosoftAuthError(
+        res,
+        req,
+        "Microsoft-Anmeldung fehlgeschlagen. Bitte spaeter erneut versuchen."
+      );
+    }
+    return next(err);
+  }
+});
+
 // --- Passwortwechsel erzwingen ---
 app.get("/force-password-change", requireAuth, (req, res) => {
   if (!req.session.user.must_change_password) {
@@ -347,7 +619,7 @@ app.post("/force-password-change", requireAuth, (req, res, next) => {
 });
 
 // --- Login POST ---
-app.post("/login", (req, res, next) => {
+app.post("/login", async (req, res, next) => {
   const { email, password } = req.body || {};
   const loginKey = buildLoginKey(req, email);
   if (isLoginRateLimited(loginKey)) {
@@ -367,80 +639,45 @@ app.post("/login", (req, res, next) => {
       email
     });
   }
+  let user;
+  try {
+    user = await getAsync(
+      "SELECT id, email, password_hash, role, status, must_change_password, microsoft_oid, microsoft_tenant_id, microsoft_email FROM users WHERE email = ?",
+      [email]
+    );
+  } catch (err) {
+    return res.status(500).render("error", {
+      message: "DB-Fehler.",
+      status: 500,
+      backUrl: "/login"
+    });
+  }
 
-  db.get(
-    "SELECT id, email, password_hash, role, status, must_change_password FROM users WHERE email = ?",
-    [email],
-    (err, user) => {
-      if (err) {
-        return res.status(500).render("error", {
-          message: "DB-Fehler.",
-          status: 500,
-          backUrl: "/login"
-        });
-      }
-      if (!user || !verifyPassword(user.password_hash, password)) {
-        recordLoginFailure(loginKey);
-        return renderLogin(res, req, {
-          status: 401,
-          errorType: "invalid",
-          errorMessage: "Login fehlgeschlagen.",
-          email
-        });
-      }
-      if (user.status !== "active") {
-        recordLoginFailure(loginKey);
-        return renderLogin(res, req, {
-          status: 401,
-          errorType: "invalid",
-          errorMessage: "Login fehlgeschlagen.",
-          email
-        });
-      }
+  if (!user || !verifyPassword(user.password_hash, password)) {
+    recordLoginFailure(loginKey);
+    return renderLogin(res, req, {
+      status: 401,
+      errorType: "invalid",
+      errorMessage: "Login fehlgeschlagen.",
+      email
+    });
+  }
+  if (user.status !== "active") {
+    recordLoginFailure(loginKey);
+    return renderLogin(res, req, {
+      status: 401,
+      errorType: "invalid",
+      errorMessage: "Login fehlgeschlagen.",
+      email
+    });
+  }
 
-      const completeLogin = () => {
-        req.session.regenerate((regenErr) => {
-          if (regenErr) return next(regenErr);
-
-          req.session.user = {
-            id: user.id,
-            email: user.email,
-            role: user.role,
-            status: user.status,
-            must_change_password: Boolean(user.must_change_password)
-          };
-
-          resetLoginAttempts(loginKey);
-          db.run("UPDATE users SET last_login = current_timestamp WHERE id = ?", [user.id], () => {});
-          const redirectTarget = user.must_change_password
-            ? "/force-password-change"
-            : getRedirectForRole(user.role);
-          req.session.save((saveErr) => {
-            if (saveErr) return next(saveErr);
-            res.redirect(redirectTarget);
-          });
-        });
-      };
-
-      if (user.role === "teacher") {
-        return db.get(
-          "SELECT COUNT(*) AS count FROM class_subject_teacher WHERE teacher_id = ?",
-          [user.id],
-          (assignmentErr, assignmentRow) => {
-            if (assignmentErr) {
-              console.error("Assignment count check failed:", assignmentErr);
-              console.log("Assignments found: 0");
-            } else {
-              console.log(`Assignments found: ${Number(assignmentRow?.count || 0)}`);
-            }
-            completeLogin();
-          }
-        );
-      }
-
-      completeLogin();
-    }
-  );
+  try {
+    const redirectTarget = await completeLogin(req, user, loginKey);
+    return res.redirect(redirectTarget);
+  } catch (err) {
+    return next(err);
+  }
 });
 
 // --- Logout ---
@@ -452,6 +689,7 @@ app.post("/logout", (req, res) => {
 app.use("/admin", adminRouter);
 app.use("/admin", assignmentRouter);
 app.use("/admin", rolloverRouter);
+app.use("/account", accountRouter);
 app.use("/teacher", teacherRouter);
 app.use("/student", studentRouter);
 app.use("/", archiveRouter);

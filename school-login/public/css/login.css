@@ -197,6 +197,72 @@ body.page-force-password {
   border-color: #003a99;
 }
 
+.login-divider {
+  position: relative;
+  margin: 18px 0 14px;
+  text-align: center;
+}
+
+.login-divider::before {
+  content: "";
+  position: absolute;
+  inset: 50% 0 auto;
+  border-top: 1px solid #dbe3f0;
+}
+
+.login-divider span {
+  position: relative;
+  display: inline-block;
+  padding: 0 10px;
+  background: var(--login-card);
+  color: var(--login-muted);
+  font-size: 12px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.btn-login-microsoft {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  min-height: 44px;
+  padding: 11px 14px;
+  border-radius: 8px;
+  border: 1px solid #cbd5e1;
+  background: #ffffff;
+  color: #111827;
+  font-size: 14px;
+  font-weight: 700;
+  text-decoration: none;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease, transform 0.2s ease;
+}
+
+.btn-login-microsoft:hover {
+  border-color: #94a3b8;
+  box-shadow: 0 12px 24px rgba(15, 23, 42, 0.08);
+  transform: translateY(-1px);
+}
+
+.btn-login-microsoft.is-disabled,
+.btn-login-microsoft:disabled {
+  cursor: not-allowed;
+  opacity: 0.7;
+  box-shadow: none;
+  transform: none;
+  color: #64748b;
+  background: #f8fafc;
+}
+
+.login-provider-hint {
+  margin: 10px 0 0;
+  color: var(--login-muted);
+  font-size: 11.5px;
+  line-height: 1.5;
+  text-align: center;
+}
+
 .btn-login-back {
   flex: 0 0 auto;
   padding: 12px 18px;

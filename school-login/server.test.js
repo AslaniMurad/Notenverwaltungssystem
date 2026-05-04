@@ -12,9 +12,14 @@ process.env.SEED_DEMO = "true";
 process.env.DEMO_TEACHER_PASS = "teacherDemo123!";
 process.env.DEMO_STUDENT_PASS = "studentDemo123!";
 process.env.USE_FAKE_DB = "true";
+process.env.MICROSOFT_CLIENT_ID = "test-microsoft-client";
+process.env.MICROSOFT_CLIENT_SECRET = "test-microsoft-secret";
+process.env.MICROSOFT_TENANT_ID = "test-tenant-id";
+process.env.MICROSOFT_REDIRECT_URI = "http://127.0.0.1/auth/microsoft/callback";
+process.env.MICROSOFT_ALLOWED_DOMAIN = "test.local";
 
 const app = require("./server");
-const { db } = require("./db");
+const { db, hashPassword } = require("./db");
 
 let server;
 let baseUrl;
@@ -51,6 +56,12 @@ function mergeCookies(existingCookies, incomingCookies) {
     cookieMap.set(name, cookie);
   });
   return Array.from(cookieMap.values());
+}
+
+function buildMockIdToken(payload) {
+  const header = Buffer.from(JSON.stringify({ alg: "none", typ: "JWT" })).toString("base64url");
+  const body = Buffer.from(JSON.stringify(payload)).toString("base64url");
+  return `${header}.${body}.signature`;
 }
 
 async function startServer() {
@@ -227,6 +238,145 @@ test("GET /login renders the login form with a CSRF token", async () => {
   const { response, body } = await fetchWithCookies("/login");
   assert.strictEqual(response.status, 200);
   assert.ok(extractCsrfToken(body));
+});
+
+test("GET /login renders the Microsoft login option when configured", async () => {
+  const { response, body } = await fetchWithCookies("/login");
+  assert.strictEqual(response.status, 200);
+  assert.match(body, /Mit Microsoft anmelden/);
+});
+
+test("Microsoft account can be linked and used for login", { concurrency: false }, async () => {
+  const microsoftAdminEmail = "microsoft-linked-admin@test.local";
+  await dbRun(
+    "INSERT INTO users (email, password_hash, role, status, must_change_password) VALUES (?,?,?,?,?)",
+    [microsoftAdminEmail, hashPassword("UnusedPass123!"), "admin", "active", 0]
+  );
+
+  const originalFetch = global.fetch;
+  global.fetch = async (input, init) => {
+    const requestUrl = typeof input === "string"
+      ? input
+      : String(input?.url || input);
+
+    if (
+      requestUrl.startsWith("https://login.microsoftonline.com/")
+      && requestUrl.endsWith("/oauth2/v2.0/token")
+    ) {
+      return new Response(
+        JSON.stringify({
+          access_token: "microsoft-access-token",
+          id_token: buildMockIdToken({
+            email: microsoftAdminEmail,
+            preferred_username: microsoftAdminEmail,
+            oid: "oid-admin-1",
+            tid: "tenant-admin-1"
+          })
+        }),
+        {
+          status: 200,
+          headers: { "Content-Type": "application/json" }
+        }
+      );
+    }
+
+    if (requestUrl === "https://graph.microsoft.com/oidc/userinfo") {
+      return new Response(
+        JSON.stringify({
+          email: microsoftAdminEmail,
+          preferred_username: microsoftAdminEmail,
+          name: "Admin Test",
+          sub: "oid-admin-1"
+        }),
+        {
+          status: 200,
+          headers: { "Content-Type": "application/json" }
+        }
+      );
+    }
+
+    return originalFetch(input, init);
+  };
+
+  try {
+    const passwordLoginPage = await fetchWithCookies("/login");
+    const passwordLoginToken = extractCsrfToken(passwordLoginPage.body);
+    assert.ok(passwordLoginToken, "CSRF token missing for password login");
+
+    const passwordLoginResponse = await fetchWithCookies(
+      "/login",
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/x-www-form-urlencoded" },
+        body: new URLSearchParams({
+          _csrf: passwordLoginToken,
+          email: microsoftAdminEmail,
+          password: "UnusedPass123!"
+        }).toString(),
+        redirect: "manual"
+      },
+      passwordLoginPage.cookies
+    );
+    assert.strictEqual(passwordLoginResponse.response.headers.get("location"), "/admin");
+
+    const linkPage = await fetchWithCookies("/account/microsoft-link", {}, passwordLoginResponse.cookies);
+    assert.strictEqual(linkPage.response.status, 200);
+    const linkToken = extractCsrfToken(linkPage.body);
+    assert.ok(linkToken, "CSRF token missing on Microsoft link page");
+
+    const linkStart = await fetchWithCookies(
+      "/account/microsoft-link",
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/x-www-form-urlencoded" },
+        body: new URLSearchParams({
+          _csrf: linkToken,
+          email: microsoftAdminEmail,
+          password: "UnusedPass123!"
+        }).toString(),
+        redirect: "manual"
+      },
+      linkPage.cookies
+    );
+    assert.strictEqual(linkStart.response.status, 302);
+
+    const linkLocation = linkStart.response.headers.get("location");
+    assert.ok(linkLocation, "Microsoft connect redirect missing");
+    const linkUrl = new URL(linkLocation);
+    const linkState = linkUrl.searchParams.get("state");
+    assert.ok(linkState, "Microsoft connect state missing");
+
+    const linkCallbackResponse = await fetchWithCookies(
+      `/auth/microsoft/callback?code=test-code&state=${encodeURIComponent(linkState)}`,
+      { redirect: "manual" },
+      linkStart.cookies
+    );
+    assert.strictEqual(linkCallbackResponse.response.status, 302);
+    assert.strictEqual(linkCallbackResponse.response.headers.get("location"), "/account/microsoft-link?linked=1");
+
+    const authStart = await fetchWithCookies("/auth/microsoft", { redirect: "manual" });
+    assert.strictEqual(authStart.response.status, 302);
+    const authLocation = authStart.response.headers.get("location");
+    assert.ok(authLocation, "Microsoft authorization redirect missing");
+    const authUrl = new URL(authLocation);
+    const authState = authUrl.searchParams.get("state");
+    assert.ok(authState, "Microsoft auth state missing");
+
+    const callbackResponse = await fetchWithCookies(
+      `/auth/microsoft/callback?code=test-code&state=${encodeURIComponent(authState)}`,
+      { redirect: "manual" },
+      authStart.cookies
+    );
+
+    assert.strictEqual(callbackResponse.response.status, 302);
+    assert.strictEqual(callbackResponse.response.headers.get("location"), "/admin");
+
+    const adminPage = await fetchWithCookies("/admin", {}, callbackResponse.cookies);
+    assert.strictEqual(adminPage.response.status, 200);
+    assert.match(adminPage.body, /microsoft-linked-admin@test\.local/);
+  } finally {
+    global.fetch = originalFetch;
+  }
 });
 
 test("admin can log in with seeded credentials", async () => {
