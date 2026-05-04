@@ -31,6 +31,10 @@ const teacherRouter = require("./routes/teacher");
 const app = express();
 const isProduction = process.env.NODE_ENV === "production";
 const assetVersion = process.env.ASSET_VERSION || (isProduction ? "1" : Date.now().toString(36));
+const ssoEnabled = process.env.SSO_ENABLED === "true";
+const ssoHeaderName = (process.env.SSO_HEADER || "x-remote-user").toLowerCase();
+const ssoEmailDomain = (process.env.SSO_EMAIL_DOMAIN || "").toLowerCase();
+const ssoRealm = (process.env.SSO_REALM || "").toLowerCase();
 
 if (isProduction) {
   app.set("trust proxy", 1);
@@ -324,6 +328,36 @@ app.use((req, res, next) => {
   next();
 });
 
+app.use((req, res, next) => {
+  if (!ssoEnabled || req.session.user) return next();
+
+  const ssoEmail = normalizeSsoEmail(getHeaderValue(req, ssoHeaderName));
+  if (!ssoEmail) return next();
+
+  db.get(
+    "SELECT id, email, password_hash, role, status, must_change_password FROM users WHERE email = ?",
+    [ssoEmail],
+    (err, user) => {
+      if (err) return next(err);
+      if (!user) {
+        return res.status(403).render("error", {
+          message: "Windows-Anmeldung erkannt, aber kein passender NVS-Benutzer gefunden.",
+          status: 403,
+          backUrl: "/login"
+        });
+      }
+      if (user.status !== "active") {
+        return res.status(403).render("error", {
+          message: "Account gesperrt.",
+          status: 403,
+          backUrl: "/login"
+        });
+      }
+      createSessionForUser(req, user, next);
+    }
+  );
+});
+
 // --- CSRF ---
 const multipartAllowList = [/^\/teacher\/add-grade\/\d+\/\d+$/];
 const csrfProtection = csrf({
@@ -371,6 +405,49 @@ function getRedirectForRole(role) {
     student: "/student"
   };
   return redirectMap[role] || "/";
+}
+
+function getHeaderValue(req, headerName) {
+  const value = req.headers[headerName];
+  if (Array.isArray(value)) return value[0];
+  return value;
+}
+
+function normalizeSsoEmail(rawPrincipal) {
+  const principal = String(rawPrincipal || "").trim();
+  if (!principal) return null;
+
+  const withoutDomain = principal.includes("\\")
+    ? principal.slice(principal.lastIndexOf("\\") + 1)
+    : principal;
+  const lowerPrincipal = withoutDomain.toLowerCase();
+
+  if (lowerPrincipal.includes("@")) {
+    const [userPart, realmPart] = lowerPrincipal.split("@", 2);
+    if (ssoRealm && ssoEmailDomain && realmPart === ssoRealm) {
+      return `${userPart}@${ssoEmailDomain}`;
+    }
+    return lowerPrincipal;
+  }
+
+  return ssoEmailDomain ? `${lowerPrincipal}@${ssoEmailDomain}` : lowerPrincipal;
+}
+
+function createSessionForUser(req, user, next) {
+  req.session.regenerate((regenErr) => {
+    if (regenErr) return next(regenErr);
+
+    req.session.user = {
+      id: user.id,
+      email: user.email,
+      role: user.role,
+      status: user.status,
+      must_change_password: Boolean(user.must_change_password)
+    };
+
+    db.run("UPDATE users SET last_login = current_timestamp WHERE id = ?", [user.id], () => {});
+    req.session.save(next);
+  });
 }
 
 app.use((req, res, next) => {

@@ -1,0 +1,16 @@
+[Unit]
+Description=NVS Node App
+After=network.target
+
+[Service]
+Type=simple
+WorkingDirectory=/opt/nvs/school-login
+EnvironmentFile=/opt/nvs/school-login/.env
+ExecStart=/usr/bin/node server.js
+Restart=always
+RestartSec=5
+User=www-data
+Group=www-data
+
+[Install]
+WantedBy=multi-user.target
