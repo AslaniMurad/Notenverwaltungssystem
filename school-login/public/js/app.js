@@ -42,6 +42,27 @@ if (studentEmailInput && studentNameInput) {
   });
 }
 
+document.querySelectorAll('[data-teacher-email-autocomplete]').forEach((emailInput) => {
+  const form = emailInput.closest('form');
+  const teacherIdInput = form?.querySelector('[data-teacher-id-input]');
+  const dataListId = emailInput.getAttribute('list');
+  const dataList = dataListId ? document.getElementById(dataListId) : null;
+  if (!teacherIdInput || !dataList) return;
+
+  const syncTeacherId = () => {
+    const typedEmail = emailInput.value.trim().toLowerCase();
+    const matchingOption = Array.from(dataList.options).find(
+      (option) => option.value.trim().toLowerCase() === typedEmail
+    );
+    teacherIdInput.value = matchingOption?.dataset.teacherId || '';
+  };
+
+  emailInput.addEventListener('input', syncTeacherId);
+  emailInput.addEventListener('change', syncTeacherId);
+  form.addEventListener('submit', syncTeacherId);
+  syncTeacherId();
+});
+
 document.querySelectorAll('[data-create-switcher]').forEach((root) => {
   const buttons = Array.from(root.querySelectorAll('[data-mode-toggle]'));
   const panels = Array.from(root.querySelectorAll('[data-create-panel]'));

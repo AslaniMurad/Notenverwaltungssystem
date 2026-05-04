@@ -11,6 +11,8 @@
       const unitLabel = "Punkte";
       const defaultsByCategory = (activeProfile && activeProfile.weights) || {};
       const useProfileSettings = Boolean(formData && formData.use_profile_settings);
+      const scoringMode = (activeProfile && activeProfile.scoring_mode) || "points_only";
+      const maxPointsRequired = scoringMode !== "grade_only";
 %>
     <div class="app-shell teacher-shell">
       <aside class="teacher-sidebar" aria-label="Lehrer Navigation">
@@ -22,7 +24,7 @@
             <a href="/teacher/classes">Fächer</a>
             <a href="/teacher/create-class">Fach erstellen</a>
             <a href="/teacher/settings">Einstellungen</a>
-            <div class="nav-section-title">Klasse: <%= classData.name %> / <%= classData.subject %></div>
+            <div class="nav-section-title teacher-class-context-title">Klasse: <%= classData.name %> / <%= classData.subject %></div>
             <a href="/teacher/students/<%= classData.id %>">Schüler</a>
             <a href="/teacher/grades/<%= classData.id %>">Noten</a>
             <a href="/teacher/special-assessments/<%= classData.id %>">Sonderleistungen</a>
@@ -112,7 +114,7 @@
             >
             <small class="form-hint" id="weight-hint">Profil-Vorschlag wird automatisch gesetzt.</small>
 
-            <label for="max_points">Maximale Punkte (optional)</label>
+            <label for="max_points">Maximale Punkte<%= maxPointsRequired ? " *" : " (optional)" %></label>
             <input
               type="number"
               id="max_points"
@@ -120,10 +122,11 @@
               min="0.25"
               step="0.25"
               placeholder="z.B. 50"
+              <%= maxPointsRequired ? "required" : "" %>
               value="<%= formData && formData.max_points !== '' ? formData.max_points : '' %>"
-              <%= useProfileSettings ? 'readonly class="is-readonly"' : '' %>
+              <%= useProfileSettings && !maxPointsRequired ? 'readonly class="is-readonly"' : '' %>
             >
-            <small class="form-hint" id="max-points-hint">Wenn aktiv, bleibt der bisherige Maximalwert sichtbar, aber gesperrt.</small>
+            <small class="form-hint" id="max-points-hint"><%= maxPointsRequired ? "Für diesen Bewertungsmodus nötig, damit Punkte erfasst oder aus Noten berechnet werden können." : "Optional für interne Punkteübersichten und Noten-zu-Punkte-Schätzungen." %></small>
 
             <label for="date">Datum (optional)</label>
             <input type="date" id="date" name="date" value="<%= formData && formData.date ? formData.date : '' %>">
@@ -157,6 +160,7 @@
         const maxPointsHint = document.getElementById("max-points-hint");
         const unitLabel = document.getElementById("weight-unit-label");
         const manualWeightRequired = weightInput ? weightInput.dataset.manualRequired === "1" : false;
+        const maxPointsRequired = <%= maxPointsRequired ? "true" : "false" %>;
 
         function formatWeight(value) {
           const numeric = Number(value);
@@ -184,8 +188,9 @@
           }
 
           if (maxPointsInput) {
-            maxPointsInput.readOnly = useProfileSettings;
-            maxPointsInput.classList.toggle("is-readonly", useProfileSettings);
+            maxPointsInput.readOnly = useProfileSettings && !maxPointsRequired;
+            maxPointsInput.required = maxPointsRequired;
+            maxPointsInput.classList.toggle("is-readonly", useProfileSettings && !maxPointsRequired);
           }
 
           if (profileSettingsHint) {
@@ -196,8 +201,12 @@
 
           if (maxPointsHint) {
             maxPointsHint.textContent = useProfileSettings
-              ? "Maximalpunkte bleiben sichtbar, können mit aktiven Profileinstellungen aber nicht bearbeitet werden."
-              : "Wenn aktiv, bleibt der bisherige Maximalwert sichtbar, aber gesperrt.";
+              ? (maxPointsRequired
+                ? "Maximalpunkte bleiben für diesen Bewertungsmodus erforderlich."
+                : "Maximalpunkte bleiben sichtbar, können mit aktiven Profileinstellungen aber nicht bearbeitet werden.")
+              : (maxPointsRequired
+                ? "Für diesen Bewertungsmodus nötig, damit Punkte erfasst oder aus Noten berechnet werden können."
+                : "Optional für interne Punkteübersichten und Noten-zu-Punkte-Schätzungen.");
           }
         }
 

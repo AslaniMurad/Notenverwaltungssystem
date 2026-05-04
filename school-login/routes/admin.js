@@ -51,6 +51,7 @@ const AUDIT_FIELD_LABELS = {
   head_teacher_id: "Klassenvorstand",
   bulkRole: "Rolle",
   bulkEmails: "E-Mails",
+  bulkClassId: "Klasse",
   profile_name: "Profil",
   scoring_mode: "Bewertung",
   absence_mode: "Abwesenheit",
@@ -707,6 +708,19 @@ async function getActiveClassById(classId, columns = "id, name") {
   );
 }
 
+async function listBulkAssignableClasses() {
+  const activeSchoolYear = await schoolYearModel.getActiveSchoolYear();
+  if (!activeSchoolYear) return [];
+
+  return allAsync(
+    `SELECT id, name, subject, subject_id, school_year_id, head_teacher_id, created_at
+     FROM classes
+     WHERE school_year_id = ?
+     ORDER BY name ASC`,
+    [activeSchoolYear.id]
+  );
+}
+
 async function listActiveTeachers() {
   return allAsync(
     "SELECT id, email FROM users WHERE role = 'teacher' AND status = 'active' ORDER BY email ASC"
@@ -726,6 +740,12 @@ function buildTeacherDirectory(rows = []) {
 }
 
 function normalizeOptionalTeacherId(value) {
+  if (value == null || String(value).trim() === "") return null;
+  const numeric = Number(value);
+  return Number.isInteger(numeric) && numeric > 0 ? numeric : null;
+}
+
+function normalizeOptionalPositiveId(value) {
   if (value == null || String(value).trim() === "") return null;
   const numeric = Number(value);
   return Number.isInteger(numeric) && numeric > 0 ? numeric : null;
@@ -879,7 +899,8 @@ function renderCreateUserPage(req, res, options = {}) {
     error = null,
     mode = bulkResult ? "bulk" : "single",
     singleForm = {},
-    bulkForm = {}
+    bulkForm = {},
+    bulkClassOptions = []
   } = options;
 
   return res.render("admin/create-user", {
@@ -898,8 +919,10 @@ function renderCreateUserPage(req, res, options = {}) {
       bulkEmails: String(bulkForm.bulkEmails || "").trim(),
       bulkRole: normalizeUserRole(bulkForm.bulkRole),
       bulkUseInitial: Boolean(bulkForm.bulkUseInitial),
-      bulkDelimiter: normalizeBulkDelimiter(bulkForm.bulkDelimiter)
-    }
+      bulkDelimiter: normalizeBulkDelimiter(bulkForm.bulkDelimiter),
+      bulkClassId: normalizeOptionalPositiveId(bulkForm.bulkClassId)
+    },
+    bulkClassOptions: Array.isArray(bulkClassOptions) ? bulkClassOptions : []
   });
 }
 
@@ -1002,7 +1025,14 @@ router.get("/users", async (req, res, next) => {
   }
 });
 
-router.get("/users/new", (req, res) => renderCreateUserPage(req, res));
+router.get("/users/new", async (req, res, next) => {
+  try {
+    const bulkClassOptions = await listBulkAssignableClasses();
+    return renderCreateUserPage(req, res, { bulkClassOptions });
+  } catch (err) {
+    next(err);
+  }
+});
 
 router.post("/users", async (req, res, next) => {
   const { email, role, password, useInitial } = req.body || {};
@@ -1132,14 +1162,17 @@ router.post("/users", async (req, res, next) => {
 });
 
 router.post("/users/bulk", async (req, res, next) => {
-  const { bulkEmails, bulkRole, bulkPassword, bulkUseInitial, bulkDelimiter } = req.body || {};
+  const { bulkEmails, bulkRole, bulkPassword, bulkUseInitial, bulkDelimiter, bulkClassId } = req.body || {};
   const wantsInitial = bulkUseInitial === "on";
   const normalizedBulkDelimiter = normalizeBulkDelimiter(bulkDelimiter);
+  const normalizedBulkClassId = normalizeOptionalPositiveId(bulkClassId);
+  const bulkClassOptions = await listBulkAssignableClasses();
   const bulkForm = {
     bulkEmails,
     bulkRole,
     bulkUseInitial: wantsInitial,
-    bulkDelimiter: normalizedBulkDelimiter
+    bulkDelimiter: normalizedBulkDelimiter,
+    bulkClassId: normalizedBulkClassId
   };
   const normalizedBulkRole = normalizeUserRole(bulkRole, "");
 
@@ -1148,7 +1181,8 @@ router.post("/users/bulk", async (req, res, next) => {
     return renderCreateUserPage(req, res, {
       error: "Bitte wähle eine Rolle für neue Nutzer.",
       mode: "bulk",
-      bulkForm
+      bulkForm,
+      bulkClassOptions
     });
   }
   if (wantsInitial && normalizedBulkRole === "teacher") {
@@ -1156,7 +1190,17 @@ router.post("/users/bulk", async (req, res, next) => {
     return renderCreateUserPage(req, res, {
       error: "Lehrer dürfen kein Initial-Passwort erhalten.",
       mode: "bulk",
-      bulkForm
+      bulkForm,
+      bulkClassOptions
+    });
+  }
+  if (normalizedBulkClassId && normalizedBulkRole !== "student") {
+    res.status(400);
+    return renderCreateUserPage(req, res, {
+      error: "Eine Klasse kann nur neuen Schüler-Konten zugeordnet werden.",
+      mode: "bulk",
+      bulkForm,
+      bulkClassOptions
     });
   }
 
@@ -1184,7 +1228,8 @@ router.post("/users/bulk", async (req, res, next) => {
     return renderCreateUserPage(req, res, {
       error: "Keine E-Mails zum Anlegen gefunden.",
       mode: "bulk",
-      bulkForm
+      bulkForm,
+      bulkClassOptions
     });
   }
   if (!wantsInitial && !bulkPassword) {
@@ -1192,7 +1237,8 @@ router.post("/users/bulk", async (req, res, next) => {
     return renderCreateUserPage(req, res, {
       error: "Bitte Passwort eingeben oder Initial-Kennwort nutzen.",
       mode: "bulk",
-      bulkForm
+      bulkForm,
+      bulkClassOptions
     });
   }
   if (wantsInitial && !INITIAL_PASSWORD) {
@@ -1200,7 +1246,8 @@ router.post("/users/bulk", async (req, res, next) => {
     return renderCreateUserPage(req, res, {
       error: "Initial-Passwort ist nicht konfiguriert (ENV INITIAL_PASSWORD).",
       mode: "bulk",
-      bulkForm
+      bulkForm,
+      bulkClassOptions
     });
   }
   if (wantsInitial) {
@@ -1210,7 +1257,8 @@ router.post("/users/bulk", async (req, res, next) => {
       return renderCreateUserPage(req, res, {
         error: `Initial-Passwort ist zu schwach: ${initialError}`,
         mode: "bulk",
-        bulkForm
+        bulkForm,
+        bulkClassOptions
       });
     }
   } else {
@@ -1220,7 +1268,8 @@ router.post("/users/bulk", async (req, res, next) => {
       return renderCreateUserPage(req, res, {
         error: passwordError,
         mode: "bulk",
-        bulkForm
+        bulkForm,
+        bulkClassOptions
       });
     }
   }
@@ -1272,6 +1321,27 @@ router.post("/users/bulk", async (req, res, next) => {
     }
   }
 
+  let selectedBulkClass = null;
+  let activeSchoolYear = null;
+  if (normalizedBulkClassId) {
+    activeSchoolYear = await getActiveSchoolYearOrThrow();
+    selectedBulkClass = await getAsync(
+      `SELECT id, name
+       FROM classes
+       WHERE id = ? AND school_year_id = ?`,
+      [normalizedBulkClassId, activeSchoolYear.id]
+    );
+    if (!selectedBulkClass) {
+      res.status(404);
+      return renderCreateUserPage(req, res, {
+        error: "Klasse nicht gefunden oder nicht im aktiven Schuljahr.",
+        mode: "bulk",
+        bulkForm,
+        bulkClassOptions
+      });
+    }
+  }
+
   const chosenPassword = wantsInitial ? INITIAL_PASSWORD : bulkPassword;
   const mustChange = wantsInitial ? 1 : 0;
   const hash = hashPassword(chosenPassword);
@@ -1280,10 +1350,48 @@ router.post("/users/bulk", async (req, res, next) => {
 
   for (const line of lines) {
     try {
+      const derivedName = selectedBulkClass ? deriveNameFromEmail(line) : null;
+      if (selectedBulkClass && !derivedName) {
+        bulkResult.failed.push({
+          email: line,
+          reason: "Name fehlt (E-Mail Format vorname.nachname@xy)."
+        });
+        continue;
+      }
+      if (selectedBulkClass) {
+        const existingUser = await getAsync("SELECT id FROM users WHERE email = ?", [line]);
+        if (existingUser) {
+          bulkResult.failed.push({
+            email: line,
+            reason: "E-Mail existiert bereits."
+          });
+          continue;
+        }
+        const duplicateStudent = await getAsync("SELECT id FROM students WHERE email = ? AND class_id = ?", [
+          line,
+          selectedBulkClass.id
+        ]);
+        if (duplicateStudent) {
+          bulkResult.failed.push({
+            email: line,
+            reason: "Schüler ist bereits in der Klasse."
+          });
+          continue;
+        }
+      }
+
       await runAsync(
         "INSERT INTO users (email, password_hash, role, status, must_change_password) VALUES (?,?,?,?,?)",
         [line, hash, normalizedBulkRole, "active", mustChange]
       );
+      if (selectedBulkClass) {
+        await runAsync("INSERT INTO students (name, email, class_id, school_year) VALUES (?,?,?,?)", [
+          derivedName,
+          line,
+          selectedBulkClass.id,
+          activeSchoolYear.name
+        ]);
+      }
       bulkResult.success.push(line);
     } catch (err) {
       bulkResult.failed.push({ email: line, reason: String(err) });
@@ -1293,7 +1401,8 @@ router.post("/users/bulk", async (req, res, next) => {
   return renderCreateUserPage(req, res, {
     bulkResult,
     mode: "bulk",
-    bulkForm
+    bulkForm,
+    bulkClassOptions
   });
 });
 
@@ -1538,7 +1647,8 @@ router.get("/classes/new", async (req, res, next) => {
 
 router.post("/classes", async (req, res, next) => {
   const name = String(req.body?.name || "").trim();
-  const headTeacherId = normalizeOptionalTeacherId(req.body?.head_teacher_id);
+  const headTeacherEmail = String(req.body?.head_teacher_email || "").trim().toLowerCase();
+  let headTeacherId = normalizeOptionalTeacherId(req.body?.head_teacher_id);
   if (!name) {
     return res.status(400).render("error", {
       message: "Bitte alle Pflichtfelder ausfüllen.",
@@ -1549,6 +1659,20 @@ router.post("/classes", async (req, res, next) => {
   }
   try {
     const teacherDirectory = buildTeacherDirectory(await listActiveTeachers());
+    if (!headTeacherId && headTeacherEmail) {
+      const teacherEntry = Array.from(teacherDirectory.values()).find(
+        (teacher) => teacher.email.toLowerCase() === headTeacherEmail
+      );
+      headTeacherId = teacherEntry?.id || null;
+      if (!headTeacherId) {
+        return res.status(400).render("error", {
+          message: "Bitte einen vorgeschlagenen Klassenvorstand auswählen.",
+          status: 400,
+          backUrl: "/admin/classes/new",
+          csrfToken: req.csrfToken()
+        });
+      }
+    }
     if (headTeacherId && !teacherDirectory.has(Number(headTeacherId))) {
       return res.status(400).render("error", {
         message: "Klassenvorstand nicht gefunden.",

@@ -64,9 +64,9 @@
             <a href="/teacher/classes">Fächer</a>
             <a href="/teacher/create-class">Fach erstellen</a>
             <a href="/teacher/settings">Einstellungen</a>
-            <div class="nav-section-title">Klasse: <%= classData.name %> / <%= classData.subject %></div>
+            <div class="nav-section-title teacher-class-context-title">Klasse: <%= classData.name %> / <%= classData.subject %></div>
             <a href="/teacher/students/<%= classData.id %>">Schüler</a>
-            <a class="<%= (typeof openMessageCount !== 'undefined' && openMessageCount > 0) ? 'is-alert' : '' %>" href="/teacher/test-questions/<%= classData.id %>">Fragen zu Tests<% if (typeof openMessageCount !== 'undefined' && openMessageCount > 0) { %><span class="nav-notification-badge"><%= openMessageCount %></span><% } %></a>
+            <a class="<%= (typeof openMessageCount !== 'undefined' && openMessageCount > 0) ? 'is-alert' : '' %>" href="/teacher/test-questions/<%= classData.id %>?subject_id=<%= classData.subject_id %>">Fragen zu Tests<% if (typeof openMessageCount !== 'undefined' && openMessageCount > 0) { %><span class="nav-notification-badge"><%= openMessageCount %></span><% } %></a>
             <a href="/teacher/grades/<%= classData.id %>">Noten</a>
             <a href="/teacher/special-assessments/<%= classData.id %>">Sonderleistungen</a>
             <a href="/teacher/grade-templates/<%= classData.id %>">Prüfungen</a>
@@ -181,7 +181,8 @@
                   <tr>
                     <th>Datum</th>
                     <th>Symbol</th>
-                    <th>Notenwirkung</th>
+                    <th>Punkte</th>
+                    <th>Note</th>
                     <th>Gewichtung</th>
                     <th>Notiz</th>
                     <th>Aktion</th>
@@ -193,9 +194,10 @@
                       <td><%= entry.created_at ? new Date(entry.created_at).toLocaleDateString("de-DE") : "-" %></td>
                       <td><span class="badge-count"><%= entry.symbol_label %></span></td>
                       <td>
-                        <span class="grade-badge grade-<%= Math.round(entry.grade) %>"><%= entry.grade %></span>
+                        <%= entry.points_label || "-" %>
                       </td>
-                      <td><%= entry.weight_label %></td>
+                      <td><span class="grade-badge grade-<%= Math.round(entry.grade) %>"><%= entry.grade %></span></td>
+                      <td><%= entry.points_max %> Punkte</td>
                       <td><%= entry.note || "-" %></td>
                       <td>
                         <form class="inline" method="POST" action="/teacher/delete-participation/<%= classData.id %>/<%= student.id %>/<%= entry.id %>">
@@ -323,6 +325,7 @@
                               <% } else if (!grade.thread_closed_at) { %>
                                 <form class="teacher-form teacher-reply-form" method="POST" action="/teacher/students/<%= classData.id %>/messages/<%= message.id %>/reply">
                                   <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+                                  <input type="hidden" name="subject_id" value="<%= classData.subject_id %>">
                                   <label for="reply-grade-<%= grade.id %>-<%= message.id %>">Antwort</label>
                                   <textarea id="reply-grade-<%= grade.id %>-<%= message.id %>" name="reply" rows="3" maxlength="1000" required placeholder="Antwort an den Schüler..."></textarea>
                                   <div class="teacher-form-actions">

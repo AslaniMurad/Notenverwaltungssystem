@@ -1,4 +1,5 @@
 const assignmentModel = require("../models/assignmentModel");
+const { deleteClassSubjectDataIfUnassigned } = require("../utils/classSubjectData");
 const { ensureSubjectIdByName } = require("../utils/subjects");
 const { getDisplayName } = require("../utils/userDisplay");
 
@@ -340,6 +341,8 @@ async function createAssignment(req, res, next) {
       });
     }
 
+    await deleteClassSubjectDataIfUnassigned(classId, subjectId);
+
     const { created, duplicates } = await assignmentModel.createAssignments({
       classId,
       subjectId,
@@ -364,9 +367,22 @@ async function deleteAssignment(req, res, next) {
       });
     }
 
+    const assignment = await assignmentModel.getAssignmentById(assignmentId);
+    if (!assignment) {
+      return flashAndRedirect(req, res, "/admin/assignments", {
+        error: "Zuordnung nicht gefunden."
+      });
+    }
+
     await assignmentModel.deleteAssignment(assignmentId);
+    const resetSubjectData = await deleteClassSubjectDataIfUnassigned(
+      assignment.class_id,
+      assignment.subject_id
+    );
     return flashAndRedirect(req, res, "/admin/assignments", {
-      message: "Zuordnung entfernt."
+      message: resetSubjectData
+        ? "Letzte Zuordnung entfernt. Fachdaten wurden zurückgesetzt."
+        : "Zuordnung entfernt."
     });
   } catch (err) {
     console.error("DB error deleting assignment:", err);
@@ -413,9 +429,10 @@ async function deleteAssignmentGroup(req, res, next) {
       for (const row of matchingRows) {
         await assignmentModel.deleteAssignment(row.id);
       }
+      await deleteClassSubjectDataIfUnassigned(classId, subjectId);
 
       return flashAndRedirect(req, res, "/admin/assignments", {
-        message: `Fachgruppe entfernt. ${matchingRows.length} Lehrerzuordnung(en) gelöscht.`
+        message: `Fachgruppe entfernt. ${matchingRows.length} Lehrerzuordnung(en) und Fachdaten gelöscht.`
       });
     }
 

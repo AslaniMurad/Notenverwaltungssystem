@@ -3,6 +3,8 @@
   const selSubjectId = selectedSubjectId ? String(selectedSubjectId) : '';
   const selectedClass = classes.find((entry) => String(entry.id) === selClassId) || null;
   const selectedSubject = classSubjects.find((entry) => String(entry.subject_id) === selSubjectId) || null;
+  const selectedClassName = selectedClass ? String(selectedClass.name || '') : '';
+  const selectedSubjectName = selectedSubject ? String(selectedSubject.subject_name || '') : '';
   const newSubjectName = formData && formData.new_subject ? String(formData.new_subject) : '';
   const canAssign = Boolean(selectedClass && (createSubjectMode || selectedSubject));
   const existingModeHref = selClassId
@@ -65,12 +67,21 @@
             </div>
 
             <form class="admin-form assign-selection-form" id="assignment-selection-form" method="GET" action="/admin/assignments/new">
-            <select name="class" required>
-              <option value="">Klasse wählen</option>
+            <input type="hidden" name="class" value="<%= selClassId %>" data-assignment-class-id>
+            <input
+              type="text"
+              value="<%= selectedClassName %>"
+              list="assignment-class-options"
+              placeholder="Klasse suchen"
+              autocomplete="off"
+              required
+              data-assignment-class-autocomplete
+            >
+            <datalist id="assignment-class-options">
               <% (classes || []).forEach((entry) => { %>
-                <option value="<%= entry.id %>" <%= selClassId === String(entry.id) ? 'selected' : '' %>><%= entry.name %></option>
+                <option value="<%= entry.name %>" data-class-id="<%= entry.id %>"></option>
               <% }) %>
-            </select>
+            </datalist>
 
             <% if (createSubjectMode) { %>
               <input type="hidden" name="create_subject" value="1">
@@ -78,14 +89,21 @@
                 <input type="hidden" name="subject" value="<%= subjectPrefillId %>">
               <% } %>
             <% } else { %>
-              <select name="subject" <%= !selectedClass || !classSubjects.length ? 'disabled' : '' %>>
-                <option value="">Klassenfach wählen</option>
+              <input type="hidden" name="subject" value="<%= selSubjectId %>" data-assignment-subject-id>
+              <input
+                type="text"
+                value="<%= selectedSubjectName %>"
+                list="assignment-subject-options"
+                placeholder="<%= selectedClass ? 'Klassenfach suchen' : 'Zuerst Klasse waehlen' %>"
+                autocomplete="off"
+                <%= !selectedClass || !classSubjects.length ? 'disabled' : '' %>
+                data-assignment-subject-autocomplete
+              >
+              <datalist id="assignment-subject-options">
                 <% (classSubjects || []).forEach((entry) => { %>
-                  <option value="<%= entry.subject_id %>" <%= selSubjectId === String(entry.subject_id) ? 'selected' : '' %>>
-                    <%= entry.subject_name %> (<%= entry.teacher_count %> Lehrer)
-                  </option>
+                  <option value="<%= entry.subject_name %>" data-subject-id="<%= entry.subject_id %>" label="<%= entry.teacher_count %> Lehrer"></option>
                 <% }) %>
-              </select>
+              </datalist>
             <% } %>
 
             <noscript>
@@ -236,6 +254,51 @@
 
         var selectionForm = document.getElementById('assignment-selection-form');
         if (selectionForm) {
+          var submitSelectionForm = function () {
+            if (selectionForm.requestSubmit) {
+              selectionForm.requestSubmit();
+              return;
+            }
+            selectionForm.submit();
+          };
+
+          var setupAutocompleteSelection = function (inputSelector, hiddenSelector, optionIdAttribute) {
+            var input = selectionForm.querySelector(inputSelector);
+            var hiddenInput = selectionForm.querySelector(hiddenSelector);
+            var dataList = input && input.getAttribute('list')
+              ? document.getElementById(input.getAttribute('list'))
+              : null;
+            if (!input || !hiddenInput || !dataList) return;
+
+            var syncValue = function () {
+              if (input.disabled) return false;
+              var typedValue = String(input.value || '').trim().toLowerCase();
+              var matchingOption = Array.prototype.find.call(dataList.options, function (option) {
+                return String(option.value || '').trim().toLowerCase() === typedValue;
+              });
+              hiddenInput.value = matchingOption ? matchingOption.getAttribute(optionIdAttribute) || '' : '';
+              return Boolean(hiddenInput.value);
+            };
+
+            input.addEventListener('input', function () {
+              if (syncValue()) submitSelectionForm();
+            });
+            input.addEventListener('change', function () {
+              if (syncValue()) submitSelectionForm();
+            });
+          };
+
+          setupAutocompleteSelection(
+            '[data-assignment-class-autocomplete]',
+            '[data-assignment-class-id]',
+            'data-class-id'
+          );
+          setupAutocompleteSelection(
+            '[data-assignment-subject-autocomplete]',
+            '[data-assignment-subject-id]',
+            'data-subject-id'
+          );
+
           Array.prototype.forEach.call(selectionForm.querySelectorAll('select[name]'), function (select) {
             select.addEventListener('change', function () {
               if (select.disabled) return;

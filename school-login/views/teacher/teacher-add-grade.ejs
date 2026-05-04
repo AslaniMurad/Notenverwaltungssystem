@@ -13,6 +13,7 @@
       const allowsGrade = mode !== 'points_only';
       const requiresPoints = mode === 'points_only' || mode === 'points_and_grade';
       const allowsPoints = mode !== 'grade_only';
+      const isEitherOrMode = mode === 'points_or_grade';
       const thresholdsData = thresholds || {};
       const gradedTemplateSet = new Set((gradedTemplateIds || []).map(String));
       const absenceModeLabel = absenceMode === 'exclude'
@@ -29,9 +30,9 @@
             <a href="/teacher/classes">Fächer</a>
             <a href="/teacher/create-class">Fach erstellen</a>
             <a href="/teacher/settings">Einstellungen</a>
-            <div class="nav-section-title">Klasse: <%= classData.name %> / <%= classData.subject %></div>
+            <div class="nav-section-title teacher-class-context-title">Klasse: <%= classData.name %> / <%= classData.subject %></div>
             <a href="/teacher/students/<%= classData.id %>">Schüler</a>
-            <a class="<%= (typeof openMessageCount !== 'undefined' && openMessageCount > 0) ? 'is-alert' : '' %>" href="/teacher/test-questions/<%= classData.id %>">Fragen zu Tests<% if (typeof openMessageCount !== 'undefined' && openMessageCount > 0) { %><span class="nav-notification-badge"><%= openMessageCount %></span><% } %></a>
+            <a class="<%= (typeof openMessageCount !== 'undefined' && openMessageCount > 0) ? 'is-alert' : '' %>" href="/teacher/test-questions/<%= classData.id %>?subject_id=<%= classData.subject_id %>">Fragen zu Tests<% if (typeof openMessageCount !== 'undefined' && openMessageCount > 0) { %><span class="nav-notification-badge"><%= openMessageCount %></span><% } %></a>
             <a href="/teacher/grades/<%= classData.id %>">Noten</a>
             <a href="/teacher/special-assessments/<%= classData.id %>">Sonderleistungen</a>
             <a href="/teacher/grade-templates/<%= classData.id %>">Prüfungen</a>
@@ -83,6 +84,9 @@
 
               <div class="teacher-alert info">
                 Bewertungsmodus dieses Profils: <strong><%= scoringModeLabel || 'Punkte oder Noten' %></strong>
+                <% if (scoringModeDescription) { %>
+                  <span><%= scoringModeDescription %></span>
+                <% } %>
               </div>
 
               <label for="template_search">Prüfung *</label>
@@ -204,6 +208,11 @@
                   value="<%= formData.grade || '' %>"
                 >
                 <small class="form-hint">Notenskala: 1 (Sehr gut) bis 5 (Nicht genügend)</small>
+                <% if (mode === 'grade_only') { %>
+                  <small class="form-hint">Es wird nur die Note eingegeben. Interne Punkte werden geschätzt, wenn die Vorlage maximale Punkte hat.</small>
+                <% } else if (isEitherOrMode) { %>
+                  <small class="form-hint">Wenn du eine Note eingibst, bleibt das Punktefeld leer und die Punkte werden im Hintergrund berechnet.</small>
+                <% } %>
               <% } %>
 
               <% if (allowsPoints) { %>
@@ -219,8 +228,12 @@
                 >
                 <p id="templateMaxPointsInfo" class="teacher-muted">Maximale Punkte aus Vorlage: -</p>
                 <small class="form-hint">
-                  Wenn keine Note eingegeben ist, wird die Note aus Punkten berechnet
-                  (1 ab <%= thresholdsData.grade1_min_percent %>%, 2 ab <%= thresholdsData.grade2_min_percent %>%, 3 ab <%= thresholdsData.grade3_min_percent %>%, 4 ab <%= thresholdsData.grade4_min_percent %>%).
+                  <% if (mode === 'points_and_grade') { %>
+                    Punkte und Note werden gemeinsam gespeichert; die Note wird hier nicht automatisch ersetzt.
+                  <% } else { %>
+                    Wenn Punkte eingegeben werden, wird die Note aus Punkten berechnet
+                    (1 ab <%= thresholdsData.grade1_min_percent %>%, 2 ab <%= thresholdsData.grade2_min_percent %>%, 3 ab <%= thresholdsData.grade3_min_percent %>%, 4 ab <%= thresholdsData.grade4_min_percent %>%).
+                  <% } %>
                 </small>
               <% } %>
 
@@ -253,6 +266,7 @@
 
         const requiresGrade = <%= requiresGrade ? "true" : "false" %>;
         const requiresPoints = <%= requiresPoints ? "true" : "false" %>;
+        const eitherOrMode = <%= isEitherOrMode ? "true" : "false" %>;
         const searchInput = document.getElementById("template_search");
         const sortSelect = document.getElementById("template_sort");
         const body = document.getElementById("template_picker_body");
@@ -304,13 +318,15 @@
         function updateInputRequirements(maxPointsLabel) {
           const hasMaxPoints = Number(maxPointsLabel) > 0;
           const isAbsent = Boolean(absentField && absentField.checked);
+          const gradeHasValue = String(gradeField?.value || "").trim() !== "";
+          const pointsHasValue = String(pointsField?.value || "").trim() !== "";
 
           if (gradeField) {
-            gradeField.disabled = isAbsent;
+            gradeField.disabled = isAbsent || (eitherOrMode && pointsHasValue);
             gradeField.required = !isAbsent && requiresGrade;
           }
           if (pointsField) {
-            pointsField.disabled = isAbsent;
+            pointsField.disabled = isAbsent || !hasMaxPoints || (eitherOrMode && gradeHasValue);
             pointsField.required = !isAbsent && requiresPoints && hasMaxPoints;
             if (hasMaxPoints) {
               pointsField.max = String(maxPointsLabel);
@@ -318,6 +334,22 @@
               pointsField.removeAttribute("max");
             }
           }
+        }
+
+        function bindEitherOrInputs() {
+          if (!eitherOrMode || !gradeField || !pointsField) return;
+          gradeField.addEventListener("input", () => {
+            if (String(gradeField.value || "").trim()) {
+              pointsField.value = "";
+            }
+            updateSelectionState();
+          });
+          pointsField.addEventListener("input", () => {
+            if (String(pointsField.value || "").trim()) {
+              gradeField.value = "";
+            }
+            updateSelectionState();
+          });
         }
 
         function applyFilterAndSort() {
@@ -370,6 +402,7 @@
         });
 
         absentField?.addEventListener("change", updateSelectionState);
+        bindEitherOrInputs();
         searchInput.addEventListener("input", applyFilterAndSort);
         sortSelect.addEventListener("change", applyFilterAndSort);
 

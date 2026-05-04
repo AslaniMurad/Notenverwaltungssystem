@@ -91,6 +91,23 @@
   margin-top: 4px;
 }
 
+.teacher-sidebar .teacher-class-context-title {
+  width: fit-content;
+  max-width: 100%;
+  margin: 10px auto 4px;
+  padding: 8px 14px;
+  border-radius: 10px;
+  background: var(--primary);
+  color: #fff;
+  font-size: 15px;
+  line-height: 1.35;
+  letter-spacing: 0;
+  text-align: center;
+  text-transform: none;
+  font-weight: 800;
+  overflow-wrap: anywhere;
+}
+
 .teacher-actions-inline {
   display: flex;
   gap: 10px;
@@ -1268,6 +1285,32 @@
   align-items: center;
   gap: 8px;
   flex-wrap: wrap;
+}
+
+.settings-mode-info-list {
+  display: grid;
+  gap: 8px;
+  margin: 10px 0 16px;
+}
+
+.settings-mode-info-item {
+  border: 1px solid var(--teacher-border);
+  border-radius: 8px;
+  padding: 10px 12px;
+  background: var(--surface-2);
+  display: grid;
+  gap: 3px;
+}
+
+.settings-mode-info-item span {
+  color: var(--teacher-muted);
+  font-size: 13px;
+  line-height: 1.35;
+}
+
+.settings-mode-info-item.is-active {
+  border-color: var(--teacher-primary);
+  background: rgba(37, 99, 235, 0.08);
 }
 
 .settings-grid {

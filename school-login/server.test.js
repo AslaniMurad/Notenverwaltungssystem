@@ -399,6 +399,218 @@ test("admin can log in with seeded credentials", async () => {
   assert.match(dashboard.body, /Audit-Log/);
 });
 
+test("teacher class overview renders assigned subjects", async () => {
+  const loginResult = await loginTeacher();
+  assert.strictEqual(loginResult.redirect, "/teacher");
+
+  const classesPage = await fetchWithCookies("/teacher/classes", {}, loginResult.cookies);
+  assert.strictEqual(classesPage.response.status, 200);
+  assert.match(classesPage.body, /Aktive Fachzuordnungen/);
+  assert.doesNotMatch(classesPage.body, /classId is not defined/);
+});
+
+test("teacher settings allow safe edits on locked class schemas", async () => {
+  const loginResult = await loginTeacher();
+  assert.strictEqual(loginResult.redirect, "/teacher");
+
+  const teacherRow = await dbGet("SELECT id FROM users WHERE email = ?", ["teacher@example.com"]);
+  const classRow = await dbGet("SELECT id, subject_id FROM classes WHERE id = ?", [1]);
+  assert.ok(teacherRow?.id);
+  assert.ok(classRow?.subject_id);
+
+  const profileInsert = await dbRun(
+    `INSERT INTO teacher_grading_profiles
+     (teacher_id, class_id, subject_id, name, weight_mode, scoring_mode, absence_mode, grade1_min_percent, grade2_min_percent, grade3_min_percent, grade4_min_percent, ma_enabled, ma_weight, ma_points_plus, ma_points_plus_tilde, ma_points_neutral, ma_points_minus_tilde, ma_points_minus, is_active)
+     VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+    [
+      teacherRow.id,
+      classRow.id,
+      classRow.subject_id,
+      "Locked Safe Edit",
+      "points",
+      "points_only",
+      "include_zero",
+      88.5,
+      75,
+      62.5,
+      50,
+      0,
+      5,
+      5,
+      4,
+      3,
+      2,
+      0,
+      0
+    ]
+  );
+  const profileId = profileInsert.lastID;
+
+  try {
+    const settingsPage = await fetchWithCookies(
+      `/teacher/settings?class_id=${classRow.id}&subject_id=${classRow.subject_id}`,
+      {},
+      loginResult.cookies
+    );
+    assert.strictEqual(settingsPage.response.status, 200);
+    assert.match(settingsPage.body, /Änderungen speichern/);
+    assert.match(settingsPage.body, /ma_enabled" name="ma_enabled" value="1"[^>]*disabled/);
+
+    const csrfToken = extractCsrfToken(settingsPage.body);
+    const params = new URLSearchParams({
+      _csrf: csrfToken,
+      profile_id: String(profileId),
+      class_id: String(classRow.id),
+      subject_id: String(classRow.subject_id),
+      weight_mode: "percent",
+      scoring_mode: "grade_only",
+      profile_name: "Locked Safe Edit Updated",
+      absence_mode: "exclude",
+      grade1_min_percent: "90",
+      grade2_min_percent: "80",
+      grade3_min_percent: "65",
+      grade4_min_percent: "50",
+      ma_enabled: "1",
+      ma_weight: "9",
+      ma_points_plus: "9",
+      ma_points_plus_tilde: "7",
+      ma_points_neutral: "5",
+      ma_points_minus_tilde: "3",
+      ma_points_minus: "1",
+      weight_schularbeit: "42",
+      weight_test: "18",
+      weight_projekt: "20",
+      weight_hausaufgabe: "10",
+      weight_mitarbeit: "10",
+      weight_wiederholung: "0"
+    });
+
+    const saveResponse = await fetchWithCookies(
+      "/teacher/settings/save-profile",
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/x-www-form-urlencoded" },
+        body: params.toString(),
+        redirect: "manual"
+      },
+      settingsPage.cookies
+    );
+    assert.strictEqual(saveResponse.response.status, 302);
+
+    const updatedProfile = await dbGet(
+      `SELECT tgp.id, tgp.name, tgp.weight_mode, tgp.scoring_mode, tgp.absence_mode, tgp.ma_enabled, tgp.ma_weight, tgp.ma_points_plus
+       FROM teacher_grading_profiles tgp
+       WHERE tgp.class_id = ? AND tgp.subject_id = ?`,
+      [classRow.id, classRow.subject_id]
+    );
+    assert.strictEqual(updatedProfile.name, "Locked Safe Edit Updated");
+    assert.strictEqual(updatedProfile.absence_mode, "exclude");
+    assert.strictEqual(updatedProfile.weight_mode, "points");
+    assert.strictEqual(updatedProfile.scoring_mode, "points_only");
+    assert.strictEqual(Boolean(updatedProfile.ma_enabled), false);
+    assert.strictEqual(Number(updatedProfile.ma_weight), 5);
+    assert.strictEqual(Number(updatedProfile.ma_points_plus), 5);
+  } finally {
+    if (profileId) {
+      await dbRun("DELETE FROM teacher_grading_profiles WHERE id = ? AND teacher_id = ?", [
+        profileId,
+        teacherRow.id
+      ]);
+    }
+  }
+});
+
+test("teacher settings save selected scoring mode for new class schemas", async () => {
+  const loginResult = await loginTeacher();
+  assert.strictEqual(loginResult.redirect, "/teacher");
+
+  const teacherRow = await dbGet("SELECT id FROM users WHERE email = ?", ["teacher@example.com"]);
+  const classRow = await dbGet("SELECT id, subject_id FROM classes WHERE id = ?", [1]);
+  assert.ok(teacherRow?.id);
+  assert.ok(classRow?.subject_id);
+
+  const existingProfile = await dbGet(
+    `SELECT tgp.id
+     FROM teacher_grading_profiles tgp
+     WHERE tgp.class_id = ? AND tgp.subject_id = ?`,
+    [classRow.id, classRow.subject_id]
+  );
+  if (existingProfile?.id) {
+    await dbRun("DELETE FROM teacher_grading_profiles WHERE id = ? AND teacher_id = ?", [
+      existingProfile.id,
+      teacherRow.id
+    ]);
+  }
+
+  let profileId = null;
+  try {
+    const settingsPage = await fetchWithCookies(
+      `/teacher/settings?class_id=${classRow.id}&subject_id=${classRow.subject_id}&setup=1`,
+      {},
+      loginResult.cookies
+    );
+    assert.strictEqual(settingsPage.response.status, 200);
+    assert.match(settingsPage.body, /name="scoring_mode"/);
+    assert.match(settingsPage.body, /Nur Noten/);
+
+    const csrfToken = extractCsrfToken(settingsPage.body);
+    const params = new URLSearchParams({
+      _csrf: csrfToken,
+      class_id: String(classRow.id),
+      subject_id: String(classRow.subject_id),
+      weight_mode: "points",
+      scoring_mode: "grade_only",
+      profile_name: "Scoring Mode Auswahl",
+      absence_mode: "include_zero",
+      grade1_min_percent: "88.5",
+      grade2_min_percent: "75",
+      grade3_min_percent: "62.5",
+      grade4_min_percent: "50",
+      ma_weight: "5",
+      ma_points_plus: "5",
+      ma_points_plus_tilde: "4",
+      ma_points_neutral: "3",
+      ma_points_minus_tilde: "2",
+      ma_points_minus: "0",
+      weight_schularbeit: "40",
+      weight_test: "20",
+      weight_projekt: "20",
+      weight_hausaufgabe: "10",
+      weight_mitarbeit: "10",
+      weight_wiederholung: "0"
+    });
+
+    const saveResponse = await fetchWithCookies(
+      "/teacher/settings/save-profile",
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/x-www-form-urlencoded" },
+        body: params.toString(),
+        redirect: "manual"
+      },
+      settingsPage.cookies
+    );
+    assert.strictEqual(saveResponse.response.status, 302);
+
+    const savedProfile = await dbGet(
+      `SELECT tgp.id, tgp.scoring_mode
+       FROM teacher_grading_profiles tgp
+       WHERE tgp.class_id = ? AND tgp.subject_id = ?`,
+      [classRow.id, classRow.subject_id]
+    );
+    assert.ok(savedProfile?.id);
+    profileId = savedProfile.id;
+    assert.strictEqual(savedProfile.scoring_mode, "grade_only");
+  } finally {
+    if (profileId) {
+      await dbRun("DELETE FROM teacher_grading_profiles WHERE id = ? AND teacher_id = ?", [
+        profileId,
+        teacherRow.id
+      ]);
+    }
+  }
+});
+
 test("student can view grades and profile after login", async () => {
   const loginResult = await loginStudent();
   assert.strictEqual(loginResult.redirect, "/student");
@@ -574,6 +786,7 @@ test("teacher bulk grading saves entries for numeric student ids", async () => {
     [2, "Bulkprofil", "points", "points_or_grade", "include_zero", 88.5, 75, 62.5, 50, 0, 5, 1.5, 2.5, 3, 3.5, 4.5, 1]
   );
   const templateId = 1;
+  await dbRun("UPDATE grade_templates SET max_points = ? WHERE id = ?", [20, templateId]);
 
   const bulkPage = await fetchWithCookies(
     `/teacher/bulk-grade-template/1/${templateId}`,
