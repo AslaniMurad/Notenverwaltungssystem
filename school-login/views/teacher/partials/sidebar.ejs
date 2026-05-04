@@ -24,6 +24,8 @@
     typeof openMessageCount !== "undefined" && Number(openMessageCount) > 0
       ? Number(openMessageCount)
       : 0;
+  const sessionUser = typeof locals !== "undefined" ? locals.sessionUser : null;
+  const microsoftConnected = Boolean(sessionUser && sessionUser.microsoft_connected);
 %>
 <aside class="teacher-sidebar" aria-label="Lehrer Navigation">
   <div class="sidebar-brand">
@@ -32,6 +34,12 @@
       <div class="sidebar-meta"><%= email %> - Lehrer</div>
     </div>
     <span class="sidebar-badge">Eingeloggt</span>
+  </div>
+  <div class="sidebar-account-actions">
+    <a class="sidebar-connect-btn <%= microsoftConnected ? 'is-linked' : '' %>" href="/account/microsoft-link">
+      <span>Connect with Microsoft</span>
+      <small><%= microsoftConnected ? 'Microsoft ist verbunden' : 'NVS-Konto verknuepfen' %></small>
+    </a>
   </div>
 
   <div class="app-nav">

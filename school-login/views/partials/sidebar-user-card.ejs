@@ -8,6 +8,8 @@
   const resolvedSidebarTeacherKvClasses = typeof sidebarTeacherKvClasses !== "undefined"
     ? sidebarTeacherKvClasses
     : (typeof locals !== "undefined" ? locals.sidebarTeacherKvClasses : null);
+  const sessionUser = typeof locals !== "undefined" ? locals.sessionUser : null;
+  const microsoftConnected = Boolean(sessionUser && sessionUser.microsoft_connected);
   const sidebarUser = userDisplay.buildSidebarUser({
     ...(user || {}),
     activeSchoolYearName: resolvedActiveSchoolYear?.name || "",
@@ -28,4 +30,10 @@
       <span class="theme-toggle-icon" aria-hidden="true">&#127769;</span>
     </button>
   </div>
+</div>
+<div class="sidebar-account-actions">
+  <a class="sidebar-connect-btn <%= microsoftConnected ? 'is-linked' : '' %>" href="/account/microsoft-link">
+    <span>Connect with Microsoft</span>
+    <small><%= microsoftConnected ? 'Microsoft ist verbunden' : 'NVS-Konto verknuepfen' %></small>
+  </a>
 </div>
