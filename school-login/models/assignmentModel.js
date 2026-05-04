@@ -126,6 +126,14 @@ async function getSubjectById(subjectId) {
   return getAsync("SELECT id, name FROM subjects WHERE id = ?", [subjectId]);
 }
 
+async function getAssignmentById(assignmentId) {
+  if (!Number.isInteger(Number(assignmentId)) || Number(assignmentId) <= 0) return null;
+  return getAsync(
+    "SELECT id, class_id, subject_id, teacher_id FROM class_subject_teacher WHERE id = ?",
+    [assignmentId]
+  );
+}
+
 async function listValidTeacherIds(teacherIds) {
   if (!teacherIds.length) return [];
   return allAsync(
@@ -225,6 +233,7 @@ module.exports = {
   createAssignments,
   deleteAssignment,
   deleteSubject,
+  getAssignmentById,
   getClassById,
   getSubjectById,
   countTeacherSearchResults,

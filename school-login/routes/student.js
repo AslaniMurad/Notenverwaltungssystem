@@ -125,6 +125,43 @@ function isValidWeightValue(value) {
   return Number.isFinite(numeric) && numeric >= 0;
 }
 
+function resolveWeightMode(mode) {
+  return String(mode || "").trim().toLowerCase() === "percent" ? "percent" : "points";
+}
+
+function getWeightUnit(mode) {
+  return resolveWeightMode(mode) === "percent" ? "%" : "Punkte";
+}
+
+function formatNumber(value) {
+  const numeric = Number(value);
+  if (!Number.isFinite(numeric)) return "-";
+  return String(Number(numeric.toFixed(2)));
+}
+
+function formatWeightLabel(weight, mode, excludedFromAverage = false) {
+  if (excludedFromAverage) return "Ohne Gewichtung";
+  const formatted = formatNumber(weight);
+  return formatted === "-" ? "-" : `${formatted} ${getWeightUnit(mode)}`;
+}
+
+function mapPointsData(row) {
+  const achieved = Number(row?.points_achieved);
+  const max = Number(row?.points_max);
+  const hasPoints = Number.isFinite(achieved) && Number.isFinite(max) && max > 0;
+  return {
+    points_achieved: hasPoints ? achieved : null,
+    points_max: hasPoints ? max : null,
+    points_percent: hasPoints ? Number(((achieved / max) * 100).toFixed(2)) : null
+  };
+}
+
+function formatPointsLabel(source) {
+  const points = mapPointsData(source);
+  if (points.points_achieved == null || points.points_max == null) return "-";
+  return `${formatNumber(points.points_achieved)} / ${formatNumber(points.points_max)} Punkte`;
+}
+
 async function loadClassAbsenceMode(classId) {
   const row = await getAsync(
     `SELECT gp.absence_mode
@@ -141,7 +178,7 @@ async function loadClassAbsenceMode(classId) {
 
 async function loadStudentGrades(studentId) {
   return allAsync(
-    `SELECT g.id, g.grade, g.note, g.created_at, g.is_absent, g.excluded_from_average, gt.id as template_id, gt.name, gt.category, gt.weight, gt.date, gt.description, s.name as subject_name, gt.subject_id, c.subject as class_subject,
+    `SELECT g.id, g.grade, g.points_achieved, g.points_max, g.note, g.created_at, g.is_absent, g.excluded_from_average, gt.id as template_id, gt.name, gt.category, gt.weight, gt.weight_mode, gt.max_points as template_max_points, gt.date, gt.description, s.name as subject_name, gt.subject_id, c.subject as class_subject,
             COALESCE((
               SELECT STRING_AGG(teacher_rows.email, ', ')
               FROM (
@@ -159,7 +196,7 @@ async function loadStudentGrades(studentId) {
      LEFT JOIN subjects s ON s.id = gt.subject_id
      WHERE g.student_id = ?
      UNION ALL
-     SELECT sa.id, sa.grade, sa.description as note, sa.created_at, false as is_absent, sa.excluded_from_average, NULL as template_id, sa.name, sa.type as category, sa.weight, sa.created_at as date, sa.description, ss.name as subject_name, sa.subject_id, c.subject as class_subject,
+     SELECT sa.id, sa.grade, NULL as points_achieved, NULL as points_max, sa.description as note, sa.created_at, false as is_absent, sa.excluded_from_average, NULL as template_id, sa.name, sa.type as category, sa.weight, NULL as weight_mode, NULL as template_max_points, sa.created_at as date, sa.description, ss.name as subject_name, sa.subject_id, c.subject as class_subject,
             COALESCE((
               SELECT STRING_AGG(teacher_rows.email, ', ')
               FROM (
@@ -182,7 +219,7 @@ async function loadStudentGrades(studentId) {
 
 async function loadTemplates(classId) {
   return allAsync(
-    `SELECT gt.id, gt.name, gt.category, gt.weight, gt.date, gt.description, s.name AS subject_name, gt.subject_id
+    `SELECT gt.id, gt.name, gt.category, gt.weight, gt.weight_mode, gt.max_points, gt.date, gt.description, s.name AS subject_name, gt.subject_id
      FROM grade_templates gt
      JOIN classes c ON c.id = gt.class_id
      LEFT JOIN subjects s ON s.id = gt.subject_id
@@ -194,7 +231,7 @@ async function loadTemplates(classId) {
 
 async function loadArchivedTemplates(classId) {
   return allAsync(
-    `SELECT gt.id, gt.name, gt.category, gt.weight, gt.date, gt.description, s.name AS subject_name, gt.subject_id
+    `SELECT gt.id, gt.name, gt.category, gt.weight, gt.weight_mode, gt.max_points, gt.date, gt.description, s.name AS subject_name, gt.subject_id
      FROM grade_templates gt
      JOIN classes c ON c.id = gt.class_id
      LEFT JOIN subjects s ON s.id = gt.subject_id
@@ -248,6 +285,8 @@ function mapGradeRow(row, classInfo) {
   const title = row.name || row.category || "Leistung";
   const category = row.category || (isSpecial ? "Sonderleistung" : "");
   const excludedFromAverage = Boolean(row.excluded_from_average);
+  const weightMode = resolveWeightMode(row.weight_mode);
+  const points = mapPointsData(row);
   let comment = row.note || "";
   if (isSpecial) {
     const displayName = row.name || row.category || "Sonderleistung";
@@ -258,6 +297,9 @@ function mapGradeRow(row, classInfo) {
     id: row.id,
     value: row.grade == null ? null : Number(row.grade),
     weight: row.weight == null ? 1 : Number(row.weight),
+    weight_mode: weightMode,
+    weight_label: formatWeightLabel(row.weight == null ? 1 : Number(row.weight), weightMode, excludedFromAverage),
+    ...points,
     is_absent: Boolean(row.is_absent),
     title,
     category,
@@ -266,17 +308,26 @@ function mapGradeRow(row, classInfo) {
     teacher: row.teacher_email || classInfo?.teacher_email || null,
     comment,
     graded_at: gradedAt,
-    excluded_from_average: excludedFromAverage,
-    weight_label: excludedFromAverage ? "Ohne Gewichtung" : null
+    excluded_from_average: excludedFromAverage
   };
 }
 
 function mapTaskRow(template, gradeRow, classInfo) {
+  const weightMode = resolveWeightMode(template.weight_mode);
+  const points = gradeRow ? mapPointsData(gradeRow) : {
+    points_achieved: null,
+    points_max: null,
+    points_percent: null
+  };
   return {
     id: template.id,
     title: template.name,
     category: template.category,
     weight: Number(template.weight || 0),
+    weight_mode: weightMode,
+    weight_label: formatWeightLabel(Number(template.weight || 0), weightMode, Boolean(gradeRow?.excluded_from_average)),
+    max_points: template.max_points == null ? null : Number(template.max_points),
+    ...points,
     due_at: template.date || null,
     description: template.description || "",
     subject: resolveSubjectLabel(template, classInfo),
@@ -292,6 +343,9 @@ function mapReturnRow(row, classInfo, messagesByGrade = new Map()) {
   const hasFile = Boolean(row.attachment_path);
   const hasLink = Boolean(row.external_link);
   const canMessage = Boolean(row.template_id && !row.is_special);
+  const excludedFromAverage = Boolean(row.excluded_from_average);
+  const weightMode = resolveWeightMode(row.weight_mode);
+  const points = mapPointsData(row);
   const messages = canMessage ? messagesByGrade.get(String(row.id)) || [] : [];
   const threadClosedAt = messages.reduce((latest, message) => {
     const hiddenAt = message.student_hidden_at || null;
@@ -305,6 +359,9 @@ function mapReturnRow(row, classInfo, messagesByGrade = new Map()) {
     title: row.name,
     category: row.category,
     weight: Number(row.weight || 0),
+    weight_mode: weightMode,
+    weight_label: formatWeightLabel(Number(row.weight || 0), weightMode, excludedFromAverage),
+    ...points,
     grade: Number(row.grade),
     graded_at: row.created_at || row.date || null,
     note: row.note || "",
@@ -1025,7 +1082,7 @@ router.get("/grades.csv", async (req, res, next) => {
     const gradeRows = await loadStudentGrades(student.id);
     const grades = gradeRows.map((row) => mapGradeRow(row, classInfo));
 
-    const header = ["Fach", "Datum", "Note", "Gewichtung", "Lehrkraft", "Kommentar"];
+    const header = ["Fach", "Datum", "Note", "Punkte", "Gewichtung", "Lehrkraft", "Kommentar"];
     const lines = [header.map(escapeCsv).join(",")];
 
     grades.forEach((grade) => {
@@ -1034,7 +1091,8 @@ router.get("/grades.csv", async (req, res, next) => {
         grade.subject,
         dateLabel,
         Number(grade.value).toFixed(2),
-        grade.weight,
+        formatPointsLabel(grade),
+        grade.weight_label || formatWeightLabel(grade.weight, grade.weight_mode, grade.excluded_from_average),
         grade.teacher || "",
         grade.comment
       ];
@@ -1066,7 +1124,7 @@ router.get("/grades.pdf", async (req, res, next) => {
       `Schüler: ${student.name}`,
       `Klasse: ${student.class_name || classInfo?.name || ""}`,
       "",
-      "Fach | Datum | Note | Gewicht | Kommentar"
+      "Fach | Datum | Note | Punkte | Gewicht | Kommentar"
     ];
 
     grades.forEach((grade) => {
@@ -1075,7 +1133,8 @@ router.get("/grades.pdf", async (req, res, next) => {
         grade.subject,
         dateLabel,
         Number(grade.value).toFixed(2),
-        String(grade.weight || ""),
+        formatPointsLabel(grade),
+        grade.weight_label || formatWeightLabel(grade.weight, grade.weight_mode, grade.excluded_from_average),
         grade.comment || ""
       ].join(" | ");
       lines.push(row);

@@ -2,6 +2,8 @@
   const resolvedMode = mode === 'bulk' ? 'bulk' : 'single';
   const singleValues = singleForm || {};
   const bulkValues = bulkForm || {};
+  const classOptions = Array.isArray(bulkClassOptions) ? bulkClassOptions : [];
+  const resolvedBulkClassId = bulkValues.bulkClassId ? String(bulkValues.bulkClassId) : '';
   const hasBulkResult = Boolean(bulkResult);
   const resolvedBulkDelimiter = ['paragraph', 'comma', 'semicolon', 'tab'].includes(bulkValues.bulkDelimiter) ? bulkValues.bulkDelimiter : 'paragraph';
   const bulkDelimiterExamples = {
@@ -154,6 +156,20 @@
                       <input name="bulkPassword" type="password" placeholder="Ein Passwort für alle">
                     </label>
                   </div>
+
+                  <label class="admin-field">
+                    <span>Optional direkt Klasse zuordnen</span>
+                    <select name="bulkClassId">
+                      <option value="">Keine Klasse zuordnen</option>
+                      <% if (!classOptions.length) { %>
+                        <option value="" disabled>Keine aktive Klasse verfügbar</option>
+                      <% } %>
+                      <% classOptions.forEach(function(classOption){ %>
+                        <option value="<%= classOption.id %>" <%= resolvedBulkClassId === String(classOption.id) ? 'selected' : '' %>><%= classOption.name %></option>
+                      <% }) %>
+                    </select>
+                    <small class="admin-field-hint">Wird nur bei Rolle Schüler angewendet.</small>
+                  </label>
 
                   <label class="admin-inline-option admin-inline-option-simple">
                     <input type="checkbox" name="bulkUseInitial" <%= bulkValues.bulkUseInitial ? 'checked' : '' %>>

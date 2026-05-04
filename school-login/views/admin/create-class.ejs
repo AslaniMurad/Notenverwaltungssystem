@@ -25,13 +25,23 @@
             <input type="hidden" name="_csrf" value="<%= csrfToken %>">
             <label for="name">Klassenname</label>
             <input id="name" type="text" name="name" placeholder="z.B. 3AHWII" required>
-            <label for="head_teacher_id">Klassenvorstand</label>
-            <select id="head_teacher_id" name="head_teacher_id">
-              <option value="">Kein Klassenvorstand</option>
+            <label for="head_teacher_email">Klassenvorstand</label>
+            <input
+              id="head_teacher_email"
+              type="email"
+              name="head_teacher_email"
+              list="head_teacher_options"
+              placeholder="E-Mail suchen"
+              autocomplete="off"
+              data-teacher-email-autocomplete
+            >
+            <input type="hidden" name="head_teacher_id" data-teacher-id-input>
+            <datalist id="head_teacher_options">
               <% (teachers || []).forEach((teacher) => { %>
-                <option value="<%= teacher.id %>"><%= teacher.email %></option>
+                <option value="<%= teacher.email %>" data-teacher-id="<%= teacher.id %>"></option>
               <% }) %>
-            </select>
+            </datalist>
+            <p class="admin-muted">Optional: Tippe einen Teil der Lehrer-E-Mail und waehle den passenden Vorschlag.</p>
             <p class="admin-muted">Diese Klasse kann auch ohne Fachzuordnung gespeichert werden.</p>
             <button class="btn btn-primary" type="submit">Klasse erstellen</button>
           </form>

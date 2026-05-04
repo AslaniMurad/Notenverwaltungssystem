@@ -31,8 +31,12 @@
       teacher: grade.teacher || null,
       comment: grade.comment || "",
       value: grade.value == null ? null : Number(grade.value),
-      weight: Number(grade.weight || 1),
+      weight: grade.weight == null ? 1 : Number(grade.weight),
+      weight_mode: grade.weight_mode || "points",
       weight_label: grade.weight_label || "",
+      points_achieved: grade.points_achieved == null ? null : Number(grade.points_achieved),
+      points_max: grade.points_max == null ? null : Number(grade.points_max),
+      points_percent: grade.points_percent == null ? null : Number(grade.points_percent),
       is_absent: Boolean(grade.is_absent),
       excluded_from_average: Boolean(grade.excluded_from_average)
     };
@@ -47,6 +51,11 @@
       description: task.description || "",
       note: task.note || "",
       weight: Number(task.weight || 0),
+      weight_mode: task.weight_mode || "points",
+      weight_label: task.weight_label || "",
+      points_achieved: task.points_achieved == null ? null : Number(task.points_achieved),
+      points_max: task.points_max == null ? null : Number(task.points_max),
+      points_percent: task.points_percent == null ? null : Number(task.points_percent),
       grade: task.grade == null ? null : Number(task.grade),
       graded: Boolean(task.graded)
     };
@@ -61,6 +70,11 @@
       note: entry.note || "",
       thread_closed_at: entry.thread_closed_at || null,
       weight: Number(entry.weight || 0),
+      weight_mode: entry.weight_mode || "points",
+      weight_label: entry.weight_label || "",
+      points_achieved: entry.points_achieved == null ? null : Number(entry.points_achieved),
+      points_max: entry.points_max == null ? null : Number(entry.points_max),
+      points_percent: entry.points_percent == null ? null : Number(entry.points_percent),
       grade: entry.grade == null ? null : Number(entry.grade),
       attachment_download_url: entry.attachment_download_url || null,
       attachment_name: entry.attachment_name || null,
@@ -240,7 +254,7 @@
       if (grade?.excluded_from_average) return;
       if (grade?.is_absent) return;
       const value = Number(grade?.value);
-      const weight = Number(grade?.weight || 1);
+      const weight = grade?.weight == null ? 1 : Number(grade.weight);
       if (!Number.isFinite(value) || !Number.isFinite(weight) || weight < 0) return;
 
       weightedSum += value * weight;
@@ -533,8 +547,32 @@
     return Number.isFinite(value) ? Number(value).toFixed(2) : "-";
   }
 
-  function formatWeight(weight) {
-    return Number.isFinite(weight) && weight ? `${weight}%` : "-";
+  function formatNumber(value) {
+    const numeric = Number(value);
+    if (!Number.isFinite(numeric)) return "-";
+    return String(Number(numeric.toFixed(2)));
+  }
+
+  function resolveWeightMode(mode) {
+    return String(mode || "").trim().toLowerCase() === "percent" ? "percent" : "points";
+  }
+
+  function formatWeight(weight, mode = "points") {
+    const numeric = Number(weight);
+    if (!Number.isFinite(numeric)) return "-";
+    const unit = resolveWeightMode(mode) === "percent" ? "%" : "Punkte";
+    return `${formatNumber(numeric)} ${unit}`;
+  }
+
+  function getWeightText(entry) {
+    return entry.weight_label || formatWeight(entry.weight, entry.weight_mode);
+  }
+
+  function formatPoints(entry) {
+    const achieved = Number(entry?.points_achieved);
+    const max = Number(entry?.points_max);
+    if (!Number.isFinite(achieved) || !Number.isFinite(max) || max <= 0) return "-";
+    return `${formatNumber(achieved)} / ${formatNumber(max)} Punkte`;
   }
 
   function buildSubjectBadge(subject) {
@@ -613,7 +651,8 @@
         const gradeText = formatGradeValue(grade.value);
         const dateText = formatDate(grade.graded_at);
         const teacherText = grade.teacher || "Lehrkraft unbekannt";
-        const weightText = grade.weight_label || formatWeight(grade.weight);
+        const weightText = getWeightText(grade);
+        const pointsText = formatPoints(grade);
         const noteHtml = grade.comment
           ? `<div class="nav-note">${escapeHtml(grade.comment)}</div>`
           : "";
@@ -625,6 +664,7 @@
               ${buildMetaLine([
                 `Lehrkraft: ${teacherText}`,
                 `Datum: ${dateText}`,
+                `Punkte: ${pointsText}`,
                 `Gewichtung: ${weightText}`
               ])}
               ${noteHtml}
@@ -730,7 +770,9 @@
                   ${buildRowHead(grade.title, grade.subject, grade.category)}
                   ${buildMetaLine([
                     `Lehrkraft: ${grade.teacher || "Lehrkraft unbekannt"}`,
-                    `Datum: ${formatDate(grade.graded_at)}`
+                    `Datum: ${formatDate(grade.graded_at)}`,
+                    `Punkte: ${formatPoints(grade)}`,
+                    `Gewichtung: ${getWeightText(grade)}`
                   ])}
                 </div>
                 <div class="overview-row-side">
@@ -765,6 +807,8 @@
                   ${buildRowHead(entry.title, entry.subject, entry.category)}
                   ${buildMetaLine([
                     `Rückgabe: ${formatDate(entry.graded_at)}`,
+                    `Punkte: ${formatPoints(entry)}`,
+                    `Gewichtung: ${getWeightText(entry)}`,
                     `${stats.totalCount} Nachricht${stats.totalCount === 1 ? "" : "en"}`
                   ])}
                 </div>
@@ -919,7 +963,8 @@
             ${buildRowHead(task.title, task.subject, task.category)}
             ${buildMetaLine([
               `Fällig: ${formatDate(task.due_at)}`,
-              `Gewichtung: ${formatWeight(task.weight)}`,
+              task.graded ? `Punkte: ${formatPoints(task)}` : "",
+              `Gewichtung: ${getWeightText(task)}`,
               task.graded_at ? `Benotet: ${formatDate(task.graded_at)}` : ""
             ])}
             ${task.description ? `<div class="nav-note">${escapeHtml(task.description)}</div>` : ""}
@@ -1012,7 +1057,8 @@
               ${buildRowHead(task.title, task.subject, task.category)}
               ${buildMetaLine([
                 `Prüfungsdatum: ${formatDate(task.due_at)}`,
-                `Gewichtung: ${formatWeight(task.weight)}`
+                task.graded ? `Punkte: ${formatPoints(task)}` : "",
+                `Gewichtung: ${getWeightText(task)}`
               ])}
               ${task.description ? `<div class="nav-note">${escapeHtml(task.description)}</div>` : ""}
               ${task.note ? `<div class="nav-note">Kommentar: ${escapeHtml(task.note)}</div>` : ""}
@@ -1264,6 +1310,17 @@
       });
 
       body.appendChild(details);
+
+      body.querySelectorAll(`[data-return-message-toggle="${entryKey}"]`).forEach((button) => {
+        button.addEventListener("click", () => {
+          details.open = true;
+          state.openReturnDetails.add(entryKey);
+          const textarea = details.querySelector("textarea[name='message']");
+          const focusTarget = textarea || summary;
+          focusTarget?.focus({ preventScroll: true });
+          details.scrollIntoView({ behavior: "smooth", block: "nearest" });
+        });
+      });
     });
   }
 
@@ -1311,7 +1368,7 @@
             ? `<div class="return-actions"><a class="btn small secondary" href="${downloadUrl}">Datei herunterladen</a><small>${attachmentName}</small></div>`
             : "";
         const requestActionHtml = entry.can_message
-          ? `<div class="return-actions"><a class="btn small" href="/student/requests?gradeId=${encodeURIComponent(String(entry.id))}">${stats.closedAt ? "Neue Anfrage starten" : stats.totalCount > 0 ? "Anfragen ansehen" : "Anfrage erstellen"}</a></div>`
+          ? `<div class="return-actions"><button class="btn small" type="button" data-return-message-toggle="${escapeHtml(String(entry.id))}">${stats.closedAt ? "Neue Anfrage starten" : stats.totalCount > 0 ? "Anfragen ansehen" : "Anfrage erstellen"}</button></div>`
           : "";
 
         return `
@@ -1320,7 +1377,8 @@
               ${buildRowHead(entry.title, entry.subject, entry.category)}
               ${buildMetaLine([
                 `Rückgabe: ${formatDate(entry.graded_at, true)}`,
-                `Gewichtung: ${formatWeight(entry.weight)}`
+                `Punkte: ${formatPoints(entry)}`,
+                `Gewichtung: ${getWeightText(entry)}`
               ])}
               <div class="return-insights">
                 <span class="return-status-pill ${status.className}">${status.label}</span>
@@ -1426,7 +1484,8 @@
                   ${buildRowHead(entry.title, entry.subject, entry.category)}
                   ${buildMetaLine([
                     `Rückgabe: ${formatDate(entry.graded_at, true)}`,
-                    `Gewichtung: ${formatWeight(entry.weight)}`
+                    `Punkte: ${formatPoints(entry)}`,
+                    `Gewichtung: ${getWeightText(entry)}`
                   ])}
                 </div>
                 <div class="return-grade">
