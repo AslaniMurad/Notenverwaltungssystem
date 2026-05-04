@@ -171,6 +171,44 @@
   text-overflow: ellipsis;
 }
 
+.sidebar-account-actions {
+  margin: -2px 0 14px;
+}
+
+.sidebar-connect-btn {
+  display: grid;
+  gap: 4px;
+  padding: 12px 14px;
+  border: 1px solid var(--shell-border);
+  border-radius: 16px;
+  background: linear-gradient(135deg, rgba(37, 99, 235, 0.14), rgba(59, 130, 246, 0.04));
+  text-decoration: none;
+  color: var(--shell-text);
+  transition: transform 0.18s ease, border-color 0.18s ease, box-shadow 0.18s ease;
+}
+
+.sidebar-connect-btn:hover {
+  transform: translateY(-1px);
+  border-color: var(--shell-accent);
+  box-shadow: 0 14px 28px rgba(0, 61, 165, 0.12);
+}
+
+.sidebar-connect-btn span {
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.sidebar-connect-btn small {
+  color: var(--shell-muted);
+  font-size: 11px;
+  line-height: 1.4;
+}
+
+.sidebar-connect-btn.is-linked {
+  background: linear-gradient(135deg, rgba(16, 185, 129, 0.14), rgba(16, 185, 129, 0.04));
+  border-color: rgba(16, 185, 129, 0.25);
+}
+
 .app-nav {
   display: grid;
   gap: 10px;

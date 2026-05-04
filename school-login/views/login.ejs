@@ -3,6 +3,7 @@
   const _errorMessage = typeof errorMessage !== 'undefined' ? errorMessage : null;
   const _csrfToken = typeof csrfToken !== 'undefined' ? csrfToken : '';
   const _email = typeof email !== 'undefined' ? email : '';
+  const _microsoftAuthEnabled = Boolean(microsoftAuthEnabled);
 
   const page = {
     title: 'Login | Notenverwaltungssystem',
@@ -24,7 +25,9 @@
         <hr class="login-separator">
 
         <h1 class="login-welcome-title">Willkommen</h1>
-        <p class="login-subtitle">Melde dich mit deinen Schulzugangsdaten an</p>
+        <p class="login-subtitle">
+          Melde dich mit deinen Schulzugangsdaten an<% if (_microsoftAuthEnabled) { %> oder nutze dein Microsoft-Schulkonto<% } %>
+        </p>
         <p class="login-notice">
           Hinweis (freiwillig, in Anlehnung an &sect; 25 MedienG):
           Diese Website ist ein zeitlich befristetes Schulprojekt zu Demonstrationszwecken
@@ -59,6 +62,21 @@
 
           <button class="btn-login-submit" type="submit">Login</button>
         </form>
+
+        <div class="login-divider" aria-hidden="true">
+          <span>oder</span>
+        </div>
+        <% if (_microsoftAuthEnabled) { %>
+          <a class="btn-login-microsoft" href="/auth/microsoft">Mit Microsoft anmelden</a>
+          <p class="login-provider-hint">
+            Der Microsoft-Login verwendet dein vorher verknuepftes NVS-Konto und uebernimmt dieselbe Rolle wie beim normalen Login.
+          </p>
+        <% } else { %>
+          <button class="btn-login-microsoft is-disabled" type="button" disabled>Mit Microsoft anmelden</button>
+          <p class="login-provider-hint">
+            Microsoft-Anmeldung ist vorbereitet, aber in der `.env` noch nicht konfiguriert.
+          </p>
+        <% } %>
 
         <div class="login-foot">
           <div class="login-foot-item">

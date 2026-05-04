@@ -49,6 +49,10 @@
               <p class="admin-muted">Status</p>
               <strong><%= user.status %></strong>
             </div>
+            <div>
+              <p class="admin-muted">Microsoft</p>
+              <strong><%= user.microsoft_email || 'Nicht verknuepft' %></strong>
+            </div>
             <% if (user.created_at) { %>
               <div>
                 <p class="admin-muted">Erstellt</p>

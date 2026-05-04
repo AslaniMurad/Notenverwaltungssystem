@@ -51,11 +51,11 @@
           </div>
           <table class="admin-table">
             <thead>
-              <tr><th>ID</th><th>E-Mail</th><th>Rolle</th><th>Status</th><th>Initial?</th><th>Erstellt</th><th>Aktionen</th></tr>
+              <tr><th>ID</th><th>E-Mail</th><th>Rolle</th><th>Status</th><th>Microsoft</th><th>Initial?</th><th>Erstellt</th><th>Aktionen</th></tr>
             </thead>
             <tbody>
               <% if (!users || users.length === 0) { %>
-                <tr><td colspan="7" class="admin-muted">Keine Nutzer gefunden.</td></tr>
+                <tr><td colspan="8" class="admin-muted">Keine Nutzer gefunden.</td></tr>
               <% } %>
               <% users.forEach(function(u){ %>
                 <tr>
@@ -63,6 +63,7 @@
                   <td><a class="admin-link" href="/admin/users/<%= u.id %>"><%= u.email %></a></td>
                   <td><%= u.role %></td>
                   <td><%= u.status %></td>
+                  <td><%= u.microsoft_email ? 'Verbunden' : 'Offen' %></td>
                   <td><%= u.must_change_password ? 'Ja' : 'Nein' %></td>
                   <td><%= u.created_at || '-' %></td>
                   <td class="admin-actions">
