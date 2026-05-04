@@ -10,6 +10,7 @@ const schoolYearModel = require("../models/schoolYearModel");
 const { listClasses: listAssignableClasses } = require("../models/assignmentModel");
 const { requireAuth, requireRole } = require("../middleware/auth");
 const { createAuditLogMiddleware } = require("../middleware/audit");
+const { deleteClassSubjectDataIfUnassigned } = require("../utils/classSubjectData");
 const { deriveNameFromEmail } = require("../utils/studentName");
 const { ensureSubjectIdByName } = require("../utils/subjects");
 
@@ -2154,6 +2155,8 @@ router.post("/create-class", async (req, res, next) => {
       });
     }
 
+    await deleteClassSubjectDataIfUnassigned(selectedClassId, subjectId);
+
     await runAsync(
       "INSERT INTO class_subject_teacher (class_id, subject_id, teacher_id, school_year_id) VALUES (?,?,?,?)",
       [selectedClassId, subjectId, req.session.user.id, activeSchoolYear.id]
@@ -2219,6 +2222,7 @@ router.post("/delete-class/:id", async (req, res, next) => {
     }
 
     await runAsync("DELETE FROM class_subject_teacher WHERE id = ?", [assignment.id]);
+    await deleteClassSubjectDataIfUnassigned(classId, subjectId);
     return res.redirect("/teacher/classes");
   } catch (err) {
     next(err);

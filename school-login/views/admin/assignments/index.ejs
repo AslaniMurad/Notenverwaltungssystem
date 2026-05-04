@@ -115,7 +115,7 @@
                             class="assign-row-delete-form"
                             data-confirm-title="<%= deleteTitle %>"
                             data-confirm-message="<%= deleteMessage %>"
-                            data-confirm-note="<%= deleteNote %>"
+                            data-confirm-note="<%= assignmentGroup.class_id ? 'Alle Lehrerzuordnungen und Fachdaten dieser Fachgruppe werden entfernt. Gelöschte Daten sind möglicherweise nicht wiederherstellbar.' : deleteNote %>"
                             data-confirm-action="Löschen"
                             data-confirm-variant="danger"
                           >
