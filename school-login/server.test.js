@@ -12,6 +12,10 @@ process.env.SEED_DEMO = "true";
 process.env.DEMO_TEACHER_PASS = "teacherDemo123!";
 process.env.DEMO_STUDENT_PASS = "studentDemo123!";
 process.env.USE_FAKE_DB = "true";
+process.env.SSO_ENABLED = "true";
+process.env.SSO_HEADER = "x-remote-user";
+process.env.SSO_EMAIL_DOMAIN = "example.com";
+process.env.SSO_REALM = "HTLWYDEV.AT";
 
 const app = require("./server");
 const { db } = require("./db");
@@ -247,6 +251,21 @@ test("admin can log in with seeded credentials", async () => {
   assert.match(dashboard.body, /Platzhalter fuer spaeter/);
   assert.match(dashboard.body, /Nutzer anlegen/);
   assert.match(dashboard.body, /Audit-Log/);
+});
+
+test("Kerberos reverse proxy header can create an app session", async () => {
+  const teacher = await dbGet("SELECT id FROM users WHERE email = ?", ["teacher@example.com"]);
+  assert.ok(teacher, "seeded teacher missing");
+  await dbRun("UPDATE users SET must_change_password = ? WHERE id = ?", [0, teacher.id]);
+
+  const ssoPage = await fetchWithCookies("/teacher/settings", {
+    headers: { "x-remote-user": "HTLWYDEV\\teacher" }
+  });
+  assert.strictEqual(ssoPage.response.status, 200);
+  assert.match(ssoPage.body, /teacher@example\.com/);
+
+  const sessionPage = await fetchWithCookies("/teacher/classes", {}, ssoPage.cookies);
+  assert.strictEqual(sessionPage.response.status, 200);
 });
 
 test("teacher class overview renders assigned subjects", async () => {
