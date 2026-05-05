@@ -295,6 +295,14 @@ SSO_REALM=HTLWYDEV.AT
 SSO_EMAIL_DOMAIN=htlwydev.at
 ```
 
+Fuer Microsoft Teams Einbettung zusaetzlich setzen:
+
+```env
+TEAMS_EMBED_ENABLED=true
+# Optional, nur wenn weitere erlaubte Parent-Origin(s) gebraucht werden.
+# FRAME_ANCESTORS=self
+```
+
 Test:
 
 ```bash
@@ -305,6 +313,18 @@ In einem zweiten Terminal:
 
 ```bash
 curl -I http://127.0.0.1:3000/login
+```
+
+Nach dem Deployment muss der CSP-Header Teams erlauben:
+
+```bash
+curl -I https://nvs.htlwydev.at/login | grep -i content-security-policy
+```
+
+Erwartet ist ein Header mit Teams und `cloud.microsoft`, z. B.:
+
+```text
+Content-Security-Policy: frame-ancestors 'self' https://teams.microsoft.com https://*.teams.microsoft.com https://teams.cloud.microsoft https://*.cloud.microsoft
 ```
 
 ## WEB01: systemd Service

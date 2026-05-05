@@ -106,11 +106,10 @@ const defaultTeamsFrameAncestors = [
 const configuredFrameAncestors = parseDelimitedList(process.env.FRAME_ANCESTORS)
   .map(normalizeFrameAncestor)
   .filter(Boolean);
-const allowedFrameAncestors = configuredFrameAncestors.length
-  ? configuredFrameAncestors
-  : teamsEmbedEnabled
-    ? defaultTeamsFrameAncestors
-    : [];
+const allowedFrameAncestors = [
+  ...(teamsEmbedEnabled ? defaultTeamsFrameAncestors : []),
+  ...configuredFrameAncestors
+].filter((entry, index, list) => list.indexOf(entry) === index);
 const sessionCookieSameSite =
   normalizeSameSite(process.env.SESSION_COOKIE_SAMESITE) || (teamsEmbedEnabled ? "none" : "lax");
 const secureCookieOverride = parseOptionalBoolean(process.env.SESSION_COOKIE_SECURE);
