@@ -33,7 +33,10 @@
 </div>
 <div class="sidebar-account-actions">
   <a class="sidebar-connect-btn <%= microsoftConnected ? 'is-linked' : '' %>" href="/account/microsoft-link">
-    <span>Connect with Microsoft</span>
-    <small><%= microsoftConnected ? 'Microsoft ist verbunden' : 'NVS-Konto verknuepfen' %></small>
+    <span class="sidebar-connect-copy">
+      <span class="sidebar-connect-label">Connect with Microsoft</span>
+      <small><%= microsoftConnected ? 'Microsoft ist verbunden' : 'NVS-Konto verknüpfen' %></small>
+    </span>
+    <img class="sidebar-connect-icon" src="/images/microsoft-icon.svg" alt="" aria-hidden="true">
   </a>
 </div>

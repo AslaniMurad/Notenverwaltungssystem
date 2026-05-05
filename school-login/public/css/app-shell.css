@@ -177,7 +177,9 @@
 
 .sidebar-connect-btn {
   display: grid;
-  gap: 4px;
+  grid-template-columns: minmax(0, 1fr) 40px;
+  align-items: center;
+  gap: 12px;
   padding: 12px 14px;
   border: 1px solid var(--shell-border);
   border-radius: 16px;
@@ -187,13 +189,27 @@
   transition: transform 0.18s ease, border-color 0.18s ease, box-shadow 0.18s ease;
 }
 
+.sidebar-connect-copy {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+
+.sidebar-connect-icon {
+  display: block;
+  width: 40px;
+  height: 40px;
+  object-fit: contain;
+  flex-shrink: 0;
+}
+
 .sidebar-connect-btn:hover {
   transform: translateY(-1px);
   border-color: var(--shell-accent);
   box-shadow: 0 14px 28px rgba(0, 61, 165, 0.12);
 }
 
-.sidebar-connect-btn span {
+.sidebar-connect-label {
   font-size: 13px;
   font-weight: 800;
 }

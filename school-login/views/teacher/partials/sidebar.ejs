@@ -37,21 +37,24 @@
   </div>
   <div class="sidebar-account-actions">
     <a class="sidebar-connect-btn <%= microsoftConnected ? 'is-linked' : '' %>" href="/account/microsoft-link">
-      <span>Connect with Microsoft</span>
-      <small><%= microsoftConnected ? 'Microsoft ist verbunden' : 'NVS-Konto verknuepfen' %></small>
+      <span class="sidebar-connect-copy">
+        <span class="sidebar-connect-label">Connect with Microsoft</span>
+        <small><%= microsoftConnected ? 'Microsoft ist verbunden' : 'NVS-Konto verknüpfen' %></small>
+      </span>
+      <img class="sidebar-connect-icon" src="/images/microsoft-icon.svg" alt="" aria-hidden="true">
     </a>
   </div>
 
   <div class="app-nav">
     <div class="nav-section">
-      <div class="nav-section-title">Menue</div>
+      <div class="nav-section-title">Menü</div>
       <a class="<%= isActiveGeneralLink('classes') %>" href="/teacher/classes">Meine Klassen</a>
       <a class="<%= isActiveGeneralLink('create-class') %>" href="/teacher/create-class">Klasse erstellen</a>
       <a class="<%= isActiveGeneralLink('settings') %>" href="/teacher/settings">Einstellungen</a>
     </div>
 
     <div class="nav-section teacher-class-nav-section">
-      <div class="nav-section-title">Klassenmenues</div>
+      <div class="nav-section-title">Klassenmenüs</div>
 
       <% if (!sidebarClasses.length) { %>
         <p class="teacher-nav-empty">Noch keine Klassen zugewiesen.</p>
@@ -89,7 +92,7 @@
               </summary>
 
               <div class="teacher-class-nav-links">
-                <a class="<%= isActiveClassLink('students', menuClassId) ? 'is-active' : '' %>" href="/teacher/students/<%= menuClassId %>">Schueler</a>
+                <a class="<%= isActiveClassLink('students', menuClassId) ? 'is-active' : '' %>" href="/teacher/students/<%= menuClassId %>">Schüler</a>
                 <a class="<%= testQuestionsClasses %>" href="/teacher/test-questions/<%= menuClassId %><%= subjectQuery %>">
                   Fragen zu Tests
                   <% if (isCurrentClass && currentClassBadgeCount > 0) { %>
@@ -98,7 +101,7 @@
                 </a>
                 <a class="<%= isActiveClassLink('grades', menuClassId) ? 'is-active' : '' %>" href="/teacher/grades/<%= menuClassId %>">Noten</a>
                 <a class="<%= isActiveClassLink('special-assessments', menuClassId) ? 'is-active' : '' %>" href="/teacher/special-assessments/<%= menuClassId %>">Sonderleistungen</a>
-                <a class="<%= isActiveClassLink('grade-templates', menuClassId) ? 'is-active' : '' %>" href="/teacher/grade-templates/<%= menuClassId %>">Pruefungen</a>
+                <a class="<%= isActiveClassLink('grade-templates', menuClassId) ? 'is-active' : '' %>" href="/teacher/grade-templates/<%= menuClassId %>">Prüfungen</a>
                 <a class="<%= isActiveClassLink('class-statistics', menuClassId) ? 'is-active' : '' %>" href="/teacher/class-statistics/<%= menuClassId %>">Statistiken</a>
               </div>
             </details>

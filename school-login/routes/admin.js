@@ -1468,10 +1468,16 @@ router.get("/users/:id", async (req, res, next) => {
 router.get("/users/:id/edit", async (req, res, next) => {
   const id = req.params.id;
   try {
-    const user = await getAsync(
-      "SELECT id, email, role, status, must_change_password, microsoft_email, microsoft_connected_at FROM users WHERE id = ?",
-      [id]
-    );
+    const [user, microsoftUser] = await Promise.all([
+      getAsync(
+        "SELECT id, email, role, status, must_change_password, microsoft_email, microsoft_connected_at FROM users WHERE id = ?",
+        [id]
+      ),
+      getAsync(
+        "SELECT id, email, status, microsoft_oid, microsoft_tenant_id, microsoft_email FROM users WHERE id = ?",
+        [id]
+      )
+    ]);
     if (!user)
       return res.status(404).render("error", {
         message: "Nutzer nicht gefunden.",
@@ -1480,14 +1486,55 @@ router.get("/users/:id/edit", async (req, res, next) => {
         csrfToken: req.csrfToken()
       });
 
+    user.microsoft_oid = microsoftUser?.microsoft_oid || null;
+    user.microsoft_tenant_id = microsoftUser?.microsoft_tenant_id || null;
+
     res.render("admin/edit", {
       user,
+      feedback: req.query.microsoft === "unlinked"
+        ? { tone: "success", message: "Microsoft-Konto wurde entbunden." }
+        : null,
       csrfToken: req.csrfToken(),
       currentUser: req.session.user,
       activePath: req.originalUrl
     });
   } catch (err) {
     console.error("DB error fetching user for edit:", err);
+    next(err);
+  }
+});
+
+router.post("/users/:id/microsoft-unlink", async (req, res, next) => {
+  const id = req.params.id;
+
+  try {
+    const user = await getAsync(
+      "SELECT id, email, status, microsoft_oid, microsoft_tenant_id, microsoft_email FROM users WHERE id = ?",
+      [id]
+    );
+
+    if (!user) {
+      return res.status(404).render("error", {
+        message: "Nutzer nicht gefunden.",
+        status: 404,
+        backUrl: "/admin/users",
+        csrfToken: req.csrfToken()
+      });
+    }
+
+    await runAsync(
+      "UPDATE users SET microsoft_oid = NULL, microsoft_tenant_id = NULL, microsoft_email = NULL, microsoft_connected_at = NULL WHERE id = ?",
+      [id]
+    );
+
+    if (Number(req.session.user?.id) === Number(id)) {
+      req.session.user.microsoft_connected = false;
+      req.session.user.microsoft_email = null;
+    }
+
+    res.redirect(`/admin/users/${id}/edit?microsoft=unlinked`);
+  } catch (err) {
+    console.error("DB error unlinking Microsoft account:", err);
     next(err);
   }
 });
