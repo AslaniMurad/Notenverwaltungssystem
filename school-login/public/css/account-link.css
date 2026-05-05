@@ -13,12 +13,14 @@
 }
 
 .account-link-card {
+  --account-link-card-padding: 28px;
   width: min(100%, 560px);
-  padding: 28px;
+  padding: var(--account-link-card-padding);
   border: 1px solid var(--border);
   border-radius: 22px;
   background: linear-gradient(180deg, var(--surface) 0%, var(--surface-2) 100%);
   box-shadow: 0 24px 60px rgba(15, 23, 42, 0.18);
+  overflow: hidden;
 }
 
 .account-link-head {
@@ -30,6 +32,32 @@
 .account-link-head h1 {
   margin: 0;
   font-size: clamp(28px, 4vw, 36px);
+}
+
+.account-link-title {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  line-height: 1.12;
+}
+
+.account-link-title-brand {
+  display: inline-flex;
+  align-items: center;
+  min-width: 0;
+}
+
+.account-link-title-logo {
+  display: block;
+  width: min(42vw, 210px);
+  height: 0.88em;
+  object-fit: contain;
+  object-position: left center;
+}
+
+.account-link-title-text {
+  display: none;
 }
 
 .account-link-eyebrow {
@@ -125,7 +153,16 @@
 
 @media (max-width: 640px) {
   .account-link-card {
-    padding: 22px 18px;
+    --account-link-card-padding: 18px;
+    padding: 22px var(--account-link-card-padding);
+  }
+
+  .account-link-title-logo {
+    display: none;
+  }
+
+  .account-link-title-text {
+    display: inline;
   }
 
   .account-link-status {

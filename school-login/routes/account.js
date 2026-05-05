@@ -30,18 +30,18 @@ function resolveLinkFeedback(query = {}) {
   if (query.linked === "1") {
     return {
       tone: "success",
-      message: "Dein NVS-Konto ist jetzt mit Microsoft verknuepft."
+      message: "Dein NVS-Konto ist jetzt mit Microsoft verknüpft."
     };
   }
 
   const errors = {
     "microsoft-cancelled": "Die Microsoft-Anmeldung wurde abgebrochen.",
-    "microsoft-state": "Die Microsoft-Verknuepfung konnte nicht bestaetigt werden.",
-    "microsoft-failed": "Microsoft konnte die Verknuepfung nicht abschliessen.",
-    "domain-blocked": "Dieses Microsoft-Konto ist fuer die Schule nicht freigegeben.",
-    "session-expired": "Deine Sitzung ist abgelaufen. Bitte pruefe dein Passwort erneut.",
+    "microsoft-state": "Die Microsoft-Verknüpfung konnte nicht bestätigt werden.",
+    "microsoft-failed": "Microsoft konnte die Verknüpfung nicht abschließen.",
+    "domain-blocked": "Dieses Microsoft-Konto ist für die Schule nicht freigegeben.",
+    "session-expired": "Deine Sitzung ist abgelaufen. Bitte prüfe dein Passwort erneut.",
     "account-missing": "Dein NVS-Konto ist nicht mehr aktiv.",
-    "already-linked": "Dieses Microsoft-Konto ist bereits mit einem anderen NVS-Konto verknuepft."
+    "already-linked": "Dieses Microsoft-Konto ist bereits mit einem anderen NVS-Konto verknüpft."
   };
 
   const message = errors[String(query.error || "")];
@@ -58,7 +58,7 @@ async function loadLinkPageModel(req, overrides = {}) {
   const feedback = overrides.feedback || resolveLinkFeedback(req.query);
 
   return {
-    title: "Microsoft verknuepfen",
+    title: "Microsoft verknüpfen",
     headerTitle: "Konto",
     styles: ["/css/account-link.css"],
     scripts: ["/js/app.js"],
@@ -145,7 +145,7 @@ router.post("/microsoft-link", requireAuth, async (req, res, next) => {
         formEmail: submittedEmail,
         feedback: {
           tone: "error",
-          message: "Microsoft-Anmeldung ist derzeit nicht verfuegbar."
+          message: "Microsoft-Anmeldung ist derzeit nicht verfügbar."
         }
       });
       return res.status(503).render("account/microsoft-link", pageModel);

@@ -379,6 +379,65 @@ test("Microsoft account can be linked and used for login", { concurrency: false 
   }
 });
 
+test("admin can inspect and unlink a user's Microsoft account", { concurrency: false }, async () => {
+  const linkedUserEmail = "microsoft-unlink-target@test.local";
+  const insertResult = await dbRun(
+    "INSERT INTO users (email, password_hash, role, status, must_change_password) VALUES (?,?,?,?,?)",
+    [linkedUserEmail, hashPassword("UnusedPass123!"), "admin", "active", 0]
+  );
+  const userId = insertResult.lastID;
+
+  await dbRun(
+    "UPDATE users SET microsoft_oid = ?, microsoft_tenant_id = ?, microsoft_email = ?, microsoft_connected_at = current_timestamp WHERE id = ?",
+    ["oid-unlink-target", "tenant-unlink-target", "microsoft.person@test.local", userId]
+  );
+
+  const loginResult = await loginAdmin();
+  const editPage = await fetchWithCookies(`/admin/users/${userId}/edit`, {}, loginResult.cookies);
+  assert.strictEqual(editPage.response.status, 200);
+  assert.match(editPage.body, /microsoft\.person@test\.local/);
+  assert.match(editPage.body, /tenant-unlink-target/);
+  assert.match(editPage.body, /oid-unlink-target/);
+  assert.match(editPage.body, /Microsoft entbinden/);
+
+  const csrfToken = extractCsrfToken(editPage.body);
+  assert.ok(csrfToken, "CSRF token missing on user edit page");
+
+  const unlinkResponse = await fetchWithCookies(
+    `/admin/users/${userId}/microsoft-unlink`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/x-www-form-urlencoded" },
+      body: new URLSearchParams({ _csrf: csrfToken }).toString(),
+      redirect: "manual"
+    },
+    editPage.cookies
+  );
+
+  assert.strictEqual(unlinkResponse.response.status, 302);
+  assert.strictEqual(
+    unlinkResponse.response.headers.get("location"),
+    `/admin/users/${userId}/edit?microsoft=unlinked`
+  );
+
+  const user = await dbGet(
+    "SELECT id, email, status, microsoft_oid, microsoft_tenant_id, microsoft_email FROM users WHERE id = ?",
+    [userId]
+  );
+  assert.strictEqual(user.microsoft_oid, null);
+  assert.strictEqual(user.microsoft_tenant_id, null);
+  assert.strictEqual(user.microsoft_email, null);
+
+  const refreshedPage = await fetchWithCookies(
+    unlinkResponse.response.headers.get("location"),
+    {},
+    unlinkResponse.cookies
+  );
+  assert.strictEqual(refreshedPage.response.status, 200);
+  assert.match(refreshedPage.body, /Microsoft-Konto wurde entbunden/);
+  assert.match(refreshedPage.body, /Keine Verknüpfung/);
+});
+
 test("admin can log in with seeded credentials", async () => {
   const loginResult = await loginAndChangePassword(
     process.env.ADMIN_EMAIL,

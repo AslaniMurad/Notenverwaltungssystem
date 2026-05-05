@@ -12,15 +12,21 @@
       <div class="account-link-card">
         <div class="account-link-head">
           <p class="account-link-eyebrow">Nutzer</p>
-          <h1>Connect with Microsoft</h1>
+          <h1 class="account-link-title">
+            <span>Connect with</span>
+            <span class="account-link-title-brand">
+              <img class="account-link-title-logo" src="/images/microsoft-logo-2012.png" alt="Microsoft">
+              <span class="account-link-title-text">Microsoft</span>
+            </span>
+          </h1>
           <p class="account-link-copy">
-            Bestaetige zuerst dein NVS-Konto mit E-Mail und Passwort. Danach verknuepfen wir es mit deinem Microsoft-Konto.
+            Bestätige zuerst dein NVS-Konto mit E-Mail und Passwort. Danach verknüpfen wir es mit deinem Microsoft-Konto.
           </p>
         </div>
 
         <% if (feedback && feedback.message) { %>
           <div class="account-link-alert is-<%= feedback.tone %>" role="alert">
-            <strong><%= feedback.tone === 'success' ? 'Verknuepfung erfolgreich' : 'Verknuepfung fehlgeschlagen' %></strong>
+            <strong><%= feedback.tone === 'success' ? 'Verknüpfung erfolgreich' : 'Verknüpfung fehlgeschlagen' %></strong>
             <span><%= feedback.message %></span>
           </div>
         <% } %>
@@ -32,7 +38,7 @@
           </div>
           <div>
             <span class="account-link-status-label">Microsoft</span>
-            <strong><%= microsoftConnected ? (microsoftEmail || 'Verbunden') : 'Noch nicht verknuepft' %></strong>
+            <strong><%= microsoftConnected ? (microsoftEmail || 'Verbunden') : 'Noch nicht verknüpft' %></strong>
           </div>
         </div>
 
@@ -53,7 +59,7 @@
         </form>
 
         <div class="account-link-foot">
-          <a class="btn btn-secondary" href="<%= backUrl %>">Zurueck</a>
+          <a class="btn btn-secondary" href="<%= backUrl %>">Zurück</a>
           <a class="btn" href="/login">Zum Login</a>
         </div>
       </div>

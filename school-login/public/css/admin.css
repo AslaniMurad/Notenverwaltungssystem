@@ -157,6 +157,12 @@ body.page-admin-edit {
   font-weight: 700;
 }
 
+.admin-badge-success {
+  background: rgba(16, 185, 129, 0.14);
+  color: #047857;
+  border: 1px solid rgba(16, 185, 129, 0.24);
+}
+
 .admin-actions-row {
   display: flex;
   gap: 8px;
@@ -513,6 +519,155 @@ body.page-admin-edit {
   margin: 2px 0 0;
 }
 
+.admin-user-edit-hero {
+  align-items: flex-start;
+}
+
+.admin-user-edit-title {
+  min-width: 0;
+}
+
+.admin-user-edit-title h1 {
+  overflow-wrap: anywhere;
+}
+
+.admin-user-edit-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.admin-user-edit-alert {
+  margin-bottom: 16px;
+  padding: 12px 14px;
+  border-radius: 12px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text);
+  font-weight: 700;
+}
+
+.admin-user-edit-alert.is-success {
+  border-color: rgba(16, 185, 129, 0.28);
+  background: rgba(16, 185, 129, 0.12);
+  color: #047857;
+}
+
+.admin-user-edit-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.35fr) minmax(300px, 0.85fr);
+  gap: 18px;
+  align-items: start;
+}
+
+.admin-user-edit-main,
+.admin-user-edit-side {
+  display: grid;
+  gap: 18px;
+}
+
+.admin-user-edit-panel,
+.admin-user-edit-ms-card {
+  background: var(--surface);
+  display: grid;
+  gap: 18px;
+}
+
+.admin-user-edit-panel .admin-panel-head {
+  margin-bottom: 0;
+}
+
+.admin-user-edit-panel h3,
+.admin-user-edit-ms-card h3 {
+  margin: 0;
+}
+
+.admin-user-edit-panel .admin-edit-form input,
+.admin-user-edit-panel .admin-edit-form select {
+  width: 100%;
+  min-height: 44px;
+  margin-right: 0;
+}
+
+.admin-user-edit-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+}
+
+.admin-user-edit-danger {
+  border-color: rgba(225, 29, 72, 0.24);
+  background: linear-gradient(180deg, var(--surface) 0%, rgba(225, 29, 72, 0.04) 100%);
+}
+
+.admin-user-edit-ms-card {
+  position: sticky;
+  top: 24px;
+}
+
+.admin-user-edit-ms-head {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.admin-user-edit-ms-head img {
+  width: 42px;
+  height: 42px;
+  object-fit: contain;
+  flex-shrink: 0;
+}
+
+.admin-user-edit-ms-status {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.admin-user-edit-ms-list {
+  display: grid;
+  gap: 10px;
+  margin: 0;
+}
+
+.admin-user-edit-ms-list > div {
+  display: grid;
+  gap: 4px;
+  padding: 12px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--surface-2);
+}
+
+.admin-user-edit-ms-list dt {
+  color: var(--text-muted);
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.admin-user-edit-ms-list dd {
+  margin: 0;
+  color: var(--text);
+  font-size: 13px;
+  overflow-wrap: anywhere;
+}
+
+.admin-user-edit-code {
+  font-family: ui-monospace, SFMono-Regular, Consolas, "Liberation Mono", monospace;
+}
+
+.admin-user-edit-ms-form {
+  display: flex;
+}
+
+.admin-user-edit-ms-form .btn {
+  width: 100%;
+  justify-content: center;
+}
+
 .admin-inline-option-simple {
   display: inline-flex;
   align-items: center;
@@ -657,6 +812,24 @@ body.page-admin-edit {
 }
 
 @media (max-width: 720px) {
+  .admin-user-edit-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .admin-user-edit-ms-card {
+    position: static;
+  }
+
+  .admin-user-edit-actions,
+  .admin-user-edit-ms-form {
+    justify-content: stretch;
+  }
+
+  .admin-user-edit-actions .btn,
+  .admin-user-edit-ms-form .btn {
+    width: 100%;
+  }
+
   .admin-panel-card {
     padding: 18px;
   }

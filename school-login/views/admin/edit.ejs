@@ -1,4 +1,7 @@
 <%
+  const microsoftLinked = Boolean(user.microsoft_oid && user.microsoft_tenant_id);
+  const passwordState = user.must_change_password ? 'Initial-Passwort aktiv' : 'Individuelles Passwort';
+
   const page = {
     title: 'Bearbeite Nutzer',
     headerTitle: 'Adminbereich',
@@ -13,66 +16,168 @@
       <%- include('./nav', { csrfToken, currentUser, activePath }) %>
 
       <section class="app-main">
-        <div class="app-main-header">
-          <div>
-            <p class="app-main-subtitle">Bearbeitung</p>
-            <h1>Nutzer anpassen</h1>
+        <div class="app-main-header admin-user-edit-hero">
+          <div class="admin-user-edit-title">
+            <p class="app-main-subtitle">Nutzer bearbeiten</p>
+            <h1><%= user.email %></h1>
+            <div class="admin-user-edit-meta">
+              <span class="admin-badge admin-badge-neutral">ID <%= user.id %></span>
+              <span class="admin-badge"><%= user.role %></span>
+              <span class="admin-badge <%= user.status === 'active' ? 'admin-badge-success' : 'admin-badge-neutral' %>"><%= user.status %></span>
+            </div>
           </div>
-          <a class="admin-button-plain" href="/admin">Zurück</a>
+          <div class="admin-actions-row">
+            <a class="btn btn-secondary" href="/admin/users/<%= user.id %>">Profil</a>
+            <a class="btn" href="/admin/users">Zurück</a>
+          </div>
         </div>
 
-        <div class="admin-card-narrow">
-          <form class="admin-edit-form" method="POST" action="/admin/users/<%= user.id %>">
-            <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+        <% if (feedback && feedback.message) { %>
+          <div class="admin-user-edit-alert is-<%= feedback.tone %>" role="alert"><%= feedback.message %></div>
+        <% } %>
 
-            <label for="email">E-Mail</label>
-            <input id="email" name="email" value="<%= user.email %>" type="email" required>
+        <div class="admin-user-edit-grid">
+          <div class="admin-user-edit-main">
+            <section class="admin-card admin-user-edit-panel">
+              <div class="admin-panel-head">
+                <div>
+                  <p class="admin-eyebrow">Stammdaten</p>
+                  <h3>Login und Rolle</h3>
+                </div>
+              </div>
 
-            <label for="role">Rolle</label>
-            <select id="role" name="role">
-              <option value="student" <%= user.role === 'student' ? 'selected' : '' %>>Schüler</option>
-              <option value="teacher" <%= user.role === 'teacher' ? 'selected' : '' %>>Lehrer</option>
-              <option value="admin" <%= user.role === 'admin' ? 'selected' : '' %>>Admin</option>
-            </select>
+              <form class="admin-edit-form admin-stacked-form" method="POST" action="/admin/users/<%= user.id %>">
+                <input type="hidden" name="_csrf" value="<%= csrfToken %>">
 
-            <label for="status">Status</label>
-            <select id="status" name="status">
-              <option value="active" <%= user.status === 'active' ? 'selected' : '' %>>active</option>
-              <option value="locked" <%= user.status === 'locked' ? 'selected' : '' %>>locked</option>
-              <option value="deleted" <%= user.status === 'deleted' ? 'selected' : '' %>>deleted</option>
-            </select>
+                <div class="admin-form-grid admin-form-grid-2">
+                  <label class="admin-field" for="email">
+                    <span>E-Mail</span>
+                    <input id="email" name="email" value="<%= user.email %>" type="email" required>
+                  </label>
 
-            <button class="btn btn-primary" type="submit">Speichern</button>
-          </form>
+                  <label class="admin-field" for="role">
+                    <span>Rolle</span>
+                    <select id="role" name="role">
+                      <option value="student" <%= user.role === 'student' ? 'selected' : '' %>>Schüler</option>
+                      <option value="teacher" <%= user.role === 'teacher' ? 'selected' : '' %>>Lehrer</option>
+                      <option value="admin" <%= user.role === 'admin' ? 'selected' : '' %>>Admin</option>
+                    </select>
+                  </label>
 
-          <div class="admin-alert muted">Aktueller Status: <strong><%= user.must_change_password ? 'Initial-Passwort aktiv' : 'individuelles Passwort' %></strong></div>
+                  <label class="admin-field" for="status">
+                    <span>Status</span>
+                    <select id="status" name="status">
+                      <option value="active" <%= user.status === 'active' ? 'selected' : '' %>>active</option>
+                      <option value="locked" <%= user.status === 'locked' ? 'selected' : '' %>>locked</option>
+                      <option value="deleted" <%= user.status === 'deleted' ? 'selected' : '' %>>deleted</option>
+                    </select>
+                  </label>
+                </div>
 
-          <hr class="admin-separator">
+                <div class="admin-user-edit-actions">
+                  <button class="btn btn-primary" type="submit">Änderungen speichern</button>
+                </div>
+              </form>
+            </section>
 
-          <form class="admin-edit-form" method="POST" action="/admin/users/<%= user.id %>/reset">
-            <input type="hidden" name="_csrf" value="<%= csrfToken %>">
-            <label for="password">Neues Passwort</label>
-            <input id="password" name="password" type="password" required>
-            <button class="btn" type="submit">Passwort zurücksetzen</button>
-          </form>
+            <section class="admin-card admin-user-edit-panel">
+              <div class="admin-panel-head">
+                <div>
+                  <p class="admin-eyebrow">Passwort</p>
+                  <h3>Zugang zurücksetzen</h3>
+                  <p class="admin-muted">Aktueller Passwortstatus: <strong><%= passwordState %></strong></p>
+                </div>
+              </div>
 
-          <form
-            class="admin-edit-form"
-            method="POST"
-            action="/admin/users/<%= user.id %>/delete"
-            data-confirm-title="Nutzer löschen"
-            data-confirm-message="Möchtest du diesen Nutzer wirklich löschen?"
-            data-confirm-note="Der Nutzer wird per Soft-Delete deaktiviert."
-            data-confirm-action="Löschen"
-            data-confirm-variant="danger"
-          >
-            <input type="hidden" name="_csrf" value="<%= csrfToken %>">
-            <button class="btn btn-danger" type="submit">Nutzer löschen</button>
-          </form>
+              <form class="admin-edit-form admin-stacked-form" method="POST" action="/admin/users/<%= user.id %>/reset">
+                <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+                <label class="admin-field" for="password">
+                  <span>Neues Passwort</span>
+                  <input id="password" name="password" type="password" required>
+                  <span class="admin-field-hint">Das Passwort wird sofort ersetzt. Der Nutzer muss es danach nicht automatisch ändern.</span>
+                </label>
+                <div class="admin-user-edit-actions">
+                  <button class="btn" type="submit">Passwort zurücksetzen</button>
+                </div>
+              </form>
+            </section>
 
-          <div class="admin-back-link">
-            <a class="admin-link" href="/admin">← Zurück zur Übersicht</a>
+            <section class="admin-card admin-user-edit-panel admin-user-edit-danger">
+              <div>
+                <p class="admin-eyebrow">Gefahrenzone</p>
+                <h3>Nutzer deaktivieren</h3>
+                <p class="admin-muted">Der Datensatz bleibt erhalten, der Login wird aber per Status gelöscht markiert.</p>
+              </div>
+              <form
+                class="admin-edit-form"
+                method="POST"
+                action="/admin/users/<%= user.id %>/delete"
+                data-confirm-title="Nutzer löschen"
+                data-confirm-message="Möchtest du diesen Nutzer wirklich löschen?"
+                data-confirm-note="Der Nutzer wird per Soft-Delete deaktiviert."
+                data-confirm-action="Löschen"
+                data-confirm-variant="danger"
+              >
+                <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+                <button class="btn btn-danger" type="submit">Nutzer löschen</button>
+              </form>
+            </section>
           </div>
+
+          <aside class="admin-user-edit-side">
+            <section class="admin-card admin-user-edit-ms-card <%= microsoftLinked ? 'is-linked' : 'is-open' %>">
+              <div class="admin-user-edit-ms-head">
+                <img src="/images/microsoft-icon.svg" alt="" aria-hidden="true">
+                <div>
+                  <p class="admin-eyebrow">Microsoft Account</p>
+                  <h3><%= microsoftLinked ? 'Verbunden' : 'Nicht verbunden' %></h3>
+                </div>
+              </div>
+
+              <div class="admin-user-edit-ms-status">
+                <span class="admin-badge <%= microsoftLinked ? 'admin-badge-success' : 'admin-badge-neutral' %>">
+                  <%= microsoftLinked ? 'SSO aktiv' : 'Keine Verknüpfung' %>
+                </span>
+              </div>
+
+              <dl class="admin-user-edit-ms-list">
+                <div>
+                  <dt>Microsoft E-Mail</dt>
+                  <dd><%= user.microsoft_email || '-' %></dd>
+                </div>
+                <div>
+                  <dt>Verbunden seit</dt>
+                  <dd><%= user.microsoft_connected_at || '-' %></dd>
+                </div>
+                <div>
+                  <dt>Tenant ID</dt>
+                  <dd class="admin-user-edit-code"><%= user.microsoft_tenant_id || '-' %></dd>
+                </div>
+                <div>
+                  <dt>Object ID</dt>
+                  <dd class="admin-user-edit-code"><%= user.microsoft_oid || '-' %></dd>
+                </div>
+              </dl>
+
+              <% if (microsoftLinked) { %>
+                <form
+                  class="admin-user-edit-ms-form"
+                  method="POST"
+                  action="/admin/users/<%= user.id %>/microsoft-unlink"
+                  data-confirm-title="Microsoft entbinden"
+                  data-confirm-message="Möchtest du die Microsoft-Verknüpfung für <%= user.email %> entfernen?"
+                  data-confirm-note="Der Nutzer kann sich danach nicht mehr mit diesem Microsoft-Konto anmelden, bis er es erneut verknüpft."
+                  data-confirm-action="Entbinden"
+                  data-confirm-variant="danger"
+                >
+                  <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+                  <button class="btn btn-danger" type="submit">Microsoft entbinden</button>
+                </form>
+              <% } else { %>
+                <p class="admin-muted">Für diesen Nutzer ist aktuell kein Microsoft-Konto hinterlegt.</p>
+              <% } %>
+            </section>
+          </aside>
         </div>
       </section>
     </div>
