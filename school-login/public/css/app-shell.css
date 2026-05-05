@@ -389,7 +389,8 @@
   --nav-icon: var(--nav-icon-archive);
 }
 
-.app-nav a[href="/teacher/settings"] {
+.app-nav a[href="/teacher/settings"],
+.app-nav a[href="/admin/settings"] {
   --nav-icon: var(--nav-icon-settings);
 }
 

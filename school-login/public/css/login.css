@@ -263,6 +263,35 @@ body.page-force-password {
   text-align: center;
 }
 
+.login-advanced {
+  margin-top: 18px;
+  border-top: 1px solid #e5e7eb;
+  padding-top: 14px;
+}
+
+.login-advanced summary {
+  cursor: pointer;
+  color: var(--login-muted);
+  font-size: 13px;
+  font-weight: 700;
+  list-style: none;
+}
+
+.login-advanced summary::-webkit-details-marker {
+  display: none;
+}
+
+.login-advanced summary::before {
+  content: ">";
+  display: inline-block;
+  margin-right: 8px;
+  transition: transform 0.2s ease;
+}
+
+.login-advanced[open] summary::before {
+  transform: rotate(90deg);
+}
+
 .btn-login-back {
   flex: 0 0 auto;
   padding: 12px 18px;

@@ -7,6 +7,7 @@ const { createAuditLogMiddleware } = require("../middleware/audit");
 const { getPasswordValidationError } = require("../utils/password");
 const { deriveNameFromEmail } = require("../utils/studentName");
 const { getDisplayName } = require("../utils/userDisplay");
+const { getRuntimeSettings, updateRuntimeSettings } = require("../services/appSettings");
 
 const INITIAL_PASSWORD = process.env.INITIAL_PASSWORD || null;
 const AUDIT_PAGE_SIZE = 50;
@@ -76,6 +77,8 @@ const AUDIT_FIELD_LABELS = {
   id: "ID",
   classId: "Klasse",
   class_id: "Klasse",
+  microsoft_login_enabled: "Microsoft Login",
+  maintenance_mode_enabled: "Maintenance Mode",
   studentId: "Schüler",
   profileId: "Profil",
   gradeId: "Note",
@@ -976,6 +979,33 @@ router.get("/", async (req, res, next) => {
     });
   } catch (err) {
     console.error("DB error fetching admin home stats:", err);
+    next(err);
+  }
+});
+
+router.get("/settings", async (req, res, next) => {
+  try {
+    const settings = await getRuntimeSettings();
+    res.render("admin/settings", {
+      settings,
+      saved: req.query.saved === "1",
+      csrfToken: req.csrfToken(),
+      currentUser: req.session.user,
+      activePath: "/admin/settings"
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
+router.post("/settings", async (req, res, next) => {
+  try {
+    await updateRuntimeSettings({
+      microsoftLoginEnabled: req.body?.microsoft_login_enabled === "1",
+      maintenanceModeEnabled: req.body?.maintenance_mode_enabled === "1"
+    });
+    res.redirect("/admin/settings?saved=1");
+  } catch (err) {
     next(err);
   }
 });

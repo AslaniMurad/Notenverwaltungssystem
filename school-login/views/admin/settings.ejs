@@ -1,0 +1,69 @@
+<%
+  const _settings = settings || {};
+  const page = {
+    title: "Admin - Einstellungen",
+    headerTitle: "Adminbereich",
+    styles: ["/css/admin.css"],
+    scripts: ["/js/app.js"],
+    bodyClass: "page-admin",
+    hideHeader: true,
+    hideFooter: true,
+    content: function () { %>
+    <div class="app-shell">
+      <%- include("./nav", { csrfToken, currentUser, activePath }) %>
+
+      <section class="app-main">
+        <div class="app-main-header">
+          <div>
+            <p class="app-main-subtitle">Einstellungen</p>
+            <h1>System</h1>
+          </div>
+        </div>
+
+        <% if (saved) { %>
+          <div class="admin-alert">Einstellungen gespeichert.</div>
+        <% } %>
+
+        <form class="admin-settings-form" method="POST" action="/admin/settings">
+          <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+
+          <div class="admin-settings-grid">
+            <label class="admin-setting-tile">
+              <input
+                class="admin-setting-toggle-input"
+                type="checkbox"
+                name="microsoft_login_enabled"
+                value="1"
+                <%= _settings.microsoftLoginEnabled ? "checked" : "" %>
+              >
+              <span class="admin-setting-copy">
+                <span class="admin-setting-title">Microsoft Login</span>
+                <span class="admin-setting-state"><%= _settings.microsoftLoginEnabled ? "Aktiv" : "Deaktiviert" %></span>
+              </span>
+              <span class="admin-setting-toggle" aria-hidden="true"></span>
+            </label>
+
+            <label class="admin-setting-tile is-danger">
+              <input
+                class="admin-setting-toggle-input"
+                type="checkbox"
+                name="maintenance_mode_enabled"
+                value="1"
+                <%= _settings.maintenanceModeEnabled ? "checked" : "" %>
+              >
+              <span class="admin-setting-copy">
+                <span class="admin-setting-title">Maintenance Mode</span>
+                <span class="admin-setting-state"><%= _settings.maintenanceModeEnabled ? "Aktiv" : "Deaktiviert" %></span>
+              </span>
+              <span class="admin-setting-toggle" aria-hidden="true"></span>
+            </label>
+          </div>
+
+          <div class="admin-settings-actions">
+            <button class="btn btn-primary" type="submit">Speichern</button>
+          </div>
+        </form>
+      </section>
+    </div>
+<% } }; %>
+<%- include("../layout", page) %>

@@ -21,6 +21,7 @@ process.env.TEAMS_MICROSOFT_LOGIN_ONLY = "true";
 
 const app = require("./server");
 const { db, hashPassword } = require("./db");
+const { updateRuntimeSettings } = require("./services/appSettings");
 
 let server;
 let baseUrl;
@@ -263,6 +264,98 @@ test("Teams login entry redirects directly to Microsoft auth", async () => {
     authLocation.startsWith("https://login.microsoftonline.com/"),
     "Teams login should continue with Microsoft authorization"
   );
+});
+
+test("runtime settings can disable Microsoft login without restart", async () => {
+  await updateRuntimeSettings({
+    microsoftLoginEnabled: false,
+    maintenanceModeEnabled: false
+  });
+
+  try {
+    const { response, body } = await fetchWithCookies("/login");
+    assert.strictEqual(response.status, 200);
+    assert.doesNotMatch(body, /href="\/auth\/microsoft"/);
+
+    const authStart = await fetchWithCookies("/auth/microsoft", { redirect: "manual" });
+    assert.strictEqual(authStart.response.status, 503);
+  } finally {
+    await updateRuntimeSettings({
+      microsoftLoginEnabled: true,
+      maintenanceModeEnabled: false
+    });
+  }
+});
+
+test("maintenance mode limits login to admins and kicks existing non-admin sessions", async () => {
+  await updateRuntimeSettings({
+    microsoftLoginEnabled: true,
+    maintenanceModeEnabled: false
+  });
+  const teacherLogin = await loginTeacher();
+  assert.strictEqual(teacherLogin.redirect, "/teacher");
+
+  await updateRuntimeSettings({
+    microsoftLoginEnabled: true,
+    maintenanceModeEnabled: true
+  });
+
+  try {
+    const kickedTeacher = await fetchWithCookies(
+      "/teacher/classes",
+      { redirect: "manual" },
+      teacherLogin.cookies
+    );
+    assert.strictEqual(kickedTeacher.response.status, 302);
+    assert.strictEqual(kickedTeacher.response.headers.get("location"), "/login");
+
+    const maintenanceLogin = await fetchWithCookies("/login");
+    assert.strictEqual(maintenanceLogin.response.status, 200);
+    assert.match(maintenanceLogin.body, /Wartungsarbeiten/);
+    assert.match(maintenanceLogin.body, /Erweitert/);
+    assert.doesNotMatch(maintenanceLogin.body, /href="\/auth\/microsoft"/);
+
+    const teacherToken = extractCsrfToken(maintenanceLogin.body);
+    const blockedTeacher = await fetchWithCookies(
+      "/login",
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/x-www-form-urlencoded" },
+        body: new URLSearchParams({
+          _csrf: teacherToken,
+          email: "teacher@example.com",
+          password: "NewPass12345"
+        }).toString(),
+        redirect: "manual"
+      },
+      maintenanceLogin.cookies
+    );
+    assert.strictEqual(blockedTeacher.response.status, 503);
+
+    const adminLogin = await fetchWithCookies("/login");
+    const adminToken = extractCsrfToken(adminLogin.body);
+    const adminResponse = await fetchWithCookies(
+      "/login",
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/x-www-form-urlencoded" },
+        body: new URLSearchParams({
+          _csrf: adminToken,
+          email: process.env.ADMIN_EMAIL,
+          password: process.env.ADMIN_PASS
+        }).toString(),
+        redirect: "manual"
+      },
+      adminLogin.cookies
+    );
+    assert.strictEqual(adminResponse.response.status, 302);
+    assert.strictEqual(adminResponse.response.headers.get("location"), "/force-password-change");
+  } finally {
+    await updateRuntimeSettings({
+      microsoftLoginEnabled: true,
+      maintenanceModeEnabled: false
+    });
+  }
 });
 
 test("Microsoft account can be linked and used for login", { concurrency: false }, async () => {

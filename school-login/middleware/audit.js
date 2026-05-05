@@ -7,6 +7,7 @@ const ENTITY_PATTERNS = [
   { regex: /\/users(\/|$)/i, entity: "user" },
   { regex: /\/classes(\/|$)/i, entity: "class" },
   { regex: /\/students(\/|$)/i, entity: "student" },
+  { regex: /\/settings(\/|$)/i, entity: "system" },
   { regex: /\/assignments(\/|$)/i, entity: "assignment" },
   { regex: /\/grade-templates(\/|$)/i, entity: "exam_template" },
   { regex: /\/add-grade(\/|$)/i, entity: "grade" },
@@ -53,7 +54,9 @@ const SUMMARY_LABELS = {
   gradeId: "Note",
   templateId: "Vorlage",
   assessmentId: "Sonderleistung",
-  markId: "Mitarbeit"
+  markId: "Mitarbeit",
+  microsoft_login_enabled: "Microsoft Login",
+  maintenance_mode_enabled: "Maintenance Mode"
 };
 const VALUE_LABELS = {
   admin: "Admin",
@@ -271,6 +274,7 @@ function buildActionText(actionTitle, targetLabel, detailSummary) {
 function buildScopeLabel(routePath, entityType) {
   const normalizedPath = String(routePath || "").toLowerCase();
   if (normalizedPath.startsWith("/archive/purge") || normalizedPath.startsWith("/archive/graduates")) return "Archiv / Danger-Zone";
+  if (normalizedPath.startsWith("/admin/settings")) return "Admin / Einstellungen";
   if (normalizedPath.startsWith("/admin/users")) return "Admin / Benutzer";
   if (normalizedPath.startsWith("/admin/classes")) return "Admin / Klassen";
   if (normalizedPath.startsWith("/admin/assignments")) return "Admin / Fachzuordnungen";
@@ -436,6 +440,13 @@ function buildAuditDescription(req, routePath, entityType, entityId) {
       actionTitle: "Fachzuordnung gespeichert",
       targetLabel: buildTargetLabel(getFormattedSourceValue(body, "subject"), entityTarget),
       detailEntries: buildSummaryFromSource(body, ["classId", "teacher_id", "subject_id"])
+    });
+  }
+  if (/^\/admin\/settings$/i.test(routePath)) {
+    return buildAuditEntry({
+      scopeLabel,
+      actionTitle: "Systemeinstellungen gespeichert",
+      detailEntries: buildSummaryFromSource(body, ["microsoft_login_enabled", "maintenance_mode_enabled"])
     });
   }
   if (/^\/teacher\/create-class$/i.test(routePath)) {

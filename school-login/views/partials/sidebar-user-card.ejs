@@ -10,6 +10,9 @@
     : (typeof locals !== "undefined" ? locals.sidebarTeacherKvClasses : null);
   const sessionUser = typeof locals !== "undefined" ? locals.sessionUser : null;
   const microsoftConnected = Boolean(sessionUser && sessionUser.microsoft_connected);
+  const microsoftLoginEnabled = typeof locals !== "undefined"
+    ? locals.microsoftLoginEnabled !== false
+    : true;
   const sidebarUser = userDisplay.buildSidebarUser({
     ...(user || {}),
     activeSchoolYearName: resolvedActiveSchoolYear?.name || "",
@@ -31,6 +34,7 @@
     </button>
   </div>
 </div>
+<% if (microsoftLoginEnabled || microsoftConnected) { %>
 <div class="sidebar-account-actions">
   <a class="sidebar-connect-btn <%= microsoftConnected ? 'is-linked' : '' %>" href="/account/microsoft-link">
     <span class="sidebar-connect-copy">
@@ -40,3 +44,4 @@
     <img class="sidebar-connect-icon" src="/images/microsoft-icon.svg" alt="" aria-hidden="true">
   </a>
 </div>
+<% } %>

@@ -19,6 +19,7 @@ const {
   isAllowedMicrosoftDomain,
   normalizeEmail
 } = require("./services/microsoftAuth");
+const { getRuntimeSettings } = require("./services/appSettings");
 
 const adminRouter = require("./routes/admin");
 const accountRouter = require("./routes/account");
@@ -210,6 +211,31 @@ function shouldUseMicrosoftOnlyLogin(req) {
   return teamsMicrosoftLoginOnly && isTeamsLoginContext(req);
 }
 
+function getRequestRuntimeSettings(req) {
+  return req.runtimeSettings || {
+    microsoftLoginEnabled: true,
+    maintenanceModeEnabled: false
+  };
+}
+
+function isMaintenanceMode(req) {
+  return Boolean(getRequestRuntimeSettings(req).maintenanceModeEnabled);
+}
+
+function isMicrosoftLoginAvailable(req) {
+  return (
+    microsoftAuthConfig.enabled &&
+    Boolean(getRequestRuntimeSettings(req).microsoftLoginEnabled) &&
+    !isMaintenanceMode(req)
+  );
+}
+
+function getMicrosoftUnavailableMessage(req) {
+  if (isMaintenanceMode(req)) return "Microsoft-Anmeldung ist im Wartungsmodus deaktiviert.";
+  if (!microsoftAuthConfig.enabled) return "Microsoft-Anmeldung ist derzeit nicht konfiguriert.";
+  return "Microsoft-Anmeldung ist derzeit deaktiviert.";
+}
+
 function saveSessionAndRedirect(req, res, next, target) {
   req.session.save((saveErr) => {
     if (saveErr) return next(saveErr);
@@ -280,8 +306,9 @@ function renderLogin(res, req, options = {}) {
     errorType,
     errorMessage,
     email,
-    microsoftAuthEnabled: microsoftAuthConfig.enabled,
-    microsoftOnlyLogin: shouldUseMicrosoftOnlyLogin(req)
+    microsoftAuthEnabled: isMicrosoftLoginAvailable(req),
+    microsoftOnlyLogin: shouldUseMicrosoftOnlyLogin(req) && !isMaintenanceMode(req),
+    maintenanceMode: isMaintenanceMode(req)
   });
 }
 
@@ -403,10 +430,18 @@ app.use((req, res, next) => {
   res.locals.sessionUser = req.session?.user || null;
   next();
 });
-app.use((req, res, next) => {
-  rememberTeamsLoginContext(req);
-  res.locals.microsoftOnlyLogin = shouldUseMicrosoftOnlyLogin(req);
-  next();
+app.use(async (req, res, next) => {
+  try {
+    req.runtimeSettings = await getRuntimeSettings();
+    rememberTeamsLoginContext(req);
+    res.locals.runtimeSettings = req.runtimeSettings;
+    res.locals.microsoftLoginEnabled = isMicrosoftLoginAvailable(req);
+    res.locals.microsoftOnlyLogin = shouldUseMicrosoftOnlyLogin(req) && !isMaintenanceMode(req);
+    res.locals.maintenanceMode = isMaintenanceMode(req);
+    next();
+  } catch (err) {
+    next(err);
+  }
 });
 
 app.use((req, res, next) => {
@@ -437,6 +472,33 @@ app.use((req, res, next) => {
       createSessionForUser(req, user, next);
     }
   );
+});
+
+app.use((req, res, next) => {
+  if (!isMaintenanceMode(req)) return next();
+
+  const sessionUser = req.session?.user || null;
+  if (sessionUser?.role === "admin") return next();
+
+  const pathOnly = String(req.path || "");
+  const isLoginRequest = pathOnly === "/login";
+  const isLogoutRequest = pathOnly === "/logout";
+
+  if (!sessionUser && (isLoginRequest || isLogoutRequest)) {
+    return next();
+  }
+
+  const redirectTarget = isTeamsLoginContext(req) ? "/login?teams=1" : "/login";
+  const finish = () => {
+    if (req.accepts("html")) return res.redirect(redirectTarget);
+    return res.status(503).json({ error: "maintenance_mode" });
+  };
+
+  if (sessionUser) {
+    return req.session.destroy(finish);
+  }
+
+  return finish();
 });
 
 // --- CSRF ---
@@ -609,12 +671,15 @@ app.get("/", requireAuth, (req, res) => {
 // --- Login Seite ---
 app.get("/login", (req, res, next) => {
   if (req.session.user) return res.redirect("/");
+  if (isMaintenanceMode(req)) {
+    return renderLogin(res, req);
+  }
   if (shouldUseMicrosoftOnlyLogin(req)) {
-    if (!microsoftAuthConfig.enabled) {
+    if (!isMicrosoftLoginAvailable(req)) {
       return renderMicrosoftAuthError(
         res,
         req,
-        "Microsoft-Anmeldung ist derzeit nicht konfiguriert.",
+        getMicrosoftUnavailableMessage(req),
         503
       );
     }
@@ -628,11 +693,11 @@ app.get("/auth/microsoft", (req, res, next) => {
   if (req.session.user) {
     return res.redirect("/");
   }
-  if (!microsoftAuthConfig.enabled) {
+  if (!isMicrosoftLoginAvailable(req)) {
     return renderMicrosoftAuthError(
       res,
       req,
-      "Microsoft-Anmeldung ist derzeit nicht konfiguriert.",
+      getMicrosoftUnavailableMessage(req),
       503
     );
   }
@@ -666,11 +731,11 @@ app.get("/auth/microsoft/callback", async (req, res, next) => {
   if (req.session.user && !isLinkMode) {
     return res.redirect("/");
   }
-  if (!microsoftAuthConfig.enabled) {
+  if (!isMicrosoftLoginAvailable(req)) {
     return renderMicrosoftAuthError(
       res,
       req,
-      "Microsoft-Anmeldung ist derzeit nicht konfiguriert.",
+      getMicrosoftUnavailableMessage(req),
       503
     );
   }
@@ -829,12 +894,12 @@ app.post("/force-password-change", requireAuth, (req, res, next) => {
 
 // --- Login POST ---
 app.post("/login", async (req, res, next) => {
-  if (shouldUseMicrosoftOnlyLogin(req)) {
-    if (!microsoftAuthConfig.enabled) {
+  if (shouldUseMicrosoftOnlyLogin(req) && !isMaintenanceMode(req)) {
+    if (!isMicrosoftLoginAvailable(req)) {
       return renderMicrosoftAuthError(
         res,
         req,
-        "Microsoft-Anmeldung ist derzeit nicht konfiguriert.",
+        getMicrosoftUnavailableMessage(req),
         503
       );
     }
@@ -890,6 +955,14 @@ app.post("/login", async (req, res, next) => {
       errorType: "invalid",
       errorMessage: "Login fehlgeschlagen.",
       email
+    });
+  }
+  if (isMaintenanceMode(req) && user.role !== "admin") {
+    return renderLogin(res, req, {
+      status: 503,
+      errorType: "invalid",
+      errorMessage: "Nur Admins.",
+      email: ""
     });
   }
 

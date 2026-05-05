@@ -26,6 +26,14 @@ function getRedirectForRole(role) {
   return redirectMap[role] || "/";
 }
 
+function isMicrosoftLinkingEnabled(req) {
+  return (
+    microsoftAuthConfig.enabled &&
+    Boolean(req.runtimeSettings?.microsoftLoginEnabled) &&
+    !Boolean(req.runtimeSettings?.maintenanceModeEnabled)
+  );
+}
+
 function resolveLinkFeedback(query = {}) {
   if (query.linked === "1") {
     return {
@@ -69,7 +77,7 @@ async function loadLinkPageModel(req, overrides = {}) {
     csrfToken: req.csrfToken(),
     formEmail: overrides.formEmail ?? req.session.user.email,
     feedback,
-    microsoftAuthEnabled: microsoftAuthConfig.enabled,
+    microsoftAuthEnabled: isMicrosoftLinkingEnabled(req),
     microsoftConnected: Boolean(currentUser?.microsoft_oid && currentUser?.microsoft_tenant_id),
     microsoftEmail: currentUser?.microsoft_email || "",
     backUrl: getRedirectForRole(req.session.user.role)
@@ -95,12 +103,14 @@ router.post("/microsoft-link", requireAuth, async (req, res, next) => {
       [req.session.user.email]
     );
 
-    if (!microsoftAuthConfig.enabled) {
+    if (!isMicrosoftLinkingEnabled(req)) {
       const pageModel = await loadLinkPageModel(req, {
         formEmail: submittedEmail || req.session.user.email,
         feedback: {
           tone: "error",
-          message: "Microsoft-Anmeldung ist derzeit nicht konfiguriert."
+          message: microsoftAuthConfig.enabled
+            ? "Microsoft-Anmeldung ist derzeit deaktiviert."
+            : "Microsoft-Anmeldung ist derzeit nicht konfiguriert."
         }
       });
       return res.status(503).render("account/microsoft-link", pageModel);
