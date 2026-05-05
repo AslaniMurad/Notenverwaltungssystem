@@ -316,6 +316,7 @@ test("maintenance mode limits login to admins and kicks existing non-admin sessi
     assert.doesNotMatch(maintenanceLogin.body, /href="\/auth\/microsoft"/);
 
     const teacherToken = extractCsrfToken(maintenanceLogin.body);
+    const teacherMaintenanceToken = extractHiddenInput(maintenanceLogin.body, "_maintenance_csrf");
     const blockedTeacher = await fetchWithCookies(
       "/login",
       {
@@ -323,6 +324,7 @@ test("maintenance mode limits login to admins and kicks existing non-admin sessi
         headers: { "Content-Type": "application/x-www-form-urlencoded" },
         body: new URLSearchParams({
           _csrf: teacherToken,
+          _maintenance_csrf: teacherMaintenanceToken,
           email: "teacher@example.com",
           password: "NewPass12345"
         }).toString(),
@@ -334,6 +336,8 @@ test("maintenance mode limits login to admins and kicks existing non-admin sessi
 
     const adminLogin = await fetchWithCookies("/login");
     const adminToken = extractCsrfToken(adminLogin.body);
+    const maintenanceToken = extractHiddenInput(adminLogin.body, "_maintenance_csrf");
+    assert.ok(maintenanceToken, "maintenance login token missing");
     const adminResponse = await fetchWithCookies(
       "/login",
       {
@@ -341,6 +345,7 @@ test("maintenance mode limits login to admins and kicks existing non-admin sessi
         headers: { "Content-Type": "application/x-www-form-urlencoded" },
         body: new URLSearchParams({
           _csrf: adminToken,
+          _maintenance_csrf: maintenanceToken,
           email: process.env.ADMIN_EMAIL,
           password: process.env.ADMIN_PASS
         }).toString(),
@@ -350,6 +355,18 @@ test("maintenance mode limits login to admins and kicks existing non-admin sessi
     );
     assert.strictEqual(adminResponse.response.status, 302);
     assert.strictEqual(adminResponse.response.headers.get("location"), "/force-password-change");
+
+    const statelessAdminResponse = await fetchWithCookies("/login", {
+      method: "POST",
+      headers: { "Content-Type": "application/x-www-form-urlencoded" },
+      body: new URLSearchParams({
+        _maintenance_csrf: maintenanceToken,
+        email: process.env.ADMIN_EMAIL,
+        password: process.env.ADMIN_PASS
+      }).toString(),
+      redirect: "manual"
+    });
+    assert.strictEqual(statelessAdminResponse.response.status, 302);
   } finally {
     await updateRuntimeSettings({
       microsoftLoginEnabled: true,
