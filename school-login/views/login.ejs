@@ -4,6 +4,7 @@
   const _csrfToken = typeof csrfToken !== 'undefined' ? csrfToken : '';
   const _email = typeof email !== 'undefined' ? email : '';
   const _microsoftAuthEnabled = Boolean(microsoftAuthEnabled);
+  const _microsoftOnlyLogin = Boolean(microsoftOnlyLogin);
 
   const page = {
     title: 'Login | Notenverwaltungssystem',
@@ -26,7 +27,11 @@
 
         <h1 class="login-welcome-title">Willkommen</h1>
         <p class="login-subtitle">
-          Melde dich mit deinen Schulzugangsdaten an<% if (_microsoftAuthEnabled) { %> oder nutze dein Microsoft-Schulkonto<% } %>
+          <% if (_microsoftOnlyLogin) { %>
+            Melde dich mit deinem Microsoft-Schulkonto an
+          <% } else { %>
+            Melde dich mit deinen Schulzugangsdaten an<% if (_microsoftAuthEnabled) { %> oder nutze dein Microsoft-Schulkonto<% } %>
+          <% } %>
         </p>
         <p class="login-notice">
           Hinweis (freiwillig, in Anlehnung an &sect; 25 MedienG):
@@ -46,36 +51,40 @@
           </div>
         <% } %>
 
-        <form method="POST" action="/login">
-          <input type="hidden" name="_csrf" value="<%= _csrfToken %>">
+        <% if (!_microsoftOnlyLogin) { %>
+          <form method="POST" action="/login">
+            <input type="hidden" name="_csrf" value="<%= _csrfToken %>">
 
-          <label class="login-label" for="email">E-Mail-Adresse</label>
-          <input class="login-input" id="email" name="email" type="email" placeholder="vorname.nachname@htlwy.at" required value="<%= _email %>">
+            <label class="login-label" for="email">E-Mail-Adresse</label>
+            <input class="login-input" id="email" name="email" type="email" placeholder="vorname.nachname@htlwy.at" required value="<%= _email %>">
 
-          <label class="login-label" for="password">Passwort</label>
-          <input class="login-input" id="password" name="password" type="password" placeholder="Dein Passwort" required>
+            <label class="login-label" for="password">Passwort</label>
+            <input class="login-input" id="password" name="password" type="password" placeholder="Dein Passwort" required>
 
-          <div class="login-hint-row">
-            <!-- TODO: Add a remeber me functionality -->
-            
+            <div class="login-hint-row">
+              <!-- TODO: Add a remeber me functionality -->
+              
+            </div>
+
+            <button class="btn-login-submit" type="submit">Login</button>
+          </form>
+
+          <div class="login-divider" aria-hidden="true">
+            <span>oder</span>
           </div>
-
-          <button class="btn-login-submit" type="submit">Login</button>
-        </form>
-
-        <div class="login-divider" aria-hidden="true">
-          <span>oder</span>
-        </div>
+        <% } %>
         <% if (_microsoftAuthEnabled) { %>
           <a class="btn-login-microsoft" href="/auth/microsoft">Mit Microsoft anmelden</a>
           <p class="login-provider-hint">
             Der Microsoft-Login verwendet dein vorher verknuepftes NVS-Konto und uebernimmt dieselbe Rolle wie beim normalen Login.
           </p>
-        <% } else { %>
+        <% } else if (!_microsoftOnlyLogin) { %>
           <button class="btn-login-microsoft is-disabled" type="button" disabled>Mit Microsoft anmelden</button>
           <p class="login-provider-hint">
             Microsoft-Anmeldung ist vorbereitet, aber in der `.env` noch nicht konfiguriert.
           </p>
+        <% } else { %>
+          <button class="btn-login-microsoft is-disabled" type="button" disabled>Mit Microsoft anmelden</button>
         <% } %>
 
         <div class="login-foot">

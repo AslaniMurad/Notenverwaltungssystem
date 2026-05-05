@@ -299,9 +299,21 @@ Fuer Microsoft Teams Einbettung zusaetzlich setzen:
 
 ```env
 TEAMS_EMBED_ENABLED=true
+# Standard ist true, wenn TEAMS_EMBED_ENABLED=true.
+TEAMS_MICROSOFT_LOGIN_ONLY=true
 # Optional, nur wenn weitere erlaubte Parent-Origin(s) gebraucht werden.
 # FRAME_ANCESTORS=self
+# Optionaler Override. Standard ist true, wenn TEAMS_EMBED_ENABLED=true.
+# SESSION_COOKIE_PARTITIONED=true
 ```
+
+Die URL des Teams-Tabs sollte den Teams-Kontext explizit mitgeben:
+
+```text
+https://nvs.htlwydev.at/login?teams=1
+```
+
+Dann wird innerhalb von Teams direkt zur Microsoft-Anmeldung weitergeleitet. `https://nvs.htlwydev.at/login` im normalen Browser zeigt weiterhin alle Loginmoeglichkeiten.
 
 Test:
 
@@ -326,6 +338,14 @@ Erwartet ist ein Header mit Teams und `cloud.microsoft`, z. B.:
 ```text
 Content-Security-Policy: frame-ancestors 'self' https://teams.microsoft.com https://*.teams.microsoft.com https://teams.cloud.microsoft https://*.cloud.microsoft
 ```
+
+Der Session-Cookie muss fuer Teams als Cross-Site-Cookie gesetzt werden:
+
+```bash
+curl -I https://nvs.htlwydev.at/login | grep -i set-cookie
+```
+
+Erwartet sind `Secure`, `SameSite=None` und bei Teams-Einbettung `Partitioned`.
 
 ## WEB01: systemd Service
 

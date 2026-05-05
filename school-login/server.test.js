@@ -17,6 +17,7 @@ process.env.MICROSOFT_CLIENT_SECRET = "test-microsoft-secret";
 process.env.MICROSOFT_TENANT_ID = "test-tenant-id";
 process.env.MICROSOFT_REDIRECT_URI = "http://127.0.0.1/auth/microsoft/callback";
 process.env.MICROSOFT_ALLOWED_DOMAIN = "test.local";
+process.env.TEAMS_MICROSOFT_LOGIN_ONLY = "true";
 
 const app = require("./server");
 const { db, hashPassword } = require("./db");
@@ -244,6 +245,24 @@ test("GET /login renders the Microsoft login option when configured", async () =
   const { response, body } = await fetchWithCookies("/login");
   assert.strictEqual(response.status, 200);
   assert.match(body, /Mit Microsoft anmelden/);
+});
+
+test("Teams login entry redirects directly to Microsoft auth", async () => {
+  const loginStart = await fetchWithCookies("/login?teams=1", { redirect: "manual" });
+  assert.strictEqual(loginStart.response.status, 302);
+  assert.strictEqual(loginStart.response.headers.get("location"), "/auth/microsoft");
+
+  const authStart = await fetchWithCookies(
+    "/auth/microsoft",
+    { redirect: "manual" },
+    loginStart.cookies
+  );
+  const authLocation = authStart.response.headers.get("location");
+  assert.ok(authLocation, "Microsoft authorization redirect missing");
+  assert.ok(
+    authLocation.startsWith("https://login.microsoftonline.com/"),
+    "Teams login should continue with Microsoft authorization"
+  );
 });
 
 test("Microsoft account can be linked and used for login", { concurrency: false }, async () => {
