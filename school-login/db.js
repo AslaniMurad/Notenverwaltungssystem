@@ -67,6 +67,7 @@ function createFakeDb() {
   const rolloverLogs = [];
   const teacherGradingProfiles = [];
   const teacherGradingProfileItems = [];
+  const appSettings = [];
   let userId = 1;
   let schoolYearId = 1;
   let classId = 1;
@@ -1455,6 +1456,20 @@ function createFakeDb() {
         const [id, student_id] = params.map(Number);
         const note = notifications.find((n) => n.id === id && n.student_id === student_id);
         if (note) note.read_at = new Date().toISOString();
+      } else if (/INSERT INTO app_settings \(key, value\)/i.test(sql)) {
+        const [key, value] = params;
+        const normalizedKey = String(key || "").trim();
+        const existing = appSettings.find((entry) => entry.key === normalizedKey);
+        if (existing) {
+          existing.value = String(value);
+          existing.updated_at = new Date().toISOString();
+        } else {
+          appSettings.push({
+            key: normalizedKey,
+            value: String(value),
+            updated_at: new Date().toISOString()
+          });
+        }
       }
 
       if (typeof cb === "function") {
@@ -1552,6 +1567,10 @@ function createFakeDb() {
               microsoft_email: user.microsoft_email || null
             }
           : undefined;
+      } else if (/SELECT value FROM app_settings WHERE key = \?/i.test(sql)) {
+        const [key] = params;
+        const setting = appSettings.find((entry) => entry.key === String(key || "").trim());
+        row = setting ? { value: setting.value } : undefined;
       } else if (/SELECT id FROM subjects WHERE LOWER\(name\) = LOWER\(\?\)/i.test(sql)) {
         const [name] = params;
         const subject = subjects.find((entry) => String(entry.name).toLowerCase() === String(name).toLowerCase());
@@ -4653,6 +4672,14 @@ async function initializeDatabase() {
   await pool.query(
     "CREATE INDEX IF NOT EXISTS sessions_expire_idx ON sessions (expire)"
   );
+
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS app_settings (
+      key TEXT PRIMARY KEY,
+      value TEXT NOT NULL,
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    )
+  `);
 
   await seedAdmin();
   await seedDemoData();

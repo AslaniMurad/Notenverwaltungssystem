@@ -19,6 +19,7 @@ const {
   isAllowedMicrosoftDomain,
   normalizeEmail
 } = require("./services/microsoftAuth");
+const { getRuntimeSettings } = require("./services/appSettings");
 
 const adminRouter = require("./routes/admin");
 const accountRouter = require("./routes/account");
@@ -96,6 +97,8 @@ const LOGIN_RATE_WINDOW_MS = Number(process.env.LOGIN_RATE_LIMIT_WINDOW_MS) || 1
 const LOGIN_RATE_MAX = Number(process.env.LOGIN_RATE_LIMIT_MAX) || 5;
 const loginAttempts = new Map();
 const teamsEmbedEnabled = parseOptionalBoolean(process.env.TEAMS_EMBED_ENABLED) ?? false;
+const teamsMicrosoftLoginOnly =
+  parseOptionalBoolean(process.env.TEAMS_MICROSOFT_LOGIN_ONLY) ?? teamsEmbedEnabled;
 const defaultTeamsFrameAncestors = [
   "'self'",
   "https://teams.microsoft.com",
@@ -114,9 +117,14 @@ const sessionCookieSameSite =
   normalizeSameSite(process.env.SESSION_COOKIE_SAMESITE) || (teamsEmbedEnabled ? "none" : "lax");
 const secureCookieOverride = parseOptionalBoolean(process.env.SESSION_COOKIE_SECURE);
 const useSecureSessionCookie = secureCookieOverride ?? (isProduction || sessionCookieSameSite === "none");
+const sessionCookiePartitioned =
+  parseOptionalBoolean(process.env.SESSION_COOKIE_PARTITIONED) ?? teamsEmbedEnabled;
 
 if (sessionCookieSameSite === "none" && !useSecureSessionCookie) {
   throw new Error("SESSION_COOKIE_SECURE must be true when SESSION_COOKIE_SAMESITE is none.");
+}
+if (sessionCookiePartitioned && !useSecureSessionCookie) {
+  throw new Error("SESSION_COOKIE_SECURE must be true when SESSION_COOKIE_PARTITIONED is true.");
 }
 
 function buildLoginKey(req, email) {
@@ -152,6 +160,87 @@ function recordLoginFailure(key) {
 
 function resetLoginAttempts(key) {
   loginAttempts.delete(key);
+}
+
+function queryValueMatchesTeams(value) {
+  if (value == null) return false;
+  const values = Array.isArray(value) ? value : [value];
+  return values.some((entry) => {
+    const normalized = String(entry || "").trim().toLowerCase();
+    return ["1", "true", "yes", "on", "teams", "msteams", "microsoftteams"].includes(normalized);
+  });
+}
+
+function isTeamsHost(value) {
+  if (!value) return false;
+  try {
+    const { hostname } = new URL(String(value));
+    const normalizedHost = hostname.toLowerCase();
+    return (
+      normalizedHost === "teams.microsoft.com" ||
+      normalizedHost.endsWith(".teams.microsoft.com") ||
+      normalizedHost === "teams.cloud.microsoft" ||
+      normalizedHost.endsWith(".teams.cloud.microsoft")
+    );
+  } catch {
+    return false;
+  }
+}
+
+function hasTeamsLoginSignal(req) {
+  return (
+    queryValueMatchesTeams(req.query?.teams) ||
+    queryValueMatchesTeams(req.query?.client) ||
+    queryValueMatchesTeams(req.query?.hostClientType) ||
+    isTeamsHost(req.get("origin")) ||
+    isTeamsHost(req.get("referer"))
+  );
+}
+
+function rememberTeamsLoginContext(req) {
+  if (hasTeamsLoginSignal(req)) {
+    req.session.teamsLogin = true;
+  }
+}
+
+function isTeamsLoginContext(req) {
+  return Boolean(req.session?.teamsLogin || hasTeamsLoginSignal(req));
+}
+
+function shouldUseMicrosoftOnlyLogin(req) {
+  return teamsMicrosoftLoginOnly && isTeamsLoginContext(req);
+}
+
+function getRequestRuntimeSettings(req) {
+  return req.runtimeSettings || {
+    microsoftLoginEnabled: true,
+    maintenanceModeEnabled: false
+  };
+}
+
+function isMaintenanceMode(req) {
+  return Boolean(getRequestRuntimeSettings(req).maintenanceModeEnabled);
+}
+
+function isMicrosoftLoginAvailable(req) {
+  return (
+    microsoftAuthConfig.enabled &&
+    Boolean(getRequestRuntimeSettings(req).microsoftLoginEnabled) &&
+    !isMaintenanceMode(req)
+  );
+}
+
+function getMicrosoftUnavailableMessage(req) {
+  if (isMaintenanceMode(req)) return "Microsoft-Anmeldung ist im Wartungsmodus deaktiviert.";
+  if (!microsoftAuthConfig.enabled) return "Microsoft-Anmeldung ist derzeit nicht konfiguriert.";
+  return "Microsoft-Anmeldung ist derzeit deaktiviert.";
+}
+
+function saveSessionAndRedirect(req, res, next, target) {
+  req.session.save((saveErr) => {
+    if (saveErr) return next(saveErr);
+    return res.redirect(target);
+  });
 }
 
 app.use(express.urlencoded({ extended: true }));
@@ -217,7 +306,9 @@ function renderLogin(res, req, options = {}) {
     errorType,
     errorMessage,
     email,
-    microsoftAuthEnabled: microsoftAuthConfig.enabled
+    microsoftAuthEnabled: isMicrosoftLoginAvailable(req),
+    microsoftOnlyLogin: shouldUseMicrosoftOnlyLogin(req) && !isMaintenanceMode(req),
+    maintenanceMode: isMaintenanceMode(req)
   });
 }
 
@@ -265,9 +356,13 @@ function logTeacherAssignments(user) {
 
 function createUserSession(req, user, loginKey) {
   return new Promise((resolve, reject) => {
+    const teamsLogin = Boolean(req.session?.teamsLogin);
     req.session.regenerate((regenErr) => {
       if (regenErr) return reject(regenErr);
 
+      if (teamsLogin) {
+        req.session.teamsLogin = true;
+      }
       req.session.user = buildSessionUser(user);
 
       if (loginKey) {
@@ -326,6 +421,7 @@ app.use(
       httpOnly: true,
       sameSite: sessionCookieSameSite,
       secure: useSecureSessionCookie,
+      partitioned: sessionCookiePartitioned,
       maxAge: 1000 * 60 * 60 // 1h
     }
   })
@@ -333,6 +429,19 @@ app.use(
 app.use((req, res, next) => {
   res.locals.sessionUser = req.session?.user || null;
   next();
+});
+app.use(async (req, res, next) => {
+  try {
+    req.runtimeSettings = await getRuntimeSettings();
+    rememberTeamsLoginContext(req);
+    res.locals.runtimeSettings = req.runtimeSettings;
+    res.locals.microsoftLoginEnabled = isMicrosoftLoginAvailable(req);
+    res.locals.microsoftOnlyLogin = shouldUseMicrosoftOnlyLogin(req) && !isMaintenanceMode(req);
+    res.locals.maintenanceMode = isMaintenanceMode(req);
+    next();
+  } catch (err) {
+    next(err);
+  }
 });
 
 app.use((req, res, next) => {
@@ -363,6 +472,33 @@ app.use((req, res, next) => {
       createSessionForUser(req, user, next);
     }
   );
+});
+
+app.use((req, res, next) => {
+  if (!isMaintenanceMode(req)) return next();
+
+  const sessionUser = req.session?.user || null;
+  if (sessionUser?.role === "admin") return next();
+
+  const pathOnly = String(req.path || "");
+  const isLoginRequest = pathOnly === "/login";
+  const isLogoutRequest = pathOnly === "/logout";
+
+  if (!sessionUser && (isLoginRequest || isLogoutRequest)) {
+    return next();
+  }
+
+  const redirectTarget = isTeamsLoginContext(req) ? "/login?teams=1" : "/login";
+  const finish = () => {
+    if (req.accepts("html")) return res.redirect(redirectTarget);
+    return res.status(503).json({ error: "maintenance_mode" });
+  };
+
+  if (sessionUser) {
+    return req.session.destroy(finish);
+  }
+
+  return finish();
 });
 
 // --- CSRF ---
@@ -533,20 +669,35 @@ app.get("/", requireAuth, (req, res) => {
 });
 
 // --- Login Seite ---
-app.get("/login", (req, res) => {
+app.get("/login", (req, res, next) => {
   if (req.session.user) return res.redirect("/");
+  if (isMaintenanceMode(req)) {
+    return renderLogin(res, req);
+  }
+  if (shouldUseMicrosoftOnlyLogin(req)) {
+    if (!isMicrosoftLoginAvailable(req)) {
+      return renderMicrosoftAuthError(
+        res,
+        req,
+        getMicrosoftUnavailableMessage(req),
+        503
+      );
+    }
+    return saveSessionAndRedirect(req, res, next, "/auth/microsoft");
+  }
   renderLogin(res, req);
 });
 
 app.get("/auth/microsoft", (req, res, next) => {
+  rememberTeamsLoginContext(req);
   if (req.session.user) {
     return res.redirect("/");
   }
-  if (!microsoftAuthConfig.enabled) {
+  if (!isMicrosoftLoginAvailable(req)) {
     return renderMicrosoftAuthError(
       res,
       req,
-      "Microsoft-Anmeldung ist derzeit nicht konfiguriert.",
+      getMicrosoftUnavailableMessage(req),
       503
     );
   }
@@ -580,11 +731,11 @@ app.get("/auth/microsoft/callback", async (req, res, next) => {
   if (req.session.user && !isLinkMode) {
     return res.redirect("/");
   }
-  if (!microsoftAuthConfig.enabled) {
+  if (!isMicrosoftLoginAvailable(req)) {
     return renderMicrosoftAuthError(
       res,
       req,
-      "Microsoft-Anmeldung ist derzeit nicht konfiguriert.",
+      getMicrosoftUnavailableMessage(req),
       503
     );
   }
@@ -743,6 +894,18 @@ app.post("/force-password-change", requireAuth, (req, res, next) => {
 
 // --- Login POST ---
 app.post("/login", async (req, res, next) => {
+  if (shouldUseMicrosoftOnlyLogin(req) && !isMaintenanceMode(req)) {
+    if (!isMicrosoftLoginAvailable(req)) {
+      return renderMicrosoftAuthError(
+        res,
+        req,
+        getMicrosoftUnavailableMessage(req),
+        503
+      );
+    }
+    return res.redirect("/auth/microsoft");
+  }
+
   const { email, password } = req.body || {};
   const loginKey = buildLoginKey(req, email);
   if (isLoginRateLimited(loginKey)) {
@@ -794,6 +957,14 @@ app.post("/login", async (req, res, next) => {
       email
     });
   }
+  if (isMaintenanceMode(req) && user.role !== "admin") {
+    return renderLogin(res, req, {
+      status: 503,
+      errorType: "invalid",
+      errorMessage: "Nur Admins.",
+      email: ""
+    });
+  }
 
   try {
     const redirectTarget = await completeLogin(req, user, loginKey);
@@ -805,7 +976,8 @@ app.post("/login", async (req, res, next) => {
 
 // --- Logout ---
 app.post("/logout", (req, res) => {
-  req.session.destroy(() => res.redirect("/login"));
+  const teamsLogin = Boolean(req.session?.teamsLogin);
+  req.session.destroy(() => res.redirect(teamsLogin ? "/login?teams=1" : "/login"));
 });
 
 // --- Router Mounts ---

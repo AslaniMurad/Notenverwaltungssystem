@@ -1,51 +1,80 @@
 <%
-  const _errorType = typeof errorType !== 'undefined' ? errorType : null;
-  const _errorMessage = typeof errorMessage !== 'undefined' ? errorMessage : null;
-  const _csrfToken = typeof csrfToken !== 'undefined' ? csrfToken : '';
-  const _email = typeof email !== 'undefined' ? email : '';
+  const _errorType = typeof errorType !== "undefined" ? errorType : null;
+  const _errorMessage = typeof errorMessage !== "undefined" ? errorMessage : null;
+  const _csrfToken = typeof csrfToken !== "undefined" ? csrfToken : "";
+  const _email = typeof email !== "undefined" ? email : "";
   const _microsoftAuthEnabled = Boolean(microsoftAuthEnabled);
+  const _microsoftOnlyLogin = Boolean(microsoftOnlyLogin);
+  const _maintenanceMode = Boolean(maintenanceMode);
 
   const page = {
-    title: 'Login | Notenverwaltungssystem',
-    styles: ['/css/login.css'],
-    scripts: ['/js/app.js'],
-    bodyClass: 'page-login',
+    title: "Login | Notenverwaltungssystem",
+    styles: ["/css/login.css"],
+    scripts: ["/js/app.js"],
+    bodyClass: "page-login",
     hideHeader: true,
     hideFooter: true,
     content: function () { %>
     <div class="login-card card">
-        <div class="login-brand">
-          <img src="/images/nvs-logo.png" alt="Notenverwaltungssystem Logo" class="login-mark">
-          <div>
-            <div class="login-eyebrow">HTL Waidhofen</div>
-            <div class="login-title-inline">Notenverwaltung</div>
-          </div>
+      <div class="login-brand">
+        <img src="/images/nvs-logo.png" alt="Notenverwaltungssystem Logo" class="login-mark">
+        <div>
+          <div class="login-eyebrow">HTL Waidhofen</div>
+          <div class="login-title-inline">Notenverwaltung</div>
         </div>
+      </div>
 
-        <hr class="login-separator">
+      <hr class="login-separator">
 
-        <h1 class="login-welcome-title">Willkommen</h1>
-        <p class="login-subtitle">
+      <h1 class="login-welcome-title"><%= _maintenanceMode ? "Wartungsarbeiten" : "Willkommen" %></h1>
+      <p class="login-subtitle">
+        <% if (_maintenanceMode) { %>
+          Die App ist derzeit im Wartungsmodus.
+        <% } else if (_microsoftOnlyLogin) { %>
+          Melde dich mit deinem Microsoft-Schulkonto an
+        <% } else { %>
           Melde dich mit deinen Schulzugangsdaten an<% if (_microsoftAuthEnabled) { %> oder nutze dein Microsoft-Schulkonto<% } %>
-        </p>
+        <% } %>
+      </p>
+
+      <% if (!_maintenanceMode) { %>
         <p class="login-notice">
           Hinweis (freiwillig, in Anlehnung an &sect; 25 MedienG):
           Diese Website ist ein zeitlich befristetes Schulprojekt zu Demonstrationszwecken
           im Rahmen des Unterrichts an der HTBLuVA Waidhofen an der Ybbs.
         </p>
+      <% } %>
 
-        <% const hasErrorPanel = _errorType === 'invalid'; %>
-        <% if (hasErrorPanel) { %>
-          <div class="login-alert-panel login-alert-invalid" role="alert">
-            <div class="login-alert-icon">✖</div>
-            <div class="login-alert-body">
-              <p class="login-alert-title">Der Login ist fehlgeschlagen</p>
-              <p class="login-alert-text"><%= _errorMessage || 'Versuchen Sie es erneut.' %></p>
+      <% const hasErrorPanel = _errorType === "invalid"; %>
+      <% if (hasErrorPanel) { %>
+        <div class="login-alert-panel login-alert-invalid" role="alert">
+          <div class="login-alert-icon">!</div>
+          <div class="login-alert-body">
+            <p class="login-alert-title"><%= _maintenanceMode ? "Anmeldung nicht moeglich" : "Der Login ist fehlgeschlagen" %></p>
+            <p class="login-alert-text"><%= _errorMessage || "Versuchen Sie es erneut." %></p>
+            <% if (!_maintenanceMode) { %>
               <p class="login-alert-text">Sollte der Fehler bestehen bleiben, wende dich bitte an die Schuladministration.</p>
-            </div>
+            <% } %>
           </div>
-        <% } %>
+        </div>
+      <% } %>
 
+      <% if (_maintenanceMode) { %>
+        <details class="login-advanced">
+          <summary>Erweitert</summary>
+          <form method="POST" action="/login">
+            <input type="hidden" name="_csrf" value="<%= _csrfToken %>">
+
+            <label class="login-label" for="email">E-Mail-Adresse</label>
+            <input class="login-input" id="email" name="email" type="email" required value="<%= _email %>">
+
+            <label class="login-label" for="password">Passwort</label>
+            <input class="login-input" id="password" name="password" type="password" required>
+
+            <button class="btn-login-submit" type="submit">Admin Login</button>
+          </form>
+        </details>
+      <% } else if (!_microsoftOnlyLogin) { %>
         <form method="POST" action="/login">
           <input type="hidden" name="_csrf" value="<%= _csrfToken %>">
 
@@ -57,7 +86,6 @@
 
           <div class="login-hint-row">
             <!-- TODO: Add a remeber me functionality -->
-            
           </div>
 
           <button class="btn-login-submit" type="submit">Login</button>
@@ -66,25 +94,23 @@
         <div class="login-divider" aria-hidden="true">
           <span>oder</span>
         </div>
-        <% if (_microsoftAuthEnabled) { %>
-          <a class="btn-login-microsoft" href="/auth/microsoft">Mit Microsoft anmelden</a>
-          <p class="login-provider-hint">
-            Der Microsoft-Login verwendet dein vorher verknuepftes NVS-Konto und uebernimmt dieselbe Rolle wie beim normalen Login.
-          </p>
-        <% } else { %>
-          <button class="btn-login-microsoft is-disabled" type="button" disabled>Mit Microsoft anmelden</button>
-          <p class="login-provider-hint">
-            Microsoft-Anmeldung ist vorbereitet, aber in der `.env` noch nicht konfiguriert.
-          </p>
-        <% } %>
+      <% } %>
 
+      <% if (!_maintenanceMode && _microsoftAuthEnabled) { %>
+        <a class="btn-login-microsoft" href="/auth/microsoft">Mit Microsoft anmelden</a>
+        <p class="login-provider-hint">
+          Der Microsoft-Login verwendet dein vorher verknuepftes NVS-Konto und uebernimmt dieselbe Rolle wie beim normalen Login.
+        </p>
+      <% } %>
+
+      <% if (!_maintenanceMode) { %>
         <div class="login-foot">
           <div class="login-foot-item">
-            <span class="login-foot-icon">👥</span>
             <span>Sitz, Grasberger, Granzer, Aslani</span>
           </div>
         </div>
-      </div>
+      <% } %>
+    </div>
 <% } };
 %>
-<%- include('layout', page) %>
+<%- include("layout", page) %>

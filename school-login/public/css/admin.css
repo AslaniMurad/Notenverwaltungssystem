@@ -169,6 +169,100 @@ body.page-admin-edit {
   flex-wrap: wrap;
 }
 
+.admin-settings-form {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
+.admin-settings-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: 14px;
+}
+
+.admin-setting-tile {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  min-height: 96px;
+  padding: 18px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--surface);
+  cursor: pointer;
+}
+
+.admin-setting-copy {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.admin-setting-title {
+  color: var(--text);
+  font-size: 16px;
+  font-weight: 800;
+}
+
+.admin-setting-state {
+  color: var(--text-muted);
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.admin-setting-toggle-input {
+  position: absolute;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.admin-setting-toggle {
+  position: relative;
+  flex: 0 0 auto;
+  width: 50px;
+  height: 28px;
+  border-radius: 999px;
+  background: #cbd5e1;
+  transition: background-color 0.2s ease;
+}
+
+.admin-setting-toggle::after {
+  content: "";
+  position: absolute;
+  top: 4px;
+  left: 4px;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: #fff;
+  box-shadow: 0 2px 6px rgba(15, 23, 42, 0.18);
+  transition: transform 0.2s ease;
+}
+
+.admin-setting-toggle-input:checked ~ .admin-setting-toggle {
+  background: #2563eb;
+}
+
+.admin-setting-tile.is-danger .admin-setting-toggle-input:checked ~ .admin-setting-toggle {
+  background: #dc2626;
+}
+
+.admin-setting-toggle-input:checked ~ .admin-setting-toggle::after {
+  transform: translateX(22px);
+}
+
+.admin-setting-toggle-input:focus-visible ~ .admin-setting-toggle {
+  outline: 3px solid rgba(37, 99, 235, 0.18);
+  outline-offset: 3px;
+}
+
+.admin-settings-actions {
+  display: flex;
+  justify-content: flex-end;
+}
+
 .admin-quick-actions {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
