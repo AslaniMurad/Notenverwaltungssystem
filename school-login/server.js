@@ -95,6 +95,7 @@ function isDbConnectionError(err) {
 
 const LOGIN_RATE_WINDOW_MS = Number(process.env.LOGIN_RATE_LIMIT_WINDOW_MS) || 15 * 60 * 1000;
 const LOGIN_RATE_MAX = Number(process.env.LOGIN_RATE_LIMIT_MAX) || 5;
+const MAINTENANCE_LOGIN_TOKEN_TTL_MS = 10 * 60 * 1000;
 const loginAttempts = new Map();
 const teamsEmbedEnabled = parseOptionalBoolean(process.env.TEAMS_EMBED_ENABLED) ?? false;
 const teamsMicrosoftLoginOnly =
@@ -236,6 +237,47 @@ function getMicrosoftUnavailableMessage(req) {
   return "Microsoft-Anmeldung ist derzeit deaktiviert.";
 }
 
+function createMaintenanceLoginToken(now = Date.now()) {
+  const nonce = crypto.randomBytes(16).toString("base64url");
+  const payload = `${now}.${nonce}`;
+  const signature = crypto
+    .createHmac("sha256", sessionSecret)
+    .update(payload)
+    .digest("base64url");
+  return `${payload}.${signature}`;
+}
+
+function verifyMaintenanceLoginToken(token) {
+  const parts = String(token || "").split(".");
+  if (parts.length !== 3) return false;
+
+  const [timestampValue, nonce, signature] = parts;
+  const issuedAt = Number(timestampValue);
+  if (!Number.isFinite(issuedAt) || !nonce || !signature) return false;
+
+  const now = Date.now();
+  if (issuedAt > now + 60 * 1000 || now - issuedAt > MAINTENANCE_LOGIN_TOKEN_TTL_MS) {
+    return false;
+  }
+
+  const payload = `${timestampValue}.${nonce}`;
+  const expectedSignature = crypto
+    .createHmac("sha256", sessionSecret)
+    .update(payload)
+    .digest("base64url");
+
+  const actualBuffer = Buffer.from(signature);
+  const expectedBuffer = Buffer.from(expectedSignature);
+  return (
+    actualBuffer.length === expectedBuffer.length &&
+    crypto.timingSafeEqual(actualBuffer, expectedBuffer)
+  );
+}
+
+function isMaintenanceLoginPost(req) {
+  return req.method === "POST" && req.path === "/login" && isMaintenanceMode(req);
+}
+
 function saveSessionAndRedirect(req, res, next, target) {
   req.session.save((saveErr) => {
     if (saveErr) return next(saveErr);
@@ -302,13 +344,14 @@ function renderLogin(res, req, options = {}) {
   } = options;
 
   return res.status(status).render("login", {
-    csrfToken: req.csrfToken(),
+    csrfToken: typeof req.csrfToken === "function" ? req.csrfToken() : "",
     errorType,
     errorMessage,
     email,
     microsoftAuthEnabled: isMicrosoftLoginAvailable(req),
     microsoftOnlyLogin: shouldUseMicrosoftOnlyLogin(req) && !isMaintenanceMode(req),
-    maintenanceMode: isMaintenanceMode(req)
+    maintenanceMode: isMaintenanceMode(req),
+    maintenanceLoginToken: isMaintenanceMode(req) ? createMaintenanceLoginToken() : ""
   });
 }
 
@@ -522,6 +565,14 @@ app.use((req, res, next) => {
   }
   if (req.is("multipart/form-data")) {
     return next();
+  }
+  if (isMaintenanceLoginPost(req)) {
+    if (verifyMaintenanceLoginToken(req.body?._maintenance_csrf)) {
+      return next();
+    }
+    const err = new Error("Invalid maintenance login token.");
+    err.code = "EBADCSRFTOKEN";
+    return next(err);
   }
   return csrfProtection(req, res, next);
 });

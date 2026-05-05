@@ -6,6 +6,7 @@
   const _microsoftAuthEnabled = Boolean(microsoftAuthEnabled);
   const _microsoftOnlyLogin = Boolean(microsoftOnlyLogin);
   const _maintenanceMode = Boolean(maintenanceMode);
+  const _maintenanceLoginToken = typeof maintenanceLoginToken !== "undefined" ? maintenanceLoginToken : "";
 
   const page = {
     title: "Login | Notenverwaltungssystem",
@@ -64,6 +65,7 @@
           <summary>Erweitert</summary>
           <form method="POST" action="/login">
             <input type="hidden" name="_csrf" value="<%= _csrfToken %>">
+            <input type="hidden" name="_maintenance_csrf" value="<%= _maintenanceLoginToken %>">
 
             <label class="login-label" for="email">E-Mail-Adresse</label>
             <input class="login-input" id="email" name="email" type="email" required value="<%= _email %>">
