@@ -61,6 +61,12 @@ function parseDelimitedList(value) {
     .filter(Boolean);
 }
 
+function normalizeFrameAncestor(value) {
+  const normalized = String(value || "").trim();
+  if (!normalized) return null;
+  return normalized.toLowerCase() === "self" ? "'self'" : normalized;
+}
+
 function normalizeSameSite(value) {
   if (value == null || value === "") return null;
   const normalized = String(value).trim().toLowerCase();
@@ -97,7 +103,9 @@ const defaultTeamsFrameAncestors = [
   "https://teams.cloud.microsoft",
   "https://*.cloud.microsoft"
 ];
-const configuredFrameAncestors = parseDelimitedList(process.env.FRAME_ANCESTORS);
+const configuredFrameAncestors = parseDelimitedList(process.env.FRAME_ANCESTORS)
+  .map(normalizeFrameAncestor)
+  .filter(Boolean);
 const allowedFrameAncestors = configuredFrameAncestors.length
   ? configuredFrameAncestors
   : teamsEmbedEnabled
