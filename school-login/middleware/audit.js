@@ -380,6 +380,13 @@ function buildAuditDescription(req, routePath, entityType, entityId) {
       targetLabel: entityTarget
     });
   }
+  if (/^\/admin\/users\/[^/]+\/email-reset$/i.test(routePath)) {
+    return buildAuditEntry({
+      scopeLabel,
+      actionTitle: "Einmalpasswort per E-Mail erstellt",
+      targetLabel: entityTarget
+    });
+  }
   if (/^\/admin\/users\/[^/]+\/delete$/i.test(routePath)) {
     return buildAuditEntry({
       scopeLabel,

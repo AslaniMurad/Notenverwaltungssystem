@@ -2,12 +2,14 @@ const express = require("express");
 const router = express.Router();
 const { db, hashPassword } = require("../db");
 const schoolYearModel = require("../models/schoolYearModel");
+const passwordResetModel = require("../models/passwordResetModel");
 const { requireAuth, requireRole } = require("../middleware/auth");
 const { createAuditLogMiddleware } = require("../middleware/audit");
-const { getPasswordValidationError } = require("../utils/password");
+const { getPasswordValidationError, generateOneTimePassword } = require("../utils/password");
 const { deriveNameFromEmail } = require("../utils/studentName");
 const { getDisplayName } = require("../utils/userDisplay");
 const { getRuntimeSettings, updateRuntimeSettings } = require("../services/appSettings");
+const { sendPasswordResetEmail } = require("../services/mailService");
 
 const INITIAL_PASSWORD = process.env.INITIAL_PASSWORD || null;
 const AUDIT_PAGE_SIZE = 50;
@@ -956,6 +958,22 @@ function renderAddStudentPage(req, res, classData, options = {}) {
   });
 }
 
+function resolveUserEditFeedback(query = {}) {
+  if (query.microsoft === "unlinked") {
+    return { tone: "success", message: "Microsoft-Konto wurde entbunden." };
+  }
+  if (query.passwordReset === "sent") {
+    return { tone: "success", message: "Einmalpasswort wurde per E-Mail versendet." };
+  }
+  return null;
+}
+
+function getPublicLoginUrl(req) {
+  const configuredBaseUrl = String(process.env.APP_BASE_URL || "").trim().replace(/\/+$/, "");
+  if (configuredBaseUrl) return `${configuredBaseUrl}/login`;
+  return `${req.protocol}://${req.get("host")}/login`;
+}
+
 router.use(requireAuth, requireRole("admin"));
 router.use(createAuditLogMiddleware());
 router.use(async (req, res, next) => {
@@ -1498,7 +1516,7 @@ router.get("/users/:id", async (req, res, next) => {
 router.get("/users/:id/edit", async (req, res, next) => {
   const id = req.params.id;
   try {
-    const [user, microsoftUser] = await Promise.all([
+    const [user, microsoftUser, passwordResetRequests] = await Promise.all([
       getAsync(
         "SELECT id, email, role, status, must_change_password, microsoft_email, microsoft_connected_at FROM users WHERE id = ?",
         [id]
@@ -1506,7 +1524,8 @@ router.get("/users/:id/edit", async (req, res, next) => {
       getAsync(
         "SELECT id, email, status, microsoft_oid, microsoft_tenant_id, microsoft_email FROM users WHERE id = ?",
         [id]
-      )
+      ),
+      passwordResetModel.listRecentRequestsForUser(id)
     ]);
     if (!user)
       return res.status(404).render("error", {
@@ -1521,9 +1540,8 @@ router.get("/users/:id/edit", async (req, res, next) => {
 
     res.render("admin/edit", {
       user,
-      feedback: req.query.microsoft === "unlinked"
-        ? { tone: "success", message: "Microsoft-Konto wurde entbunden." }
-        : null,
+      passwordResetRequests,
+      feedback: resolveUserEditFeedback(req.query),
       csrfToken: req.csrfToken(),
       currentUser: req.session.user,
       activePath: req.originalUrl
@@ -1566,6 +1584,74 @@ router.post("/users/:id/microsoft-unlink", async (req, res, next) => {
   } catch (err) {
     console.error("DB error unlinking Microsoft account:", err);
     next(err);
+  }
+});
+
+router.post("/users/:id/email-reset", async (req, res, next) => {
+  const id = req.params.id;
+  const backUrl = `/admin/users/${id}/edit`;
+
+  try {
+    const user = await getAsync(
+      "SELECT id, email, role, status, must_change_password FROM users WHERE id = ?",
+      [id]
+    );
+
+    if (!user) {
+      return res.status(404).render("error", {
+        message: "Nutzer nicht gefunden.",
+        status: 404,
+        backUrl: "/admin/users",
+        csrfToken: req.csrfToken()
+      });
+    }
+
+    if (user.status !== "active") {
+      return res.status(400).render("error", {
+        message: "Einmalpasswort kann nur fuer aktive Nutzer erstellt werden.",
+        status: 400,
+        backUrl,
+        csrfToken: req.csrfToken()
+      });
+    }
+
+    const oneTimePassword = generateOneTimePassword();
+    const resetRequest = await passwordResetModel.createOneTimePasswordRequest({
+      userId: user.id,
+      requestedByUserId: req.session.user.id,
+      oneTimePassword
+    });
+
+    try {
+      await sendPasswordResetEmail({
+        to: user.email,
+        oneTimePassword,
+        expiresAt: resetRequest.expiresAt,
+        loginUrl: getPublicLoginUrl(req),
+        requestedByEmail: req.session.user.email
+      });
+      await passwordResetModel.markRequestSent(resetRequest.id);
+    } catch (mailErr) {
+      await passwordResetModel.invalidateRequest(resetRequest.id).catch((invalidateErr) => {
+        console.error("Failed to invalidate password reset request:", invalidateErr);
+      });
+
+      const isConfigError = mailErr?.code === "MAIL_NOT_CONFIGURED";
+      return res.status(isConfigError ? 503 : 502).render("error", {
+        message: isConfigError
+          ? "Mailversand ist nicht konfiguriert. Bitte SMTP-Umgebungsvariablen am Server setzen."
+          : "Einmalpasswort wurde nicht versendet. Bitte SMTP-Konfiguration und Server-Logs pruefen.",
+        status: isConfigError ? 503 : 502,
+        backUrl,
+        csrfToken: req.csrfToken()
+      });
+    }
+
+    await runAsync("UPDATE users SET must_change_password = ? WHERE id = ?", [true, user.id]);
+    return res.redirect(`${backUrl}?passwordReset=sent`);
+  } catch (err) {
+    console.error("DB error creating email password reset:", err);
+    return next(err);
   }
 });
 
@@ -1650,6 +1736,7 @@ router.post("/users/:id/reset", async (req, res, next) => {
 
   try {
     await runAsync("UPDATE users SET password_hash = ?, must_change_password = ? WHERE id = ?", [hash, mustChange, id]);
+    await passwordResetModel.invalidateActiveRequestsForUser(id);
     res.redirect("/admin/users");
   } catch (err) {
     console.error("DB error resetting password:", err);

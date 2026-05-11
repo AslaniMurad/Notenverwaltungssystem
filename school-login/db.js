@@ -68,6 +68,7 @@ function createFakeDb() {
   const teacherGradingProfiles = [];
   const teacherGradingProfileItems = [];
   const appSettings = [];
+  const passwordResetRequests = [];
   let userId = 1;
   let schoolYearId = 1;
   let classId = 1;
@@ -86,6 +87,7 @@ function createFakeDb() {
   let rolloverLogId = 1;
   let gradingProfileId = 1;
   let gradingProfileItemId = 1;
+  let passwordResetRequestId = 1;
 
   function ensureActiveSchoolYear() {
     const active = schoolYears.find((entry) => Boolean(entry.is_active));
@@ -265,6 +267,47 @@ function createFakeDb() {
         const user = users.find((u) => u.id === Number(id));
         if (user) {
           user.must_change_password = must_change_password;
+        }
+      } else if (/INSERT INTO password_reset_requests/i.test(sql)) {
+        const [user_id, requested_by_user_id, password_hash, expires_at] = params;
+        const request = {
+          id: passwordResetRequestId++,
+          user_id: Number(user_id),
+          requested_by_user_id: requested_by_user_id == null ? null : Number(requested_by_user_id),
+          password_hash,
+          expires_at,
+          sent_at: null,
+          used_at: null,
+          invalidated_at: null,
+          created_at: new Date().toISOString()
+        };
+        passwordResetRequests.push(request);
+        lastID = request.id;
+      } else if (/UPDATE password_reset_requests\s+SET sent_at = current_timestamp\s+WHERE id = \?/i.test(sql)) {
+        const [id] = params;
+        const request = passwordResetRequests.find((entry) => entry.id === Number(id));
+        if (request) {
+          request.sent_at = new Date().toISOString();
+        }
+      } else if (/UPDATE password_reset_requests\s+SET invalidated_at = current_timestamp\s+WHERE id = \? AND used_at IS NULL AND invalidated_at IS NULL/i.test(sql)) {
+        const [id] = params;
+        const request = passwordResetRequests.find((entry) => entry.id === Number(id));
+        if (request && !request.used_at && !request.invalidated_at) {
+          request.invalidated_at = new Date().toISOString();
+        }
+      } else if (/UPDATE password_reset_requests[\s\S]*WHERE user_id = \? AND used_at IS NULL AND invalidated_at IS NULL/i.test(sql)) {
+        const [user_id] = params;
+        const now = new Date().toISOString();
+        passwordResetRequests
+          .filter((entry) => entry.user_id === Number(user_id) && !entry.used_at && !entry.invalidated_at)
+          .forEach((entry) => {
+            entry.invalidated_at = now;
+          });
+      } else if (/UPDATE password_reset_requests[\s\S]*SET used_at = current_timestamp[\s\S]*WHERE id = \? AND used_at IS NULL AND invalidated_at IS NULL/i.test(sql)) {
+        const [id] = params;
+        const request = passwordResetRequests.find((entry) => entry.id === Number(id));
+        if (request && !request.used_at && !request.invalidated_at) {
+          request.used_at = new Date().toISOString();
         }
       } else if (/INSERT INTO school_years/i.test(sql)) {
         const [name, start_date, end_date, is_active] = params;
@@ -3014,6 +3057,34 @@ function createFakeDb() {
           .filter((n) => n.student_id === Number(student_id))
           .sort((a, b) => new Date(b.created_at) - new Date(a.created_at))
           .map((n) => ({ ...n }));
+      } else if (/FROM password_reset_requests\s+WHERE user_id = \?/i.test(sql)) {
+        const [user_id, expiresAfter, limit] = params;
+        const cutoff = new Date(expiresAfter).getTime();
+        const safeLimit = Number.isFinite(Number(limit)) ? Number(limit) : 5;
+        rows = passwordResetRequests
+          .filter((entry) => entry.user_id === Number(user_id))
+          .filter((entry) => !entry.used_at && !entry.invalidated_at && entry.sent_at)
+          .filter((entry) => {
+            const expiresAt = new Date(entry.expires_at).getTime();
+            return Number.isFinite(expiresAt) && expiresAt > cutoff;
+          })
+          .sort((a, b) => new Date(b.created_at) - new Date(a.created_at) || b.id - a.id)
+          .slice(0, safeLimit)
+          .map((entry) => ({ ...entry }));
+      } else if (/FROM password_reset_requests pr/i.test(sql)) {
+        const [user_id, limit] = params;
+        const safeLimit = Number.isFinite(Number(limit)) ? Number(limit) : 5;
+        rows = passwordResetRequests
+          .filter((entry) => entry.user_id === Number(user_id))
+          .sort((a, b) => new Date(b.created_at) - new Date(a.created_at) || b.id - a.id)
+          .slice(0, safeLimit)
+          .map((entry) => {
+            const requestedBy = users.find((user) => user.id === entry.requested_by_user_id);
+            return {
+              ...entry,
+              requested_by_email: requestedBy?.email || null
+            };
+          });
       } else if (/FROM audit_logs/i.test(sql)) {
         const actorMode = parseAuditMatchMode(sql, "actor");
         const actionMode = parseAuditMatchMode(sql, "action");
@@ -3520,6 +3591,26 @@ async function initializeDatabase() {
   await pool.query("ALTER TABLE users ADD COLUMN IF NOT EXISTS microsoft_connected_at TIMESTAMPTZ");
   await pool.query(
     "CREATE UNIQUE INDEX IF NOT EXISTS users_microsoft_link_unique_idx ON users (microsoft_tenant_id, microsoft_oid) WHERE microsoft_oid IS NOT NULL AND microsoft_tenant_id IS NOT NULL"
+  );
+
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS password_reset_requests (
+      id SERIAL PRIMARY KEY,
+      user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      requested_by_user_id INTEGER REFERENCES users(id) ON DELETE SET NULL,
+      password_hash TEXT NOT NULL,
+      expires_at TIMESTAMPTZ NOT NULL,
+      sent_at TIMESTAMPTZ,
+      used_at TIMESTAMPTZ,
+      invalidated_at TIMESTAMPTZ,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    )
+  `);
+  await pool.query(
+    "CREATE INDEX IF NOT EXISTS password_reset_requests_user_idx ON password_reset_requests (user_id, created_at DESC)"
+  );
+  await pool.query(
+    "CREATE INDEX IF NOT EXISTS password_reset_requests_active_idx ON password_reset_requests (user_id, expires_at) WHERE sent_at IS NOT NULL AND used_at IS NULL AND invalidated_at IS NULL"
   );
 
   await pool.query(`

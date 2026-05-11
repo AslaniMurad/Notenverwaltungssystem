@@ -11,6 +11,25 @@ CREATE TABLE IF NOT EXISTS users (
   last_login TIMESTAMPTZ
 );
 
+CREATE TABLE IF NOT EXISTS password_reset_requests (
+  id SERIAL PRIMARY KEY,
+  user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  requested_by_user_id INTEGER REFERENCES users(id) ON DELETE SET NULL,
+  password_hash TEXT NOT NULL,
+  expires_at TIMESTAMPTZ NOT NULL,
+  sent_at TIMESTAMPTZ,
+  used_at TIMESTAMPTZ,
+  invalidated_at TIMESTAMPTZ,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS password_reset_requests_user_idx
+  ON password_reset_requests (user_id, created_at DESC);
+
+CREATE INDEX IF NOT EXISTS password_reset_requests_active_idx
+  ON password_reset_requests (user_id, expires_at)
+  WHERE sent_at IS NOT NULL AND used_at IS NULL AND invalidated_at IS NULL;
+
 CREATE TABLE IF NOT EXISTS classes (
   id SERIAL PRIMARY KEY,
   name TEXT NOT NULL,
