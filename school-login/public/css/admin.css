@@ -690,6 +690,46 @@ body.page-admin-edit {
   gap: 10px;
 }
 
+.admin-user-edit-reset-mail {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 14px;
+  align-items: start;
+  padding: 14px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: rgba(14, 165, 233, 0.06);
+}
+
+.admin-user-edit-reset-mail h4,
+.admin-user-edit-reset-history h4 {
+  margin: 0 0 6px;
+}
+
+.admin-user-edit-reset-history {
+  display: grid;
+  gap: 10px;
+}
+
+.admin-user-edit-reset-history ul {
+  list-style: none;
+  display: grid;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+}
+
+.admin-user-edit-reset-history li {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 12px;
+  align-items: center;
+  padding: 10px 0;
+  border-top: 1px solid var(--border);
+  color: var(--text-muted);
+  font-size: 0.92rem;
+}
+
 .admin-user-edit-danger {
   border-color: rgba(225, 29, 72, 0.24);
   background: linear-gradient(180deg, var(--surface) 0%, rgba(225, 29, 72, 0.04) 100%);
@@ -914,12 +954,17 @@ body.page-admin-edit {
     position: static;
   }
 
+  .admin-user-edit-reset-mail {
+    grid-template-columns: 1fr;
+  }
+
   .admin-user-edit-actions,
   .admin-user-edit-ms-form {
     justify-content: stretch;
   }
 
   .admin-user-edit-actions .btn,
+  .admin-user-edit-reset-mail .btn,
   .admin-user-edit-ms-form .btn {
     width: 100%;
   }

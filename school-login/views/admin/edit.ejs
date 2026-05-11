@@ -1,6 +1,7 @@
 <%
   const microsoftLinked = Boolean(user.microsoft_oid && user.microsoft_tenant_id);
   const passwordState = user.must_change_password ? 'Initial-Passwort aktiv' : 'Individuelles Passwort';
+  const resetRequests = Array.isArray(passwordResetRequests) ? passwordResetRequests : [];
 
   const page = {
     title: 'Bearbeite Nutzer',
@@ -88,6 +89,40 @@
                   <p class="admin-muted">Aktueller Passwortstatus: <strong><%= passwordState %></strong></p>
                 </div>
               </div>
+
+              <div class="admin-user-edit-reset-mail">
+                <div>
+                  <h4>Einmalpasswort per E-Mail</h4>
+                  <p class="admin-muted">Erstellt ein kryptografisch generiertes Einmalpasswort, sendet es an <strong><%= user.email %></strong> und erzwingt nach dem Login einen Passwortwechsel.</p>
+                </div>
+                <form
+                  method="POST"
+                  action="/admin/users/<%= user.id %>/email-reset"
+                  data-confirm-title="Einmalpasswort senden"
+                  data-confirm-message="MÃ¶chtest du ein neues Einmalpasswort an <%= user.email %> senden?"
+                  data-confirm-note="Vorherige offene EinmalpasswÃ¶rter fÃ¼r diesen Nutzer werden ungÃ¼ltig."
+                  data-confirm-action="Senden"
+                >
+                  <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+                  <button class="btn btn-primary" type="submit" <%= user.status !== 'active' ? 'disabled' : '' %>>Einmalpasswort senden</button>
+                </form>
+              </div>
+
+              <% if (resetRequests.length > 0) { %>
+                <div class="admin-user-edit-reset-history">
+                  <h4>Letzte ZurÃ¼cksetzungsanfragen</h4>
+                  <ul>
+                    <% resetRequests.forEach(function(request) { %>
+                      <li>
+                        <span class="admin-badge <%= request.status === 'active' ? 'admin-badge-success' : 'admin-badge-neutral' %>"><%= request.status_label %></span>
+                        <span>Erstellt: <%= request.created_at || '-' %></span>
+                        <span>GÃ¼ltig bis: <%= request.expires_at || '-' %></span>
+                        <span>Von: <%= request.requested_by_email || '-' %></span>
+                      </li>
+                    <% }) %>
+                  </ul>
+                </div>
+              <% } %>
 
               <form class="admin-edit-form admin-stacked-form" method="POST" action="/admin/users/<%= user.id %>/reset">
                 <input type="hidden" name="_csrf" value="<%= csrfToken %>">

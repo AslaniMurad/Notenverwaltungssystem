@@ -12,6 +12,7 @@ const { buildSessionStore } = require("./sessionStore");
 const { getPasswordValidationError } = require("./utils/password");
 const userDisplay = require("./utils/userDisplay");
 const schoolYearModel = require("./models/schoolYearModel");
+const passwordResetModel = require("./models/passwordResetModel");
 const {
   microsoftAuthConfig,
   createMicrosoftAuthorizationRequest,
@@ -331,6 +332,15 @@ function allAsync(sql, params = []) {
     db.all(sql, params, (err, rows) => {
       if (err) return reject(err);
       resolve(rows || []);
+    });
+  });
+}
+
+function runAsync(sql, params = []) {
+  return new Promise((resolve, reject) => {
+    db.run(sql, params, function onRun(err) {
+      if (err) return reject(err);
+      resolve(this);
     });
   });
 }
@@ -918,7 +928,7 @@ app.get("/force-password-change", requireAuth, (req, res) => {
   });
 });
 
-app.post("/force-password-change", requireAuth, (req, res, next) => {
+app.post("/force-password-change", requireAuth, async (req, res, next) => {
   if (!req.session.user.must_change_password) {
     return res.redirect(getRedirectForRole(req.session.user.role));
   }
@@ -932,15 +942,17 @@ app.post("/force-password-change", requireAuth, (req, res, next) => {
     });
   }
   const hash = hashPassword(newPassword);
-  db.run(
-    "UPDATE users SET password_hash = ?, must_change_password = ? WHERE id = ?",
-    [hash, 0, req.session.user.id],
-    (err) => {
-      if (err) return next(err);
-      req.session.user.must_change_password = false;
-      return res.redirect(getRedirectForRole(req.session.user.role));
-    }
-  );
+  try {
+    await runAsync(
+      "UPDATE users SET password_hash = ?, must_change_password = ? WHERE id = ?",
+      [hash, 0, req.session.user.id]
+    );
+    await passwordResetModel.invalidateActiveRequestsForUser(req.session.user.id);
+    req.session.user.must_change_password = false;
+    return res.redirect(getRedirectForRole(req.session.user.role));
+  } catch (err) {
+    return next(err);
+  }
 });
 
 // --- Login POST ---
@@ -990,7 +1002,7 @@ app.post("/login", async (req, res, next) => {
     });
   }
 
-  if (!user || !verifyPassword(user.password_hash, password)) {
+  if (!user) {
     recordLoginFailure(loginKey);
     return renderLogin(res, req, {
       status: 401,
@@ -999,7 +1011,27 @@ app.post("/login", async (req, res, next) => {
       email
     });
   }
+  let passwordAccepted = verifyPassword(user.password_hash, password);
   if (user.status !== "active") {
+    recordLoginFailure(loginKey);
+    return renderLogin(res, req, {
+      status: 401,
+      errorType: "invalid",
+      errorMessage: "Login fehlgeschlagen.",
+      email
+    });
+  }
+  if (!passwordAccepted) {
+    try {
+      passwordAccepted = await passwordResetModel.consumeMatchingOneTimePassword(user.id, password);
+      if (passwordAccepted) {
+        user.must_change_password = 1;
+      }
+    } catch (err) {
+      return next(err);
+    }
+  }
+  if (!passwordAccepted) {
     recordLoginFailure(loginKey);
     return renderLogin(res, req, {
       status: 401,

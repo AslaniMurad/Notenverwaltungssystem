@@ -18,10 +18,12 @@ process.env.MICROSOFT_TENANT_ID = "test-tenant-id";
 process.env.MICROSOFT_REDIRECT_URI = "http://127.0.0.1/auth/microsoft/callback";
 process.env.MICROSOFT_ALLOWED_DOMAIN = "test.local";
 process.env.TEAMS_MICROSOFT_LOGIN_ONLY = "true";
+process.env.EMAIL_DELIVERY_MODE = "console";
 
 const app = require("./server");
 const { db, hashPassword } = require("./db");
 const { updateRuntimeSettings } = require("./services/appSettings");
+const { clearTestOutbox, getTestOutbox } = require("./services/mailService");
 
 let server;
 let baseUrl;
@@ -565,6 +567,149 @@ test("admin can inspect and unlink a user's Microsoft account", { concurrency: f
   assert.strictEqual(refreshedPage.response.status, 200);
   assert.match(refreshedPage.body, /Microsoft-Konto wurde entbunden/);
   assert.match(refreshedPage.body, /Keine Verknüpfung/);
+});
+
+test("admin can email a one-time password reset that is consumed on login", { concurrency: false }, async () => {
+  clearTestOutbox();
+  const targetEmail = `reset.student.${Date.now()}@test.local`;
+  const insertResult = await dbRun(
+    "INSERT INTO users (email, password_hash, role, status, must_change_password) VALUES (?,?,?,?,?)",
+    [targetEmail, hashPassword("OldPass12345"), "student", "active", 0]
+  );
+  const userId = insertResult.lastID;
+  const adminEmail = `reset.admin.${Date.now()}@test.local`;
+  await dbRun(
+    "INSERT INTO users (email, password_hash, role, status, must_change_password) VALUES (?,?,?,?,?)",
+    [adminEmail, hashPassword("ResetAdminPass123"), "admin", "active", 0]
+  );
+
+  const adminLoginPage = await fetchWithCookies("/login");
+  const adminLoginToken = extractCsrfToken(adminLoginPage.body);
+  const adminLogin = await fetchWithCookies(
+    "/login",
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/x-www-form-urlencoded" },
+      body: new URLSearchParams({
+        _csrf: adminLoginToken,
+        email: adminEmail,
+        password: "ResetAdminPass123"
+      }).toString(),
+      redirect: "manual"
+    },
+    adminLoginPage.cookies
+  );
+  assert.strictEqual(adminLogin.response.headers.get("location"), "/admin");
+
+  const editPage = await fetchWithCookies(`/admin/users/${userId}/edit`, {}, adminLogin.cookies);
+  assert.strictEqual(editPage.response.status, 200);
+  assert.match(editPage.body, /Einmalpasswort senden/);
+
+  const csrfToken = extractCsrfToken(editPage.body);
+  assert.ok(csrfToken, "CSRF token missing on user edit page");
+
+  const resetResponse = await fetchWithCookies(
+    `/admin/users/${userId}/email-reset`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/x-www-form-urlencoded" },
+      body: new URLSearchParams({ _csrf: csrfToken }).toString(),
+      redirect: "manual"
+    },
+    editPage.cookies
+  );
+
+  assert.strictEqual(resetResponse.response.status, 302);
+  assert.strictEqual(
+    resetResponse.response.headers.get("location"),
+    `/admin/users/${userId}/edit?passwordReset=sent`
+  );
+
+  const resetMail = getTestOutbox().find((message) => message.to === targetEmail);
+  assert.ok(resetMail, "Password reset email was not captured");
+  const passwordMatch = resetMail.text.match(/Einmalpasswort:\s*([A-Za-z0-9]+)/);
+  assert.ok(passwordMatch, "One-time password missing in reset email");
+  const oneTimePassword = passwordMatch[1];
+
+  const loginPage = await fetchWithCookies("/login");
+  const loginToken = extractCsrfToken(loginPage.body);
+  const oneTimeLogin = await fetchWithCookies(
+    "/login",
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/x-www-form-urlencoded" },
+      body: new URLSearchParams({
+        _csrf: loginToken,
+        email: targetEmail,
+        password: oneTimePassword
+      }).toString(),
+      redirect: "manual"
+    },
+    loginPage.cookies
+  );
+
+  assert.strictEqual(oneTimeLogin.response.status, 302);
+  assert.strictEqual(oneTimeLogin.response.headers.get("location"), "/force-password-change");
+
+  const replayPage = await fetchWithCookies("/login");
+  const replayToken = extractCsrfToken(replayPage.body);
+  const replayLogin = await fetchWithCookies(
+    "/login",
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/x-www-form-urlencoded" },
+      body: new URLSearchParams({
+        _csrf: replayToken,
+        email: targetEmail,
+        password: oneTimePassword
+      }).toString(),
+      redirect: "manual"
+    },
+    replayPage.cookies
+  );
+  assert.strictEqual(replayLogin.response.status, 401);
+
+  const forcePage = await fetchWithCookies("/force-password-change", {}, oneTimeLogin.cookies);
+  assert.strictEqual(forcePage.response.status, 200);
+  const forceToken = extractCsrfToken(forcePage.body);
+  assert.ok(forceToken, "CSRF token missing on force-password-change page");
+
+  const changeResponse = await fetchWithCookies(
+    "/force-password-change",
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/x-www-form-urlencoded" },
+      body: new URLSearchParams({
+        _csrf: forceToken,
+        newPassword: "StudentNewPass123"
+      }).toString(),
+      redirect: "manual"
+    },
+    forcePage.cookies
+  );
+
+  assert.strictEqual(changeResponse.response.status, 302);
+  assert.strictEqual(changeResponse.response.headers.get("location"), "/student");
+
+  const freshLoginPage = await fetchWithCookies("/login");
+  const freshLoginToken = extractCsrfToken(freshLoginPage.body);
+  const freshLogin = await fetchWithCookies(
+    "/login",
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/x-www-form-urlencoded" },
+      body: new URLSearchParams({
+        _csrf: freshLoginToken,
+        email: targetEmail,
+        password: "StudentNewPass123"
+      }).toString(),
+      redirect: "manual"
+    },
+    freshLoginPage.cookies
+  );
+
+  assert.strictEqual(freshLogin.response.status, 302);
+  assert.strictEqual(freshLogin.response.headers.get("location"), "/student");
 });
 
 test("admin can log in with seeded credentials", async () => {
