@@ -1161,6 +1161,49 @@ test("student routes redirect when unauthenticated", async () => {
   assert.strictEqual(res.response.headers.get("location"), "/login");
 });
 
+test("webuntis student grade target survives login", async () => {
+  const studentUser = await dbGet(
+    "SELECT id, email, password_hash, role, status, must_change_password, microsoft_oid, microsoft_tenant_id, microsoft_email FROM users WHERE email = ?",
+    ["student@example.com"]
+  );
+  assert.ok(studentUser, "Seeded student missing");
+
+  await dbRun(
+    "UPDATE users SET password_hash = ?, must_change_password = ? WHERE id = ?",
+    [hashPassword("WebUntisPass123!"), 0, studentUser.id]
+  );
+
+  const target =
+    "/student/grades?subject=AM&from=webuntis&returnUrl=https%3A%2F%2Fhtlwy.webuntis.com%2Ftimetable%2Fmy-student";
+  const protectedPage = await fetchWithCookies(target, { redirect: "manual" });
+  assert.strictEqual(protectedPage.response.status, 302);
+  assert.strictEqual(protectedPage.response.headers.get("location"), "/login");
+
+  const loginPage = await fetchWithCookies("/login", {}, protectedPage.cookies);
+  const csrfToken = extractCsrfToken(loginPage.body);
+  assert.ok(csrfToken, "CSRF token missing in login page");
+
+  const params = new URLSearchParams({
+    _csrf: csrfToken,
+    email: "student@example.com",
+    password: "WebUntisPass123!"
+  });
+
+  const loginResponse = await fetchWithCookies(
+    "/login",
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/x-www-form-urlencoded" },
+      body: params.toString(),
+      redirect: "manual"
+    },
+    loginPage.cookies
+  );
+
+  assert.strictEqual(loginResponse.response.status, 302);
+  assert.strictEqual(loginResponse.response.headers.get("location"), target);
+});
+
 test("admin archive renders the optimized overview and exports CSV", async () => {
   const loginResult = await loginAdmin();
 
