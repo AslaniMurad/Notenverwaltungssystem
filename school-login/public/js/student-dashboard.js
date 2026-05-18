@@ -95,7 +95,18 @@
     };
   }
 
+  function normalizeSubjectList(subjects) {
+    return Array.from(
+      new Set(
+        (subjects || [])
+          .map((subject) => String(subject || "").trim())
+          .filter(Boolean)
+      )
+    ).sort((a, b) => a.localeCompare(b));
+  }
+
   const state = {
+    subjects: normalizeSubjectList(initialData.subjects || []),
     allGrades: (initialData.grades || []).map(normalizeGrade),
     grades: (initialData.grades || []).map(normalizeGrade),
     averages: initialData.averages || { subjects: [], overall: null },
@@ -357,6 +368,20 @@
   function getSubjectOverviewItems(baseGrades = getBaseFilteredGrades()) {
     const subjectMap = new Map();
 
+    state.subjects.forEach((subject) => {
+      const key = String(subject || "").trim();
+      if (!key || subjectMap.has(key)) return;
+      subjectMap.set(key, {
+        subject: key,
+        count: 0,
+        weightedSum: 0,
+        weightTotal: 0,
+        latestAt: null,
+        latestTitle: "",
+        latestValue: null
+      });
+    });
+
     baseGrades.forEach((grade) => {
       const key = String(grade.subject || "Ohne Fach");
       const bucket = subjectMap.get(key) || {
@@ -446,13 +471,15 @@
         const subjectUrl = `/student/grades?subject=${encodeURIComponent(item.subject)}`;
         const subjectText = escapeHtml(item.subject);
         const countLabel = `${item.count} ${item.count === 1 ? "Eintrag" : "Eintraege"}`;
+        const avgClass = item.average == null ? "empty" : gradeColor(item.average);
+        const hintText = item.count ? "Notenverlauf ansehen" : "Noch keine Rueckgabe";
         return `
           <a class="subject-list-row" href="${subjectUrl}" aria-label="Fach ${subjectText} oeffnen">
             <span class="subject-list-subject">
               <span class="subject-list-name">${subjectText}</span>
-              <span class="subject-list-hint">Notenverlauf ansehen</span>
+              <span class="subject-list-hint">${hintText}</span>
             </span>
-            <span class="subject-list-avg ${gradeColor(item.average)}">${avgText}</span>
+            <span class="subject-list-avg ${avgClass}">${avgText}</span>
             <span class="subject-list-count">${countLabel}</span>
             <span class="subject-list-date">${latestText}</span>
           </a>
@@ -611,6 +638,9 @@
 
   function getSubjectCount() {
     const subjectSet = new Set();
+    state.subjects.forEach((subject) => {
+      if (subject) subjectSet.add(subject);
+    });
     state.grades.forEach((grade) => {
       if (grade.subject) subjectSet.add(grade.subject);
     });
@@ -1545,6 +1575,9 @@
       try {
         const response = await fetch("/student/grades?format=json");
         const data = await response.json();
+        if (Array.isArray(data.subjects)) {
+          state.subjects = normalizeSubjectList(data.subjects);
+        }
         state.allGrades = (data.grades || []).map(normalizeGrade);
       } catch (err) {
         console.error("Konnte Noten nicht aktualisieren:", err);

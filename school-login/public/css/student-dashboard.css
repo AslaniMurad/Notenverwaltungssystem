@@ -1181,6 +1181,10 @@ header.dashboard-hero {
   color: var(--student-danger-text);
 }
 
+.subject-list-avg.empty {
+  color: var(--student-muted);
+}
+
 .subject-list-count,
 .subject-list-date {
   justify-self: end;
