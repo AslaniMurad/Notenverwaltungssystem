@@ -97,6 +97,7 @@ function isDbConnectionError(err) {
 const LOGIN_RATE_WINDOW_MS = Number(process.env.LOGIN_RATE_LIMIT_WINDOW_MS) || 15 * 60 * 1000;
 const LOGIN_RATE_MAX = Number(process.env.LOGIN_RATE_LIMIT_MAX) || 5;
 const MAINTENANCE_LOGIN_TOKEN_TTL_MS = 10 * 60 * 1000;
+const PASSWORD_CHANGE_PATH = "/changepw";
 const loginAttempts = new Map();
 const teamsEmbedEnabled = parseOptionalBoolean(process.env.TEAMS_EMBED_ENABLED) ?? false;
 const teamsMicrosoftLoginOnly =
@@ -428,7 +429,7 @@ function createUserSession(req, user, loginKey) {
         if (saveErr) return reject(saveErr);
         resolve(
           shouldRequirePasswordChange(user)
-            ? "/force-password-change"
+            ? PASSWORD_CHANGE_PATH
             : getRedirectForRole(user.role)
         );
       });
@@ -657,10 +658,10 @@ function createSessionForUser(req, user, next) {
 app.use((req, res, next) => {
   const user = req.session.user;
   if (!user || !user.must_change_password) return next();
-  if (req.path === "/force-password-change" || req.path === "/logout") {
+  if (req.path === PASSWORD_CHANGE_PATH || req.path === "/force-password-change" || req.path === "/logout") {
     return next();
   }
-  return res.redirect("/force-password-change");
+  return res.redirect(PASSWORD_CHANGE_PATH);
 });
 
 app.use(async (req, res, next) => {
@@ -916,30 +917,23 @@ app.get("/auth/microsoft/callback", async (req, res, next) => {
   }
 });
 
-// --- Passwortwechsel erzwingen ---
-app.get("/force-password-change", requireAuth, (req, res) => {
-  if (!req.session.user.must_change_password) {
-    return res.redirect(getRedirectForRole(req.session.user.role));
-  }
-  res.render("force-password-change", {
+function renderPasswordChangePage(req, res, options = {}) {
+  return res.render("force-password-change", {
     email: req.session.user.email,
     csrfToken: req.csrfToken(),
-    error: null
+    error: options.error || null
   });
-});
+}
 
-app.post("/force-password-change", requireAuth, async (req, res, next) => {
+async function handleForcedPasswordChange(req, res, next) {
   if (!req.session.user.must_change_password) {
     return res.redirect(getRedirectForRole(req.session.user.role));
   }
   const newPassword = req.body?.newPassword;
   const validationError = getPasswordValidationError(newPassword);
   if (validationError) {
-    return res.status(400).render("force-password-change", {
-      email: req.session.user.email,
-      csrfToken: req.csrfToken(),
-      error: validationError
-    });
+    res.status(400);
+    return renderPasswordChangePage(req, res, { error: validationError });
   }
   const hash = hashPassword(newPassword);
   try {
@@ -953,7 +947,19 @@ app.post("/force-password-change", requireAuth, async (req, res, next) => {
   } catch (err) {
     return next(err);
   }
+}
+
+// --- Passwortwechsel erzwingen ---
+app.get(PASSWORD_CHANGE_PATH, requireAuth, (req, res) => {
+  if (!req.session.user.must_change_password) {
+    return res.redirect(getRedirectForRole(req.session.user.role));
+  }
+  return renderPasswordChangePage(req, res);
 });
+
+app.post(PASSWORD_CHANGE_PATH, requireAuth, handleForcedPasswordChange);
+app.get("/force-password-change", requireAuth, (req, res) => res.redirect(PASSWORD_CHANGE_PATH));
+app.post("/force-password-change", requireAuth, handleForcedPasswordChange);
 
 // --- Login POST ---
 app.post("/login", async (req, res, next) => {

@@ -114,13 +114,13 @@ async function loginAndChangePassword(email, password, newPassword) {
   );
 
   const location = loginResponse.response.headers.get("location");
-  if (location !== "/force-password-change") {
+  if (location !== "/changepw") {
     return { cookies: loginResponse.cookies, redirect: location };
   }
 
-  const forcePage = await fetchWithCookies("/force-password-change", {}, loginResponse.cookies);
+  const forcePage = await fetchWithCookies("/changepw", {}, loginResponse.cookies);
   const forceToken = extractCsrfToken(forcePage.body);
-  assert.ok(forceToken, "CSRF token missing in force-password-change page");
+  assert.ok(forceToken, "CSRF token missing in changepw page");
 
   const changeParams = new URLSearchParams({
     _csrf: forceToken,
@@ -128,7 +128,7 @@ async function loginAndChangePassword(email, password, newPassword) {
   });
 
   const changeResponse = await fetchWithCookies(
-    "/force-password-change",
+    "/changepw",
     {
       method: "POST",
       headers: { "Content-Type": "application/x-www-form-urlencoded" },
@@ -356,7 +356,7 @@ test("maintenance mode limits login to admins and kicks existing non-admin sessi
       adminLogin.cookies
     );
     assert.strictEqual(adminResponse.response.status, 302);
-    assert.strictEqual(adminResponse.response.headers.get("location"), "/force-password-change");
+    assert.strictEqual(adminResponse.response.headers.get("location"), "/changepw");
 
     const statelessAdminResponse = await fetchWithCookies("/login", {
       method: "POST",
@@ -649,7 +649,7 @@ test("admin can email a one-time password reset that is consumed on login", { co
   );
 
   assert.strictEqual(oneTimeLogin.response.status, 302);
-  assert.strictEqual(oneTimeLogin.response.headers.get("location"), "/force-password-change");
+  assert.strictEqual(oneTimeLogin.response.headers.get("location"), "/changepw");
 
   const replayPage = await fetchWithCookies("/login");
   const replayToken = extractCsrfToken(replayPage.body);
@@ -669,13 +669,13 @@ test("admin can email a one-time password reset that is consumed on login", { co
   );
   assert.strictEqual(replayLogin.response.status, 401);
 
-  const forcePage = await fetchWithCookies("/force-password-change", {}, oneTimeLogin.cookies);
+  const forcePage = await fetchWithCookies("/changepw", {}, oneTimeLogin.cookies);
   assert.strictEqual(forcePage.response.status, 200);
   const forceToken = extractCsrfToken(forcePage.body);
-  assert.ok(forceToken, "CSRF token missing on force-password-change page");
+  assert.ok(forceToken, "CSRF token missing on changepw page");
 
   const changeResponse = await fetchWithCookies(
-    "/force-password-change",
+    "/changepw",
     {
       method: "POST",
       headers: { "Content-Type": "application/x-www-form-urlencoded" },
