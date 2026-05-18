@@ -86,55 +86,86 @@
                 <div>
                   <p class="admin-eyebrow">Passwort</p>
                   <h3>Zugang zurücksetzen</h3>
-                  <p class="admin-muted">Aktueller Passwortstatus: <strong><%= passwordState %></strong></p>
+                  <p class="admin-muted admin-user-edit-password-status">Aktueller Passwortstatus: <strong><%= passwordState %></strong></p>
                 </div>
               </div>
 
-              <div class="admin-user-edit-reset-mail">
-                <div>
-                  <h4>Einmalpasswort per E-Mail</h4>
-                  <p class="admin-muted">Erstellt ein kryptografisch generiertes Einmalpasswort, sendet es an <strong><%= user.email %></strong> und erzwingt nach dem Login einen Passwortwechsel.</p>
-                </div>
-                <form
-                  method="POST"
-                  action="/admin/users/<%= user.id %>/email-reset"
-                  data-confirm-title="Einmalpasswort senden"
-                  data-confirm-message="MÃ¶chtest du ein neues Einmalpasswort an <%= user.email %> senden?"
-                  data-confirm-note="Vorherige offene EinmalpasswÃ¶rter fÃ¼r diesen Nutzer werden ungÃ¼ltig."
-                  data-confirm-action="Senden"
-                >
-                  <input type="hidden" name="_csrf" value="<%= csrfToken %>">
-                  <button class="btn btn-primary" type="submit" <%= user.status !== 'active' ? 'disabled' : '' %>>Einmalpasswort senden</button>
-                </form>
+              <div class="admin-user-edit-reset-options">
+                <article class="admin-user-edit-reset-option is-email">
+                  <div>
+                    <h4>Einmalpasswort per E-Mail</h4>
+                  </div>
+                  <form
+                    method="POST"
+                    action="/admin/users/<%= user.id %>/email-reset"
+                    data-confirm-title="Einmalpasswort senden"
+                    data-confirm-message="Möchtest du ein neues Einmalpasswort an <%= user.email %> senden?"
+                    data-confirm-note="Vorherige offene Einmalpasswörter für diesen Nutzer werden ungültig."
+                    data-confirm-action="Senden"
+                  >
+                    <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+                    <button class="btn btn-primary" type="submit" <%= user.status !== 'active' ? 'disabled' : '' %>>Einmalpasswort senden</button>
+                  </form>
+                </article>
+
+                <article class="admin-user-edit-reset-option is-custom">
+                  <div>
+                    <h4>Benutzerdefiniertes Passwort festlegen</h4>
+                  </div>
+                  <form class="admin-edit-form admin-stacked-form" method="POST" action="/admin/users/<%= user.id %>/reset">
+                    <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+                    <input type="hidden" name="returnTo" value="/admin/users/<%= user.id %>/edit">
+                    <label class="admin-field" for="password">
+                      <span>Neues Passwort</span>
+                      <input id="password" name="password" type="password" autocomplete="new-password" required>
+                      <span class="admin-field-hint">Mindestens 10 Zeichen, inkl. Zahl.</span>
+                    </label>
+                    <div class="admin-user-edit-actions">
+                      <button class="btn" type="submit">Benutzerdefiniert setzen</button>
+                    </div>
+                  </form>
+                </article>
+
+                <article class="admin-user-edit-reset-option is-initial">
+                  <div>
+                    <h4>Initial-Kennwort setzen</h4>
+                  </div>
+                  <form
+                    method="POST"
+                    action="/admin/users/<%= user.id %>/reset"
+                    data-confirm-title="Initial-Kennwort setzen"
+                    data-confirm-message="Möchtest du das Initial-Kennwort für <%= user.email %> setzen?"
+                    data-confirm-note="Der Nutzer muss beim nächsten Login ein eigenes Passwort vergeben."
+                    data-confirm-action="Setzen"
+                  >
+                    <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+                    <input type="hidden" name="useInitial" value="1">
+                    <input type="hidden" name="returnTo" value="/admin/users/<%= user.id %>/edit">
+                    <button class="btn btn-secondary" type="submit">Initial-Kennwort setzen</button>
+                  </form>
+                </article>
               </div>
 
               <% if (resetRequests.length > 0) { %>
-                <div class="admin-user-edit-reset-history">
-                  <h4>Letzte ZurÃ¼cksetzungsanfragen</h4>
+                <details class="admin-user-edit-reset-history">
+                  <summary>
+                    <span>Letzte Zurücksetzungsanfragen</span>
+                    <span class="admin-user-edit-reset-count"><%= resetRequests.length %></span>
+                  </summary>
+                  <div class="admin-user-edit-reset-history-body">
                   <ul>
                     <% resetRequests.forEach(function(request) { %>
                       <li>
                         <span class="admin-badge <%= request.status === 'active' ? 'admin-badge-success' : 'admin-badge-neutral' %>"><%= request.status_label %></span>
                         <span>Erstellt: <%= request.created_at || '-' %></span>
-                        <span>GÃ¼ltig bis: <%= request.expires_at || '-' %></span>
+                        <span>Gültig bis: <%= request.expires_at || '-' %></span>
                         <span>Von: <%= request.requested_by_email || '-' %></span>
                       </li>
                     <% }) %>
                   </ul>
-                </div>
+                  </div>
+                </details>
               <% } %>
-
-              <form class="admin-edit-form admin-stacked-form" method="POST" action="/admin/users/<%= user.id %>/reset">
-                <input type="hidden" name="_csrf" value="<%= csrfToken %>">
-                <label class="admin-field" for="password">
-                  <span>Neues Passwort</span>
-                  <input id="password" name="password" type="password" required>
-                  <span class="admin-field-hint">Das Passwort wird sofort ersetzt. Der Nutzer muss es danach nicht automatisch ändern.</span>
-                </label>
-                <div class="admin-user-edit-actions">
-                  <button class="btn" type="submit">Passwort zurücksetzen</button>
-                </div>
-              </form>
             </section>
 
             <section class="admin-card admin-user-edit-panel admin-user-edit-danger">
