@@ -15,29 +15,16 @@ function getDeliveryMode() {
 }
 
 function shouldUseConsoleDelivery() {
-  return getDeliveryMode() === "console" || (!process.env.SMTP_HOST && process.env.NODE_ENV !== "production");
-}
-
-function createMailError(message, code = "MAIL_DELIVERY_FAILED") {
-  const error = new Error(message);
-  error.code = code;
-  return error;
+  return getDeliveryMode() === "console";
 }
 
 function getDefaultFromAddress() {
-  return process.env.MAIL_FROM || process.env.SMTP_USER || "NVS <no-reply@localhost>";
+  return process.env.MAIL_FROM || process.env.SMTP_USER || "NVS <no-reply@nvs.htlwydev.at>";
 }
 
 function getSmtpTransportConfig() {
-  const host = process.env.SMTP_HOST;
-  if (!host) {
-    throw createMailError(
-      "SMTP_HOST ist nicht konfiguriert. Setze SMTP_HOST, SMTP_PORT und MAIL_FROM.",
-      "MAIL_NOT_CONFIGURED"
-    );
-  }
-
-  const port = Number(process.env.SMTP_PORT || 587);
+  const host = process.env.SMTP_HOST || "localhost";
+  const port = Number(process.env.SMTP_PORT || 25);
   const secure = parseBoolean(process.env.SMTP_SECURE, port === 465);
   const user = process.env.SMTP_USER || "";
   const pass = process.env.SMTP_PASS || "";
