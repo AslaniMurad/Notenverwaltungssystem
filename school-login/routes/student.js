@@ -431,6 +431,25 @@ function computeClassAverages(rows, options = {}) {
   }));
 }
 
+function buildSubjectList(classSubjects = [], grades = [], classInfo = null) {
+  const subjectSet = new Set();
+
+  classSubjects.forEach((entry) => {
+    const subjectName = String(entry?.subject_name || "").trim();
+    if (subjectName) subjectSet.add(subjectName);
+  });
+
+  const legacySubject = resolveLegacyClassSubject(classInfo);
+  if (legacySubject) subjectSet.add(legacySubject);
+
+  grades.forEach((grade) => {
+    const subjectName = String(grade?.subject || "").trim();
+    if (subjectName) subjectSet.add(subjectName);
+  });
+
+  return Array.from(subjectSet).sort((a, b) => a.localeCompare(b));
+}
+
 function escapeCsv(value) {
   const stringValue = value == null ? "" : String(value);
   const guarded = /^[=+\-@\t\r]/.test(stringValue) ? `'${stringValue}` : stringValue;
@@ -550,14 +569,7 @@ async function buildStudentDashboardViewModel(req) {
   ]);
 
   const grades = gradeRows.map((row) => mapGradeRow(row, classInfo));
-  const subjectSet = new Set(
-    classSubjects.map((entry) => String(entry.subject_name || "").trim()).filter(Boolean)
-  );
-  grades.forEach((grade) => {
-    if (grade.subject) subjectSet.add(grade.subject);
-  });
-
-  const subjects = Array.from(subjectSet).filter(Boolean);
+  const subjects = buildSubjectList(classSubjects, grades, classInfo);
   const averages = computeAverages(grades, { absenceMode: classAbsenceMode });
   const gradeByTemplate = new Map(
     gradeRows
@@ -607,6 +619,7 @@ async function buildStudentDashboardViewModel(req) {
     returns,
     initialData: {
       currentUserEmail: req.session.user.email,
+      subjects,
       grades,
       averages,
       tasks,
@@ -686,9 +699,7 @@ router.get("/profile", async (req, res, next) => {
 
     const { student, classInfo } = context;
     const classSubjects = await loadClassSubjects(student.class_id);
-    const subjects = classSubjects
-      .map((entry) => String(entry.subject_name || "").trim())
-      .filter(Boolean);
+    const subjects = buildSubjectList(classSubjects, [], classInfo);
     res.json({
       name: student.name,
       class: student.class_name || classInfo?.name || "",
@@ -713,8 +724,12 @@ router.get("/grades", async (req, res, next) => {
     }
 
     const { student, classInfo } = context;
-    const gradeRows = await loadStudentGrades(student.id);
+    const [gradeRows, classSubjects] = await Promise.all([
+      loadStudentGrades(student.id),
+      loadClassSubjects(student.class_id)
+    ]);
     let grades = gradeRows.map((row) => mapGradeRow(row, classInfo));
+    const subjects = buildSubjectList(classSubjects, grades, classInfo);
 
     const subject = String(req.query.subject || "").trim();
     const query = String(req.query.query || "").trim().toLowerCase();
@@ -755,7 +770,7 @@ router.get("/grades", async (req, res, next) => {
       grades.sort((a, b) => new Date(b.graded_at) - new Date(a.graded_at));
     }
 
-    res.json({ grades });
+    res.json({ grades, subjects });
   } catch (err) {
     next(err);
   }

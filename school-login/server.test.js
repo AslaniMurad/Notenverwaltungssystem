@@ -39,6 +39,14 @@ function extractHiddenInput(html, name) {
   return match ? match[1] : null;
 }
 
+function extractStudentInitialData(html) {
+  const match = html.match(
+    /<script type="application\/json" id="student-initial-data">([\s\S]*?)<\/script>/
+  );
+  assert.ok(match, "Student initial data missing");
+  return JSON.parse(match[1]);
+}
+
 function buildCookieHeader(cookies) {
   if (!cookies.length) return {};
   const latestCookiesByName = new Map();
@@ -963,7 +971,7 @@ test("student can view grades and profile after login", async () => {
   const loginResult = await loginStudent();
   assert.strictEqual(loginResult.redirect, "/student");
 
-  const gradesResponse = await fetchWithCookies("/student/grades", {}, loginResult.cookies);
+  const gradesResponse = await fetchWithCookies("/student/grades?format=json", {}, loginResult.cookies);
   assert.strictEqual(gradesResponse.response.status, 200);
   const gradesData = JSON.parse(gradesResponse.body);
   assert.ok(Array.isArray(gradesData.grades));
@@ -973,6 +981,57 @@ test("student can view grades and profile after login", async () => {
   assert.strictEqual(profileResponse.response.status, 200);
   const profile = JSON.parse(profileResponse.body);
   assert.strictEqual(profile.class, "3AHWII");
+});
+
+test("student grade subject overview includes assigned subjects without returns", async () => {
+  const loginResult = await loginStudent();
+  assert.strictEqual(loginResult.redirect, "/student");
+
+  const teacherRow = await dbGet("SELECT id FROM users WHERE email = ?", ["teacher@example.com"]);
+  assert.ok(teacherRow?.id, "Teacher user missing");
+
+  const studentRow = await dbGet(
+    "SELECT s.*, c.name as class_name, c.subject as class_subject, c.id as class_id FROM students s JOIN classes c ON c.id = s.class_id WHERE s.email = ?",
+    ["student@example.com"]
+  );
+  assert.ok(studentRow?.class_id, "Student class missing");
+
+  const classRow = await dbGet(
+    "SELECT id, name, subject, subject_id, school_year_id FROM classes WHERE id = ?",
+    [studentRow.class_id]
+  );
+  assert.ok(classRow?.school_year_id, "Student class school year missing");
+
+  const subjectName = `Keine Rueckgabe ${Date.now()}`;
+  const subjectInsert = await dbRun("INSERT INTO subjects (name) VALUES (?)", [subjectName]);
+  let assignmentId = null;
+
+  try {
+    const assignmentInsert = await dbRun(
+      "INSERT INTO class_subject_teacher (class_id, subject_id, teacher_id, school_year_id) VALUES (?,?,?,?)",
+      [classRow.id, subjectInsert.lastID, teacherRow.id, classRow.school_year_id]
+    );
+    assignmentId = assignmentInsert.lastID;
+
+    const gradesPage = await fetchWithCookies("/student/grades", {}, loginResult.cookies);
+    assert.strictEqual(gradesPage.response.status, 200);
+
+    const initialData = extractStudentInitialData(gradesPage.body);
+    assert.ok(
+      initialData.subjects.includes(subjectName),
+      "Assigned subject without returns should be visible"
+    );
+    assert.strictEqual(
+      initialData.grades.some((grade) => grade.subject === subjectName),
+      false,
+      "Subject without returns should not create a fake grade"
+    );
+  } finally {
+    if (assignmentId) {
+      await dbRun("DELETE FROM class_subject_teacher WHERE id = ?", [assignmentId]);
+    }
+    await dbRun("DELETE FROM subjects WHERE id = ?", [subjectInsert.lastID]);
+  }
 });
 
 test("student and teacher can complete the full grade message workflow", async () => {
