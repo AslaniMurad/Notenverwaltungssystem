@@ -10,28 +10,28 @@ Admins koennen unter `/admin/users/<id>/edit` ein Einmalpasswort erzeugen. Das P
    npm install
    ```
 
-2. In der Server-Umgebung oder `.env` SMTP konfigurieren:
+2. In der Server-Umgebung oder `.env` SMTP konfigurieren. Standard ist lokaler Postfix auf Port 25 ohne Authentifizierung:
 
    ```env
-   APP_BASE_URL=https://deine-nvs-domain.example
+   APP_BASE_URL=https://nvs.htlwydev.at
    EMAIL_DELIVERY_MODE=smtp
-   SMTP_HOST=smtp.example.at
-   SMTP_PORT=587
+   SMTP_HOST=localhost
+   SMTP_PORT=25
    SMTP_SECURE=false
-   SMTP_REQUIRE_TLS=true
-   SMTP_USER=nvs@example.at
-   SMTP_PASS=dein-smtp-passwort
-   MAIL_FROM="NVS <nvs@example.at>"
+   SMTP_REQUIRE_TLS=false
+   SMTP_USER=
+   SMTP_PASS=
+   MAIL_FROM="NVS <no-reply@nvs.htlwydev.at>"
    PASSWORD_RESET_TTL_HOURS=24
    ONE_TIME_PASSWORD_LENGTH=16
    ```
 
    Hinweise:
 
-   - Fuer Port `465` normalerweise `SMTP_SECURE=true` setzen.
-   - Fuer Port `587` normalerweise `SMTP_SECURE=false` und `SMTP_REQUIRE_TLS=true` setzen.
+   - Es wird keine externe Mail-API verwendet; die App liefert per SMTP an den lokalen Mailserver ein.
+   - Wenn die App in einem Container laeuft, zeigt `localhost` auf den Container. Dann muss `SMTP_HOST` auf die erreichbare Host-/Gateway-IP oder einen Mailserver-Container-Namen gesetzt werden.
    - `APP_BASE_URL` muss die oeffentliche HTTPS-Adresse der App sein, damit der Login-Link in der E-Mail stimmt.
-   - `EMAIL_DELIVERY_MODE=console` nur lokal verwenden; am Server muss `smtp` aktiv sein.
+   - `EMAIL_DELIVERY_MODE=console` nur fuer Tests verwenden; am Server muss `smtp` aktiv sein.
 
 3. App neu starten:
 
@@ -56,6 +56,5 @@ Admins koennen unter `/admin/users/<id>/edit` ein Einmalpasswort erzeugen. Das P
 
 ## Fehlerdiagnose
 
-- `Mailversand ist nicht konfiguriert`: `SMTP_HOST`, `SMTP_PORT` und `MAIL_FROM` fehlen oder werden vom Prozess nicht geladen.
-- `Einmalpasswort wurde nicht versendet`: SMTP-Zugangsdaten, Firewall, TLS-Einstellungen oder Provider-Limits pruefen.
+- `Einmalpasswort wurde nicht versendet`: lokalen Postfix, Firewall, Container-Netzwerk und Postfix-Relay-Regeln pruefen.
 - Mail kommt nicht an, aber die App meldet Erfolg: Spam-Ordner, SPF/DKIM/DMARC und SMTP-Provider-Logs pruefen.
