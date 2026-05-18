@@ -189,6 +189,32 @@ function createFakeDb() {
     return normalizedHaystack.includes(normalizedNeedle);
   }
 
+  function filterUsersForSql(sql, params = []) {
+    let paramIndex = 0;
+    let filteredUsers = [...users];
+
+    if (/WHERE[\s\S]*\bid\s*=\s*\?/i.test(sql)) {
+      const id = Number(params[paramIndex++]);
+      filteredUsers = filteredUsers.filter((user) => user.id === id);
+    }
+
+    if (/LOWER\(email\)\s+LIKE\s+LOWER\(\?\)/i.test(sql)) {
+      const needle = String(params[paramIndex++] || "")
+        .replace(/^%|%$/g, "")
+        .toLowerCase();
+      filteredUsers = filteredUsers.filter((user) =>
+        String(user.email || "").toLowerCase().includes(needle)
+      );
+    }
+
+    if (/WHERE[\s\S]*\brole\s*=\s*\?/i.test(sql)) {
+      const role = String(params[paramIndex++] || "");
+      filteredUsers = filteredUsers.filter((user) => user.role === role);
+    }
+
+    return { users: filteredUsers, nextParamIndex: paramIndex };
+  }
+
   const activeSchoolYear = ensureActiveSchoolYear();
 
   const db = {
@@ -1632,6 +1658,10 @@ function createFakeDb() {
         row = {
           count: teacherStudentExclusions.filter((entry) => entry.subject_id === Number(subjectIdParam)).length
         };
+      } else if (/SELECT COUNT\(\*\) AS count\s+FROM users/i.test(sql)) {
+        row = {
+          count: filterUsersForSql(sql, params).users.length
+        };
       } else if (/SELECT id, subject_id FROM classes WHERE id = \?/i.test(sql)) {
         const [id] = params;
         const classRow = classes.find((entry) => entry.id === Number(id));
@@ -2262,6 +2292,25 @@ function createFakeDb() {
               executed_by_email: user?.email || null
             };
           });
+      } else if (/SELECT id, email, role, status, created_at, must_change_password, microsoft_email, microsoft_connected_at\s+FROM users[\s\S]*ORDER BY id DESC[\s\S]*LIMIT \?\s+OFFSET \?/i.test(sql)) {
+        const { users: filteredUsers, nextParamIndex } = filterUsersForSql(sql, params);
+        const limit = Number(params[nextParamIndex]);
+        const offset = Number(params[nextParamIndex + 1]);
+        const safeLimit = Number.isFinite(limit) ? Math.max(1, limit) : 50;
+        const safeOffset = Number.isFinite(offset) ? Math.max(0, offset) : 0;
+        rows = filteredUsers
+          .sort((a, b) => b.id - a.id)
+          .slice(safeOffset, safeOffset + safeLimit)
+          .map((u) => ({
+            id: u.id,
+            email: u.email,
+            role: u.role,
+            status: u.status,
+            created_at: u.created_at,
+            must_change_password: u.must_change_password || 0,
+            microsoft_email: u.microsoft_email || null,
+            microsoft_connected_at: u.microsoft_connected_at || null
+          }));
       } else if (/SELECT id, email, role, status, created_at, must_change_password, microsoft_email, microsoft_connected_at FROM users ORDER BY id DESC/i.test(sql)) {
         rows = [...users]
           .sort((a, b) => b.id - a.id)

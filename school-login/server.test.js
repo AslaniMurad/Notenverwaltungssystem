@@ -732,6 +732,41 @@ test("admin can log in with seeded credentials", async () => {
   assert.match(dashboard.body, /Audit-Log/);
 });
 
+test("admin user list paginates users in batches of fifty", async () => {
+  const loginResult = await loginAdmin();
+  const prefix = `page-users-${Date.now()}`;
+
+  for (let index = 0; index < 55; index += 1) {
+    const suffix = String(index).padStart(2, "0");
+    await dbRun(
+      "INSERT INTO users (email, password_hash, role, status, must_change_password) VALUES (?,?,?,?,?)",
+      [`${prefix}-${suffix}@example.com`, "placeholder-hash", "student", "active", 0]
+    );
+  }
+
+  const filter = encodeURIComponent(prefix);
+  const firstPage = await fetchWithCookies(`/admin/users?email=${filter}`, {}, loginResult.cookies);
+  assert.strictEqual(firstPage.response.status, 200);
+  assert.doesNotMatch(firstPage.body, /Zeige\s*<strong>/);
+  assert.match(firstPage.body, /Seite\s*1\s*\/\s*2/);
+  assert.match(firstPage.body, /Max\.\s*50 pro Seite/);
+  assert.match(firstPage.body, new RegExp(`href="/admin/users\\?email=${prefix}&amp;page=2"`));
+  assert.match(firstPage.body, new RegExp(`${prefix}-54@example\\.com`));
+  assert.doesNotMatch(firstPage.body, new RegExp(`${prefix}-00@example\\.com`));
+
+  const secondPage = await fetchWithCookies(
+    `/admin/users?email=${filter}&page=2`,
+    {},
+    loginResult.cookies
+  );
+  assert.strictEqual(secondPage.response.status, 200);
+  assert.doesNotMatch(secondPage.body, /Zeige\s*<strong>/);
+  assert.match(secondPage.body, /Seite\s*2\s*\/\s*2/);
+  assert.match(secondPage.body, new RegExp(`href="/admin/users\\?email=${prefix}"`));
+  assert.match(secondPage.body, new RegExp(`${prefix}-00@example\\.com`));
+  assert.doesNotMatch(secondPage.body, new RegExp(`${prefix}-54@example\\.com`));
+});
+
 test("Kerberos reverse proxy header can create an app session", async () => {
   const teacher = await dbGet("SELECT id FROM users WHERE email = ?", ["teacher@example.com"]);
   assert.ok(teacher, "seeded teacher missing");

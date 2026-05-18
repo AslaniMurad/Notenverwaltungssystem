@@ -12,6 +12,7 @@ const { getRuntimeSettings, updateRuntimeSettings } = require("../services/appSe
 const { sendPasswordResetEmail } = require("../services/mailService");
 
 const INITIAL_PASSWORD = process.env.INITIAL_PASSWORD || null;
+const USER_PAGE_SIZE = 50;
 const AUDIT_PAGE_SIZE = 50;
 const AUDIT_ENTITY_LABELS = {
   user: "Benutzer",
@@ -169,6 +170,11 @@ function parseAuditPage(req) {
   return Number.isInteger(value) && value > 0 ? value : 1;
 }
 
+function parseUserPage(req) {
+  const value = Number.parseInt(String(req.query.page || "1"), 10);
+  return Number.isInteger(value) && value > 0 ? value : 1;
+}
+
 function parseAuditCategory(value) {
   const normalized = String(value || "all").trim().toLowerCase();
   return AUDIT_CATEGORY_OPTIONS[normalized] ? normalized : "all";
@@ -198,6 +204,16 @@ function getAuditOffset(page = 1) {
 function getAuditTotalPages(totalCount = 0) {
   const safeCount = Math.max(0, Number(totalCount || 0));
   return Math.max(1, Math.ceil(safeCount / AUDIT_PAGE_SIZE) || 1);
+}
+
+function getUserOffset(page = 1) {
+  const safePage = Number.isFinite(Number(page)) ? Math.max(1, Number(page)) : 1;
+  return (safePage - 1) * USER_PAGE_SIZE;
+}
+
+function getUserTotalPages(totalCount = 0) {
+  const safeCount = Math.max(0, Number(totalCount || 0));
+  return Math.max(1, Math.ceil(safeCount / USER_PAGE_SIZE) || 1);
 }
 
 function normalizeAuditReturnPath(value) {
@@ -661,6 +677,49 @@ function buildAuditQuery(filters = {}, page = 1, returnTo = null) {
   return query ? `?${query}` : "";
 }
 
+function buildUserQuery(filters = {}, page = 1) {
+  const params = new URLSearchParams();
+  if (filters.id) params.set("id", filters.id);
+  if (filters.email) params.set("email", filters.email);
+  if (filters.role) params.set("role", filters.role);
+  if (page > 1) params.set("page", String(page));
+  const query = params.toString();
+  return query ? `/admin/users?${query}` : "/admin/users";
+}
+
+function buildUserPagination(filters, currentPage, totalCount) {
+  const totalPages = getUserTotalPages(totalCount);
+  const safePage = Math.min(Math.max(1, Number(currentPage || 1)), totalPages);
+  const offset = getUserOffset(safePage);
+  const startPage = Math.max(1, safePage - 2);
+  const endPage = Math.min(totalPages, safePage + 2);
+  const pages = [];
+
+  for (let pageNumber = startPage; pageNumber <= endPage; pageNumber += 1) {
+    pages.push({
+      number: pageNumber,
+      isCurrent: pageNumber === safePage,
+      href: buildUserQuery(filters, pageNumber)
+    });
+  }
+
+  return {
+    currentPage: safePage,
+    totalPages,
+    pageSize: USER_PAGE_SIZE,
+    maxPageSize: USER_PAGE_SIZE,
+    rangeStart: totalCount > 0 ? offset + 1 : 0,
+    rangeEnd: Math.min(totalCount, offset + USER_PAGE_SIZE),
+    hasPrev: safePage > 1,
+    hasNext: safePage < totalPages,
+    prevHref: buildUserQuery(filters, safePage - 1),
+    nextHref: buildUserQuery(filters, safePage + 1),
+    firstHref: buildUserQuery(filters, 1),
+    lastHref: buildUserQuery(filters, totalPages),
+    pages
+  };
+}
+
 function buildAuditPagination(filters, currentPage, totalCount, returnTo = null) {
   const totalPages = getAuditTotalPages(totalCount);
   const safePage = Math.min(Math.max(1, Number(currentPage || 1)), totalPages);
@@ -1056,13 +1115,31 @@ router.get("/users", async (req, res, next) => {
     }
 
     const whereClause = filters.length ? `WHERE ${filters.join(" AND ")}` : "";
-    const users = await allAsync(
-      `SELECT id, email, role, status, created_at, must_change_password, microsoft_email, microsoft_connected_at FROM users ${whereClause} ORDER BY id DESC`,
+    const filterState = { id: idQuery, email: emailQuery, role: roleQuery };
+    const requestedPage = parseUserPage(req);
+    const countRow = await getAsync(
+      `SELECT COUNT(*) AS count FROM users ${whereClause}`,
       params
     );
+    const totalCount = Number(countRow?.count || 0);
+    const totalPages = getUserTotalPages(totalCount);
+    const currentPage = Math.min(requestedPage, totalPages);
+    const users = await allAsync(
+      `SELECT id, email, role, status, created_at, must_change_password, microsoft_email, microsoft_connected_at
+       FROM users
+       ${whereClause}
+       ORDER BY id DESC
+       LIMIT ?
+       OFFSET ?`,
+      [...params, USER_PAGE_SIZE, getUserOffset(currentPage)]
+    );
+    const pagination = buildUserPagination(filterState, currentPage, totalCount);
+
     res.render("admin/users", {
       users,
-      query: { id: idQuery, email: emailQuery, role: roleQuery },
+      totalCount,
+      pagination,
+      query: filterState,
       csrfToken: req.csrfToken(),
       currentUser: req.session.user,
       activePath: req.originalUrl
