@@ -204,11 +204,12 @@ function createFakeDb() {
         const resolvedRole =
           role || (/\'teacher\'/i.test(sql) ? "teacher" : /\'student\'/i.test(sql) ? "student" : /\'admin\'/i.test(sql) ? "admin" : undefined);
         const resolvedStatus = status || (/\'active\'/i.test(sql) ? "active" : undefined) || "active";
+        const nextUserId = userId++;
         if (users.some((u) => u.email === email)) {
           err = new Error("UNIQUE constraint failed: users.email");
         } else {
           const newUser = {
-            id: userId++,
+            id: nextUserId,
             email,
             password_hash,
             role: resolvedRole,

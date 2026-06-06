@@ -740,6 +740,68 @@ test("admin can log in with seeded credentials", async () => {
   assert.match(dashboard.body, /Audit-Log/);
 });
 
+test("admin user creation rejects invalid email addresses", async () => {
+  const loginResult = await loginAdmin();
+  const csrfToken = await fetchCsrfToken("/admin/users/new", loginResult.cookies);
+
+  const response = await fetchWithCookies(
+    "/admin/users",
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/x-www-form-urlencoded" },
+      body: new URLSearchParams({
+        _csrf: csrfToken,
+        email: "not-an-email",
+        role: "student",
+        password: "ValidPass123!"
+      }).toString(),
+      redirect: "manual"
+    },
+    loginResult.cookies
+  );
+
+  assert.strictEqual(response.response.status, 400);
+  assert.match(response.body, /gültige E-Mail-Adresse/);
+  const user = await dbGet("SELECT id FROM users WHERE email = ?", ["not-an-email"]);
+  assert.strictEqual(user, undefined);
+});
+
+test("admin bulk user creation prechecks failures before consuming user ids", async () => {
+  const loginResult = await loginAdmin();
+  const markerEmail = `bulk.marker.${Date.now()}@test.local`;
+  const markerInsert = await dbRun(
+    "INSERT INTO users (email, password_hash, role, status, must_change_password) VALUES (?,?,?,?,?)",
+    [markerEmail, hashPassword("MarkerPass123!"), "student", "active", 0]
+  );
+  const csrfToken = await fetchCsrfToken("/admin/users/new", loginResult.cookies);
+
+  const response = await fetchWithCookies(
+    "/admin/users/bulk",
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/x-www-form-urlencoded" },
+      body: new URLSearchParams({
+        _csrf: csrfToken,
+        bulkEmails: `${markerEmail}\nnot-an-email`,
+        bulkRole: "student",
+        bulkPassword: "ValidPass123!",
+        bulkDelimiter: "paragraph"
+      }).toString()
+    },
+    loginResult.cookies
+  );
+
+  assert.strictEqual(response.response.status, 200);
+  assert.match(response.body, /E-Mail existiert bereits/);
+  assert.match(response.body, /Ungültige E-Mail-Adresse/);
+
+  const afterInsert = await dbRun(
+    "INSERT INTO users (email, password_hash, role, status, must_change_password) VALUES (?,?,?,?,?)",
+    [`bulk.after.${Date.now()}@test.local`, hashPassword("MarkerPass123!"), "student", "active", 0]
+  );
+  assert.strictEqual(afterInsert.lastID, markerInsert.lastID + 1);
+});
+
 test("Kerberos reverse proxy header can create an app session", async () => {
   const teacher = await dbGet("SELECT id FROM users WHERE email = ?", ["teacher@example.com"]);
   assert.ok(teacher, "seeded teacher missing");
