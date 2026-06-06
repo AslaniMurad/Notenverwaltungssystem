@@ -1402,6 +1402,39 @@ test("admin can delete an archived school year through the archive danger flow",
     "INSERT INTO students (name, email, class_id, school_year) VALUES (?,?,?,?)",
     ["Archiv Schüler", "archiv.schueler@example.com", classInsert.lastID, schoolYearName]
   );
+  const studentRow = await dbGet(
+    "SELECT s.*, c.name as class_name, c.subject as class_subject, c.id as class_id FROM students s JOIN classes c ON c.id = s.class_id WHERE s.email = ?",
+    ["archiv.schueler@example.com"]
+  );
+  const teacherRow = await dbGet("SELECT id FROM users WHERE email = ?", ["teacher@example.com"]);
+  const assignmentInsert = await dbRun(
+    "INSERT INTO class_subject_teacher (class_id, subject_id, teacher_id, school_year_id) VALUES (?,?,?,?)",
+    [classInsert.lastID, 1, teacherRow.id, archivedSchoolYearId]
+  );
+  const templateInsert = await dbRun(
+    "INSERT INTO grade_templates (class_id, subject_id, name, category, weight, weight_mode, max_points, date, description) VALUES (?,?,?,?,?,?,?,?,?)",
+    [classInsert.lastID, 1, "Archiv Test", "Test", 10, "points", 20, "2024-05-15", "Archivdaten"]
+  );
+  const gradeInsert = await dbRun(
+    "INSERT INTO grades (student_id, class_id, grade_template_id, grade, points_achieved, points_max, note, attachment_path, attachment_original_name, attachment_mime, attachment_size, external_link, is_absent, school_year_id) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+    [studentRow.id, classInsert.lastID, templateInsert.lastID, 2, 18, 20, "Archivnote", null, null, null, null, null, 0, archivedSchoolYearId]
+  );
+  await dbRun(
+    "INSERT INTO grade_messages (grade_id, student_id, student_message) VALUES (?,?,?)",
+    [gradeInsert.lastID, studentRow.id, "Bitte pruefen"]
+  );
+  await dbRun(
+    "INSERT INTO special_assessments (student_id, class_id, subject_id, type, name, description, weight, grade) VALUES (?,?,?,?,?,?,?,?)",
+    [studentRow.id, classInsert.lastID, 1, "Präsentation", "Archiv Referat", "", 10, 2]
+  );
+  await dbRun(
+    "INSERT INTO participation_marks (student_id, class_id, subject_id, teacher_id, symbol, note) VALUES (?,?,?,?,?,?)",
+    [studentRow.id, classInsert.lastID, 1, teacherRow.id, "plus", "Archiv Mitarbeit"]
+  );
+  await dbRun(
+    "INSERT INTO teacher_student_exclusions (teacher_id, class_id, subject_id, student_id, school_year_id) VALUES (?,?,?,?,?)",
+    [teacherRow.id, classInsert.lastID, 1, studentRow.id, archivedSchoolYearId]
+  );
   await dbRun(
     "INSERT INTO archives (school_year_id, archive_type, entity_count) VALUES (?,?,?)",
     [archivedSchoolYearId, "grades", 1]
@@ -1457,6 +1490,14 @@ test("admin can delete an archived school year through the archive danger flow",
 
   const deletedSchoolYear = await dbGet("SELECT id, name, start_date, end_date, is_active FROM school_years WHERE id = ?", [archivedSchoolYearId]);
   assert.strictEqual(deletedSchoolYear, undefined);
+  const deletedStudent = await dbGet("SELECT id FROM students WHERE email = ? AND class_id = ?", ["archiv.schueler@example.com", classInsert.lastID]);
+  assert.strictEqual(deletedStudent, undefined);
+  const deletedAssignment = await dbGet("SELECT id, class_id, subject_id, teacher_id FROM class_subject_teacher WHERE id = ?", [assignmentInsert.lastID]);
+  assert.strictEqual(deletedAssignment, undefined);
+  const deletedTemplate = await dbGet("SELECT id FROM grade_templates WHERE id = ? AND class_id = ?", [templateInsert.lastID, classInsert.lastID]);
+  assert.strictEqual(deletedTemplate, undefined);
+  const deletedGrade = await dbGet("SELECT id, student_id, grade_template_id FROM grades WHERE id = ? AND student_id = ?", [gradeInsert.lastID, studentRow.id]);
+  assert.strictEqual(deletedGrade, undefined);
 });
 
 test("graduate cleanup can remove all memberships of a selected class name and deactivate orphaned student logins", async () => {

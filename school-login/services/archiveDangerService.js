@@ -522,9 +522,23 @@ async function executeArchiveDelete({ schoolYearId }) {
   ensureArchivedSchoolYearSelected(previewData);
 
   await withDangerTransaction(async ({ run }) => {
+    await run("DELETE FROM grade_messages WHERE grade_id IN (SELECT id FROM grades WHERE school_year_id = ?)", [
+      previewData.selectedSchoolYear.id
+    ]);
+    await run("DELETE FROM grades WHERE school_year_id = ?", [previewData.selectedSchoolYear.id]);
+
     for (const classRow of previewData.classes) {
+      await run("DELETE FROM grade_notifications WHERE student_id IN (SELECT id FROM students WHERE class_id = ?)", [
+        classRow.id
+      ]);
+      await run("DELETE FROM special_assessments WHERE class_id = ?", [classRow.id]);
+      await run("DELETE FROM participation_marks WHERE class_id = ?", [classRow.id]);
+      await run("DELETE FROM teacher_student_exclusions WHERE class_id = ?", [classRow.id]);
       await run("DELETE FROM students WHERE class_id = ?", [classRow.id]);
+      await run("DELETE FROM grade_templates WHERE class_id = ?", [classRow.id]);
     }
+
+    await run("DELETE FROM class_subject_teacher WHERE school_year_id = ?", [previewData.selectedSchoolYear.id]);
 
     for (const classRow of previewData.classes) {
       await run("DELETE FROM classes WHERE id = ?", [classRow.id]);
