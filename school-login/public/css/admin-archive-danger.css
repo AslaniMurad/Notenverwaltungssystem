@@ -283,16 +283,33 @@
 .archive-page .archive-danger-hero,
 .archive-page .archive-danger-summary,
 .archive-page .archive-danger-confirm-card {
-  border-color: var(--border);
-  box-shadow: inset 3px 0 0 rgba(185, 28, 28, 0.18);
+  border-color: rgba(185, 28, 28, 0.22);
+  box-shadow:
+    inset 3px 0 0 rgba(185, 28, 28, 0.24),
+    0 10px 22px rgba(15, 23, 42, 0.045);
 }
 
 .archive-page .archive-danger-hero {
-  background: var(--surface);
+  position: relative;
+  overflow: hidden;
+  background:
+    linear-gradient(180deg, rgba(185, 28, 28, 0.045), rgba(185, 28, 28, 0) 54%),
+    var(--surface);
+}
+
+.archive-page .archive-danger-summary,
+.archive-page .archive-danger-confirm-card {
+  background:
+    linear-gradient(180deg, rgba(185, 28, 28, 0.025), rgba(185, 28, 28, 0)),
+    var(--surface);
 }
 
 .archive-page .archive-danger-summary .archive-meta-item:last-child dd {
   color: #991b1b;
+}
+
+html[data-theme="dark"] .archive-page .archive-danger-summary .archive-meta-item:last-child dd {
+  color: #fca5a5;
 }
 
 .archive-page .archive-danger-form {
@@ -420,7 +437,17 @@
 
 .archive-page .archive-danger-confirm-note {
   border-color: rgba(185, 28, 28, 0.18);
-  background: rgba(185, 28, 28, 0.06);
+  background: rgba(185, 28, 28, 0.055);
+  color: var(--text);
+}
+
+html[data-theme="dark"] .archive-page .archive-danger-confirm-note {
+  border-color: rgba(248, 113, 113, 0.18);
+  background: rgba(248, 113, 113, 0.06);
+}
+
+.archive-page .archive-danger-button-row .btn-danger {
+  min-height: 44px;
 }
 
 .archive-page .archive-status-banner-error {

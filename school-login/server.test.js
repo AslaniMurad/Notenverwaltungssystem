@@ -1434,7 +1434,7 @@ test("admin archive renders the optimized overview and exports CSV", async () =>
   assert.strictEqual(archivePage.response.status, 200);
   assert.match(archivePage.body, /Historische Schuljahre für viel Datenvolumen aufbereitet/);
   assert.match(archivePage.body, /CSV Noten/);
-  assert.match(archivePage.body, /Danger-Zone/);
+  assert.match(archivePage.body, /Sicherheitsbereich/);
 
   const csvResponse = await fetchWithCookies(
     "/archive/export/grades",

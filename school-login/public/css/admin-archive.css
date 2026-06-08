@@ -452,14 +452,30 @@
 }
 
 .archive-danger-zone {
+  position: relative;
+  overflow: hidden;
   display: grid;
-  gap: 16px;
-  border-color: var(--border);
-  background: var(--surface);
-  box-shadow: inset 3px 0 0 rgba(185, 28, 28, 0.18);
+  gap: 18px;
+  border-color: rgba(185, 28, 28, 0.22);
+  background:
+    linear-gradient(180deg, rgba(185, 28, 28, 0.045), rgba(185, 28, 28, 0) 46%),
+    var(--surface);
+  box-shadow:
+    inset 3px 0 0 rgba(185, 28, 28, 0.24),
+    0 12px 26px rgba(15, 23, 42, 0.05);
+}
+
+.archive-danger-zone::before {
+  content: "";
+  position: absolute;
+  inset: 0 0 auto;
+  height: 3px;
+  background: linear-gradient(90deg, #b91c1c, rgba(185, 28, 28, 0.18));
+  pointer-events: none;
 }
 
 .archive-danger-head {
+  position: relative;
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
@@ -478,33 +494,46 @@
   align-items: center;
   min-height: 34px;
   padding: 8px 12px;
-  border: 1px solid var(--border);
+  border: 1px solid rgba(185, 28, 28, 0.18);
   border-radius: 999px;
-  background: var(--surface-2);
+  background: rgba(185, 28, 28, 0.07);
   color: #991b1b;
   font-size: 12px;
   font-weight: 700;
+  white-space: nowrap;
 }
 
 .archive-danger-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(260px, 1fr));
-  gap: 14px;
+  gap: 16px;
 }
 
 .archive-danger-card {
+  position: relative;
+  overflow: hidden;
   display: grid;
-  gap: 10px;
-  padding: 18px 20px;
-  border: 1px solid var(--border);
-  border-radius: 12px;
+  grid-template-rows: auto auto 1fr auto auto;
+  gap: 11px;
+  min-height: 190px;
+  padding: 20px;
+  border: 1px solid rgba(185, 28, 28, 0.14);
+  border-radius: 10px;
   background:
-    linear-gradient(180deg, rgba(185, 28, 28, 0.03), rgba(185, 28, 28, 0)),
-    linear-gradient(90deg, rgba(185, 28, 28, 0.1) 0 4px, var(--surface) 4px 100%);
+    linear-gradient(180deg, rgba(185, 28, 28, 0.028), rgba(185, 28, 28, 0)),
+    var(--surface);
   color: var(--text);
   text-decoration: none;
-  box-shadow: 0 8px 18px rgba(15, 23, 42, 0.04);
+  box-shadow: 0 8px 18px rgba(15, 23, 42, 0.035);
   transition: transform 0.16s ease, border-color 0.16s ease, background-color 0.16s ease, box-shadow 0.16s ease;
+}
+
+.archive-danger-card::before {
+  content: "";
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 4px;
+  background: linear-gradient(180deg, #b91c1c, rgba(185, 28, 28, 0.2));
 }
 
 .archive-danger-card-label {
@@ -534,35 +563,70 @@
   line-height: 1.55;
 }
 
+.archive-danger-card-meta {
+  display: block;
+  color: #991b1b;
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1.35;
+}
+
 .archive-danger-card-action {
   display: inline-flex;
   align-items: center;
+  gap: 7px;
   width: fit-content;
-  margin-top: 4px;
-  padding: 6px 10px;
-  border: 1px solid var(--border);
+  margin-top: 2px;
+  padding: 7px 10px;
+  border: 1px solid rgba(185, 28, 28, 0.16);
   border-radius: 999px;
-  background: var(--surface-2);
-  color: var(--text);
+  background: rgba(185, 28, 28, 0.06);
+  color: #7f1d1d;
   font-size: 12px;
   font-weight: 700;
   line-height: 1.2;
 }
 
+.archive-danger-card-action::after {
+  content: ">";
+  font-size: 15px;
+  line-height: 1;
+}
+
 .archive-danger-card:hover {
   transform: translateY(-1px);
-  border-color: rgba(185, 28, 28, 0.28);
+  border-color: rgba(185, 28, 28, 0.34);
   background:
-    linear-gradient(180deg, rgba(185, 28, 28, 0.04), rgba(185, 28, 28, 0)),
-    linear-gradient(90deg, rgba(185, 28, 28, 0.14) 0 4px, var(--surface) 4px 100%);
-  box-shadow: 0 12px 24px rgba(15, 23, 42, 0.06);
+    linear-gradient(180deg, rgba(185, 28, 28, 0.045), rgba(185, 28, 28, 0)),
+    var(--surface);
+  box-shadow: 0 14px 28px rgba(15, 23, 42, 0.07);
 }
 
 .archive-danger-note {
+  position: relative;
   padding: 12px 14px;
-  border: 1px solid var(--border);
+  border: 1px solid rgba(185, 28, 28, 0.14);
   border-radius: 8px;
-  background: var(--surface-2);
+  background: rgba(185, 28, 28, 0.035);
+}
+
+html[data-theme="dark"] .archive-danger-badge,
+html[data-theme="dark"] .archive-danger-card-label,
+html[data-theme="dark"] .archive-danger-card-meta,
+html[data-theme="dark"] .archive-danger-card-action {
+  color: #fca5a5;
+}
+
+html[data-theme="dark"] .archive-danger-badge,
+html[data-theme="dark"] .archive-danger-card-label,
+html[data-theme="dark"] .archive-danger-card-action {
+  border-color: rgba(248, 113, 113, 0.22);
+  background: rgba(248, 113, 113, 0.08);
+}
+
+html[data-theme="dark"] .archive-danger-note {
+  border-color: rgba(248, 113, 113, 0.16);
+  background: rgba(248, 113, 113, 0.06);
 }
 
 @media (max-width: 1080px) {
