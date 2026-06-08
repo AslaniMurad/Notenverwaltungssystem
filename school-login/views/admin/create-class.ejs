@@ -16,7 +16,6 @@
           <div>
             <p class="app-main-subtitle">Klassen</p>
             <h1>Neue Klasse anlegen</h1>
-            <p class="admin-muted">Lege zuerst nur die Klasse an. Fächer und Lehrer werden später separat zugeordnet.</p>
           </div>
         </div>
 
@@ -41,8 +40,6 @@
                 <option value="<%= teacher.email %>" data-teacher-id="<%= teacher.id %>"></option>
               <% }) %>
             </datalist>
-            <p class="admin-muted">Optional: Tippe einen Teil der Lehrer-E-Mail und waehle den passenden Vorschlag.</p>
-            <p class="admin-muted">Diese Klasse kann auch ohne Fachzuordnung gespeichert werden.</p>
             <button class="btn btn-primary" type="submit">Klasse erstellen</button>
           </form>
         </div>

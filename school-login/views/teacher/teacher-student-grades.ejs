@@ -148,8 +148,6 @@
           </div>
           <% if ((wishGradeRows || []).length === 0) { %>
             <p class="teacher-muted"><%= student.is_excluded ? 'Keine aktive Berechnung, weil der Schüler in diesem Fach ausgeschlossen ist.' : 'Noch keine gewichteten Einträge vorhanden.' %></p>
-          <% } else { %>
-            <p class="teacher-muted">Der Rechner berücksichtigt Noten und Mitarbeit aus der Gesamtnote.</p>
           <% } %>
         </div>
 
@@ -167,12 +165,10 @@
           <% if (!participationEnabled) { %>
             <div class="teacher-empty">
               <h4>Mitarbeit deaktiviert</h4>
-              <p>Aktiviere MA im aktiven Profil unter Einstellungen.</p>
             </div>
           <% } else if ((participationEntries || []).length === 0) { %>
             <div class="teacher-empty">
               <h4><%= student.is_excluded ? 'Keine aktive Mitarbeit' : 'Noch keine Mitarbeit' %></h4>
-              <p><%= student.is_excluded ? 'Der Schüler ist in diesem Fach ausgeschlossen. Historische MA-Einträge würden hier erscheinen.' : 'In der Notenübersicht kannst du mit dem MA-Button Einträge erfassen.' %></p>
             </div>
           <% } else { %>
             <div class="grades-table-wrapper">
@@ -226,7 +222,6 @@
             <% if (grades.length === 0) { %>
               <div class="teacher-empty">
                 <h4><%= student.is_excluded ? 'Keine aktiven Bewertungen' : 'Noch keine Noten' %></h4>
-                <p><%= student.is_excluded ? 'Der Schüler ist in diesem Fach ausgeschlossen. Historische Einträge würden hier erscheinen.' : 'Füge die erste Note für diesen Schüler hinzu.' %></p>
                 <% if (!student.is_excluded) { %>
                   <a class="btn btn-primary" href="/teacher/add-grade/<%= classData.id %>/<%= student.id %>">Bewertung hinzufügen</a>
                 <% } %>
@@ -365,7 +360,6 @@
               value="<%= average != null ? average : '' %>"
               placeholder="z.B. 2.0"
             >
-            <small class="form-hint">Berechnung für eine zusätzliche Leistung mit frei wählbarer Gewichtung.</small>
           </form>
 
           <p class="teacher-muted" id="wish-grade-info"></p>
@@ -376,7 +370,6 @@
                 <tr>
                   <th>Gewichtung (Punkte)</th>
                   <th>Benötigte Note</th>
-                  <th>Hinweis</th>
                 </tr>
               </thead>
               <tbody id="wish-grade-table"></tbody>
@@ -396,7 +389,7 @@
         </div>
         <div class="modal-body">
           <p>Was soll mit <strong id="deleteGradeInfo"></strong> passieren?</p>
-          <p class="teacher-muted" id="deleteGradeHint">Eintrag löschen entfernt ihn vollständig. Gewichtung entfernen lässt den Eintrag stehen, zählt ihn aber nicht mehr zur Note.</p>
+          <p class="teacher-muted" id="deleteGradeHint">Löschen oder Gewichtung ändern.</p>
         </div>
         <div class="modal-footer">
           <button class="btn btn-secondary" id="cancelDeleteGrade" type="button">Abbrechen</button>
@@ -444,27 +437,17 @@
 
         function formatRequiredGrade(required, currentAverage, targetGrade) {
           if (!Number.isFinite(required)) {
-            return { display: "-", hint: "Keine Berechnung möglich", badgeClass: null };
+            return { display: "-", badgeClass: null };
           }
           if (required < 1) {
-            return {
-              display: "Nicht erreichbar",
-              hint: "Mit nur einer zusätzlichen Bewertung dieses Gewichts reicht selbst Note 1 nicht.",
-              badgeClass: null
-            };
+            return { display: "Nicht erreichbar", badgeClass: null };
           }
           if (required > 5) {
-            const alreadyReached = Number.isFinite(currentAverage) && currentAverage <= targetGrade;
-            return {
-              display: "Bis 5.00 möglich",
-              hint: alreadyReached ? "Ziel ist bereits erreicht." : "Auch eine schwache zusätzliche Note wäre ausreichend.",
-              badgeClass: null
-            };
+            return { display: "Bis 5.00 möglich", badgeClass: null };
           }
           const roundedClass = Math.min(5, Math.max(1, Math.round(required)));
           return {
             display: required.toFixed(2),
-            hint: "Benötigte Note für genau diese Wunschnote.",
             badgeClass: `grade-${roundedClass}`
           };
         }
@@ -507,7 +490,6 @@
                 <tr>
                   <td>${weight} ${wishWeightUnit}</td>
                   <td>${gradeCell}</td>
-                  <td>${formatted.hint || "-"}</td>
                 </tr>
               `;
             })
@@ -555,8 +537,8 @@
             }
             if (deleteGradeHint) {
               deleteGradeHint.textContent = currentGradeForm?.dataset?.weightRemoved === "1"
-                ? "Die Gewichtung dieses Eintrags ist aktuell entfernt. Mit einem weiteren Klick kannst du sie wiederherstellen."
-                : "Eintrag löschen entfernt ihn vollständig. Gewichtung entfernen lässt den Eintrag stehen, zählt ihn aber nicht mehr zur Note.";
+                ? "Gewichtung ist entfernt."
+                : "Löschen oder Gewichtung entfernen.";
             }
             if (removeWeightGrade) {
               removeWeightGrade.textContent = currentGradeForm?.dataset?.weightRemoved === "1"

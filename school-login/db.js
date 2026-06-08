@@ -316,7 +316,8 @@ function createFakeDb() {
         if (duplicate) {
           err = new Error("UNIQUE constraint failed: school_years.name");
         } else {
-          if (is_active) {
+          const isActive = is_active === true || is_active === 1 || String(is_active).toLowerCase() === "true";
+          if (isActive) {
             schoolYears.forEach((entry) => {
               entry.is_active = false;
             });
@@ -326,21 +327,22 @@ function createFakeDb() {
             name: String(name),
             start_date: start_date || null,
             end_date: end_date || null,
-            is_active: Boolean(is_active)
+            is_active: isActive
           };
           schoolYears.push(schoolYear);
           lastID = schoolYear.id;
         }
       } else if (/UPDATE school_years SET is_active = \? WHERE id = \?/i.test(sql)) {
         const [is_active, id] = params;
-        if (is_active) {
+        const isActive = is_active === true || is_active === 1 || String(is_active).toLowerCase() === "true";
+        if (isActive) {
           schoolYears.forEach((entry) => {
             entry.is_active = false;
           });
         }
         const schoolYear = schoolYears.find((entry) => entry.id === Number(id));
         if (schoolYear) {
-          schoolYear.is_active = Boolean(is_active);
+          schoolYear.is_active = isActive;
         }
       } else if (/DELETE FROM school_years WHERE id = \?/i.test(sql)) {
         const [id] = params;
@@ -1791,7 +1793,7 @@ function createFakeDb() {
               created_at: classRow.created_at
             }
           : undefined;
-      } else if (/SELECT .*FROM classes\s+WHERE id = \? AND school_year_id = \?/i.test(sql)) {
+      } else if (/SELECT[\s\S]*FROM classes\s+WHERE id = \? AND school_year_id = \?/i.test(sql)) {
         const [id, school_year_id] = params;
         const classRow = classes.find(
           (entry) => entry.id === Number(id) && Number(entry.school_year_id) === Number(school_year_id)

@@ -84,16 +84,12 @@
           <div>
             <p class="teacher-eyebrow">Klasse <%= classData.name %></p>
             <h1>Sonderleistungen</h1>
-            <p class="teacher-muted">Fach: <%= classData.subject %> · Individuelle Zusatzbewertungen</p>
+            <p class="teacher-muted">Fach: <%= classData.subject %></p>
           </div>
           <div class="teacher-actions-inline">
             <a class="btn btn-secondary" href="/teacher/classes">Zurück</a>
           </div>
         </header>
-
-        <div class="teacher-alert info">
-          Sonderleistungen nutzen Punkte und fließen zusätzlich in die Gesamtnote ein.
-        </div>
 
         <div class="teacher-card">
           <div class="teacher-card-header">
@@ -129,7 +125,6 @@
                 </option>
               <% }) %>
             </select>
-            <small class="form-hint">Für "Benutzerdefiniert" ist eine eigene Bezeichnung Pflicht.</small>
 
             <label for="name">Bezeichnung</label>
             <input type="text" id="name" name="name" value="<%= formData.name || '' %>" placeholder="z.B. Präsentation Modul 2">
@@ -163,7 +158,6 @@
             <% if (assessments.length === 0) { %>
               <div class="teacher-empty">
                 <h4>Noch keine Sonderleistungen</h4>
-                <p>Lege individuelle Bewertungen für einzelne Schüler an.</p>
               </div>
             <% } else { %>
               <% assessments.forEach(assessment => { %>

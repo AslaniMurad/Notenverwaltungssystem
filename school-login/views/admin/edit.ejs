@@ -93,7 +93,6 @@
               <div class="admin-user-edit-reset-mail">
                 <div>
                   <h4>Einmalpasswort per E-Mail</h4>
-                  <p class="admin-muted">Erstellt ein kryptografisch generiertes Einmalpasswort, sendet es an <strong><%= user.email %></strong> und erzwingt nach dem Login einen Passwortwechsel.</p>
                 </div>
                 <form
                   method="POST"
@@ -129,7 +128,6 @@
                 <label class="admin-field" for="password">
                   <span>Neues Passwort</span>
                   <input id="password" name="password" type="password" required>
-                  <span class="admin-field-hint">Das Passwort wird sofort ersetzt. Der Nutzer muss es danach nicht automatisch ändern.</span>
                 </label>
                 <div class="admin-user-edit-actions">
                   <button class="btn" type="submit">Passwort zurücksetzen</button>
@@ -141,7 +139,6 @@
               <div>
                 <p class="admin-eyebrow">Gefahrenzone</p>
                 <h3>Nutzer deaktivieren</h3>
-                <p class="admin-muted">Der Datensatz bleibt erhalten, der Login wird aber per Status gelöscht markiert.</p>
               </div>
               <form
                 class="admin-edit-form"

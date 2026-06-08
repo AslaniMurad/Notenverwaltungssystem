@@ -66,9 +66,6 @@
           <div>
             <p class="app-main-subtitle">Schuljahresverwaltung</p>
             <h1>Schuljahreswechsel-Assistent</h1>
-            <p class="admin-muted school-year-header-copy">
-              Mehrstufiger Wizard für Klassen, Lehrerzuordnungen und Schülerübernahme.
-            </p>
           </div>
           <div class="admin-actions-row school-year-header-actions">
             <% if (hasWizard) { %>
@@ -157,7 +154,6 @@
                       <p class="admin-eyebrow">Zielschuljahr</p>
                       <h3>Aktueller Wizard</h3>
                     </div>
-                    <small>Zum Ändern Assistent zuerst zurücksetzen.</small>
                   </div>
 
                   <div class="school-year-start-readonly">
@@ -186,7 +182,6 @@
                       <p class="admin-eyebrow">Zielschuljahr</p>
                       <h3>Bezeichnung und Datum festlegen</h3>
                     </div>
-                    <small>Standardwerte können vor dem Start angepasst werden.</small>
                   </div>
 
                   <form method="POST" action="/admin/rollover/start" class="school-year-form-stack school-year-start-form">
@@ -321,7 +316,6 @@
                     <p class="admin-eyebrow">Zusatzklassen</p>
                     <h3>Weitere Zielklassen anlegen</h3>
                   </div>
-                  <small>Vorlage bestimmt Fach und Lehrerzuordnungen.</small>
                 </div>
                 <div class="school-year-table-wrap">
                   <table class="school-year-table">

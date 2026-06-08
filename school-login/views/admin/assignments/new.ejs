@@ -30,7 +30,6 @@
           <div>
             <p class="app-main-subtitle">Unterrichtszuordnungen</p>
             <h1>Lehrer einem Klassenfach zuordnen</h1>
-            <p class="admin-muted">Wähle zuerst eine Klasse. Danach arbeitest du nur mit den Fächern dieser Klasse oder legst ein neues Fach direkt für diese Klasse an.</p>
           </div>
           <a class="btn btn-secondary" href="/admin/assignments">Zur Übersicht</a>
         </div>
@@ -115,9 +114,9 @@
           <% if (!classes.length) { %>
             <p class="admin-muted">Es gibt noch keine Klassen im aktiven Schuljahr.</p>
           <% } else if (!selectedClass) { %>
-            <p class="admin-muted">Wähle zuerst eine Klasse. Erst danach werden passende Klassenfächer und Lehrkräfte geladen.</p>
+            <p class="admin-muted">Klasse auswählen.</p>
           <% } else if (!createSubjectMode && !classSubjects.length) { %>
-            <p class="admin-muted">Diese Klasse hat noch keine Fächer. Wechsle oben auf <strong>Neues Fach für Klasse</strong>, um das erste Fach anzulegen.</p>
+            <p class="admin-muted">Keine Fächer vorhanden.</p>
           <% } %>
 
           <% if (selectedClass && classSubjects.length) { %>
@@ -165,10 +164,8 @@
                   placeholder="z.B. Mathematik"
                   required
                 >
-                <p class="admin-muted">Das Fach wird im Kontext dieser Klasse angelegt. Besteht der Fachname bereits, wird der vorhandene Fachdatensatz verwendet und nur die Lehrerzuordnung ergänzt.</p>
               <% } else { %>
                 <input type="hidden" name="subject_id" value="<%= selSubjectId %>">
-                <p class="admin-muted">Hier ordnest du Lehrkräfte nur einem bereits vorhandenen Klassenfach zu.</p>
               <% } %>
 
               <div class="assign-teacher-section">

@@ -103,7 +103,6 @@
               >
               Gespeicherte Einstellungen aus dem aktiven Profil verwenden
             </label>
-            <small class="form-hint" id="profile-settings-hint">Wenn aktiv, werden Gewichtung und weitere Profilwerte automatisch übernommen und gesperrt.</small>
 
             <label for="weight">Gewichtung (<span id="weight-unit-label"><%= unitLabel %></span>) *</label>
             <input
@@ -117,7 +116,6 @@
               value="<%= formData && formData.weight !== '' ? formData.weight : '' %>"
               <%= useProfileSettings ? 'disabled' : '' %>
             >
-            <small class="form-hint" id="weight-hint">Profil-Vorschlag wird automatisch gesetzt.</small>
 
             <label for="max_points">Maximale Punkte<%= maxPointsRequired ? ' *' : ' (optional)' %></label>
             <input
@@ -131,7 +129,6 @@
               value="<%= formData && formData.max_points !== '' ? formData.max_points : '' %>"
               <%= useProfileSettings && !maxPointsRequired ? 'readonly class="is-readonly"' : '' %>
             >
-            <small class="form-hint" id="max-points-hint"><%= maxPointsRequired ? 'Für diesen Bewertungsmodus nötig, damit Punkte erfasst oder aus Noten berechnet werden können.' : 'Optional für interne Punkteübersichten und Noten-zu-Punkte-Schätzungen.' %></small>
 
             <label for="date">Datum (optional)</label>
             <input type="date" id="date" name="date" value="<%= formData && formData.date ? formData.date : '' %>">
@@ -160,9 +157,6 @@
         const useProfileSettingsToggle = document.getElementById('use_profile_settings');
         const weightInput = document.getElementById('weight');
         const maxPointsInput = document.getElementById('max_points');
-        const weightHint = document.getElementById('weight-hint');
-        const profileSettingsHint = document.getElementById('profile-settings-hint');
-        const maxPointsHint = document.getElementById('max-points-hint');
         const unitLabel = document.getElementById('weight-unit-label');
         const manualWeightRequired = weightInput ? weightInput.dataset.manualRequired === '1' : false;
         const maxPointsRequired = <%= maxPointsRequired ? "true" : "false" %>;
@@ -198,21 +192,6 @@
             maxPointsInput.classList.toggle('is-readonly', useProfileSettings && !maxPointsRequired);
           }
 
-          if (profileSettingsHint) {
-            profileSettingsHint.textContent = useProfileSettings
-              ? 'Aktives Profil ist eingeschaltet: Gewichtung wird automatisch gesetzt und Maximalpunkte sind schreibgeschützt.'
-              : 'Wenn aktiv, werden Gewichtung und weitere Profilwerte automatisch übernommen und gesperrt.';
-          }
-
-          if (maxPointsHint) {
-            maxPointsHint.textContent = useProfileSettings
-              ? (maxPointsRequired
-                ? 'Maximalpunkte bleiben für diesen Bewertungsmodus erforderlich.'
-                : 'Maximalpunkte können bei aktiven Profileinstellungen nicht manuell geändert werden.')
-              : (maxPointsRequired
-                ? 'Für diesen Bewertungsmodus nötig, damit Punkte erfasst oder aus Noten berechnet werden können.'
-                : 'Optional für interne Punkteübersichten und Noten-zu-Punkte-Schätzungen.');
-          }
         }
 
         function updateWeightSuggestion() {
@@ -223,26 +202,14 @@
           if (unitLabel) unitLabel.textContent = 'Punkte';
 
           if (!selectedCategory) {
-            if (weightHint) {
-              weightHint.textContent = useProfileSettings
-                ? 'Wähle zuerst eine Kategorie, damit das Profil die Gewichtung setzen kann.'
-                : 'Wähle zuerst eine Kategorie.';
-            }
             syncManagedFieldState(null);
             return;
           }
 
           if (Number.isFinite(Number(suggestion))) {
-            if (weightHint) {
-              weightHint.textContent = useProfileSettings
-                ? 'Aktives Profil setzt die Gewichtung auf ' + formatWeight(suggestion) + ' Punkte.'
-                : 'Vorschlag aus Profil: ' + formatWeight(suggestion) + ' Punkte.';
-            }
             if (!useProfileSettings && !hasManualValue && weightInput) {
               weightInput.value = formatWeight(suggestion);
             }
-          } else if (weightHint) {
-            weightHint.textContent = 'Keine Profil-Gewichtung für diese Kategorie gefunden.';
           }
           syncManagedFieldState(suggestion);
         }
