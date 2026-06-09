@@ -32,6 +32,7 @@ const teacherRouter = require("./routes/teacher");
 
 const app = express();
 const isProduction = process.env.NODE_ENV === "production";
+const PENDING_WEBUNTIS_REDIRECT_SESSION_KEY = "pendingWebUntisRedirect";
 const assetVersion = process.env.ASSET_VERSION || (isProduction ? "1" : Date.now().toString(36));
 const ssoEnabled = process.env.SSO_ENABLED === "true";
 const ssoHeaderName = (process.env.SSO_HEADER || "x-remote-user").toLowerCase();
@@ -411,6 +412,12 @@ function logTeacherAssignments(user) {
 function createUserSession(req, user, loginKey) {
   return new Promise((resolve, reject) => {
     const teamsLogin = Boolean(req.session?.teamsLogin);
+    const pendingWebUntisRedirect = getValidPendingWebUntisRedirect(
+      req.session?.[PENDING_WEBUNTIS_REDIRECT_SESSION_KEY],
+      user.role
+    );
+    const needsPasswordChange = shouldRequirePasswordChange(user);
+
     req.session.regenerate((regenErr) => {
       if (regenErr) return reject(regenErr);
 
@@ -418,6 +425,9 @@ function createUserSession(req, user, loginKey) {
         req.session.teamsLogin = true;
       }
       req.session.user = buildSessionUser(user);
+      if (pendingWebUntisRedirect && needsPasswordChange) {
+        req.session[PENDING_WEBUNTIS_REDIRECT_SESSION_KEY] = pendingWebUntisRedirect;
+      }
 
       if (loginKey) {
         resetLoginAttempts(loginKey);
@@ -428,9 +438,9 @@ function createUserSession(req, user, loginKey) {
       req.session.save((saveErr) => {
         if (saveErr) return reject(saveErr);
         resolve(
-          shouldRequirePasswordChange(user)
+          needsPasswordChange
             ? PASSWORD_CHANGE_PATH
-            : getRedirectForRole(user.role)
+            : pendingWebUntisRedirect || getRedirectForRole(user.role)
         );
       });
     });
@@ -610,6 +620,39 @@ function getRedirectForRole(role) {
     student: "/student"
   };
   return redirectMap[role] || "/";
+}
+
+function getValidPendingWebUntisRedirect(value, role) {
+  if (role !== "student") return "";
+
+  const target = String(value || "");
+  if (!target) return "";
+
+  let parsedUrl;
+  try {
+    parsedUrl = new URL(target, "http://nvs.local");
+  } catch {
+    return "";
+  }
+
+  if (parsedUrl.origin !== "http://nvs.local") return "";
+  if (parsedUrl.pathname !== "/student/grades") return "";
+  if (String(parsedUrl.searchParams.get("from") || "").toLowerCase() !== "webuntis") {
+    return "";
+  }
+
+  return `${parsedUrl.pathname}${parsedUrl.search}`;
+}
+
+function consumePendingWebUntisRedirect(req, role) {
+  const target = getValidPendingWebUntisRedirect(
+    req.session?.[PENDING_WEBUNTIS_REDIRECT_SESSION_KEY],
+    role
+  );
+  if (req.session) {
+    delete req.session[PENDING_WEBUNTIS_REDIRECT_SESSION_KEY];
+  }
+  return target;
 }
 
 function getHeaderValue(req, headerName) {
@@ -927,7 +970,10 @@ function renderPasswordChangePage(req, res, options = {}) {
 
 async function handleForcedPasswordChange(req, res, next) {
   if (!req.session.user.must_change_password) {
-    return res.redirect(getRedirectForRole(req.session.user.role));
+    return res.redirect(
+      consumePendingWebUntisRedirect(req, req.session.user.role) ||
+        getRedirectForRole(req.session.user.role)
+    );
   }
   const newPassword = req.body?.newPassword;
   const validationError = getPasswordValidationError(newPassword);
@@ -943,7 +989,10 @@ async function handleForcedPasswordChange(req, res, next) {
     );
     await passwordResetModel.invalidateActiveRequestsForUser(req.session.user.id);
     req.session.user.must_change_password = false;
-    return res.redirect(getRedirectForRole(req.session.user.role));
+    return res.redirect(
+      consumePendingWebUntisRedirect(req, req.session.user.role) ||
+        getRedirectForRole(req.session.user.role)
+    );
   } catch (err) {
     return next(err);
   }
@@ -952,7 +1001,10 @@ async function handleForcedPasswordChange(req, res, next) {
 // --- Passwortwechsel erzwingen ---
 app.get(PASSWORD_CHANGE_PATH, requireAuth, (req, res) => {
   if (!req.session.user.must_change_password) {
-    return res.redirect(getRedirectForRole(req.session.user.role));
+    return res.redirect(
+      consumePendingWebUntisRedirect(req, req.session.user.role) ||
+        getRedirectForRole(req.session.user.role)
+    );
   }
   return renderPasswordChangePage(req, res);
 });
