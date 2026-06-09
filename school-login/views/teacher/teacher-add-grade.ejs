@@ -180,7 +180,6 @@
 
                 <p id="templateSelectionInfo" class="template-picker-selection"></p>
               </div>
-              <small class="form-hint">Standardmäßig werden die neuesten 3 Prüfungen gezeigt. Mit Suche oder Sortierung siehst du alle.</small>
 
               <label class="checkbox-line" for="is_absent">
                 <input
@@ -192,7 +191,6 @@
                 >
                 Schüler war bei dieser Prüfung nicht da
               </label>
-              <small class="form-hint">Aktuelle Regel aus Einstellungen: <%= absenceModeLabel %>.</small>
 
               <% if (allowsGrade) { %>
                 <label for="grade">Note (1-5)<%= requiresGrade ? ' *' : '' %></label>
@@ -207,12 +205,6 @@
                   placeholder="z.B. 2 oder 2.5"
                   value="<%= formData.grade || '' %>"
                 >
-                <small class="form-hint">Notenskala: 1 (Sehr gut) bis 5 (Nicht genügend)</small>
-                <% if (mode === 'grade_only') { %>
-                  <small class="form-hint">Es wird nur die Note eingegeben. Interne Punkte werden geschätzt, wenn die Vorlage maximale Punkte hat.</small>
-                <% } else if (isEitherOrMode) { %>
-                  <small class="form-hint">Wenn du eine Note eingibst, bleibt das Punktefeld leer und die Punkte werden im Hintergrund berechnet.</small>
-                <% } %>
               <% } %>
 
               <% if (allowsPoints) { %>
@@ -227,19 +219,10 @@
                   value="<%= formData.points_achieved || '' %>"
                 >
                 <p id="templateMaxPointsInfo" class="teacher-muted">Maximale Punkte aus Vorlage: -</p>
-                <small class="form-hint">
-                  <% if (mode === 'points_and_grade') { %>
-                    Punkte und Note werden gemeinsam gespeichert; die Note wird hier nicht automatisch ersetzt.
-                  <% } else { %>
-                    Wenn Punkte eingegeben werden, wird die Note aus Punkten berechnet
-                    (1 ab <%= thresholdsData.grade1_min_percent %>%, 2 ab <%= thresholdsData.grade2_min_percent %>%, 3 ab <%= thresholdsData.grade3_min_percent %>%, 4 ab <%= thresholdsData.grade4_min_percent %>%).
-                  <% } %>
-                </small>
               <% } %>
 
               <label for="note">Notiz (optional)</label>
               <textarea id="note" name="note" rows="2" placeholder="z.B. Sehr gute Mitarbeit, kleine Fehler bei Aufgabe 3"><%= formData.note || '' %></textarea>
-              <small class="form-hint">Optional kannst du eine korrigierte Arbeit anhängen oder einen externen Link angeben.</small>
 
               <label for="attachment_file">Korrigierte Arbeit hochladen (optional)</label>
               <input type="file" id="attachment_file" name="attachment_file" accept=".pdf,.jpg,.jpeg,.png,application/pdf,image/jpeg,image/png">

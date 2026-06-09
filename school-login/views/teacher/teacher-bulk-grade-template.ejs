@@ -80,14 +80,11 @@
           </div>
 
           <div class="teacher-alert info">
-            Bewertungsmodus: <strong><%= scoringModeLabel || 'Punkte oder Noten' %></strong> -
-            <% if (scoringModeDescription) { %>
-              <span><%= scoringModeDescription %></span>
-            <% } %>
+            Bewertungsmodus: <strong><%= scoringModeLabel || 'Punkte oder Noten' %></strong>
             <% if (templateHasMaxPoints) { %>
-              Max. Punkte: <strong><%= templateMaxPoints %></strong>
+              - Max. Punkte: <strong><%= templateMaxPoints %></strong>
             <% } else { %>
-              Keine maximalen Punkte hinterlegt.
+              - Keine maximalen Punkte hinterlegt.
             <% } %>
             <% if (existingCount > 0) { %>
               Bereits benotet: <strong><%= existingCount %></strong>
@@ -194,13 +191,6 @@
                 </tbody>
               </table>
             </div>
-
-            <small class="form-hint">
-              Bereits vorhandene Bewertungen sind vorausgefüllt und können bei Bedarf direkt angepasst werden.
-            </small>
-            <p class="form-hint">
-              Tipp: Dezimalwerte können mit Punkt oder Komma eingegeben werden.
-            </p>
 
             <div class="teacher-form-actions">
               <button class="btn btn-primary" type="submit">Bewertungen speichern</button>

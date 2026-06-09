@@ -230,11 +230,12 @@ function createFakeDb() {
         const resolvedRole =
           role || (/\'teacher\'/i.test(sql) ? "teacher" : /\'student\'/i.test(sql) ? "student" : /\'admin\'/i.test(sql) ? "admin" : undefined);
         const resolvedStatus = status || (/\'active\'/i.test(sql) ? "active" : undefined) || "active";
+        const nextUserId = userId++;
         if (users.some((u) => u.email === email)) {
           err = new Error("UNIQUE constraint failed: users.email");
         } else {
           const newUser = {
-            id: userId++,
+            id: nextUserId,
             email,
             password_hash,
             role: resolvedRole,
@@ -341,7 +342,8 @@ function createFakeDb() {
         if (duplicate) {
           err = new Error("UNIQUE constraint failed: school_years.name");
         } else {
-          if (is_active) {
+          const isActive = is_active === true || is_active === 1 || String(is_active).toLowerCase() === "true";
+          if (isActive) {
             schoolYears.forEach((entry) => {
               entry.is_active = false;
             });
@@ -351,26 +353,38 @@ function createFakeDb() {
             name: String(name),
             start_date: start_date || null,
             end_date: end_date || null,
-            is_active: Boolean(is_active)
+            is_active: isActive
           };
           schoolYears.push(schoolYear);
           lastID = schoolYear.id;
         }
       } else if (/UPDATE school_years SET is_active = \? WHERE id = \?/i.test(sql)) {
         const [is_active, id] = params;
-        if (is_active) {
+        const isActive = is_active === true || is_active === 1 || String(is_active).toLowerCase() === "true";
+        if (isActive) {
           schoolYears.forEach((entry) => {
             entry.is_active = false;
           });
         }
         const schoolYear = schoolYears.find((entry) => entry.id === Number(id));
         if (schoolYear) {
-          schoolYear.is_active = Boolean(is_active);
+          schoolYear.is_active = isActive;
         }
       } else if (/DELETE FROM school_years WHERE id = \?/i.test(sql)) {
         const [id] = params;
-        for (let i = schoolYears.length - 1; i >= 0; i -= 1) {
-          if (schoolYears[i].id === Number(id)) schoolYears.splice(i, 1);
+        const schoolYearRefId = Number(id);
+        const isReferenced =
+          classes.some((entry) => entry.school_year_id === schoolYearRefId) ||
+          teachingAssignments.some((entry) => entry.school_year_id === schoolYearRefId) ||
+          grades.some((entry) => entry.school_year_id === schoolYearRefId) ||
+          teacherStudentExclusions.some((entry) => entry.school_year_id === schoolYearRefId);
+
+        if (isReferenced) {
+          err = new Error("FOREIGN KEY constraint failed");
+        } else {
+          for (let i = schoolYears.length - 1; i >= 0; i -= 1) {
+            if (schoolYears[i].id === schoolYearRefId) schoolYears.splice(i, 1);
+          }
         }
       } else if (/INSERT INTO archives/i.test(sql)) {
         const [school_year_id, archive_type, entity_count] = params;
@@ -537,28 +551,61 @@ function createFakeDb() {
         for (let i = teachingAssignments.length - 1; i >= 0; i -= 1) {
           if (teachingAssignments[i].id === Number(id)) teachingAssignments.splice(i, 1);
         }
+      } else if (/DELETE FROM (teaching_assignments|class_subject_teacher) WHERE school_year_id = \?/i.test(sql)) {
+        const [schoolYearIdParam] = params;
+        for (let i = teachingAssignments.length - 1; i >= 0; i -= 1) {
+          if (teachingAssignments[i].school_year_id === Number(schoolYearIdParam)) {
+            teachingAssignments.splice(i, 1);
+          }
+        }
       } else if (/DELETE FROM grade_messages\s+WHERE grade_id IN/i.test(sql)) {
-        const [classIdParam, subjectIdParam] = params;
-        const templateIds = new Set(
-          gradeTemplates
-            .filter(
-              (entry) =>
-                entry.class_id === Number(classIdParam) &&
-                entry.subject_id === normalizeOptionalId(subjectIdParam)
-            )
-            .map((entry) => Number(entry.id))
-        );
-        const gradeIds = new Set(
-          grades
-            .filter(
-              (entry) =>
-                entry.class_id === Number(classIdParam) &&
-                templateIds.has(Number(entry.grade_template_id))
-            )
-            .map((entry) => Number(entry.id))
-        );
+        let gradeIds;
+        if (/FROM grades WHERE school_year_id = \?/i.test(sql)) {
+          const [schoolYearIdParam] = params;
+          gradeIds = new Set(
+            grades
+              .filter((entry) => entry.school_year_id === Number(schoolYearIdParam))
+              .map((entry) => Number(entry.id))
+          );
+        } else {
+          const [classIdParam, subjectIdParam] = params;
+          const templateIds = new Set(
+            gradeTemplates
+              .filter(
+                (entry) =>
+                  entry.class_id === Number(classIdParam) &&
+                  entry.subject_id === normalizeOptionalId(subjectIdParam)
+              )
+              .map((entry) => Number(entry.id))
+          );
+          gradeIds = new Set(
+            grades
+              .filter(
+                (entry) =>
+                  entry.class_id === Number(classIdParam) &&
+                  templateIds.has(Number(entry.grade_template_id))
+              )
+              .map((entry) => Number(entry.id))
+          );
+        }
         for (let i = gradeMessages.length - 1; i >= 0; i -= 1) {
           if (gradeIds.has(Number(gradeMessages[i].grade_id))) gradeMessages.splice(i, 1);
+        }
+      } else if (/DELETE FROM grades WHERE school_year_id = \?/i.test(sql)) {
+        const [schoolYearIdParam] = params;
+        const deletedGradeIds = [];
+        for (let i = grades.length - 1; i >= 0; i -= 1) {
+          if (grades[i].school_year_id === Number(schoolYearIdParam)) {
+            deletedGradeIds.push(Number(grades[i].id));
+            grades.splice(i, 1);
+          }
+        }
+        if (deletedGradeIds.length) {
+          for (let i = gradeMessages.length - 1; i >= 0; i -= 1) {
+            if (deletedGradeIds.includes(Number(gradeMessages[i].grade_id))) {
+              gradeMessages.splice(i, 1);
+            }
+          }
         }
       } else if (/DELETE FROM grades\s+WHERE class_id = \?\s+AND grade_template_id IN/i.test(sql)) {
         const [classIdParam, templateClassIdParam, subjectIdParam] = params;
@@ -582,6 +629,29 @@ function createFakeDb() {
           }
         }
         if (deletedGradeIds.length) {
+          for (let i = gradeMessages.length - 1; i >= 0; i -= 1) {
+            if (deletedGradeIds.includes(Number(gradeMessages[i].grade_id))) {
+              gradeMessages.splice(i, 1);
+            }
+          }
+        }
+      } else if (/DELETE FROM grade_templates WHERE class_id = \?$/i.test(sql)) {
+        const [classIdParam] = params;
+        const deletedTemplateIds = [];
+        for (let i = gradeTemplates.length - 1; i >= 0; i -= 1) {
+          if (gradeTemplates[i].class_id === Number(classIdParam)) {
+            deletedTemplateIds.push(Number(gradeTemplates[i].id));
+            gradeTemplates.splice(i, 1);
+          }
+        }
+        if (deletedTemplateIds.length) {
+          const deletedGradeIds = [];
+          for (let i = grades.length - 1; i >= 0; i -= 1) {
+            if (deletedTemplateIds.includes(Number(grades[i].grade_template_id))) {
+              deletedGradeIds.push(Number(grades[i].id));
+              grades.splice(i, 1);
+            }
+          }
           for (let i = gradeMessages.length - 1; i >= 0; i -= 1) {
             if (deletedGradeIds.includes(Number(gradeMessages[i].grade_id))) {
               gradeMessages.splice(i, 1);
@@ -653,6 +723,13 @@ function createFakeDb() {
           };
           teacherStudentExclusions.push(newExclusion);
           lastID = newExclusion.id;
+        }
+      } else if (/DELETE FROM teacher_student_exclusions WHERE class_id = \?$/i.test(sql)) {
+        const [class_id] = params;
+        for (let i = teacherStudentExclusions.length - 1; i >= 0; i -= 1) {
+          if (teacherStudentExclusions[i].class_id === Number(class_id)) {
+            teacherStudentExclusions.splice(i, 1);
+          }
         }
       } else if (/DELETE FROM teacher_student_exclusions WHERE class_id = \? AND subject_id = \?/i.test(sql)) {
         const [class_id, subject_id] = params;
@@ -1341,6 +1418,13 @@ function createFakeDb() {
         if (assessmentRow) {
           assessmentRow.excluded_from_average = Boolean(excludedValue);
         }
+      } else if (/DELETE FROM special_assessments WHERE class_id = \?$/i.test(sql)) {
+        const [classIdParam] = params;
+        for (let i = specialAssessments.length - 1; i >= 0; i -= 1) {
+          if (specialAssessments[i].class_id === Number(classIdParam)) {
+            specialAssessments.splice(i, 1);
+          }
+        }
       } else if (/DELETE FROM special_assessments WHERE class_id = \? AND subject_id = \?/i.test(sql)) {
         const [classIdParam, subjectIdParam] = params;
         for (let i = specialAssessments.length - 1; i >= 0; i -= 1) {
@@ -1381,6 +1465,13 @@ function createFakeDb() {
         };
         participationMarks.push(mark);
         lastID = mark.id;
+      } else if (/DELETE FROM participation_marks WHERE class_id = \?$/i.test(sql)) {
+        const [classIdParam] = params;
+        for (let i = participationMarks.length - 1; i >= 0; i -= 1) {
+          if (participationMarks[i].class_id === Number(classIdParam)) {
+            participationMarks.splice(i, 1);
+          }
+        }
       } else if (/DELETE FROM participation_marks WHERE class_id = \? AND subject_id = \?/i.test(sql)) {
         const [classIdParam, subjectIdParam] = params;
         for (let i = participationMarks.length - 1; i >= 0; i -= 1) {
@@ -1732,7 +1823,7 @@ function createFakeDb() {
               created_at: classRow.created_at
             }
           : undefined;
-      } else if (/SELECT .*FROM classes\s+WHERE id = \? AND school_year_id = \?/i.test(sql)) {
+      } else if (/SELECT[\s\S]*FROM classes\s+WHERE id = \? AND school_year_id = \?/i.test(sql)) {
         const [id, school_year_id] = params;
         const classRow = classes.find(
           (entry) => entry.id === Number(id) && Number(entry.school_year_id) === Number(school_year_id)

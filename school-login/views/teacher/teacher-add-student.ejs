@@ -57,13 +57,10 @@
             <div class="teacher-alert error"><%= error %></div>
           <% } %>
 
-          <div class="teacher-alert info">Hinweis: Der Schüler muss bereits als Benutzer mit der Rolle "student" existieren.</div>
-
           <form class="teacher-form" method="POST" action="/teacher/add-student/<%= classData.id %>">
             <input type="hidden" name="_csrf" value="<%= csrfToken %>">
             <label for="name">Name des Schülers</label>
             <input type="text" id="name" name="name" placeholder="Max Mustermann" data-student-name>
-            <p class="teacher-muted">Wird automatisch gesetzt bei E-Mail im Format vorname.nachname@xy.</p>
 
             <label for="email">E-Mail des Schülers</label>
             <input type="email" id="email" name="email" required placeholder="max.mustermann@schule.at" data-student-email>

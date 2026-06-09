@@ -928,6 +928,24 @@ function normalizeCreateMode(value, fallback = "single") {
   return normalized === "bulk" ? "bulk" : fallback;
 }
 
+const EMAIL_PATTERN = /^[a-z0-9.!#$%&'*+/=?^_`{|}~-]+@[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?(?:\.[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?)+$/i;
+
+function normalizeEmailInput(value) {
+  return String(value || "").trim().toLowerCase();
+}
+
+function isValidEmailInput(value) {
+  const email = normalizeEmailInput(value);
+  if (!email || email.length > 254 || !EMAIL_PATTERN.test(email)) return false;
+
+  const [localPart, domainPart] = email.split("@");
+  if (!localPart || !domainPart || localPart.length > 64) return false;
+  if (localPart.startsWith(".") || localPart.endsWith(".") || localPart.includes("..")) return false;
+  if (domainPart.split(".").some((part) => !part || part.startsWith("-") || part.endsWith("-"))) return false;
+
+  return true;
+}
+
 function normalizeUserRole(value, fallback = "student") {
   const normalized = String(value || "").trim().toLowerCase();
   return ["student", "teacher", "admin"].includes(normalized) ? normalized : fallback;
@@ -1168,17 +1186,26 @@ router.get("/users/new", async (req, res, next) => {
 router.post("/users", async (req, res, next) => {
   const { email, role, password, useInitial } = req.body || {};
   const wantsInitial = useInitial === "on";
+  const resolvedEmail = normalizeEmailInput(email);
   const singleForm = {
-    email,
+    email: resolvedEmail,
     role,
     useInitial: wantsInitial
   };
   const normalizedRole = normalizeUserRole(role, "");
 
-  if (!email || !normalizedRole || (!password && !wantsInitial)) {
+  if (!resolvedEmail || !normalizedRole || (!password && !wantsInitial)) {
     res.status(400);
     return renderCreateUserPage(req, res, {
       error: "Bitte E-Mail, Rolle und eine gültige Passwort-Option angeben.",
+      mode: "single",
+      singleForm
+    });
+  }
+  if (!isValidEmailInput(resolvedEmail)) {
+    res.status(400);
+    return renderCreateUserPage(req, res, {
+      error: "Bitte eine gültige E-Mail-Adresse angeben.",
       mode: "single",
       singleForm
     });
@@ -1221,7 +1248,7 @@ router.post("/users", async (req, res, next) => {
     }
   }
 
-  if (!email || !role || (!password && !wantsInitial)) {
+  if (!resolvedEmail || !normalizedRole || (!password && !wantsInitial)) {
     res.status(400);
     return renderCreateUserPage(req, res, {
       error: "Bitte E-Mail, Rolle und eine gültige Passwort-Option angeben.",
@@ -1229,7 +1256,7 @@ router.post("/users", async (req, res, next) => {
       singleForm
     });
   }
-  if (role === "teacher" && wantsInitial) {
+  if (normalizedRole === "teacher" && wantsInitial) {
     return res.status(400).render("error", {
       message: "Für Lehrer darf kein Initial-Passwort vergeben werden.",
       status: 400,
@@ -1273,9 +1300,19 @@ router.post("/users", async (req, res, next) => {
   const hash = hashPassword(chosenPassword);
 
   try {
+    const existingUser = await getAsync("SELECT id FROM users WHERE email = ?", [resolvedEmail]);
+    if (existingUser) {
+      res.status(409);
+      return renderCreateUserPage(req, res, {
+        error: "E-Mail existiert bereits.",
+        mode: "single",
+        singleForm
+      });
+    }
+
     await runAsync(
       "INSERT INTO users (email, password_hash, role, status, must_change_password) VALUES (?,?,?,?,?)",
-      [email, hash, role, "active", mustChange]
+      [resolvedEmail, hash, normalizedRole, "active", mustChange]
     );
     res.redirect("/admin/users?created=1");
   } catch (err) {
@@ -1478,33 +1515,52 @@ router.post("/users/bulk", async (req, res, next) => {
   const hash = hashPassword(chosenPassword);
 
   const bulkResult = { success: [], failed: [] };
+  const seenBulkEmails = new Set();
 
   for (const line of lines) {
+    const email = normalizeEmailInput(line);
     try {
-      const derivedName = selectedBulkClass ? deriveNameFromEmail(line) : null;
-      if (selectedBulkClass && !derivedName) {
+      if (!isValidEmailInput(email)) {
         bulkResult.failed.push({
           email: line,
+          reason: "Ungültige E-Mail-Adresse."
+        });
+        continue;
+      }
+      if (seenBulkEmails.has(email)) {
+        bulkResult.failed.push({
+          email,
+          reason: "E-Mail ist doppelt in der Eingabe."
+        });
+        continue;
+      }
+      seenBulkEmails.add(email);
+
+      const preexistingUser = await getAsync("SELECT id FROM users WHERE email = ?", [email]);
+      if (preexistingUser) {
+        bulkResult.failed.push({
+          email,
+          reason: "E-Mail existiert bereits."
+        });
+        continue;
+      }
+
+      const derivedName = selectedBulkClass ? deriveNameFromEmail(email) : null;
+      if (selectedBulkClass && !derivedName) {
+        bulkResult.failed.push({
+          email,
           reason: "Name fehlt (E-Mail Format vorname.nachname@xy)."
         });
         continue;
       }
       if (selectedBulkClass) {
-        const existingUser = await getAsync("SELECT id FROM users WHERE email = ?", [line]);
-        if (existingUser) {
-          bulkResult.failed.push({
-            email: line,
-            reason: "E-Mail existiert bereits."
-          });
-          continue;
-        }
         const duplicateStudent = await getAsync("SELECT id FROM students WHERE email = ? AND class_id = ?", [
-          line,
+          email,
           selectedBulkClass.id
         ]);
         if (duplicateStudent) {
           bulkResult.failed.push({
-            email: line,
+            email,
             reason: "Schüler ist bereits in der Klasse."
           });
           continue;
@@ -1513,19 +1569,19 @@ router.post("/users/bulk", async (req, res, next) => {
 
       await runAsync(
         "INSERT INTO users (email, password_hash, role, status, must_change_password) VALUES (?,?,?,?,?)",
-        [line, hash, normalizedBulkRole, "active", mustChange]
+        [email, hash, normalizedBulkRole, "active", mustChange]
       );
       if (selectedBulkClass) {
         await runAsync("INSERT INTO students (name, email, class_id, school_year) VALUES (?,?,?,?)", [
           derivedName,
-          line,
+          email,
           selectedBulkClass.id,
           activeSchoolYear.name
         ]);
       }
-      bulkResult.success.push(line);
+      bulkResult.success.push(email);
     } catch (err) {
-      bulkResult.failed.push({ email: line, reason: String(err) });
+      bulkResult.failed.push({ email, reason: String(err) });
     }
   }
 
@@ -1749,7 +1805,6 @@ router.post("/users/:id", async (req, res, next) => {
       csrfToken: req.csrfToken()
     });
   }
-
   try {
     await runAsync("UPDATE users SET email = ?, role = ?, status = ? WHERE id = ?", [email, role, status, id]);
     res.redirect("/admin/users");

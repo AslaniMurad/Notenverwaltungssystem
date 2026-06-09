@@ -50,7 +50,6 @@
                 <div class="admin-panel-head">
                   <div>
                     <h3>Einzelnen Nutzer anlegen</h3>
-                    <p class="admin-muted">Für einzelne Korrekturen, Admin-Konten oder neue Eintritte.</p>
                   </div>
                 </div>
 
@@ -95,7 +94,6 @@
                 <div class="admin-panel-head">
                   <div>
                     <h3>Bulk-Anlage</h3>
-                    <p class="admin-muted">Eine E-Mail pro Zeile. Rolle und Passwortregel gelten für alle Einträge.</p>
                   </div>
                 </div>
 
@@ -119,7 +117,6 @@
                   <div class="admin-bulk-delimiter" data-bulk-format-switcher data-default-delimiter="<%= resolvedBulkDelimiter %>">
                     <div class="admin-bulk-delimiter-head">
                       <strong>Trennformat</strong>
-                      <span class="admin-muted">Lege fest, wie die E-Mails im Feld getrennt sind.</span>
                     </div>
 
                     <div class="admin-bulk-delimiter-switch" role="tablist" aria-label="Trennformat">
@@ -158,7 +155,7 @@
                   </div>
 
                   <label class="admin-field">
-                    <span>Optional direkt Klasse zuordnen</span>
+                    <span>Klasse zuordnen (nur Schüler)</span>
                     <select name="bulkClassId">
                       <option value="">Keine Klasse zuordnen</option>
                       <% if (!classOptions.length) { %>
@@ -168,7 +165,6 @@
                         <option value="<%= classOption.id %>" <%= resolvedBulkClassId === String(classOption.id) ? 'selected' : '' %>><%= classOption.name %></option>
                       <% }) %>
                     </select>
-                    <small class="admin-field-hint">Wird nur bei Rolle Schüler angewendet.</small>
                   </label>
 
                   <label class="admin-inline-option admin-inline-option-simple">

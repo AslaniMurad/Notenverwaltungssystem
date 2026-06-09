@@ -77,7 +77,6 @@
             <div>
               <p class="app-main-subtitle">Archiv</p>
               <h1>Archivdaten</h1>
-              <p class="archive-hero-copy">Historische Schuljahre für viel Datenvolumen aufbereitet und für Admin-Exporte sauber gebündelt.</p>
             </div>
             <div class="archive-toolbar-actions">
               <a class="btn btn-secondary" href="/admin/rollover">Schuljahreswechsel</a>
@@ -469,34 +468,34 @@
         <section class="admin-card archive-danger-zone" id="archive-danger">
           <div class="archive-danger-head">
             <div>
-              <p class="admin-eyebrow">Danger-Zone</p>
-              <h2>Dauerhafte Löschaktionen (NOT FINISHED YET!!!!)</h2>
+              <p class="admin-eyebrow">Sicherheitsbereich</p>
+              <h2>Dauerhafte Löschaktionen</h2>
             </div>
-            <span class="archive-danger-badge">Admin-Passwort erforderlich</span>
+            <span class="archive-danger-badge">Vorschau + Passwort</span>
           </div>
 
           <div class="archive-danger-grid">
             <a class="archive-danger-card" href="<%= buildDangerUrl('/archive/purge') %>">
-              <span class="archive-danger-card-label">Komplettes Archiv</span>
+              <span class="archive-danger-card-label">Archiv löschen</span>
               <strong>Einzelnes Archiv löschen</strong>
-              <span class="archive-danger-card-copy">Entfernt ein komplettes archiviertes Schuljahr inklusive Klassen, Zuordnungen, Noten und Archivstatus.</span>
-              <span class="archive-danger-card-action">Zur Funktion</span>
+              <span class="archive-danger-card-meta">Klassen, Zuordnungen, Noten, Archivstatus</span>
+              <span class="archive-danger-card-action">Vorschau öffnen</span>
             </a>
             <a class="archive-danger-card" href="<%= buildDangerUrl('/archive/graduates') %>">
-              <span class="archive-danger-card-label">Schülerdaten</span>
+              <span class="archive-danger-card-label">Schülerdaten löschen</span>
               <strong>Schulabgänger bereinigen</strong>
-              <span class="archive-danger-card-copy">Wählt ganze Klassen oder einzelne Personen aus und löscht nur die betroffenen Schülerdaten nach finaler Vorschau.</span>
-              <span class="archive-danger-card-action">Zur Funktion</span>
+              <span class="archive-danger-card-meta">Klassenweise oder einzelne Personen</span>
+              <span class="archive-danger-card-action">Auswahl öffnen</span>
             </a>
           </div>
 
           <div class="archive-danger-note">
             <% if (selectedSchoolYear?.is_active) { %>
-              Das aktive Schuljahr ist geschützt. Auf den Folgeseiten sind nur archivierte Schuljahre für Löschungen erlaubt.
+              Aktives Schuljahr geschützt.
             <% } else if (selectedSchoolYear) { %>
               Vorausgewählt wird aktuell: <strong><%= selectedSchoolYear.name %></strong>.
             <% } else { %>
-              Auf den Folgeseiten muss zuerst ein archiviertes Schuljahr gewählt werden.
+              Archiviertes Schuljahr wählen.
             <% } %>
           </div>
         </section>

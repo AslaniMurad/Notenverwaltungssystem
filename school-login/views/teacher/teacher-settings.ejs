@@ -27,11 +27,6 @@
       const maFieldsLocked = existingSchema && !participation.ma_enabled;
       const scoringModeValue = (formData && formData.scoring_mode) || "points_only";
       const scoringLabel = scoringLabelByValue[scoringModeValue] || "Nur Punkte";
-      const scoringInfoByValue = {};
-      (scoringModeOptions || []).forEach((option) => {
-        scoringInfoByValue[option.value] = option.description || "";
-      });
-      const scoringDescription = scoringInfoByValue[scoringModeValue] || "";
       const showThresholds = scoringModeValue !== "points_and_grade";
       const showMaPoints = scoringModeValue !== "grade_only";
       const showMaGrades = scoringModeValue !== "points_only";
@@ -59,7 +54,6 @@
           <div>
             <p class="teacher-eyebrow">Fachspezifisches Schema</p>
             <h1>Bewertungseinstellungen</h1>
-            <p class="teacher-muted">Jede Klasse/Fach-Zuordnung bekommt ein Basisschema. Strukturelle Optionen bleiben danach gesperrt.</p>
           </div>
           <div class="teacher-actions-inline">
             <a class="btn btn-secondary" href="/teacher/classes">Zurück</a>
@@ -183,7 +177,6 @@
                 placeholder="z.B. Informatik Standard"
                 value="<%= formData.profile_name || "" %>"
               >
-              <small class="form-hint">Name, Abwesenheitsregel, Prozentgrenzen und Kategorie-Punkte bleiben bearbeitbar.</small>
 
               <% if (!existingSchema) { %>
                 <label for="scoring_mode">Bewertungseingabe *</label>
@@ -197,27 +190,11 @@
                     </option>
                   <% }) %>
                 </select>
-                <small class="form-hint">Diese Auswahl wird nach dem ersten Speichern gesperrt. Das Formular passt die relevanten Felder sofort an.</small>
               <% } %>
 
               <div class="teacher-alert info" id="scoring-mode-current-info">
                 Bewertungseingabe: <strong id="scoring-mode-current-label"><%= scoringLabel %></strong>.
-                <span id="scoring-mode-current-description"><%= scoringDescription %></span>
-                <% if (existingSchema) { %>
-                  Bewertungsmodus und MA-Aktivierung sind gesperrt, damit bestehende Einträge konsistent bleiben.
-                <% } %>
               </div>
-
-              <% if (!existingSchema) { %>
-                <div class="settings-mode-info-list" aria-label="Erklärung der Bewertungsmodi">
-                  <% (scoringModeOptions || []).forEach((option) => { %>
-                    <div class="settings-mode-info-item <%= String(scoringModeValue) === String(option.value) ? 'is-active' : '' %>" data-scoring-info-row="<%= option.value %>">
-                      <strong><%= option.label %></strong>
-                      <span><%= option.description || "" %></span>
-                    </div>
-                  <% }) %>
-                </div>
-              <% } %>
 
               <label for="absence_mode">Bei "nicht da" *</label>
               <select id="absence_mode" name="absence_mode" required>
@@ -230,7 +207,6 @@
                   </option>
                 <% }) %>
               </select>
-              <small class="form-hint">Legt fest, ob Abwesenheiten den Schnitt verschlechtern oder neutral bleiben.</small>
 
               <div class="settings-grid" id="threshold-config-fields" data-threshold-section <%= showThresholds ? "" : "hidden" %>>
                 <div class="settings-weight-item">
@@ -286,15 +262,11 @@
                   >
                 </div>
               </div>
-              <small class="form-hint" data-threshold-section <%= showThresholds ? "" : "hidden" %>>Relevant für Punkte-zu-Note und Note-zu-Punkte-Umrechnungen. Bei "Punkte und Noten" wird keine Note automatisch berechnet.</small>
 
               <label class="checkbox-line" for="ma_enabled">
                 <input type="checkbox" id="ma_enabled" name="ma_enabled" value="1" <%= participation.ma_enabled ? "checked" : "" %> <%= maToggleLocked ? "disabled" : "" %>>
                 Mitarbeit aktivieren (MA)
               </label>
-              <% if (maToggleLocked) { %>
-                <small class="form-hint">Die MA-Aktivierung ist nach dem Speichern gesperrt. MA-Punkte sind nur bearbeitbar, wenn MA bereits aktiv war.</small>
-              <% } %>
 
               <div id="ma-config-fields">
                 <div class="settings-grid">
@@ -313,7 +285,6 @@
                     >
                   </div>
                 </div>
-                <small class="form-hint">Die Gewichtung legt fest, wie stark ein MA-Eintrag in die Gesamtnote einfließt.</small>
 
                 <div class="settings-grid" id="ma-points-fields" data-ma-points-section <%= showMaPoints ? "" : "hidden" %>>
                   <div class="settings-weight-item">
@@ -392,7 +363,6 @@
                     >
                   </div>
                 </div>
-                <small class="form-hint" data-ma-points-section <%= showMaPoints ? "" : "hidden" %>>MA-Punkte müssen fallend sein: + &gt; +~ &gt; ~ &gt; -~ &gt; -. Bei Punkte-Modi wird daraus bei Bedarf die Note berechnet.</small>
 
                 <div class="settings-grid" id="ma-grade-fields" data-ma-grade-section <%= showMaGrades ? "" : "hidden" %>>
                   <div class="settings-weight-item">
@@ -476,7 +446,6 @@
                     >
                   </div>
                 </div>
-                <small class="form-hint" data-ma-grade-section <%= showMaGrades ? "" : "hidden" %>>MA-Noten müssen steigend sein: + &lt; +~ &lt; ~ &lt; -~ &lt; -. Bei "Punkte und Noten" wird dieser Notenwert direkt verwendet.</small>
               </div>
 
               <div class="settings-grid">
@@ -519,7 +488,6 @@
         </div>
         <div class="modal-body">
           <p>Möchtest du das Profil <strong id="deleteProfileName"></strong> wirklich löschen?</p>
-          <p class="teacher-muted">Wenn es aktiv ist, wird automatisch ein anderes Profil aktiv gesetzt.</p>
         </div>
         <div class="modal-footer">
           <button class="btn btn-secondary" id="cancelDeleteProfile" type="button">Abbrechen</button>
@@ -534,8 +502,6 @@
         const weightFields = Array.from(document.querySelectorAll("[data-weight-field]"));
         const scoringSelect = document.getElementById("scoring_mode");
         const scoringCurrentLabel = document.getElementById("scoring-mode-current-label");
-        const scoringCurrentDescription = document.getElementById("scoring-mode-current-description");
-        const scoringInfoRows = Array.from(document.querySelectorAll("[data-scoring-info-row]"));
         const thresholdSections = Array.from(document.querySelectorAll("[data-threshold-section]"));
         const maToggle = document.getElementById("ma_enabled");
         const maFields = document.getElementById("ma-config-fields");
@@ -549,7 +515,7 @@
         const deleteProfileName = document.getElementById("deleteProfileName");
         const cancelDeleteProfile = document.getElementById("cancelDeleteProfile");
         const confirmDeleteProfile = document.getElementById("confirmDeleteProfile");
-        const scoringModeInfo = <%- JSON.stringify((scoringModeOptions || []).map((option) => ({ value: option.value, label: option.label, description: option.description || "" }))).replace(/</g, "\\u003c") %>;
+        const scoringModeInfo = <%- JSON.stringify((scoringModeOptions || []).map((option) => ({ value: option.value, label: option.label }))).replace(/</g, "\\u003c") %>;
         const initialScoringMode = "<%= scoringModeValue %>";
         const maFieldsLocked = <%= maFieldsLocked ? "true" : "false" %>;
         let currentDeleteForm = null;
@@ -615,10 +581,6 @@
           const mode = getScoringMode();
           const info = scoringModeInfo.find((entry) => entry.value === mode) || scoringModeInfo[0] || {};
           if (scoringCurrentLabel) scoringCurrentLabel.textContent = info.label || "";
-          if (scoringCurrentDescription) scoringCurrentDescription.textContent = info.description || "";
-          scoringInfoRows.forEach((row) => {
-            row.classList.toggle("is-active", row.dataset.scoringInfoRow === mode);
-          });
           setHiddenForAll(thresholdSections, !modeUsesThresholds(mode));
           updateMaVisibility();
         }

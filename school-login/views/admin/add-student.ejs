@@ -20,23 +20,11 @@
           <div>
             <p class="app-main-subtitle">Klasse <%= classData.name %></p>
             <h1>Schüler hinzufügen</h1>
-            <p class="admin-muted admin-create-copy">Nur vorhandene Student-Konten können der Klasse zugeordnet werden. Wechsle zwischen Einzelzuordnung und Bulk-Modus.</p>
           </div>
           <a class="btn btn-secondary" href="/admin/classes/<%= classData.id %>/students">Zurück</a>
         </div>
 
         <div class="admin-create-shell" data-create-switcher data-default-mode="<%= resolvedMode %>">
-          <div class="admin-create-overview">
-            <div class="admin-create-overview-card">
-              <strong>Einzeln</strong>
-              <span>Geeignet für neue Eintritte oder gezielte Korrekturen einzelner Zuordnungen.</span>
-            </div>
-            <div class="admin-create-overview-card">
-              <strong>Bulk</strong>
-              <span>Mehrere registrierte Schüler per E-Mail-Liste in einem Schritt der Klasse zuweisen.</span>
-            </div>
-          </div>
-
           <% if (error) { %>
             <div class="admin-alert admin-alert-danger"><%= error %></div>
           <% } %>
@@ -53,7 +41,6 @@
                 <div class="admin-panel-head">
                   <div>
                     <h3>Einzelnen Schüler zuordnen</h3>
-                    <p class="admin-muted">Der Name kann automatisch aus `vorname.nachname@...` abgeleitet werden.</p>
                   </div>
                 </div>
 
@@ -70,11 +57,6 @@
                     <input id="email" name="email" type="email" value="<%= singleValues.email || '' %>" data-student-email placeholder="max.mustermann@schule.at" required>
                   </label>
 
-                  <div class="admin-example-box">
-                    <strong>Automatik</strong>
-                    <span>Wenn das Namensfeld leer bleibt und die E-Mail dem Muster `vorname.nachname@...` folgt, wird der Name automatisch eingesetzt.</span>
-                  </div>
-
                   <div class="admin-panel-actions">
                     <button class="btn btn-primary" type="submit">Schüler zuordnen</button>
                   </div>
@@ -87,7 +69,6 @@
                 <div class="admin-panel-head">
                   <div>
                     <h3>Bulk-Zuordnung</h3>
-                    <p class="admin-muted">Eine registrierte Schüler-E-Mail pro Zeile. Der Name wird aus der Adresse abgeleitet.</p>
                   </div>
                 </div>
 
@@ -111,11 +92,6 @@
                     <span>E-Mail-Liste</span>
                     <textarea id="bulkEmails" name="bulkEmails" rows="8" placeholder="max.mustermann@schule.at&#10;lena.beispiel@schule.at" required><%= bulkValues.bulkEmails || '' %></textarea>
                   </label>
-
-                  <div class="admin-example-box">
-                    <strong>Voraussetzung</strong>
-                    <span>Jede E-Mail muss bereits als Student-Konto existieren. Nicht passende Zeilen erscheinen im Ergebnis mit Grund.</span>
-                  </div>
 
                   <div class="admin-panel-actions">
                     <button class="btn btn-primary" type="submit">Bulk zuordnen</button>

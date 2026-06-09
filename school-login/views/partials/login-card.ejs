@@ -11,9 +11,6 @@
 
   <% if (_maintenanceMode) { %>
     <h1 class="login-welcome-title">Wartungsarbeiten</h1>
-    <p class="login-subtitle">
-      Die App ist derzeit im Wartungsmodus.
-    </p>
   <% } %>
 
   <% const hasErrorPanel = _errorType === "invalid"; %>
@@ -23,9 +20,6 @@
       <div class="login-alert-body">
         <p class="login-alert-title"><%= _maintenanceMode ? "Anmeldung nicht moeglich" : "Der Login ist fehlgeschlagen" %></p>
         <p class="login-alert-text"><%= _errorMessage || "Versuchen Sie es erneut." %></p>
-        <% if (!_maintenanceMode) { %>
-          <p class="login-alert-text">Sollte der Fehler bestehen bleiben, wende dich bitte an die Schuladministration.</p>
-        <% } %>
       </div>
     </div>
   <% } %>
@@ -76,9 +70,4 @@
     </div>
   <% } %>
 
-  <p class="login-notice">
-    Hinweis (freiwillig, in Anlehnung an &sect; 25 MedienG):
-    Diese Website ist ein zeitlich befristetes Schulprojekt zu Demonstrationszwecken
-    im Rahmen des Unterrichts an der HTBLuVA Waidhofen an der Ybbs.
-  </p>
 </div>
