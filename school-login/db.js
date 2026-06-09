@@ -1749,7 +1749,10 @@ function createFakeDb() {
         row = {
           count: teacherStudentExclusions.filter((entry) => entry.subject_id === Number(subjectIdParam)).length
         };
-      } else if (/SELECT COUNT\(\*\) AS count\s+FROM users/i.test(sql)) {
+      } else if (
+        /SELECT COUNT\(\*\) AS count\s+FROM users/i.test(sql) &&
+        !/WHERE[\s\S]*role = 'teacher' AND status = 'active'/i.test(sql)
+      ) {
         row = {
           count: filterUsersForSql(sql, params).users.length
         };
