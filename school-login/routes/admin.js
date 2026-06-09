@@ -1024,6 +1024,12 @@ function resolveUserEditFeedback(query = {}) {
   if (query.passwordReset === "sent") {
     return { tone: "success", message: "Einmalpasswort wurde per E-Mail versendet." };
   }
+  if (query.passwordReset === "custom") {
+    return { tone: "success", message: "Passwort wurde durch den Admin gesetzt." };
+  }
+  if (query.passwordReset === "initial") {
+    return { tone: "success", message: "Initial-Kennwort wurde gesetzt. Der Nutzer muss beim naechsten Login ein eigenes Passwort vergeben." };
+  }
   return null;
 }
 
@@ -1765,7 +1771,11 @@ router.post("/users/:id/reset", async (req, res, next) => {
   const id = req.params.id;
   const { password, useInitial } = req.body || {};
   const wantsInitial = useInitial === "1";
-  const backUrl = wantsInitial ? "/admin/users" : `/admin/users/${id}/edit`;
+  const editUrl = `/admin/users/${id}/edit`;
+  const returnTo = typeof req.body?.returnTo === "string" && req.body.returnTo.startsWith("/admin/users/")
+    ? req.body.returnTo
+    : null;
+  const backUrl = returnTo || (wantsInitial ? "/admin/users" : editUrl);
 
   if (!wantsInitial && !password) {
     return res.status(400).render("error", {
@@ -1814,6 +1824,10 @@ router.post("/users/:id/reset", async (req, res, next) => {
   try {
     await runAsync("UPDATE users SET password_hash = ?, must_change_password = ? WHERE id = ?", [hash, mustChange, id]);
     await passwordResetModel.invalidateActiveRequestsForUser(id);
+    if (returnTo) {
+      const feedback = wantsInitial ? "initial" : "custom";
+      return res.redirect(`${returnTo}?passwordReset=${feedback}`);
+    }
     res.redirect("/admin/users");
   } catch (err) {
     console.error("DB error resetting password:", err);

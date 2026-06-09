@@ -690,25 +690,134 @@ body.page-admin-edit {
   gap: 10px;
 }
 
-.admin-user-edit-reset-mail {
+.admin-user-edit-password-status {
+  font-size: 1rem;
+  line-height: 1.45;
+}
+
+.admin-user-edit-password-status strong {
+  font-size: 1.05em;
+}
+
+.admin-user-edit-reset-options {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  gap: 14px;
-  align-items: start;
+  gap: 12px;
+}
+
+.admin-user-edit-reset-option {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 12px;
+  align-items: stretch;
   padding: 14px;
   border: 1px solid var(--border);
   border-radius: 8px;
   background: rgba(14, 165, 233, 0.06);
 }
 
-.admin-user-edit-reset-mail h4,
+.admin-user-edit-reset-option h4,
 .admin-user-edit-reset-history h4 {
   margin: 0 0 6px;
+}
+
+.admin-user-edit-reset-option form {
+  min-width: 0;
+  width: 100%;
+}
+
+.admin-user-edit-reset-option .admin-stacked-form {
+  min-width: 0;
+}
+
+.admin-user-edit-reset-option > form:not(.admin-stacked-form) {
+  display: flex;
+  justify-content: flex-end;
+}
+
+.admin-user-edit-reset-option .admin-field {
+  min-width: 0;
+}
+
+.admin-user-edit-reset-option .admin-user-edit-actions {
+  justify-content: flex-end;
+}
+
+.admin-user-edit-reset-option .btn {
+  white-space: nowrap;
+}
+
+@media (min-width: 1120px) {
+  .admin-user-edit-reset-option:not(.is-custom) {
+    grid-template-columns: minmax(0, 1fr) max-content;
+    align-items: center;
+  }
+
+  .admin-user-edit-reset-option:not(.is-custom) > form {
+    width: auto;
+  }
+
+  .admin-user-edit-reset-option.is-custom .admin-stacked-form {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) max-content;
+    align-items: end;
+    gap: 12px;
+  }
+
+  .admin-user-edit-reset-option.is-custom .admin-user-edit-actions {
+    align-self: end;
+  }
 }
 
 .admin-user-edit-reset-history {
   display: grid;
   gap: 10px;
+}
+
+.admin-user-edit-reset-history summary {
+  display: inline-flex;
+  width: fit-content;
+  align-items: center;
+  gap: 10px;
+  min-height: 40px;
+  padding: 9px 13px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface);
+  color: var(--text);
+  font-weight: 700;
+  cursor: pointer;
+  list-style: none;
+  user-select: none;
+}
+
+.admin-user-edit-reset-history summary::-webkit-details-marker {
+  display: none;
+}
+
+.admin-user-edit-reset-history summary::after {
+  content: "anzeigen";
+  color: var(--text-muted);
+  font-size: 0.82rem;
+  font-weight: 600;
+}
+
+.admin-user-edit-reset-history[open] summary::after {
+  content: "ausblenden";
+}
+
+.admin-user-edit-reset-count {
+  min-width: 26px;
+  padding: 3px 8px;
+  border-radius: 999px;
+  background: rgba(14, 165, 233, 0.12);
+  color: var(--accent);
+  font-size: 0.78rem;
+  line-height: 1;
+  text-align: center;
+}
+
+.admin-user-edit-reset-history-body {
+  margin-top: 10px;
 }
 
 .admin-user-edit-reset-history ul {
@@ -954,7 +1063,7 @@ body.page-admin-edit {
     position: static;
   }
 
-  .admin-user-edit-reset-mail {
+  .admin-user-edit-reset-option {
     grid-template-columns: 1fr;
   }
 
@@ -964,7 +1073,7 @@ body.page-admin-edit {
   }
 
   .admin-user-edit-actions .btn,
-  .admin-user-edit-reset-mail .btn,
+  .admin-user-edit-reset-option .btn,
   .admin-user-edit-ms-form .btn {
     width: 100%;
   }
