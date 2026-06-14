@@ -99,7 +99,9 @@ const LOGIN_RATE_WINDOW_MS = Number(process.env.LOGIN_RATE_LIMIT_WINDOW_MS) || 1
 const LOGIN_RATE_MAX = Number(process.env.LOGIN_RATE_LIMIT_MAX) || 5;
 const MAINTENANCE_LOGIN_TOKEN_TTL_MS = 10 * 60 * 1000;
 const PASSWORD_CHANGE_PATH = "/changepw";
+const MICROSOFT_POPUP_LOGIN_TOKEN_TTL_MS = 2 * 60 * 1000;
 const loginAttempts = new Map();
+const microsoftPopupLoginCompletions = new Map();
 const teamsEmbedEnabled = parseOptionalBoolean(process.env.TEAMS_EMBED_ENABLED) ?? false;
 const teamsMicrosoftLoginOnly =
   parseOptionalBoolean(process.env.TEAMS_MICROSOFT_LOGIN_ONLY) ?? teamsEmbedEnabled;
@@ -166,12 +168,33 @@ function resetLoginAttempts(key) {
   loginAttempts.delete(key);
 }
 
+function queryValueMatchesTruthy(value) {
+  if (value == null) return false;
+  const values = Array.isArray(value) ? value : [value];
+  return values.some((entry) => {
+    const normalized = String(entry || "").trim().toLowerCase();
+    return ["1", "true", "yes", "on"].includes(normalized);
+  });
+}
+
 function queryValueMatchesTeams(value) {
   if (value == null) return false;
   const values = Array.isArray(value) ? value : [value];
   return values.some((entry) => {
     const normalized = String(entry || "").trim().toLowerCase();
-    return ["1", "true", "yes", "on", "teams", "msteams", "microsoftteams"].includes(normalized);
+    return (
+      queryValueMatchesTruthy(normalized) ||
+      ["teams", "msteams", "microsoftteams"].includes(normalized)
+    );
+  });
+}
+
+function queryValueMatchesPopup(value) {
+  if (value == null) return false;
+  const values = Array.isArray(value) ? value : [value];
+  return values.some((entry) => {
+    const normalized = String(entry || "").trim().toLowerCase();
+    return queryValueMatchesTruthy(normalized) || normalized === "popup";
   });
 }
 
@@ -213,6 +236,18 @@ function isTeamsLoginContext(req) {
 
 function shouldUseMicrosoftOnlyLogin(req) {
   return teamsMicrosoftLoginOnly && isTeamsLoginContext(req);
+}
+
+function shouldUseMicrosoftPopupLogin(req) {
+  return shouldUseMicrosoftOnlyLogin(req) && !isMaintenanceMode(req);
+}
+
+function getMicrosoftLoginUrl(req) {
+  return shouldUseMicrosoftPopupLogin(req) ? "/auth/microsoft?popup=1" : "/auth/microsoft";
+}
+
+function isMicrosoftPopupLoginRequest(req) {
+  return queryValueMatchesPopup(req.query?.popup);
 }
 
 function getRequestRuntimeSettings(req) {
@@ -279,13 +314,6 @@ function verifyMaintenanceLoginToken(token) {
 
 function isMaintenanceLoginPost(req) {
   return req.method === "POST" && req.path === "/login" && isMaintenanceMode(req);
-}
-
-function saveSessionAndRedirect(req, res, next, target) {
-  req.session.save((saveErr) => {
-    if (saveErr) return next(saveErr);
-    return res.redirect(target);
-  });
 }
 
 app.use(express.urlencoded({ extended: true }));
@@ -362,6 +390,8 @@ function renderLogin(res, req, options = {}) {
     email,
     microsoftAuthEnabled: isMicrosoftLoginAvailable(req),
     microsoftOnlyLogin: shouldUseMicrosoftOnlyLogin(req) && !isMaintenanceMode(req),
+    microsoftPopupLogin: shouldUseMicrosoftPopupLogin(req),
+    microsoftLoginUrl: getMicrosoftLoginUrl(req),
     maintenanceMode: isMaintenanceMode(req),
     maintenanceLoginToken: isMaintenanceMode(req) ? createMaintenanceLoginToken() : ""
   });
@@ -470,6 +500,168 @@ function renderMicrosoftAuthError(res, req, message, status = 401, email = "") {
     errorMessage: message,
     email
   });
+}
+
+function pruneExpiredMicrosoftPopupCompletions(now = Date.now()) {
+  for (const [token, completion] of microsoftPopupLoginCompletions.entries()) {
+    if (!completion?.expiresAt || completion.expiresAt <= now) {
+      microsoftPopupLoginCompletions.delete(token);
+    }
+  }
+}
+
+function createMicrosoftPopupCompletion(user) {
+  pruneExpiredMicrosoftPopupCompletions();
+  const token = crypto.randomBytes(32).toString("base64url");
+  microsoftPopupLoginCompletions.set(token, {
+    user,
+    expiresAt: Date.now() + MICROSOFT_POPUP_LOGIN_TOKEN_TTL_MS
+  });
+  return token;
+}
+
+function consumeMicrosoftPopupCompletion(token) {
+  pruneExpiredMicrosoftPopupCompletions();
+  const normalizedToken = String(token || "");
+  const completion = microsoftPopupLoginCompletions.get(normalizedToken);
+  if (!completion) return null;
+  microsoftPopupLoginCompletions.delete(normalizedToken);
+  return completion;
+}
+
+function escapeHtml(value) {
+  return String(value || "").replace(/[&<>"']/g, (character) => {
+    const entities = {
+      "&": "&amp;",
+      "<": "&lt;",
+      ">": "&gt;",
+      '"': "&quot;",
+      "'": "&#39;"
+    };
+    return entities[character] || character;
+  });
+}
+
+function safeJsonForScript(value) {
+  return JSON.stringify(value).replace(/</g, "\\u003c");
+}
+
+function renderMicrosoftPopupResult(res, options = {}) {
+  const success = Boolean(options.success);
+  const message =
+    options.message ||
+    (success
+      ? "Die Microsoft-Anmeldung wurde abgeschlossen."
+      : "Die Microsoft-Anmeldung konnte nicht abgeschlossen werden.");
+  const payload = {
+    success,
+    token: options.token || "",
+    message
+  };
+
+  return res.status(success ? 200 : 401).type("html").send(`<!doctype html>
+<html lang="de">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Microsoft Anmeldung | NVS</title>
+  <style>
+    :root { color-scheme: light; }
+    body {
+      min-height: 100vh;
+      margin: 0;
+      display: grid;
+      place-items: center;
+      background: #f8fafc;
+      color: #111827;
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+    main {
+      width: min(100% - 32px, 420px);
+      padding: 24px;
+      border: 1px solid #dbe3f0;
+      border-radius: 8px;
+      background: #ffffff;
+      box-shadow: 0 18px 42px rgba(15, 23, 42, 0.12);
+      text-align: center;
+    }
+    h1 { margin: 0 0 8px; font-size: 21px; line-height: 1.2; }
+    p { margin: 0 0 18px; color: #4b5563; line-height: 1.45; }
+    button {
+      min-height: 42px;
+      padding: 10px 14px;
+      border: 1px solid #003da5;
+      border-radius: 8px;
+      background: #003da5;
+      color: #ffffff;
+      font-weight: 700;
+      cursor: pointer;
+    }
+  </style>
+  <script src="https://res.cdn.office.net/teams-js/2.53.0/js/MicrosoftTeams.min.js"></script>
+</head>
+<body>
+  <main>
+    <h1>${success ? "Anmeldung abgeschlossen" : "Anmeldung fehlgeschlagen"}</h1>
+    <p>${escapeHtml(message)}</p>
+    <button type="button" id="close-button">Fenster schliessen</button>
+  </main>
+  <script>
+    (function () {
+      var result = ${safeJsonForScript(payload)};
+      var message = result.success
+        ? { type: "nvs:microsoft-login-complete", token: result.token }
+        : { type: "nvs:microsoft-login-failed", message: result.message };
+
+      function notifyParentWindow() {
+        if (window.opener && !window.opener.closed) {
+          window.opener.postMessage(message, window.location.origin);
+          return true;
+        }
+        return false;
+      }
+
+      function notifyTeamsHost() {
+        var teams = window.microsoftTeams;
+        if (!teams || !teams.app || !teams.authentication) {
+          return Promise.resolve(false);
+        }
+        return teams.app.initialize()
+          .then(function () {
+            if (result.success) {
+              teams.authentication.notifySuccess(JSON.stringify({ token: result.token }));
+            } else {
+              teams.authentication.notifyFailure(result.message);
+            }
+            return true;
+          })
+          .catch(function () {
+            return false;
+          });
+      }
+
+      function closeSoon() {
+        window.setTimeout(function () {
+          window.close();
+        }, 450);
+      }
+
+      notifyTeamsHost().then(function (usedTeamsHost) {
+        if (!usedTeamsHost) {
+          notifyParentWindow();
+        }
+        if (result.success) {
+          closeSoon();
+        }
+      });
+
+      document.getElementById("close-button").addEventListener("click", function () {
+        window.close();
+      });
+    })();
+  </script>
+</body>
+</html>`);
 }
 
 // --- Session ---
@@ -788,13 +980,14 @@ app.get("/login", (req, res, next) => {
         503
       );
     }
-    return saveSessionAndRedirect(req, res, next, "/auth/microsoft");
+    return renderLogin(res, req);
   }
   renderLogin(res, req);
 });
 
 app.get("/auth/microsoft", (req, res, next) => {
   rememberTeamsLoginContext(req);
+  const popupLogin = isMicrosoftPopupLoginRequest(req);
   if (req.session.user) {
     return res.redirect("/");
   }
@@ -820,7 +1013,8 @@ app.get("/auth/microsoft", (req, res, next) => {
   req.session.microsoftAuth = {
     state: authorizationRequest.state,
     nonce: authorizationRequest.nonce,
-    createdAt: Date.now()
+    createdAt: Date.now(),
+    popup: popupLogin
   };
 
   req.session.save((saveErr) => {
@@ -832,6 +1026,7 @@ app.get("/auth/microsoft", (req, res, next) => {
 app.get("/auth/microsoft/callback", async (req, res, next) => {
   const authState = req.session.microsoftAuth;
   const isLinkMode = authState?.mode === "link";
+  const isPopupLogin = Boolean(authState?.popup && !isLinkMode);
 
   if (req.session.user && !isLinkMode) {
     return res.redirect("/");
@@ -852,6 +1047,12 @@ app.get("/auth/microsoft/callback", async (req, res, next) => {
     if (isLinkMode) {
       return res.redirect("/account/microsoft-link?error=microsoft-cancelled");
     }
+    if (isPopupLogin) {
+      return renderMicrosoftPopupResult(res, {
+        success: false,
+        message: "Die Microsoft-Anmeldung wurde abgebrochen oder verweigert."
+      });
+    }
     return renderMicrosoftAuthError(
       res,
       req,
@@ -863,6 +1064,12 @@ app.get("/auth/microsoft/callback", async (req, res, next) => {
   if (!code || !state || !authState || authState.state !== state || isExpired) {
     if (isLinkMode) {
       return res.redirect("/account/microsoft-link?error=microsoft-state");
+    }
+    if (isPopupLogin) {
+      return renderMicrosoftPopupResult(res, {
+        success: false,
+        message: "Die Microsoft-Anmeldung konnte nicht bestaetigt werden."
+      });
     }
     return renderMicrosoftAuthError(
       res,
@@ -878,6 +1085,12 @@ app.get("/auth/microsoft/callback", async (req, res, next) => {
     if (!isAllowedMicrosoftDomain(email)) {
       if (isLinkMode) {
         return res.redirect("/account/microsoft-link?error=domain-blocked");
+      }
+      if (isPopupLogin) {
+        return renderMicrosoftPopupResult(res, {
+          success: false,
+          message: "Dieses Microsoft-Konto ist fuer die Schulanmeldung nicht freigegeben."
+        });
       }
       return renderMicrosoftAuthError(
         res,
@@ -929,6 +1142,12 @@ app.get("/auth/microsoft/callback", async (req, res, next) => {
 
     const user = await findUserByMicrosoftAccount(profile);
     if (!user || user.status !== "active") {
+      if (isPopupLogin) {
+        return renderMicrosoftPopupResult(res, {
+          success: false,
+          message: "Dieses Microsoft-Konto ist noch mit keinem NVS-Konto verknuepft."
+        });
+      }
       return renderMicrosoftAuthError(
         res,
         req,
@@ -936,6 +1155,14 @@ app.get("/auth/microsoft/callback", async (req, res, next) => {
         401,
         email
       );
+    }
+
+    if (isPopupLogin) {
+      const completionToken = createMicrosoftPopupCompletion(user);
+      return renderMicrosoftPopupResult(res, {
+        success: true,
+        token: completionToken
+      });
     }
 
     const redirectTarget = await completeLogin(req, user);
@@ -950,12 +1177,39 @@ app.get("/auth/microsoft/callback", async (req, res, next) => {
       if (isLinkMode) {
         return res.redirect("/account/microsoft-link?error=microsoft-failed");
       }
+      if (isPopupLogin) {
+        return renderMicrosoftPopupResult(res, {
+          success: false,
+          message: "Microsoft-Anmeldung fehlgeschlagen. Bitte spaeter erneut versuchen."
+        });
+      }
       return renderMicrosoftAuthError(
         res,
         req,
         "Microsoft-Anmeldung fehlgeschlagen. Bitte spaeter erneut versuchen."
       );
     }
+    return next(err);
+  }
+});
+
+app.post("/auth/microsoft/popup/complete", async (req, res, next) => {
+  if (!isMicrosoftLoginAvailable(req)) {
+    return res.status(503).json({ error: "microsoft_login_unavailable" });
+  }
+
+  const completion = consumeMicrosoftPopupCompletion(req.body?.token);
+  if (!completion?.user) {
+    return res.status(400).json({ error: "invalid_or_expired_token" });
+  }
+  if (completion.user.status !== "active") {
+    return res.status(401).json({ error: "inactive_account" });
+  }
+
+  try {
+    const redirectTarget = await completeLogin(req, completion.user);
+    return res.json({ redirect: redirectTarget });
+  } catch (err) {
     return next(err);
   }
 });
@@ -1024,7 +1278,7 @@ app.post("/login", async (req, res, next) => {
         503
       );
     }
-    return res.redirect("/auth/microsoft");
+    return renderLogin(res, req);
   }
 
   const { email, password } = req.body || {};

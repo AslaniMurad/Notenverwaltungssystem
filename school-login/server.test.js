@@ -43,6 +43,17 @@ function extractHiddenInput(html, name) {
   return match ? match[1] : null;
 }
 
+function extractDataAttribute(html, name) {
+  const escapedName = String(name).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const match = html.match(new RegExp(`${escapedName}="([^"]*)"`, "i"));
+  return match ? match[1] : null;
+}
+
+function extractMicrosoftPopupToken(html) {
+  const match = html.match(/"token":"([^"]+)"/);
+  return match ? match[1] : null;
+}
+
 function extractStudentInitialData(html) {
   const match = html.match(
     /<script type="application\/json" id="student-initial-data">([\s\S]*?)<\/script>/
@@ -262,13 +273,15 @@ test("GET /login renders the Microsoft login option when configured", async () =
   assert.match(body, /Mit Microsoft anmelden/);
 });
 
-test("Teams login entry redirects directly to Microsoft auth", async () => {
-  const loginStart = await fetchWithCookies("/login?teams=1", { redirect: "manual" });
-  assert.strictEqual(loginStart.response.status, 302);
-  assert.strictEqual(loginStart.response.headers.get("location"), "/auth/microsoft");
+test("Teams login entry renders a Microsoft popup launcher", async () => {
+  const loginStart = await fetchWithCookies("/login?teams=1");
+  assert.strictEqual(loginStart.response.status, 200);
+  assert.match(loginStart.body, /data-microsoft-popup-login/);
+  assert.match(loginStart.body, /href="\/auth\/microsoft\?popup=1"/);
+  assert.doesNotMatch(loginStart.body, /name="password"/);
 
   const authStart = await fetchWithCookies(
-    "/auth/microsoft",
+    "/auth/microsoft?popup=1",
     { redirect: "manual" },
     loginStart.cookies
   );
@@ -278,6 +291,116 @@ test("Teams login entry redirects directly to Microsoft auth", async () => {
     authLocation.startsWith("https://login.microsoftonline.com/"),
     "Teams login should continue with Microsoft authorization"
   );
+});
+
+test("Teams Microsoft popup handoff completes login in the parent session", { concurrency: false }, async () => {
+  const microsoftTeamsEmail = "microsoft-teams-admin@test.local";
+  const insertResult = await dbRun(
+    "INSERT INTO users (email, password_hash, role, status, must_change_password) VALUES (?,?,?,?,?)",
+    [
+      microsoftTeamsEmail,
+      hashPassword("UnusedPass123!"),
+      "admin",
+      "active",
+      0
+    ]
+  );
+  await dbRun(
+    "UPDATE users SET microsoft_oid = ?, microsoft_tenant_id = ?, microsoft_email = ?, microsoft_connected_at = current_timestamp WHERE id = ?",
+    ["oid-teams-1", "tenant-teams-1", microsoftTeamsEmail, insertResult.lastID]
+  );
+
+  const originalFetch = global.fetch;
+  global.fetch = async (input, init) => {
+    const requestUrl = typeof input === "string"
+      ? input
+      : String(input?.url || input);
+
+    if (
+      requestUrl.startsWith("https://login.microsoftonline.com/")
+      && requestUrl.endsWith("/oauth2/v2.0/token")
+    ) {
+      return new Response(
+        JSON.stringify({
+          access_token: "microsoft-teams-access-token",
+          id_token: buildMockIdToken({
+            email: microsoftTeamsEmail,
+            preferred_username: microsoftTeamsEmail,
+            oid: "oid-teams-1",
+            tid: "tenant-teams-1"
+          })
+        }),
+        {
+          status: 200,
+          headers: { "Content-Type": "application/json" }
+        }
+      );
+    }
+
+    if (requestUrl === "https://graph.microsoft.com/oidc/userinfo") {
+      return new Response(
+        JSON.stringify({
+          email: microsoftTeamsEmail,
+          preferred_username: microsoftTeamsEmail,
+          name: "Teams Admin",
+          sub: "oid-teams-1"
+        }),
+        {
+          status: 200,
+          headers: { "Content-Type": "application/json" }
+        }
+      );
+    }
+
+    return originalFetch(input, init);
+  };
+
+  try {
+    const parentLoginPage = await fetchWithCookies("/login?teams=1");
+    assert.strictEqual(parentLoginPage.response.status, 200);
+    const parentCsrfToken = extractDataAttribute(parentLoginPage.body, "data-csrf-token");
+    assert.ok(parentCsrfToken, "CSRF token missing on Teams login launcher");
+
+    const popupAuthStart = await fetchWithCookies("/auth/microsoft?popup=1", { redirect: "manual" });
+    assert.strictEqual(popupAuthStart.response.status, 302);
+    const popupAuthLocation = popupAuthStart.response.headers.get("location");
+    assert.ok(popupAuthLocation, "Microsoft popup authorization redirect missing");
+    const popupAuthUrl = new URL(popupAuthLocation);
+    const popupAuthState = popupAuthUrl.searchParams.get("state");
+    assert.ok(popupAuthState, "Microsoft popup auth state missing");
+
+    const popupCallback = await fetchWithCookies(
+      `/auth/microsoft/callback?code=test-code&state=${encodeURIComponent(popupAuthState)}`,
+      { redirect: "manual" },
+      popupAuthStart.cookies
+    );
+    assert.strictEqual(popupCallback.response.status, 200);
+    assert.match(popupCallback.body, /Anmeldung abgeschlossen/);
+    const completionToken = extractMicrosoftPopupToken(popupCallback.body);
+    assert.ok(completionToken, "Popup completion token missing");
+
+    const completionResponse = await fetchWithCookies(
+      "/auth/microsoft/popup/complete",
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "X-CSRF-Token": parentCsrfToken
+        },
+        body: JSON.stringify({ token: completionToken }),
+        redirect: "manual"
+      },
+      parentLoginPage.cookies
+    );
+    assert.strictEqual(completionResponse.response.status, 200);
+    assert.deepStrictEqual(JSON.parse(completionResponse.body), { redirect: "/admin" });
+
+    const adminPage = await fetchWithCookies("/admin", {}, completionResponse.cookies);
+    assert.strictEqual(adminPage.response.status, 200);
+    assert.match(adminPage.body, /microsoft-teams-admin@test\.local/);
+  } finally {
+    global.fetch = originalFetch;
+  }
 });
 
 test("runtime settings can disable Microsoft login without restart", async () => {
