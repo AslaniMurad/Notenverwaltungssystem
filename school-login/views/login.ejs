@@ -5,13 +5,21 @@
   const _email = typeof email !== "undefined" ? email : "";
   const _microsoftAuthEnabled = Boolean(microsoftAuthEnabled);
   const _microsoftOnlyLogin = Boolean(microsoftOnlyLogin);
+  const _microsoftPopupLogin = Boolean(microsoftPopupLogin);
+  const _microsoftLoginUrl = typeof microsoftLoginUrl !== "undefined" ? microsoftLoginUrl : "/auth/microsoft";
   const _maintenanceMode = Boolean(maintenanceMode);
   const _maintenanceLoginToken = typeof maintenanceLoginToken !== "undefined" ? maintenanceLoginToken : "";
+
+  const pageScripts = ["/js/app.js"];
+  if (_microsoftPopupLogin) {
+    pageScripts.push("https://res.cdn.office.net/teams-js/2.53.0/js/MicrosoftTeams.min.js");
+    pageScripts.push("/js/teams-microsoft-login.js");
+  }
 
   const page = {
     title: "Login | Notenverwaltungssystem",
     styles: ["/css/login.css"],
-    scripts: ["/js/app.js"],
+    scripts: pageScripts,
     bodyClass: "page-login",
     hideHeader: true,
     hideFooter: true,
@@ -23,6 +31,8 @@
         _email,
         _microsoftAuthEnabled,
         _microsoftOnlyLogin,
+        _microsoftPopupLogin,
+        _microsoftLoginUrl,
         _maintenanceMode,
         _maintenanceLoginToken
       });

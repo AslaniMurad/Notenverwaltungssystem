@@ -313,7 +313,7 @@ Die URL des Teams-Tabs sollte den Teams-Kontext explizit mitgeben:
 https://nvs.htlwydev.at/login?teams=1
 ```
 
-Dann wird innerhalb von Teams direkt zur Microsoft-Anmeldung weitergeleitet. `https://nvs.htlwydev.at/login` im normalen Browser zeigt weiterhin alle Loginmoeglichkeiten.
+Dann zeigt Teams nur die Microsoft-Anmeldung und oeffnet den eigentlichen Microsoft-Login in einem Popup. Das verhindert, dass `login.microsoftonline.com` im Teams-iframe geladen wird. `https://nvs.htlwydev.at/login` im normalen Browser zeigt weiterhin alle Loginmoeglichkeiten.
 
 Test:
 

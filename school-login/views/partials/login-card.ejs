@@ -59,7 +59,18 @@
   <% } %>
 
   <% if (!_maintenanceMode && _microsoftAuthEnabled) { %>
-    <a class="btn-login-microsoft" href="/auth/microsoft">Mit Microsoft anmelden</a>
+    <a
+      class="btn-login-microsoft<%= _microsoftPopupLogin ? ' is-popup-login' : '' %>"
+      href="<%= _microsoftLoginUrl %>"
+      <% if (_microsoftPopupLogin) { %>
+        data-microsoft-popup-login
+        data-microsoft-popup-complete-url="/auth/microsoft/popup/complete"
+        data-csrf-token="<%= _csrfToken %>"
+      <% } %>
+    >Mit Microsoft anmelden</a>
+    <% if (_microsoftPopupLogin) { %>
+      <p class="login-popup-status" data-microsoft-popup-status role="status" aria-live="polite"></p>
+    <% } %>
   <% } %>
 
   <% if (!_maintenanceMode) { %>
